@@ -1,11 +1,11 @@
 """Command-line interface for OncoMind.
 
 ARCHITECTURE:
-    CLI Commands → process_variant/process_variants → EvidencePanel/VariantInsight
+    CLI Commands → get_insight/get_insights → EvidencePanel/VariantInsight
 
 Two main workflows:
-- annotate: Uses new public API (EvidencePanel output)
-- process: Uses legacy InsightEngine (VariantInsight output with LLM narrative)
+- insight: Uses new public API (EvidencePanel output)
+- insight-llm: Uses InsightEngine (VariantInsight output with LLM narrative)
 
 Key Design:
 - Typer framework for auto-help and type validation
@@ -22,7 +22,7 @@ import typer
 from dotenv import load_dotenv
 
 
-from oncomind import process_variant, AnnotationConfig
+from oncomind import get_insight, AnnotationConfig
 from oncomind.engine import InsightEngine
 from oncomind.models import VariantInput
 
@@ -34,31 +34,34 @@ load_dotenv()
 
 app = typer.Typer(
     name="mind",
-    help="LLM-powered cancer variant annotation and evidence synthesis",
+    help="AI-powered cancer variant insight and evidence synthesis",
     add_completion=False,
 )
 
 
 @app.command()
-def process(
-    variant_str: str = typer.Argument(..., help="Variant (e.g., 'BRAF V600E' or 'EGFR L858R in NSCLC')"),
+def insight(
+    gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
+    variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
     llm: bool = typer.Option(False, "--llm/--no-llm", help="Enable LLM enhancement"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (if --llm enabled)"),
 ) -> None:
-    """Annotate a single variant and return evidence panel.
+    """Get insight for a single variant and return evidence panel.
 
-    This is the recommended command for variant annotation.
+    This is the recommended command for variant insight.
     Returns structured EvidencePanel output.
 
     Examples:
-        mind annotate "BRAF V600E" --tumor Melanoma
-        mind annotate "EGFR L858R in NSCLC"
-        mind annotate "TP53 R248W" --output result.json
+        mind insight BRAF V600E --tumor Melanoma
+        mind insight EGFR L858R -t NSCLC
+        mind insight TP53 R248W --output result.json
     """
-    async def get_insight() -> None:
-        print(f"\nAnnotating {variant_str}...")
+    variant_str = f"{gene} {variant}"
+
+    async def run_insight() -> None:
+        print(f"\nGetting insight for {gene} {variant}...")
         if tumor:
             print(f"  Tumor type: {tumor}")
 
@@ -67,7 +70,7 @@ def process(
             llm_model=model,
         )
 
-        panel = await process_variant(variant_str, tumor_type=tumor, config=config)
+        panel = await get_insight(variant_str, tumor_type=tumor, config=config)
 
         # Print summary
         print(f"\n{'='*60}")
@@ -103,11 +106,11 @@ def process(
                 json.dump(output_data, f, indent=2)
             print(f"\nSaved to {output}")
 
-    asyncio.run(get_insight())
+    asyncio.run(run_insight())
 
 
-@app.command()
-def process_with_llm(
+@app.command(name="insight-llm")
+def insight_llm(
     gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
     variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
@@ -117,22 +120,22 @@ def process_with_llm(
     log: bool = typer.Option(True, "--log/--no-log", help="Enable LLM decision logging"),
     vicc: bool = typer.Option(True, "--vicc/--no-vicc", help="Enable VICC MetaKB integration"),
 ) -> None:
-    """Process a single variant with LLM-generated insight narrative.
+    """Get insight for a single variant with LLM-generated narrative.
 
-    This uses the legacy InsightEngine for full LLM narrative generation.
-    For faster annotation without LLM, use 'mind process' instead.
+    This uses the InsightEngine for full LLM narrative generation.
+    For faster insight without LLM, use 'mind insight' instead.
     """
-    # Import legacy engine only when needed
+    # Import engine only when needed
     from oncomind.engine import InsightEngine
     from oncomind.models import VariantInput
 
-    async def get_variant_insight() -> None:
+    async def run_llm_insight() -> None:
         variant_input = VariantInput(gene=gene, variant=variant, tumor_type=tumor)
 
         if tumor:
-            print(f"\nProcessing {gene} {variant} in {tumor}...")
+            print(f"\nGetting insight for {gene} {variant} in {tumor}...")
         else:
-            print(f"\nProcessing {gene} {variant}...")
+            print(f"\nGetting insight for {gene} {variant}...")
 
         async with InsightEngine(llm_model=model, llm_temperature=temperature, enable_logging=log, enable_vicc=vicc) as engine:
             result = await engine.get_insight(variant_input)
@@ -145,7 +148,7 @@ def process_with_llm(
                     json.dump(output_data, f, indent=2)
                 print(f"Saved to {output}")
 
-    asyncio.run(get_variant_insight())
+    asyncio.run(run_llm_insight())
 
 
 @app.command()

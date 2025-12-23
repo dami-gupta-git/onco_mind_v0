@@ -11,7 +11,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │                       User Interfaces                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────────┐  │
 │  │    CLI      │  │  Streamlit  │  │      Python API           │  │
-│  │   (mind)    │  │    App      │  │   (process_variant)       │  │
+│  │   (mind)    │  │    App      │  │   (get_insight)           │  │
 │  └──────┬──────┘  └──────┬──────┘  └─────────────┬─────────────┘  │
 └─────────┼────────────────┼───────────────────────┼────────────────┘
           │                │                       │
@@ -20,8 +20,8 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │                      Public API Layer                             │
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  api_public/annotate.py                                     │  │
-│  │  - process_variant(variant_str, tumor_type, config)         │  │
-│  │  - process_variants(variants, tumor_type, config)           │  │
+│  │  - get_insight(variant_str, tumor_type, config)             │  │
+│  │  - get_insights(variants, tumor_type, config)               │  │
 │  │  - AnnotationConfig                                         │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -96,11 +96,11 @@ The core annotation pipeline is deterministic and does not require LLM:
 
 ```python
 # Fast, deterministic annotation (no LLM)
-panel = await process_variant("BRAF V600E")
+panel = await get_insight("BRAF V600E")
 
 # With LLM enhancement (slower, adds literature analysis)
 config = AnnotationConfig(enable_llm=True)
-panel = await process_variant("BRAF V600E", config=config)
+panel = await get_insight("BRAF V600E", config=config)
 ```
 
 ### 3. Async-First Design
@@ -139,7 +139,7 @@ else:
 The single entry point for users:
 
 ```python
-async def process_variant(
+async def get_insight(
     variant_str: str,              # "BRAF V600E" or "EGFR L858R in NSCLC"
     tumor_type: str | None = None, # Optional tumor context
     config: AnnotationConfig | None = None,

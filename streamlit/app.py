@@ -1,4 +1,4 @@
-"""OncoMind Streamlit Application - Variant annotation and evidence synthesis tool."""
+"""OncoMind Streamlit Application - Variant insight and evidence synthesis tool."""
 import streamlit as st
 import pandas as pd
 import asyncio
@@ -6,7 +6,7 @@ import json
 from backend import get_variant_insight, batch_get_variant_insights
 
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
-st.title("🧬 OncoMind: Variant Annotation")
+st.title("🧬 OncoMind: Variant Insight")
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
@@ -16,6 +16,18 @@ MODELS = {
     "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
     "Groq Llama 3.1 70B": "groq/llama-3.1-70b-versatile"
 }
+
+# Initialize session state for persisting results
+if "single_result" not in st.session_state:
+    st.session_state.single_result = None
+if "single_gene" not in st.session_state:
+    st.session_state.single_gene = None
+if "single_variant" not in st.session_state:
+    st.session_state.single_variant = None
+if "batch_results" not in st.session_state:
+    st.session_state.batch_results = None
+if "batch_df" not in st.session_state:
+    st.session_state.batch_df = None
 
 tab1, tab2 = st.tabs(["🔬 Single Variant", "📊 Batch Upload"])
 
@@ -32,9 +44,10 @@ with tab1:
         model_name = st.selectbox("LLM Model", list(MODELS.keys()))
         temperature = st.slider("Temperature", 0.0, 1.0, 0.1, 0.05)
 
-        insight_btn = st.button("🔍 Process Variant", type="primary", use_container_width=True)
+        insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
 
     with col2:
+        # Run analysis if button clicked
         if insight_btn:
             if not gene or not variant:
                 st.error("Gene and variant are required")
@@ -56,33 +69,56 @@ with tab1:
                         f"Your variant '{variant}' is classified as '{variant_type}'."
                     )
                 else:
-                    with st.spinner(f"🔬 Analyzing {gene} {variant}... Fetching evidence from CIViC, ClinVar, and COSMIC databases"):
+                    with st.spinner(f"🔬 Getting insight for {gene} {variant}... Fetching evidence from CIViC, ClinVar, and COSMIC databases"):
                         result = asyncio.run(get_variant_insight(gene, variant, tumor or None, MODELS[model_name], temperature))
                         if "error" in result:
                             st.error(result["error"])
                         else:
-                            st.success(f"✅ Annotation Complete")
-                            metrics_col = st.columns(3)
-                            metrics_col[0].metric("Evidence Strength", result['insight'].get('evidence_strength', 'N/A'))
-                            metrics_col[1].metric("Therapies", len(result.get('recommended_therapies', [])))
-                            metrics_col[2].metric("ClinVar", result.get('clinvar', {}).get('clinical_significance', 'N/A') or 'N/A')
+                            # Store in session state to persist across reruns
+                            st.session_state.single_result = result
+                            st.session_state.single_gene = gene
+                            st.session_state.single_variant = variant
 
-                            st.subheader("Summary")
-                            st.markdown(result['insight'].get('summary', 'No summary available'))
+        # Display results from session state (persists across reruns)
+        if st.session_state.single_result is not None:
+            result = st.session_state.single_result
+            gene_display = st.session_state.single_gene
+            variant_display = st.session_state.single_variant
 
-                            st.subheader("Complete Annotation")
-                            st.json(result)
-                            st.download_button("📥 Download JSON", json.dumps(result, indent=2),
-                                             f"{gene}_{variant}_annotation.json", "application/json")
-                            # Future features placeholders
-                            with st.expander("🧬 Protein Structure (Coming Soon)"):
-                                st.info("ESMFold visualization will be added here")
-                            with st.expander("🤖 Agent Workflow (Coming Soon)"):
-                                st.info("Multi-agent analysis pipeline will be added here")
+            st.success(f"✅ Insight Ready")
+            metrics_col = st.columns(3)
+            metrics_col[0].metric("Evidence Strength", result['insight'].get('evidence_strength', 'N/A'))
+            metrics_col[1].metric("Therapies", len(result.get('recommended_therapies', [])))
+            metrics_col[2].metric("ClinVar", result.get('clinvar', {}).get('clinical_significance', 'N/A') or 'N/A')
+
+            st.subheader("Summary")
+            st.markdown(result['insight'].get('summary', 'No summary available'))
+
+            st.subheader("Complete Insight")
+            st.json(result)
+            st.download_button(
+                "📥 Download JSON",
+                json.dumps(result, indent=2),
+                f"{gene_display}_{variant_display}_insight.json",
+                "application/json",
+                key="download_single"
+            )
+            # Future features placeholders
+            with st.expander("🧬 Protein Structure (Coming Soon)"):
+                st.info("ESMFold visualization will be added here")
+            with st.expander("🤖 Agent Workflow (Coming Soon)"):
+                st.info("Multi-agent analysis pipeline will be added here")
+
+            # Clear button
+            if st.button("🗑️ Clear Results", key="clear_single"):
+                st.session_state.single_result = None
+                st.session_state.single_gene = None
+                st.session_state.single_variant = None
+                st.rerun()
 
 # TAB 2: Batch Upload
 with tab2:
-    st.subheader("Batch Variant Annotation")
+    st.subheader("Batch Variant Insight")
     st.markdown("**CSV Format:** Must contain `gene`, `variant`, and optionally `tumor_type` columns")
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -94,7 +130,7 @@ with tab2:
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.dataframe(df.head(), use_container_width=True)
-        if st.button("🚀 Process Batch", type="primary"):
+        if st.button("🚀 Get Batch Insights", type="primary"):
             if 'gene' not in df.columns or 'variant' not in df.columns:
                 st.error("CSV must contain 'gene' and 'variant' columns")
             else:
@@ -107,12 +143,37 @@ with tab2:
                           status_text.text(f"Processing {i}/{t}..."))))
                 status_text.text("✅ Batch processing complete!")
                 progress_bar.progress(1.0)
+
+                # Store in session state
+                st.session_state.batch_results = results
                 results_df = pd.DataFrame([{"Gene": r['variant']['gene'], "Variant": r['variant']['variant'],
                     "Tumor": r['variant'].get('tumor_type', 'N/A'),
                     "Evidence": r['insight'].get('evidence_strength', 'N/A'),
                     "Therapies": len(r.get('recommended_therapies', []))} for r in results if 'error' not in r])
-                st.dataframe(results_df, use_container_width=True)
-                st.download_button("📥 Download Results CSV", results_df.to_csv(index=False),
-                                 "batch_results.csv", "text/csv")
-                st.download_button("📥 Download Full JSON", json.dumps(results, indent=2),
-                                 "batch_results.json", "application/json")
+                st.session_state.batch_df = results_df
+
+    # Display batch results from session state
+    if st.session_state.batch_results is not None:
+        st.dataframe(st.session_state.batch_df, use_container_width=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.download_button(
+                "📥 Download Results CSV",
+                st.session_state.batch_df.to_csv(index=False),
+                "batch_results.csv",
+                "text/csv",
+                key="download_batch_csv"
+            )
+        with col2:
+            st.download_button(
+                "📥 Download Full JSON",
+                json.dumps(st.session_state.batch_results, indent=2),
+                "batch_results.json",
+                "application/json",
+                key="download_batch_json"
+            )
+        with col3:
+            if st.button("🗑️ Clear Results", key="clear_batch"):
+                st.session_state.batch_results = None
+                st.session_state.batch_df = None
+                st.rerun()

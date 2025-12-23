@@ -1,8 +1,8 @@
-"""Public API for variant annotation.
+"""Public API for variant insight.
 
 This module provides the main entry points for OncoMind:
-- process_variant(): Annotate a single variant
-- process_variants(): Batch annotate multiple variants
+- get_insight(): Get insight for a single variant
+- get_insights(): Batch get insights for multiple variants
 
 ARCHITECTURE:
     Input (str/VCF/DataFrame) → parse → build_evidence_panel → EvidencePanel
@@ -47,7 +47,7 @@ class AnnotationConfig:
         ...     llm_model="gpt-4o-mini",
         ...     enable_literature=True,
         ... )
-        >>> panel = await process_variant("BRAF V600E", config=config)
+        >>> panel = await get_insight("BRAF V600E", config=config)
     """
 
     # Evidence source toggles
@@ -84,14 +84,14 @@ class AnnotationConfig:
         )
 
 
-async def process_variant(
+async def get_insight(
     variant_str: str,
     tumor_type: str | None = None,
     config: AnnotationConfig | None = None,
 ) -> EvidencePanel:
-    """Process a single variant and return aggregated evidence.
+    """Get insight for a single variant and return aggregated evidence.
 
-    This is the main entry point for single-variant annotation.
+    This is the main entry point for single-variant analysis.
 
     Args:
         variant_str: Variant string in any supported format:
@@ -101,7 +101,7 @@ async def process_variant(
             - "TP53 p.R248W" (with p. notation)
         tumor_type: Optional tumor type for clinical context.
             Overrides any tumor type extracted from the string.
-        config: Optional configuration for the annotation pipeline.
+        config: Optional configuration for the insight pipeline.
 
     Returns:
         EvidencePanel with all aggregated evidence.
@@ -111,13 +111,13 @@ async def process_variant(
             is not supported (when validate_variant_type=True).
 
     Example:
-        >>> panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
+        >>> panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
         >>> print(panel.identifiers.gene, panel.identifiers.variant)
         BRAF V600E
         >>> print(panel.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib', 'Encorafenib']
 
-        >>> panel = await process_variant("EGFR L858R in lung cancer")
+        >>> panel = await get_insight("EGFR L858R in lung cancer")
         >>> print(panel.clinical.tumor_type)
         lung cancer
     """
@@ -147,13 +147,13 @@ async def process_variant(
     return panel
 
 
-async def process_variants(
+async def get_insights(
     variants: list[str] | list[dict] | pd.DataFrame | Path | str,
     tumor_type: str | None = None,
     config: AnnotationConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[EvidencePanel]:
-    """Process multiple variants and return aggregated evidence.
+    """Get insights for multiple variants and return aggregated evidence.
 
     Supports various input formats:
     - List of variant strings: ["BRAF V600E", "EGFR L858R"]
@@ -166,18 +166,18 @@ async def process_variants(
         variants: Variants in any supported format.
         tumor_type: Optional tumor type (applied to all variants unless
             the variant has its own tumor_type).
-        config: Optional configuration for the annotation pipeline.
+        config: Optional configuration for the insight pipeline.
         progress_callback: Optional callback(current, total) for progress updates.
 
     Returns:
         List of EvidencePanel objects.
 
     Example:
-        >>> panels = await process_variants(["BRAF V600E", "EGFR L858R"])
+        >>> panels = await get_insights(["BRAF V600E", "EGFR L858R"])
         >>> for panel in panels:
         ...     print(f"{panel.identifiers.gene} {panel.identifiers.variant}")
 
-        >>> panels = await process_variants(
+        >>> panels = await get_insights(
         ...     "variants.csv",
         ...     progress_callback=lambda i, t: print(f"{i}/{t}")
         ... )
@@ -449,39 +449,39 @@ async def _apply_llm_enhancement(
 
 # Synchronous wrappers for convenience
 
-def process_variant_sync(
+def get_insight_sync(
     variant_str: str,
     tumor_type: str | None = None,
     config: AnnotationConfig | None = None,
 ) -> EvidencePanel:
-    """Synchronous wrapper for process_variant.
+    """Synchronous wrapper for get_insight.
 
     Use this when you're not in an async context:
 
-        >>> panel = process_variant_sync("BRAF V600E")
+        >>> panel = get_insight_sync("BRAF V600E")
     """
-    return asyncio.run(process_variant(variant_str, tumor_type, config))
+    return asyncio.run(get_insight(variant_str, tumor_type, config))
 
 
-def process_variants_sync(
+def get_insights_sync(
     variants: list[str] | list[dict] | pd.DataFrame | Path | str,
     tumor_type: str | None = None,
     config: AnnotationConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[EvidencePanel]:
-    """Synchronous wrapper for process_variants.
+    """Synchronous wrapper for get_insights.
 
     Use this when you're not in an async context:
 
-        >>> panels = process_variants_sync(["BRAF V600E", "EGFR L858R"])
+        >>> panels = get_insights_sync(["BRAF V600E", "EGFR L858R"])
     """
-    return asyncio.run(process_variants(variants, tumor_type, config, progress_callback))
+    return asyncio.run(get_insights(variants, tumor_type, config, progress_callback))
 
 
 __all__ = [
-    "process_variant",
-    "process_variants",
-    "process_variant_sync",
-    "process_variants_sync",
+    "get_insight",
+    "get_insights",
+    "get_insight_sync",
+    "get_insights_sync",
     "AnnotationConfig",
 ]

@@ -1,10 +1,10 @@
-"""Public API for OncoMind variant annotation.
+"""Public API for OncoMind variant insight.
 
-This module provides the high-level public API for variant annotation:
+This module provides the high-level public API for variant insight:
 
-    >>> from oncomind import process_variant, process_variants
-    >>> panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
-    >>> panels = await process_variants(["BRAF V600E", "EGFR L858R"])
+    >>> from oncomind import get_insight, get_insights
+    >>> panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
+    >>> panels = await get_insights(["BRAF V600E", "EGFR L858R"])
 
 The API returns strongly-typed EvidencePanel objects with all aggregated
 evidence organized into sections:
@@ -17,13 +17,13 @@ evidence organized into sections:
 """
 
 from oncomind.api_public.annotate import (
-    process_variant,
-    process_variants,
+    get_insight,
+    get_insights,
     AnnotationConfig,
 )
 
 __all__ = [
-    "process_variant",
-    "process_variants",
+    "get_insight",
+    "get_insights",
     "AnnotationConfig",
 ]

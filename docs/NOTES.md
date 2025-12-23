@@ -437,12 +437,261 @@ Possible use cases:
 
 ---
 
+## Future Differentiators (Ideas)
+
+### 1. Evidence Gap Identification
+
+**The idea:** "Here's what we DON'T know about this variant."
+
+No one does this well. Current tools tell you what evidence exists. They don't tell you what's missing.
+
+```python
+class EvidenceGaps(BaseModel):
+    variant: str
+    tumor_type: str
+
+    # What's missing
+    no_clinical_trials: bool
+    no_resistance_data: bool
+    no_functional_studies: bool
+    limited_tumor_specific_data: bool
+    conflicting_evidence: bool
+
+    # Specific gaps
+    gaps: list[str]  # ["No Phase 3 data", "Resistance mechanisms unknown", "No data in this tumor type"]
+
+    # What would help
+    suggested_searches: list[str]  # ["Check for related variants in same codon", "Look for pathway-level evidence"]
+```
+
+**Value:** Transparency about uncertainty. Researchers know where to focus their manual effort.
+
+**Implementation:** Compare expected evidence (based on gene importance, variant type) against actual evidence retrieved.
+
+### 2. Multi-Variant Reasoning
+
+**The idea:** "I have these 3 variants together, what does that mean?"
+
+Current tools annotate variants independently. Real tumors have multiple variants that interact.
+
+```python
+async def analyze_variant_profile(
+    variants: list[str],  # ["EGFR L858R", "TP53 R248W", "MET amp"]
+    tumor_type: str
+) -> ProfileAnalysis:
+    ...
+
+class ProfileAnalysis(BaseModel):
+    variants: list[str]
+    tumor_type: str
+
+    # Individual annotations
+    individual_evidence: dict[str, EvidencePanel]
+
+    # Combined analysis
+    interactions: list[VariantInteraction]
+    prognostic_impact: str  # "TP53 co-mutation associated with worse prognosis in EGFR+ NSCLC"
+    therapeutic_implications: list[str]  # ["Consider osimertinib", "TP53 may reduce TKI duration"]
+    resistance_risk: str  # "MET amp suggests potential primary resistance"
+
+    # Literature specific to combination
+    combination_papers: list[PubMedEvidence]
+
+    sources: list[str]
+```
+
+**Concrete examples:**
+- EGFR L858R + TP53 → worse prognosis, shorter TKI response
+- EGFR L858R + MET amp → potential primary resistance, consider combo
+- BRAF V600E + PIK3CA → may reduce BRAF inhibitor efficacy
+
+**Implementation:**
+1. Annotate each variant individually
+2. Search literature for co-occurrence patterns
+3. LLM synthesis of combined implications
+4. Surface known interaction patterns (can curate top combinations)
+
+### 3. Clinical Question Answering
+
+**The idea:** Not a report, but an answer to a specific question.
+
+Instead of: "Here's everything about BRAF V600E"
+Answer: "Should I try pembrolizumab given BRAF V600E and melanoma?"
+
+```python
+async def answer_clinical_question(
+    question: str,  # "Should I try drug X given variant Y and tumor Z?"
+    context: EvidencePanel | None = None
+) -> ClinicalAnswer:
+    ...
+
+class ClinicalAnswer(BaseModel):
+    question: str
+
+    # Direct answer
+    answer: str  # "Pembrolizumab is not first-line for BRAF V600E melanoma. BRAF/MEK inhibitors are preferred."
+    confidence: Literal["high", "moderate", "low"]
+
+    # Supporting evidence
+    supporting_evidence: list[AttributedClaim]
+    contradicting_evidence: list[AttributedClaim]
+
+    # Caveats
+    caveats: list[str]  # ["Response to immunotherapy may be considered after BRAF inhibitor progression"]
+
+    # What we don't know
+    evidence_gaps: list[str]
+
+    # Disclaimer
+    disclaimer: str = "This is not medical advice. Discuss with treating physician."
+```
+
+**Question types:**
+- "Should I try [drug] given [variant] and [tumor]?"
+- "What's the expected response duration for [variant] on [drug]?"
+- "What should I monitor for resistance?"
+- "Is this patient eligible for [trial NCT#]?"
+
+**Implementation:**
+1. Parse question to extract drug, variant, tumor
+2. Retrieve relevant evidence
+3. LLM generates answer grounded in evidence
+4. Require citations for every claim
+5. Surface contradictions and gaps
+
+**Risk:** This is close to clinical decision support. Be very clear about disclaimers and limitations.
+
+### 4. Dynamic Evidence Synthesis
+
+**The idea:** Not just "here's what we know" — reasoning across sources in real-time.
+
+Static annotation: "CIViC says X, OncoKB says Y, here's a list."
+
+Dynamic synthesis: "CIViC and OncoKB agree on sensitivity. However, three recent papers (2023-2024) report emerging resistance. The FDA label doesn't reflect this yet. Weight: moderate confidence in sensitivity, with caveats."
+
+```python
+class SynthesizedEvidence(BaseModel):
+    variant: str
+    tumor_type: str
+    query_context: str  # What we're trying to answer
+
+    # Synthesis result
+    consensus: str | None  # None if no consensus
+    confidence: Literal["high", "moderate", "low", "conflicting"]
+
+    # Evidence weighting
+    weighted_sources: list[WeightedSource]
+
+    # Conflict analysis
+    conflicts: list[EvidenceConflict]
+    conflict_resolution: str | None  # "Recent literature suggests resistance emerging despite FDA approval"
+
+    # Temporal analysis
+    evidence_trend: str | None  # "Older sources say sensitive, newer sources report resistance"
+    most_recent_evidence: str
+
+    # Final synthesis
+    synthesis_narrative: str  # Human-readable paragraph weighing all evidence
+    key_caveats: list[str]
+
+class WeightedSource(BaseModel):
+    source: str
+    claim: str
+    evidence_level: str
+    publication_date: date | None
+    weight: float  # Based on recency, evidence level, specificity
+    rationale: str  # Why this weight
+
+class EvidenceConflict(BaseModel):
+    source_a: str
+    claim_a: str
+    source_b: str
+    claim_b: str
+    conflict_type: Literal["direct_contradiction", "different_context", "different_evidence_level", "temporal"]
+    resolution_hint: str | None
+```
+
+**Key insight:** Evidence has a temporal dimension. A 2018 FDA approval doesn't account for 2024 resistance reports. The synthesis should reflect this.
+
+**Implementation:**
+1. Retrieve all evidence with timestamps
+2. Detect conflicts across sources
+3. Weight by recency, evidence level, tumor specificity
+4. LLM generates synthesis narrative
+5. Surface conflicts explicitly, don't hide them
+
+### 5. Contextual Question-Answering
+
+**The idea:** "What does this variant mean for a patient who already failed X therapy?"
+
+This is not static lookup. It's contextual reasoning with patient history.
+
+```python
+async def contextual_query(
+    variant: str,
+    tumor_type: str,
+    clinical_context: ClinicalContext
+) -> ContextualAnswer:
+    ...
+
+class ClinicalContext(BaseModel):
+    prior_therapies: list[str]  # ["erlotinib", "osimertinib"]
+    therapy_outcomes: dict[str, str]  # {"erlotinib": "progressed after 8 months"}
+    current_status: str  # "progressing on osimertinib"
+    other_variants: list[str]  # Co-occurring variants
+    patient_factors: dict[str, str] | None  # {"ECOG": "1", "brain_mets": "no"}
+
+class ContextualAnswer(BaseModel):
+    question_interpreted: str  # "What options after osimertinib failure in EGFR L858R NSCLC?"
+
+    # Context-aware answer
+    answer: str
+    confidence: Literal["high", "moderate", "low"]
+
+    # Why this answer given the context
+    reasoning: list[ReasoningStep]
+
+    # Options ranked by context
+    therapeutic_options: list[TherapeuticOption]
+
+    # Trials specifically for this context
+    relevant_trials: list[ClinicalTrialEvidence]  # Trials for post-osimertinib
+
+    # What resistance mechanism to look for
+    suggested_testing: list[str]  # ["Check for C797S", "Consider MET FISH"]
+
+    sources: list[str]
+
+class TherapeuticOption(BaseModel):
+    option: str  # "Platinum-based chemotherapy"
+    rationale: str  # "Standard after TKI failure"
+    evidence_level: str
+    context_fit: str  # "Appropriate given prior TKI exposure"
+    caveats: list[str]
+```
+
+**Example query flow:**
+- Input: "EGFR L858R, failed erlotinib (8mo), now failed osimertinib (14mo)"
+- Reasoning:
+  1. T790M likely emerged after erlotinib (explains osimertinib use)
+  2. Osimertinib failure suggests C797S or bypass (MET, HER2)
+  3. Check resistance mechanism to guide next therapy
+  4. If C797S: consider combo or chemo
+  5. If MET amp: consider tepotinib/capmatinib combo trials
+- Output: Ranked options with rationale specific to this treatment history
+
+**This is the holy grail of precision oncology tooling.** Moving from "here's everything about this variant" to "here's what matters for THIS patient's situation."
+
+---
+
 ## Open Questions
 
 1. **Structural variant normalization** — How much effort? Pragmatic approach vs. proper HGVS?
 2. **LLM synthesis quality** — Need to benchmark against known variants
 3. **Handling contradictions** — Paper A says sensitive, Paper B says resistant. Current approach: surface both.
 4. **Pathway data source** — Curate manually for top variants, or extract from literature?
+5. **Multi-variant interactions** — Curate known combinations, or rely on literature search?
+6. **Clinical Q&A liability** — How to frame to avoid being perceived as medical advice?
 
 ---
 
