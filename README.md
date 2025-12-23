@@ -111,6 +111,35 @@ mind insight BRAF V600E -t Melanoma --output result.json
 | Literature | - | - | ✓ |
 | Variant Insight | - | ✓ | ✓ |
 
+#### Example Output
+
+```
+$ mind insight BRAF V600E -t Melanoma --lite
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                            BRAF V600E in Melanoma                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+╭────────────────────────────── Evidence Summary ──────────────────────────────╮
+│  COSMIC:COSM476                                                              │
+│  ClinVar:            Pathogenic                                              │
+│  Pathogenicity:      AlphaMissense: Pathogenic (0.99) | PolyPhen2: D         │
+│  Gene Role:          oncogene                                                │
+│  Evidence Sources:   CIViC, CIViC Assertions, ClinVar, COSMIC, CGI, VICC     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────── FDA Approved Drugs ─────────────────────────────╮
+│  Mekinist, KEYTRUDA QLEX, BRAFTOVI, ZELBORAF, MEKTOVI                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────── Clinical Evidence ──────────────────────────────╮
+│  CIViC Assertions:                                                           │
+│    • Trametinib, Dabrafenib → SENSITIVITYRESPONSE                            │
+│    • Vemurafenib, Cobimetinib → SENSITIVITYRESPONSE                          │
+│                                                                              │
+│  CGI Biomarkers:                                                             │
+│    • PLX4720: Responsive                                                     │
+│    • Vemurafenib: Responsive                                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
 ### LLM-Ready Context
 
 OncoMind outputs context blocks designed for injection into downstream LLM systems:
