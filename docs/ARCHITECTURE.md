@@ -581,6 +581,37 @@ class ClinicalTrialsClient:
 3. **Exponential backoff with jitter**: Prevents thundering herd on batch requests
 4. **Reraise after exhaustion**: After 3 attempts, error propagates to builder
 5. **Graceful degradation**: Builder catches final errors and returns empty results
+6. **Retry-After header support**: All rate limit errors capture `Retry-After` header when present
+
+**Retry-After Header Handling:**
+
+All API clients parse the `Retry-After` HTTP header from 429/403 responses:
+
+```python
+class ClinicalTrialsRateLimitError(Exception):
+    """Raised when rate limited. Captures Retry-After for logging/monitoring."""
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after  # Seconds to wait (from header)
+
+def _parse_retry_after(self, response: httpx.Response) -> float | None:
+    retry_after = response.headers.get("Retry-After")
+    if not retry_after:
+        return None
+    try:
+        return float(retry_after)
+    except ValueError:
+        return None  # HTTP-date format not parsed, tenacity handles backoff
+```
+
+**Custom User-Agent Headers:**
+
+All clients identify themselves to avoid security blocks:
+
+| Client | User-Agent |
+|--------|-----------|
+| ClinicalTrials | `OncoMind/0.1.0 (contact: oncomind-research@example.com)` |
+| Others | httpx default (may be customized later) |
 
 **Cross-Client Fallback:**
 

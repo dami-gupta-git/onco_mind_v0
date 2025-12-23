@@ -34,8 +34,15 @@ class PubMedError(Exception):
 
 
 class PubMedRateLimitError(PubMedError):
-    """Exception raised when PubMed rate limit (429) is hit."""
-    pass
+    """Exception raised when PubMed rate limit (429) is hit.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header)
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -201,6 +208,24 @@ class PubMedClient:
             await asyncio.sleep(self.RATE_LIMIT_DELAY - elapsed)
         self._last_request_time = time.time()
 
+    def _parse_retry_after(self, response: httpx.Response) -> float | None:
+        """Parse Retry-After header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Seconds to wait, or None if header not present/parseable
+        """
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return None
+
+        try:
+            return float(retry_after)
+        except ValueError:
+            return None
+
     def _build_resistance_query(
         self,
         gene: str,
@@ -317,7 +342,8 @@ class PubMedClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
-                raise PubMedRateLimitError("PubMed rate limit exceeded")
+                retry_after = self._parse_retry_after(e.response)
+                raise PubMedRateLimitError("PubMed rate limit exceeded", retry_after=retry_after)
             return []
         except httpx.HTTPError:
             return []
@@ -375,7 +401,8 @@ class PubMedClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
-                raise PubMedRateLimitError("PubMed rate limit exceeded")
+                retry_after = self._parse_retry_after(e.response)
+                raise PubMedRateLimitError("PubMed rate limit exceeded", retry_after=retry_after)
             return []
         except httpx.HTTPError:
             return []
