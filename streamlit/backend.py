@@ -4,14 +4,163 @@ Backend logic for OncoMind Streamlit app.
 Integrates with the oncomind package for:
 - Variant annotation generation (single and batch)
 - Evidence gathering from multiple databases
+
+Supports two modes:
+- Fast annotation mode: Uses new public API (no LLM, returns EvidencePanel)
+- Full insight mode: Uses legacy InsightEngine (with LLM narrative)
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
-from oncomind.api.myvariant import MyVariantClient
-from oncomind.engine import InsightEngine
-from oncomind.models.variant import VariantInput
+from oncomind import process_variant, process_variants, AnnotationConfig
+
+
+async def get_variant_annotation(
+    gene: str,
+    variant: str,
+    tumor_type: Optional[str] = None,
+    enable_llm: bool = False,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.1
+) -> Dict[str, Any]:
+    """
+    Generate annotation for a single variant using the new public API.
+
+    This is the recommended function for variant annotation.
+    Returns EvidencePanel data.
+
+    Args:
+        gene: Gene symbol (e.g., BRAF)
+        variant: Variant notation (e.g., V600E)
+        tumor_type: Optional tumor type (e.g., Melanoma)
+        enable_llm: Enable LLM enhancement for literature analysis
+        model: LLM model to use (if enable_llm=True)
+        temperature: LLM temperature (0.0-1.0)
+
+    Returns:
+        Dict containing annotation results with identifiers, evidence, etc.
+    """
+    try:
+        config = AnnotationConfig(
+            enable_llm=enable_llm,
+            llm_model=model,
+            llm_temperature=temperature,
+        )
+
+        # Build variant string
+        variant_str = f"{gene} {variant}"
+
+        # Get evidence panel
+        panel = await process_variant(variant_str, tumor_type=tumor_type, config=config)
+
+        # Convert to dict for JSON serialization
+        return {
+            "variant": {
+                "gene": panel.identifiers.gene,
+                "variant": panel.identifiers.variant,
+                "tumor_type": panel.clinical.tumor_type,
+            },
+            "insight": {
+                "summary": _generate_summary(panel),
+                "evidence_strength": panel.meta.evidence_strength,
+            },
+            "identifiers": {
+                "cosmic_id": panel.identifiers.cosmic_id,
+                "ncbi_gene_id": panel.identifiers.ncbi_gene_id,
+                "dbsnp_id": panel.identifiers.dbsnp_id,
+                "clinvar_id": panel.identifiers.clinvar_id,
+            },
+            "hgvs": {
+                "genomic": panel.identifiers.hgvs_genomic,
+                "protein": panel.identifiers.hgvs_protein,
+                "transcript": panel.identifiers.hgvs_transcript,
+            },
+            "clinvar": {
+                "clinical_significance": panel.clinical.clinvar_clinical_significance,
+                "accession": panel.clinical.clinvar_accession,
+            },
+            "annotations": {
+                "snpeff_effect": panel.functional.snpeff_effect,
+                "polyphen2_prediction": panel.functional.polyphen2_prediction,
+                "cadd_score": panel.functional.cadd_score,
+                "gnomad_exome_af": panel.functional.gnomad_exome_af,
+                "alphamissense_score": panel.functional.alphamissense_score,
+                "alphamissense_prediction": panel.functional.alphamissense_prediction,
+            },
+            "transcript": {
+                "id": panel.identifiers.transcript_id,
+                "consequence": panel.identifiers.transcript_consequence,
+            },
+            "recommended_therapies": _extract_therapies(panel),
+            "evidence_panel": panel.model_dump(mode="json"),
+        }
+
+    except Exception as e:
+        return {"error": f"Annotation generation failed: {str(e)}"}
+
+
+def _generate_summary(panel) -> str:
+    """Generate a summary string from an EvidencePanel."""
+    parts = []
+
+    gene = panel.identifiers.gene
+    variant = panel.identifiers.variant
+    parts.append(f"{gene} {variant}")
+
+    if panel.clinical.gene_role:
+        parts.append(f"({panel.clinical.gene_role})")
+
+    drugs = panel.clinical.get_approved_drugs()
+    if drugs:
+        parts.append(f"has FDA-approved therapies: {', '.join(drugs[:3])}")
+    else:
+        parts.append("has no FDA-approved targeted therapies")
+
+    if panel.clinical.clinical_trials:
+        variant_specific = sum(1 for t in panel.clinical.clinical_trials if t.variant_specific)
+        if variant_specific:
+            parts.append(f"with {variant_specific} variant-specific clinical trials")
+        else:
+            parts.append(f"with {len(panel.clinical.clinical_trials)} relevant clinical trials")
+
+    return " ".join(parts)
+
+
+def _extract_therapies(panel) -> List[Dict[str, Any]]:
+    """Extract therapy recommendations from an EvidencePanel."""
+    therapies = []
+
+    # From FDA approvals
+    for approval in panel.clinical.fda_approvals:
+        drug_name = approval.brand_name or approval.generic_name or approval.drug_name
+        if drug_name:
+            therapies.append({
+                "drug_name": drug_name,
+                "evidence_level": "A",
+                "approval_status": "FDA Approved",
+                "clinical_context": approval.indication[:200] if approval.indication else "",
+            })
+
+    # From CGI biomarkers
+    for biomarker in panel.kb.cgi_biomarkers:
+        if biomarker.fda_approved and biomarker.drug:
+            therapies.append({
+                "drug_name": biomarker.drug,
+                "evidence_level": biomarker.evidence_level or "A",
+                "approval_status": "FDA Approved (CGI)",
+                "clinical_context": biomarker.tumor_type or "",
+            })
+
+    # Deduplicate by drug name
+    seen_drugs = set()
+    unique_therapies = []
+    for t in therapies:
+        if t["drug_name"] not in seen_drugs:
+            seen_drugs.add(t["drug_name"])
+            unique_therapies.append(t)
+
+    return unique_therapies[:10]
 
 
 async def get_variant_insight(
@@ -22,7 +171,10 @@ async def get_variant_insight(
     temperature: float = 0.1
 ) -> Dict[str, Any]:
     """
-    Generate annotation insight for a single variant.
+    Generate annotation insight for a single variant with LLM narrative.
+
+    This uses the legacy InsightEngine for full LLM narrative generation.
+    For faster annotation without LLM, use get_variant_annotation instead.
 
     Args:
         gene: Gene symbol (e.g., BRAF)
@@ -35,6 +187,10 @@ async def get_variant_insight(
         Dict containing annotation results with identifiers, evidence, etc.
     """
     try:
+        # Import legacy engine
+        from oncomind.engine import InsightEngine
+        from oncomind.models.variant import VariantInput
+
         # Create insight engine
         engine = InsightEngine(llm_model=model, llm_temperature=temperature)
 
@@ -103,6 +259,81 @@ async def get_variant_insight(
         return {"error": f"Annotation generation failed: {str(e)}"}
 
 
+async def batch_get_variant_annotations(
+    variants: List[Dict[str, str]],
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.1,
+    enable_llm: bool = False,
+    progress_callback: Optional[Callable[[int, int], None]] = None
+) -> List[Dict[str, Any]]:
+    """
+    Generate annotations for multiple variants using the new public API.
+
+    This is the recommended function for batch annotation.
+
+    Args:
+        variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
+        model: LLM model to use (if enable_llm=True)
+        temperature: LLM temperature (0.0-1.0)
+        enable_llm: Enable LLM enhancement for literature analysis
+        progress_callback: Optional callback(current, total) for progress updates
+
+    Returns:
+        List of annotation results
+    """
+    try:
+        config = AnnotationConfig(
+            enable_llm=enable_llm,
+            llm_model=model,
+            llm_temperature=temperature,
+        )
+
+        # Convert to variant strings
+        variant_strs = []
+        tumor_types = []
+        for v in variants:
+            variant_strs.append(f"{v['gene']} {v['variant']}")
+            tumor_types.append(v.get('tumor_type'))
+
+        # Process variants
+        results = []
+        panels = await process_variants(
+            variant_strs,
+            config=config,
+            progress_callback=progress_callback,
+        )
+
+        for i, panel in enumerate(panels):
+            # Apply tumor type if provided
+            if tumor_types[i]:
+                panel.clinical.tumor_type = tumor_types[i]
+
+            results.append({
+                "variant": {
+                    "gene": panel.identifiers.gene,
+                    "variant": panel.identifiers.variant,
+                    "tumor_type": panel.clinical.tumor_type,
+                },
+                "insight": {
+                    "summary": _generate_summary(panel),
+                    "evidence_strength": panel.meta.evidence_strength,
+                },
+                "identifiers": {
+                    "cosmic_id": panel.identifiers.cosmic_id,
+                    "ncbi_gene_id": panel.identifiers.ncbi_gene_id,
+                    "dbsnp_id": panel.identifiers.dbsnp_id,
+                    "clinvar_id": panel.identifiers.clinvar_id,
+                },
+                "recommended_therapies": _extract_therapies(panel),
+                "evidence_panel": panel.model_dump(mode="json"),
+            })
+
+        return results
+
+    except Exception as e:
+        return [{"error": f"Batch annotation generation failed: {str(e)}"}]
+
+
 async def batch_get_variant_insights(
     variants: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
@@ -110,7 +341,10 @@ async def batch_get_variant_insights(
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Generate annotations for multiple variants concurrently.
+    Generate annotations for multiple variants with LLM narrative.
+
+    This uses the legacy InsightEngine for full LLM narrative generation.
+    For faster batch annotation without LLM, use batch_get_variant_annotations.
 
     Args:
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
@@ -122,6 +356,10 @@ async def batch_get_variant_insights(
         List of annotation results
     """
     try:
+        # Import legacy engine
+        from oncomind.engine import InsightEngine
+        from oncomind.models.variant import VariantInput
+
         # Create insight engine
         engine = InsightEngine(llm_model=model, llm_temperature=temperature)
 
