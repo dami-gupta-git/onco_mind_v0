@@ -47,6 +47,7 @@ def insight(
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
     llm: bool = typer.Option(False, "--llm/--no-llm", help="Enable LLM enhancement"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (if --llm enabled)"),
+    fast: bool = typer.Option(False, "--fast", "-f", help="Fast mode: skip literature search"),
 ) -> None:
     """Get insight for a single variant and return evidence panel.
 
@@ -57,6 +58,7 @@ def insight(
         mind insight BRAF V600E --tumor Melanoma
         mind insight EGFR L858R -t NSCLC
         mind insight TP53 R248W --output result.json
+        mind insight KRAS G12D -t NSCLC --fast  # Skip literature for speed
     """
     variant_str = f"{gene} {variant}"
 
@@ -64,10 +66,13 @@ def insight(
         print(f"\nGetting insight for {gene} {variant}...")
         if tumor:
             print(f"  Tumor type: {tumor}")
+        if fast:
+            print("  Mode: fast (skipping literature)")
 
         config = AnnotationConfig(
             enable_llm=llm,
             llm_model=model,
+            enable_literature=not fast,
         )
 
         panel = await get_insight(variant_str, tumor_type=tumor, config=config)
@@ -157,41 +162,77 @@ def batch(
     output: Path = typer.Option("results.json", "--output", "-o", help="Output file"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model"),
     temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
-    log: bool = typer.Option(True, "--log/--no-log", help="Enable LLM decision logging"),
+    fast: bool = typer.Option(False, "--fast", "-f", help="Fast mode: skip literature search"),
+    llm: bool = typer.Option(True, "--llm/--no-llm", help="Enable LLM synthesis (use --no-llm for faster results)"),
 ) -> None:
-    """Batch process multiple variants."""
+    """Batch process multiple variants.
+
+    Examples:
+        mind batch variants.json --output results.json
+        mind batch variants.json --fast --no-llm  # Fastest mode
+        mind batch variants.json --fast            # Skip literature, keep LLM
+    """
 
     if not input_file.exists():
         print(f"Error: Input file not found: {input_file}")
         raise typer.Exit(1)
 
     async def run_batch() -> None:
+        from oncomind import get_insights, AnnotationConfig
+
         with open(input_file, "r") as f:
             data = json.load(f)
 
-        variants = [VariantInput(**item) for item in data]
-        print(f"\nLoaded {len(variants)} variants from {input_file}")
+        # Build variant strings and tumor types
+        variant_strs = []
+        tumor_types = []
+        for item in data:
+            gene = item.get('gene', '')
+            variant = item.get('variant', '')
+            variant_strs.append(f"{gene} {variant}")
+            tumor_types.append(item.get('tumor_type'))
 
-        async with InsightEngine(llm_model=model, llm_temperature=temperature, enable_logging=log) as engine:
-            print(f"Processing {len(variants)} variants...")
-            insights = await engine.batch_report(variants)
+        print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
+        if fast:
+            print("  Mode: fast (skipping literature)")
+        if not llm:
+            print("  LLM: disabled")
 
-            output_data = [insight.model_dump(mode="json") for insight in insights]
-            with open(output, "w") as f:
-                json.dump(output_data, f, indent=2)
+        config = AnnotationConfig(
+            enable_llm=llm,
+            llm_model=model,
+            llm_temperature=temperature,
+            enable_literature=not fast,
+        )
 
-            print(f"\nSuccessfully processed {len(insights)}/{len(variants)} variants")
-            print(f"Results saved to {output}")
+        def progress_callback(current: int, total: int) -> None:
+            print(f"  Processing {current}/{total}...", end='\r')
 
-            # Summary of evidence strength
-            strength_counts: dict[str, int] = {}
-            for insight in insights:
-                strength = insight.evidence_strength or "Unknown"
-                strength_counts[strength] = strength_counts.get(strength, 0) + 1
+        panels = await get_insights(variant_strs, config=config, progress_callback=progress_callback)
+        print()  # Clear progress line
 
-            print("\nEvidence Strength Distribution:")
-            for strength, count in sorted(strength_counts.items()):
-                print(f"  {strength}: {count}")
+        # Apply tumor types and build output
+        output_data = []
+        for i, panel in enumerate(panels):
+            if tumor_types[i]:
+                panel.clinical.tumor_type = tumor_types[i]
+            output_data.append(panel.model_dump(mode="json"))
+
+        with open(output, "w") as f:
+            json.dump(output_data, f, indent=2)
+
+        print(f"\nSuccessfully processed {len(panels)}/{len(variant_strs)} variants")
+        print(f"Results saved to {output}")
+
+        # Summary of evidence strength
+        strength_counts: dict[str, int] = {}
+        for panel in panels:
+            strength = panel.meta.evidence_strength or "Unknown"
+            strength_counts[strength] = strength_counts.get(strength, 0) + 1
+
+        print("\nEvidence Strength Distribution:")
+        for strength, count in sorted(strength_counts.items()):
+            print(f"  {strength}: {count}")
 
     asyncio.run(run_batch())
 

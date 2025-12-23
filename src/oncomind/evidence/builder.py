@@ -73,6 +73,11 @@ class EvidenceBuilderConfig:
     max_clinical_trials: int = 10
     max_literature_results: int = 6
 
+    # Concurrency control for rate-limited APIs
+    # Semantic Scholar: 1 RPS without key, ~10 RPS with key
+    # PubMed: 3 RPS without key, 10 RPS with key
+    literature_concurrency: int = 1  # Limit concurrent literature requests
+
     # API keys (from environment by default)
     semantic_scholar_api_key: str | None = field(
         default_factory=lambda: os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
@@ -118,6 +123,9 @@ class EvidenceBuilder:
         else:
             self.semantic_scholar_client = None
             self.pubmed_client = None
+
+        # Semaphore to limit concurrent literature API requests
+        self._literature_semaphore = asyncio.Semaphore(self.config.literature_concurrency)
 
     async def __aenter__(self):
         """Initialize HTTP client sessions."""
@@ -177,42 +185,46 @@ class EvidenceBuilder:
     ) -> tuple[list, str | None]:
         """Fetch literature from Semantic Scholar with PubMed fallback.
 
+        Uses semaphore to limit concurrent requests and avoid rate limits.
+
         Returns:
             Tuple of (papers/articles, source_name)
         """
         if not self.semantic_scholar_client:
             return [], None
 
-        try:
-            # Search both resistance AND general variant literature
-            resistance_papers, variant_papers = await asyncio.gather(
-                self.semantic_scholar_client.search_resistance_literature(
-                    gene=gene,
-                    variant=variant,
-                    tumor_type=tumor_type,
-                    max_results=self.config.max_literature_results // 2,
-                ),
-                self.semantic_scholar_client.search_variant_literature(
-                    gene=gene,
-                    variant=variant,
-                    tumor_type=tumor_type,
-                    max_results=self.config.max_literature_results // 2,
-                ),
-            )
+        # Use semaphore to limit concurrent literature API requests
+        async with self._literature_semaphore:
+            try:
+                # Search both resistance AND general variant literature
+                resistance_papers, variant_papers = await asyncio.gather(
+                    self.semantic_scholar_client.search_resistance_literature(
+                        gene=gene,
+                        variant=variant,
+                        tumor_type=tumor_type,
+                        max_results=self.config.max_literature_results // 2,
+                    ),
+                    self.semantic_scholar_client.search_variant_literature(
+                        gene=gene,
+                        variant=variant,
+                        tumor_type=tumor_type,
+                        max_results=self.config.max_literature_results // 2,
+                    ),
+                )
 
-            # Merge and deduplicate by paper_id
-            seen_ids = set()
-            merged_papers = []
-            for paper in resistance_papers + variant_papers:
-                if paper.paper_id not in seen_ids:
-                    seen_ids.add(paper.paper_id)
-                    merged_papers.append(paper)
+                # Merge and deduplicate by paper_id
+                seen_ids = set()
+                merged_papers = []
+                for paper in resistance_papers + variant_papers:
+                    if paper.paper_id not in seen_ids:
+                        seen_ids.add(paper.paper_id)
+                        merged_papers.append(paper)
 
-            return merged_papers[:self.config.max_literature_results], "semantic_scholar"
+                return merged_papers[:self.config.max_literature_results], "semantic_scholar"
 
-        except SemanticScholarRateLimitError:
-            # Fall back to PubMed
-            return await self._fetch_pubmed_literature(gene, variant, tumor_type)
+            except SemanticScholarRateLimitError:
+                # Fall back to PubMed (still within semaphore)
+                return await self._fetch_pubmed_literature(gene, variant, tumor_type)
 
     async def _fetch_pubmed_literature(
         self,
@@ -220,11 +232,17 @@ class EvidenceBuilder:
         variant: str,
         tumor_type: str | None,
     ) -> tuple[list, str | None]:
-        """Fetch literature from PubMed with retry."""
+        """Fetch literature from PubMed with fast retry.
+
+        Uses short backoff: 0.5s, 1s between retries (max 2 retries).
+        """
         if not self.pubmed_client:
             return [], None
 
-        for attempt in range(3):
+        import random
+
+        max_retries = 2  # Reduced from 4 for speed
+        for attempt in range(max_retries):
             try:
                 resistance_articles, variant_articles = await asyncio.gather(
                     self.pubmed_client.search_resistance_literature(
@@ -252,11 +270,12 @@ class EvidenceBuilder:
                 return merged_articles[:self.config.max_literature_results], "pubmed"
 
             except PubMedRateLimitError:
-                wait_time = 2 ** attempt
-                print(f"  PubMed rate limit hit, waiting {wait_time}s...")
-                await asyncio.sleep(wait_time)
+                if attempt < max_retries - 1:
+                    # Short backoff: 0.5s, 1s + small jitter
+                    wait_time = 0.5 * (attempt + 1) + random.uniform(0, 0.3)
+                    await asyncio.sleep(wait_time)
 
-        print("  Warning: Literature search unavailable (rate limits)")
+        # Silently return empty - meta.sources_failed will indicate the issue
         return [], None
 
     async def build_evidence_panel(
