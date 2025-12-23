@@ -125,45 +125,30 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
-## EvidencePanel Structure
+## EvidencePanel
+
+The `EvidencePanel` is the core output model with sections for:
+
+| Section | Contents |
+|---------|----------|
+| `identifiers` | Gene, variant, HGVS notation, COSMIC/dbSNP IDs |
+| `kb` | CIViC assertions, VICC MetaKB, CGI biomarkers, ClinVar |
+| `functional` | AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD frequencies |
+| `clinical` | FDA approvals, clinical trials, gene role |
+| `literature` | PubMed articles, LLM-synthesized insights |
+| `meta` | Sources queried, conflicts, processing metadata |
 
 ```python
 panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-# Identifiers
 panel.identifiers.gene              # "BRAF"
-panel.identifiers.variant           # "V600E"
-panel.identifiers.cosmic_id         # "COSM476"
-panel.identifiers.hgvs_protein      # "p.V600E"
-
-# Knowledgebase evidence
-panel.kb.civic_assertions           # CIViC curated assertions
-panel.kb.vicc                       # VICC MetaKB (OncoKB, CIViC, MOAlmanac)
-panel.kb.cgi_biomarkers             # CGI biomarker evidence
-panel.kb.clinvar                    # ClinVar entries
-
-# Functional scores
-panel.functional.alphamissense_score       # 0.98
-panel.functional.alphamissense_prediction  # "P" (Pathogenic)
-panel.functional.cadd_score                # 32.0
-panel.functional.gnomad_exome_af           # 0.00001
-
-# Clinical context
-panel.clinical.fda_approvals        # FDA-approved therapies
-panel.clinical.clinical_trials      # Matching active trials
-panel.clinical.gene_role            # "oncogene"
+panel.kb.civic_assertions           # Curated drug-variant associations
+panel.functional.alphamissense_score  # 0.98 (pathogenicity)
 panel.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib"]
-
-# Literature
-panel.literature.pubmed_articles         # Retrieved articles
-panel.literature.literature_knowledge    # LLM-synthesized insights
-
-# Metadata & trust
-panel.meta.sources_queried          # All sources attempted
-panel.meta.sources_with_data        # Sources that returned evidence
-panel.meta.sources_failed           # Sources that errored
-panel.meta.conflicts                # Cross-source disagreements
+panel.meta.sources_with_data        # ["CIViC", "VICC", "COSMIC", ...]
 ```
+
+See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentation.
 
 ## Supported Variant Types
 
