@@ -18,11 +18,10 @@ from pathlib import Path
 from typing import Optional
 import typer
 from dotenv import load_dotenv
-from tumorboard.engine import AssessmentEngine
-from tumorboard.models.variant import VariantInput
-from tumorboard.validation.validator import Validator
 
-from oncomind.engine import ReportingEngine
+
+from oncomind.engine import InsightEngine
+from oncomind.models import VariantInput
 
 # Suppress litellm's async cleanup warnings (harmless internal warnings)
 warnings.filterwarnings("ignore", message=".*async_success_handler.*")
@@ -50,7 +49,7 @@ def process(
 ) -> None:
     """Assess clinical actionability of a single variant."""
 
-    async def run_report() -> None:
+    async def get_variant_insight() -> None:
         variant_input = VariantInput(gene=gene, variant=variant, tumor_type=tumor)
 
         if tumor:
@@ -58,18 +57,18 @@ def process(
         else:
             print(f"\nProcessing {gene} {variant}...")
 
-        async with ReportingEngine(llm_model=model, llm_temperature=temperature, enable_logging=log, enable_vicc=vicc) as engine:
-            report = await engine.process_variant(variant_input)
+        async with InsightEngine(llm_model=model, llm_temperature=temperature, enable_logging=log, enable_vicc=vicc) as engine:
+            result = await engine.get_insight(variant_input)
 
-            print(report.to_report())
+            print(result.get_insight())
 
             if output:
-                output_data = report.model_dump(mode="json")
+                output_data = result.model_dump(mode="json")
                 with open(output, "w") as f:
                     json.dump(output_data, f, indent=2)
                 print(f"Saved to {output}")
 
-    asyncio.run(run_report())
+    asyncio.run(get_variant_insight())
 
 
 @app.command()
@@ -151,7 +150,7 @@ def validate(
                 if validator._last_failed_count > 5:
                     print(f"  ... and {validator._last_failed_count - 5} more")
 
-            print(metrics.to_report())
+            print(metrics.get_insight())
 
             if output:
                 output_data = metrics.model_dump(mode="json")

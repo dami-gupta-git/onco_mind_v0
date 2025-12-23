@@ -18,7 +18,7 @@ docker compose up --build
 
 3. **Open in browser:**
 ```
-http://localhost:8501
+http://localhost:8502
 ```
 
 ## Features
@@ -90,7 +90,7 @@ streamlit run app.py
 
 ## Notes
 
-- App runs on port 8501
+- App runs on port 8502
 - All scientific functionality from the original oncomind package is preserved
 - Backend uses async/await for efficient concurrent processing
 - LiteLLM provides unified interface to multiple LLM providers

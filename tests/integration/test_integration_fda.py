@@ -67,7 +67,7 @@ class TestFDAIntegration:
                             references=[]
                         )
 
-                        assessment = await engine.process_variant(variant_input)
+                        assessment = await engine.get_insight(variant_input)
 
                         # Verify FDA client was called
                         mock_fda.assert_called_once()
@@ -131,7 +131,7 @@ class TestFDAIntegration:
 
                         mock_llm.side_effect = capture_evidence
 
-                        assessment = await engine.process_variant(variant_input)
+                        assessment = await engine.get_insight(variant_input)
 
                         # Verify FDA data was added to evidence
                         assert evidence_captured is not None
@@ -183,7 +183,7 @@ class TestFDAIntegration:
                         )
 
                         # Should not raise exception
-                        assessment = await engine.process_variant(variant_input)
+                        assessment = await engine.get_insight(variant_input)
 
                         # Should still get valid assessment
                         assert assessment.tier == "Tier I"
@@ -280,7 +280,7 @@ class TestFDAIntegration:
                             references=[]
                         )
 
-                        assessment = await engine.process_variant(variant_input)
+                        assessment = await engine.get_insight(variant_input)
 
                         # Verify both APIs were called
                         assert "myvariant_start" in call_order

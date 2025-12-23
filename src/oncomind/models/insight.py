@@ -38,7 +38,7 @@ class RecommendedTherapy(BaseModel):
     )
 
 
-class VariantReport(VariantAnnotations):
+class VariantInsight(VariantAnnotations):
     """Complete actionability assessment for a variant."""
 
     gene: str
@@ -61,7 +61,7 @@ class VariantReport(VariantAnnotations):
         default_factory=list, description="Key references supporting the assessment"
     )
 
-    def to_report(self) -> str:
+    def get_insight(self) -> str:
         """Pretty report output with Rich formatting and soft-wrapping."""
         console = Console(width=80, force_terminal=True)
 

@@ -23,7 +23,7 @@ __all__ = [
     "COSMICEvidence",
     "ActionabilityTier",
     "RecommendedTherapy",
-    "VariantReport",
+    "VariantInsight",
     "GoldStandardEntry",
     "ValidationResult",
     "ValidationMetrics",

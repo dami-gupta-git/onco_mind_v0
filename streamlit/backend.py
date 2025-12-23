@@ -49,7 +49,7 @@ async def assess_variant(
 
         # Run assessment
         async with engine:
-            assessment = await engine.process_variant(variant_input)
+            assessment = await engine.get_insight(variant_input)
 
         # Convert to dict for JSON serialization
         return {
@@ -146,7 +146,7 @@ async def batch_assess_variants(
                     progress_callback(i + 1, len(variant_inputs))
 
                 try:
-                    assessment = await engine.process_variant(variant_input)
+                    assessment = await engine.get_insight(variant_input)
 
                     # Convert to dict
                     result = {
