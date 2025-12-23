@@ -1,30 +1,12 @@
-"""Assessment and actionability models."""
+"""Variant insight and annotation models."""
 
 import textwrap
-from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
 
 from oncomind.models.annotations import VariantAnnotations
-
-
-class ActionabilityTier(str, Enum):
-    """AMP/ASCO/CAP clinical actionability tiers.
-
-    Tier I: Variants with strong clinical significance
-    Tier II: Variants with potential clinical significance
-    Tier III: Variants with unknown clinical significance
-    Tier IV: Variants deemed benign or likely benign
-    """
-
-    TIER_I = "Tier I"
-    TIER_II = "Tier II"
-    TIER_III = "Tier III"
-    TIER_IV = "Tier IV"
-    UNKNOWN = "Unknown"
 
 
 class RecommendedTherapy(BaseModel):
@@ -39,18 +21,23 @@ class RecommendedTherapy(BaseModel):
 
 
 class VariantInsight(VariantAnnotations):
-    """Complete actionability assessment for a variant."""
+    """Complete annotation insight for a variant.
+
+    This model provides comprehensive variant annotations including:
+    - Database identifiers (COSMIC, ClinVar, dbSNP)
+    - HGVS notations
+    - Functional predictions (AlphaMissense, CADD, PolyPhen2)
+    - Clinical significance from ClinVar
+    - Therapeutic options from evidence databases
+    - LLM-generated summary and rationale
+    """
 
     gene: str
     variant: str
     tumor_type: str | None
-    tier: ActionabilityTier = Field(..., description="AMP/ASCO/CAP tier classification")
-    confidence_score: float = Field(
-        ..., ge=0.0, le=1.0, description="Confidence in the assessment (0-1)"
-    )
-    summary: str = Field(..., description="Human-readable summary of the assessment")
+    summary: str = Field(..., description="Human-readable summary of the variant")
     recommended_therapies: list[RecommendedTherapy] = Field(default_factory=list)
-    rationale: str = Field(..., description="Detailed rationale for tier assignment")
+    rationale: str = Field(..., description="Detailed rationale for clinical interpretation")
     evidence_strength: str | None = Field(
         None, description="Overall strength of evidence (Strong/Moderate/Weak)"
     )
@@ -58,7 +45,7 @@ class VariantInsight(VariantAnnotations):
         default=False, description="Whether relevant clinical trials exist"
     )
     references: list[str] = Field(
-        default_factory=list, description="Key references supporting the assessment"
+        default_factory=list, description="Key references supporting the insight"
     )
 
     def get_insight(self) -> str:
@@ -71,18 +58,7 @@ class VariantInsight(VariantAnnotations):
         # Header line
         header = f"[bold cyan]{self.gene} {self.variant}[/bold cyan]  |  Tumor: [italic]{tumor_display}[/italic]"
 
-        # Tier with color coding
-        tier_colors = {
-            "Tier I": "bold green",
-            "Tier II": "bold yellow",
-            "Tier III": "bold red",
-            "Tier IV": "dim",
-            "Unknown": "dim",
-        }
-        tier_style = tier_colors.get(self.tier.value, "white")
-        tier_line = f"[{tier_style}]{self.tier.value}[/{tier_style}]  |  Confidence: {self.confidence_score:.1%}"
-
-        content_lines = [header, tier_line, ""]
+        content_lines = [header, ""]
 
         # Add identifiers if available
         identifiers = []
@@ -118,6 +94,10 @@ class VariantInsight(VariantAnnotations):
         if annotations:
             content_lines.append(f"[dim]Scores:[/dim] {' | '.join(annotations)}")
 
+        # Evidence strength if available
+        if self.evidence_strength:
+            content_lines.append(f"[dim]Evidence:[/dim] {self.evidence_strength}")
+
         # Clinical narrative - soft-wrapped
         content_lines.append("")
         wrapped_summary = textwrap.fill(self.summary, width=74)
@@ -136,7 +116,7 @@ class VariantInsight(VariantAnnotations):
         # Create panel with box styling
         panel = Panel(
             content,
-            title="[bold white]Variant Assessment[/bold white]",
+            title="[bold white]Variant Insight[/bold white]",
             border_style="blue",
             padding=(1, 2),
         )

@@ -1,4 +1,4 @@
-"""Centralized constants and mappings for TumorBoard.
+"""Centralized constants and mappings for OncoMind.
 
 This module consolidates all hardcoded mappings used across the codebase:
 - Gene aliases (different nomenclatures for the same gene)

@@ -1,22 +1,20 @@
 """
-Backend logic for TumorBoard Streamlit app.
+Backend logic for OncoMind Streamlit app.
 
-Integrates with the existing tumorboard package for:
-- Variant assessment (single and batch)
-- Validation against gold standard
-- Evidence gathering from MyVariant.info
+Integrates with the oncomind package for:
+- Variant annotation generation (single and batch)
+- Evidence gathering from multiple databases
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
 from oncomind.api.myvariant import MyVariantClient
-from oncomind.engine import ProcessingEngine
+from oncomind.engine import InsightEngine
 from oncomind.models.variant import VariantInput
-from oncomind.validation.validator import Validator
 
 
-async def assess_variant(
+async def get_variant_insight(
     gene: str,
     variant: str,
     tumor_type: Optional[str] = None,
@@ -24,7 +22,7 @@ async def assess_variant(
     temperature: float = 0.1
 ) -> Dict[str, Any]:
     """
-    Assess a single variant for clinical actionability.
+    Generate annotation insight for a single variant.
 
     Args:
         gene: Gene symbol (e.g., BRAF)
@@ -34,11 +32,11 @@ async def assess_variant(
         temperature: LLM temperature (0.0-1.0)
 
     Returns:
-        Dict containing assessment results with tier, confidence, identifiers, etc.
+        Dict containing annotation results with identifiers, evidence, etc.
     """
     try:
-        # Create assessment engine
-        engine = ProcessingEngine(llm_model=model, llm_temperature=temperature)
+        # Create insight engine
+        engine = InsightEngine(llm_model=model, llm_temperature=temperature)
 
         # Create variant input
         variant_input = VariantInput(
@@ -47,48 +45,48 @@ async def assess_variant(
             tumor_type=tumor_type
         )
 
-        # Run assessment
+        # Generate insight
         async with engine:
-            assessment = await engine.get_insight(variant_input)
+            insight = await engine.get_insight(variant_input)
 
         # Convert to dict for JSON serialization
         return {
             "variant": {
-                "gene": assessment.gene,
-                "variant": assessment.variant,
-                "tumor_type": assessment.tumor_type,
+                "gene": insight.gene,
+                "variant": insight.variant,
+                "tumor_type": insight.tumor_type,
             },
-            "assessment": {
-                "tier": assessment.tier.value,
-                "confidence": assessment.confidence_score,
-                "rationale": assessment.rationale,
-                "summary": assessment.summary,
-                "evidence_strength": assessment.evidence_strength,
+            "insight": {
+                "summary": insight.summary,
+                "rationale": insight.rationale,
+                "evidence_strength": insight.evidence_strength,
             },
             "identifiers": {
-                "cosmic_id": assessment.cosmic_id,
-                "ncbi_gene_id": assessment.ncbi_gene_id,
-                "dbsnp_id": assessment.dbsnp_id,
-                "clinvar_id": assessment.clinvar_id,
+                "cosmic_id": insight.cosmic_id,
+                "ncbi_gene_id": insight.ncbi_gene_id,
+                "dbsnp_id": insight.dbsnp_id,
+                "clinvar_id": insight.clinvar_id,
             },
             "hgvs": {
-                "genomic": assessment.hgvs_genomic,
-                "protein": assessment.hgvs_protein,
-                "transcript": assessment.hgvs_transcript,
+                "genomic": insight.hgvs_genomic,
+                "protein": insight.hgvs_protein,
+                "transcript": insight.hgvs_transcript,
             },
             "clinvar": {
-                "clinical_significance": assessment.clinvar_clinical_significance,
-                "accession": assessment.clinvar_accession,
+                "clinical_significance": insight.clinvar_clinical_significance,
+                "accession": insight.clinvar_accession,
             },
             "annotations": {
-                "snpeff_effect": assessment.snpeff_effect,
-                "polyphen2_prediction": assessment.polyphen2_prediction,
-                "cadd_score": assessment.cadd_score,
-                "gnomad_exome_af": assessment.gnomad_exome_af,
+                "snpeff_effect": insight.snpeff_effect,
+                "polyphen2_prediction": insight.polyphen2_prediction,
+                "cadd_score": insight.cadd_score,
+                "gnomad_exome_af": insight.gnomad_exome_af,
+                "alphamissense_score": insight.alphamissense_score,
+                "alphamissense_prediction": insight.alphamissense_prediction,
             },
             "transcript": {
-                "id": assessment.transcript_id,
-                "consequence": assessment.transcript_consequence,
+                "id": insight.transcript_id,
+                "consequence": insight.transcript_consequence,
             },
             "recommended_therapies": [
                 {
@@ -97,22 +95,22 @@ async def assess_variant(
                     "approval_status": therapy.approval_status,
                     "clinical_context": therapy.clinical_context,
                 }
-                for therapy in assessment.recommended_therapies
+                for therapy in insight.recommended_therapies
             ],
         }
 
     except Exception as e:
-        return {"error": f"Assessment failed: {str(e)}"}
+        return {"error": f"Annotation generation failed: {str(e)}"}
 
 
-async def batch_assess_variants(
+async def batch_get_variant_insights(
     variants: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
     temperature: float = 0.1,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Assess multiple variants concurrently.
+    Generate annotations for multiple variants concurrently.
 
     Args:
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
@@ -121,11 +119,11 @@ async def batch_assess_variants(
         progress_callback: Optional callback(current, total) for progress updates
 
     Returns:
-        List of assessment results
+        List of annotation results
     """
     try:
-        # Create assessment engine
-        engine = ProcessingEngine(llm_model=model, llm_temperature=temperature)
+        # Create insight engine
+        engine = InsightEngine(llm_model=model, llm_temperature=temperature)
 
         # Create variant inputs
         variant_inputs = [
@@ -137,7 +135,7 @@ async def batch_assess_variants(
             for v in variants
         ]
 
-        # Run batch assessment
+        # Run batch processing
         async with engine:
             # Process with progress tracking
             results = []
@@ -146,27 +144,25 @@ async def batch_assess_variants(
                     progress_callback(i + 1, len(variant_inputs))
 
                 try:
-                    assessment = await engine.get_insight(variant_input)
+                    insight = await engine.get_insight(variant_input)
 
                     # Convert to dict
                     result = {
                         "variant": {
-                            "gene": assessment.gene,
-                            "variant": assessment.variant,
-                            "tumor_type": assessment.tumor_type,
+                            "gene": insight.gene,
+                            "variant": insight.variant,
+                            "tumor_type": insight.tumor_type,
                         },
-                        "assessment": {
-                            "tier": assessment.tier.value,
-                            "confidence": assessment.confidence_score,
-                            "rationale": assessment.rationale,
-                            "summary": assessment.summary,
-                            "evidence_strength": assessment.evidence_strength,
+                        "insight": {
+                            "summary": insight.summary,
+                            "rationale": insight.rationale,
+                            "evidence_strength": insight.evidence_strength,
                         },
                         "identifiers": {
-                            "cosmic_id": assessment.cosmic_id,
-                            "ncbi_gene_id": assessment.ncbi_gene_id,
-                            "dbsnp_id": assessment.dbsnp_id,
-                            "clinvar_id": assessment.clinvar_id,
+                            "cosmic_id": insight.cosmic_id,
+                            "ncbi_gene_id": insight.ncbi_gene_id,
+                            "dbsnp_id": insight.dbsnp_id,
+                            "clinvar_id": insight.clinvar_id,
                         },
                         "recommended_therapies": [
                             {
@@ -175,7 +171,7 @@ async def batch_assess_variants(
                                 "approval_status": therapy.approval_status,
                                 "clinical_context": therapy.clinical_context,
                             }
-                            for therapy in assessment.recommended_therapies
+                            for therapy in insight.recommended_therapies
                         ],
                     }
                     results.append(result)
@@ -193,63 +189,7 @@ async def batch_assess_variants(
             return results
 
     except Exception as e:
-        return [{"error": f"Batch assessment failed: {str(e)}"}]
-
-
-async def validate_gold_standard(
-    gold_standard_path: str,
-    model: str = "gpt-4o-mini",
-    temperature: float = 0.1
-) -> Dict[str, Any]:
-    """
-    Validate LLM performance against gold standard dataset.
-
-    Args:
-        gold_standard_path: Path to gold standard JSON file
-        model: LLM model to use
-        temperature: LLM temperature (0.0-1.0)
-
-    Returns:
-        Dict containing validation metrics (accuracy, per-tier metrics, etc.)
-    """
-    try:
-        # Create assessment engine
-        engine = ProcessingEngine(llm_model=model, llm_temperature=temperature)
-
-        # Create validator
-        validator = Validator(engine=engine)
-
-        # Run validation
-        async with engine:
-            metrics = await validator.validate_from_file(
-                gold_standard_path=gold_standard_path,
-                max_concurrent=3
-            )
-
-        # Convert to dict for JSON serialization
-        return {
-            "overall_accuracy": metrics.accuracy,
-            "total_cases": metrics.total_cases,
-            "correct_predictions": metrics.correct_predictions,
-            "average_confidence": metrics.average_confidence,
-            "per_tier_metrics": {
-                tier_name: {
-                    "precision": tier_metrics.precision,
-                    "recall": tier_metrics.recall,
-                    "f1_score": tier_metrics.f1_score,
-                    "true_positives": tier_metrics.true_positives,
-                    "false_positives": tier_metrics.false_positives,
-                    "false_negatives": tier_metrics.false_negatives,
-                }
-                for tier_name, tier_metrics in metrics.tier_metrics.items()
-            },
-            "failure_analysis": metrics.failure_analysis,
-        }
-
-    except FileNotFoundError:
-        return {"error": f"Gold standard file not found: {gold_standard_path}"}
-    except Exception as e:
-        return {"error": f"Validation failed: {str(e)}"}
+        return [{"error": f"Batch annotation generation failed: {str(e)}"}]
 
 
 # Future feature placeholders

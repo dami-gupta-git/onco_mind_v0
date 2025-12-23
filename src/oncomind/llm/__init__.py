@@ -1,4 +1,4 @@
-"""LLM service for variant assessment."""
+"""LLM service for variant insight."""
 
 from oncomind.llm.service import LLMService
 

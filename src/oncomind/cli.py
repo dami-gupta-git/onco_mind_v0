@@ -1,9 +1,9 @@
-"""Command-line interface for TumorBoard.
+"""Command-line interface for OncoMind.
 
 ARCHITECTURE:
-    CLI Commands → AssessmentEngine/Validator → JSON Output
+    CLI Commands → InsightEngine → JSON Output
 
-Three workflows: assess (single), batch (concurrent), validate (benchmarking)
+Two workflows: process (single variant), batch (multiple variants)
 
 Key Design:
 - Typer framework for auto-help and type validation
@@ -30,8 +30,8 @@ warnings.filterwarnings("ignore", message=".*coroutine.*was never awaited.*")
 load_dotenv()
 
 app = typer.Typer(
-    name="tumorboard",
-    help="LLM-powered cancer variant actionability assessment",
+    name="mind",
+    help="LLM-powered cancer variant annotation and evidence synthesis",
     add_completion=False,
 )
 
@@ -47,7 +47,7 @@ def process(
     log: bool = typer.Option(True, "--log/--no-log", help="Enable LLM decision logging"),
     vicc: bool = typer.Option(True, "--vicc/--no-vicc", help="Enable VICC MetaKB integration"),
 ) -> None:
-    """Assess clinical actionability of a single variant."""
+    """Process a single variant with evidence from multiple databases."""
 
     async def get_variant_insight() -> None:
         variant_input = VariantInput(gene=gene, variant=variant, tumor_type=tumor)
@@ -92,80 +92,35 @@ def batch(
         variants = [VariantInput(**item) for item in data]
         print(f"\nLoaded {len(variants)} variants from {input_file}")
 
-        async with AssessmentEngine(llm_model=model, llm_temperature=temperature, enable_logging=log) as engine:
-            print(f"Assessing {len(variants)} variants...")
-            assessments = await engine.batch_report(variants)
+        async with InsightEngine(llm_model=model, llm_temperature=temperature, enable_logging=log) as engine:
+            print(f"Processing {len(variants)} variants...")
+            insights = await engine.batch_report(variants)
 
-            output_data = [assessment.model_dump(mode="json") for assessment in assessments]
-            with open("results/output.json", "w") as f:
+            output_data = [insight.model_dump(mode="json") for insight in insights]
+            with open(output, "w") as f:
                 json.dump(output_data, f, indent=2)
 
-            print(f"\nSuccessfully assessed {len(assessments)}/{len(variants)} variants")
+            print(f"\nSuccessfully processed {len(insights)}/{len(variants)} variants")
             print(f"Results saved to {output}")
 
-            # Simple tier counts
-            tier_counts = {}
-            for assessment in assessments:
-                tier = assessment.tier.value
-                tier_counts[tier] = tier_counts.get(tier, 0) + 1
+            # Summary of evidence strength
+            strength_counts: dict[str, int] = {}
+            for insight in insights:
+                strength = insight.evidence_strength or "Unknown"
+                strength_counts[strength] = strength_counts.get(strength, 0) + 1
 
-            print("\nTier Distribution:")
-            for tier, count in sorted(tier_counts.items()):
-                print(f"  {tier}: {count}")
+            print("\nEvidence Strength Distribution:")
+            for strength, count in sorted(strength_counts.items()):
+                print(f"  {strength}: {count}")
 
     asyncio.run(run_batch())
 
 
 @app.command()
-def validate(
-    gold_standard: Path = typer.Argument(..., help="Gold standard JSON file"),
-    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model"),
-    temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file"),
-    max_concurrent: int = typer.Option(3, "--max-concurrent", "-c", help="Max concurrent"),
-    log: bool = typer.Option(True, "--log/--no-log", help="Enable LLM decision logging"),
-    vicc: bool = typer.Option(True, "--vicc/--no-vicc", help="Enable VICC MetaKB integration"),
-) -> None:
-    """Validate LLM assessments against gold standard."""
-
-    if not gold_standard.exists():
-        print(f"Error: Gold standard file not found: {gold_standard}")
-        raise typer.Exit(1)
-
-    async def run_validation() -> None:
-        async with AssessmentEngine(llm_model=model, llm_temperature=temperature, enable_logging=log, enable_vicc=vicc) as engine:
-            validator = Validator(engine)
-
-            entries = validator.load_gold_standard(gold_standard)
-            print(f"\nLoaded {len(entries)} gold standard entries")
-
-            print("Running validation...")
-            metrics = await validator.validate_dataset(entries, max_concurrent=max_concurrent)
-
-            # Report any entries that failed validation
-            if hasattr(validator, '_last_failed_count') and validator._last_failed_count > 0:
-                print(f"\nWarning: {validator._last_failed_count} entries failed during validation (unsupported variant types)")
-                for idx, gene, variant, error in validator._last_failed_entries[:5]:
-                    print(f"  - Entry {idx}: {gene} {variant}")
-                if validator._last_failed_count > 5:
-                    print(f"  ... and {validator._last_failed_count - 5} more")
-
-            print(metrics.get_insight())
-
-            if output:
-                output_data = metrics.model_dump(mode="json")
-                with open(output, "w") as f:
-                    json.dump(output_data, f, indent=2)
-                print(f"\nDetailed results saved to {output}")
-
-    asyncio.run(run_validation())
-
-
-@app.command()
 def version() -> None:
     """Show version information."""
-    from tumorboard import __version__
-    print(f"TumorBoard version {__version__}")
+    from oncomind import __version__
+    print(f"OncoMind version {__version__}")
 
 
 if __name__ == "__main__":

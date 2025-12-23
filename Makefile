@@ -10,7 +10,7 @@ YELLOW := \033[0;33m
 NC := \033[0m # No Color
 
 help: ## Show this help message
-	@echo "$(BLUE)TumorBoard Docker Commands$(NC)"
+	@echo "$(BLUE)OncoMind Docker Commands$(NC)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-15s$(NC) %s\n", $$1, $$2}'
 
@@ -72,7 +72,7 @@ clean: ## Stop containers and remove volumes
 	@echo "$(GREEN)✓ Cleanup complete!$(NC)"
 
 clean-all: ## Remove all images, containers, and volumes
-	@echo "$(YELLOW)WARNING: This will remove all TumorBoard Docker resources!$(NC)"
+	@echo "$(YELLOW)WARNING: This will remove all OncoMind Docker resources!$(NC)"
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \

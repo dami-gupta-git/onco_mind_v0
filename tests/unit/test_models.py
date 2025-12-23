@@ -3,9 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from oncomind.models.assessment import VariantReport, ActionabilityTier, RecommendedTherapy
+from oncomind.models.insight import VariantInsight, RecommendedTherapy
 from oncomind.models.evidence import CIViCEvidence, Evidence, VICCEvidence
-from oncomind.models.validation import GoldStandardEntry, ValidationMetrics, ValidationResult
 from oncomind.models.variant import VariantInput
 
 
@@ -121,37 +120,34 @@ class TestEvidence:
         assert evidence.hgvs_transcript == "NM_004333.4:c.1799T>A"
 
 
-class TestActionabilityAssessment:
+class TestVariantInsight:
     """Tests for VariantInsight model."""
 
-    def test_assessment_creation(self):
-        """Test creating an assessment."""
-        assessment = VariantReport(
+    def test_insight_creation(self):
+        """Test creating an insight."""
+        insight = VariantInsight(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
-            tier=ActionabilityTier.TIER_I,
-            confidence_score=0.95,
             summary="Test summary",
             rationale="Test rationale",
+            evidence_strength="Strong",
             cosmic_id="COSM476",
             ncbi_gene_id="673",
         )
-        assert assessment.tier == ActionabilityTier.TIER_I
-        assert assessment.confidence_score == 0.95
-        assert assessment.cosmic_id == "COSM476"
-        assert assessment.ncbi_gene_id == "673"
+        assert insight.evidence_strength == "Strong"
+        assert insight.cosmic_id == "COSM476"
+        assert insight.ncbi_gene_id == "673"
 
     def test_to_report(self):
         """Test simple report generation."""
-        assessment = VariantReport(
+        insight = VariantInsight(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
-            tier=ActionabilityTier.TIER_I,
-            confidence_score=0.95,
             summary="Test summary",
             rationale="Test rationale",
+            evidence_strength="Strong",
             recommended_therapies=[
                 RecommendedTherapy(
                     drug_name="Vemurafenib",
@@ -162,133 +158,43 @@ class TestActionabilityAssessment:
             dbsnp_id="rs113488022",
             hgvs_protein="NP_004324.2:p.Val600Glu",
         )
-        report = assessment.get_insight()
+        report = insight.get_insight()
         assert "BRAF" in report
         assert "V600E" in report
         assert "Melanoma" in report
-        assert "Tier I" in report
         assert "Vemurafenib" in report
         assert "COSM476" in report
         assert "rs113488022" in report
         assert "NP_004324.2:p.Val600Glu" in report
 
-    def test_assessment_without_tumor(self):
-        """Test creating an assessment without tumor type."""
-        assessment = VariantReport(
+    def test_insight_without_tumor(self):
+        """Test creating an insight without tumor type."""
+        insight = VariantInsight(
             gene="KRAS",
             variant="G12C",
             tumor_type=None,
-            tier=ActionabilityTier.TIER_III,
-            confidence_score=0.5,
-            summary="General assessment without tumor context",
+            summary="General insight without tumor context",
             rationale="Test rationale",
+            evidence_strength="Weak",
         )
-        assert assessment.gene == "KRAS"
-        assert assessment.tumor_type is None
-        assert assessment.tier == ActionabilityTier.TIER_III
+        assert insight.gene == "KRAS"
+        assert insight.tumor_type is None
+        assert insight.evidence_strength == "Weak"
 
     def test_to_report_without_tumor(self):
         """Test report generation without tumor type."""
-        assessment = VariantReport(
+        insight = VariantInsight(
             gene="KRAS",
             variant="G12C",
             tumor_type=None,
-            tier=ActionabilityTier.TIER_III,
-            confidence_score=0.5,
-            summary="General assessment",
+            summary="General insight",
             rationale="Test rationale",
+            evidence_strength="Weak",
         )
-        report = assessment.get_insight()
+        report = insight.get_insight()
         assert "KRAS" in report
         assert "G12C" in report
         assert "Not specified" in report
-        assert "Tier III" in report
-
-
-class TestValidationModels:
-    """Tests for validation models."""
-
-    def test_gold_standard_entry(self):
-        """Test gold standard entry creation."""
-        entry = GoldStandardEntry(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            expected_tier=ActionabilityTier.TIER_I,
-        )
-        assert entry.expected_tier == ActionabilityTier.TIER_I
-
-    def test_validation_result_tier_distance(self):
-        """Test tier distance calculation."""
-        assessment = VariantReport(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            tier=ActionabilityTier.TIER_II,
-            confidence_score=0.8,
-            summary="Test",
-            rationale="Test",
-        )
-
-        result = ValidationResult(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            expected_tier=ActionabilityTier.TIER_I,
-            predicted_tier=ActionabilityTier.TIER_II,
-            is_correct=False,
-            confidence_score=0.8,
-            assessment=assessment,
-        )
-
-        assert result.tier_distance == 1
-
-    def test_tier_metrics_calculation(self):
-        """Test tier metrics calculation."""
-        from oncomind.models.validation import TierMetrics
-
-        metrics = TierMetrics(
-            tier=ActionabilityTier.TIER_I,
-            true_positives=8,
-            false_positives=2,
-            false_negatives=1,
-        )
-        metrics.calculate()
-
-        assert metrics.precision == 0.8  # 8/(8+2)
-        assert metrics.recall == 8 / 9  # 8/(8+1)
-        assert metrics.f1_score > 0
-
-    def test_validation_metrics(self, sample_gold_standard_entry):
-        """Test validation metrics calculation."""
-        # Create mock results
-        assessment = VariantReport(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            tier=ActionabilityTier.TIER_I,
-            confidence_score=0.95,
-            summary="Test",
-            rationale="Test",
-        )
-
-        result = ValidationResult(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            expected_tier=ActionabilityTier.TIER_I,
-            predicted_tier=ActionabilityTier.TIER_I,
-            is_correct=True,
-            confidence_score=0.95,
-            assessment=assessment,
-        )
-
-        metrics = ValidationMetrics()
-        metrics.calculate([result])
-
-        assert metrics.total_cases == 1
-        assert metrics.correct_predictions == 1
-        assert metrics.accuracy == 1.0
 
 
 class TestEvidenceStats:

@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class VariantInput(BaseModel):
-    """Input for variant assessment."""
+    """Input for variant insight."""
 
     model_config = ConfigDict(
         json_schema_extra={

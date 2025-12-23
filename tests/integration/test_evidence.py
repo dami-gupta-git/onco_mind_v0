@@ -136,23 +136,6 @@ class TestEvidenceStats:
         assert stats['dominant_signal'] in valid_signals
 
 
-class TestEvidenceTierHints:
-    """Tests for tier hint generation."""
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_tp53_investigational_only(self):
-        """TP53 mutations should be identified as investigational-only."""
-        async with MyVariantClient() as myvariant_client:
-            evidence = await myvariant_client.fetch_evidence("TP53", "R248W")
-
-        is_investigational = evidence.is_investigational_only(tumor_type="breast")
-        assert is_investigational, "TP53 should be investigational-only in most tumors"
-
-        tier_hint = evidence.get_tier_hint(tumor_type="breast")
-        assert "TIER III" in tier_hint or "investigational" in tier_hint.lower()
-
-
 class TestEvidenceSummary:
     """Tests for evidence summary generation."""
 
@@ -459,9 +442,7 @@ class TestFullPipeline:
         assert evidence.has_evidence()
 
         stats = evidence.compute_evidence_stats(tumor_type)
-        tier_hint = evidence.get_tier_hint(tumor_type)
         summary = evidence.summary_compact(tumor_type)
 
         assert stats['sensitivity_count'] >= 0
-        assert "TIER" in tier_hint
         assert len(summary) > 0

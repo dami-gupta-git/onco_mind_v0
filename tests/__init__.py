@@ -1,1 +1,1 @@
-"""Test suite for TumorBoard."""
+"""Test suite for OncoMind."""

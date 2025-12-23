@@ -18,12 +18,6 @@ class DrugSensitivity(BaseModel):
     ic50_nM: str | None = Field(None, description="IC50 value if reported")
 
 
-class TierRecommendation(BaseModel):
-    """Tier recommendation from literature analysis."""
-    tier: str = Field("III", description="Recommended tier: I, II, III, or IV")
-    rationale: str = Field("", description="Rationale for tier recommendation")
-
-
 class LiteratureKnowledge(BaseModel):
     """Structured knowledge extracted from literature about a variant.
 
@@ -59,11 +53,6 @@ class LiteratureKnowledge(BaseModel):
     evidence_level: str = Field(
         "None",
         description="Highest evidence level: FDA-approved, Phase 3, Phase 2, Preclinical, Case reports, None"
-    )
-
-    tier_recommendation: TierRecommendation = Field(
-        default_factory=lambda: TierRecommendation(tier="III", rationale="Unknown"),
-        description="Recommended AMP/ASCO/CAP tier based on literature"
     )
 
     references: list[str] = Field(
@@ -135,11 +124,6 @@ class LiteratureKnowledge(BaseModel):
             lines.append("Key Findings:")
             for finding in self.key_findings[:3]:
                 lines.append(f"  • {finding}")
-
-        if self.tier_recommendation.tier:
-            lines.append(f"Literature-based Tier: {self.tier_recommendation.tier}")
-            if self.tier_recommendation.rationale:
-                lines.append(f"  Rationale: {self.tier_recommendation.rationale}")
 
         if self.references:
             lines.append(f"References: {', '.join(self.references[:5])}")

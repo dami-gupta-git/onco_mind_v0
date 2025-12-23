@@ -1,7 +1,7 @@
-"""Core assessment engine combining API and LLM services.
+"""Core insight engine combining API and LLM services.
 
 ARCHITECTURE:
-    VariantInput → Normalize → MyVariantClient + FDAClient + CGIClient + CIViCClient + SemanticScholar/PubMed → Evidence → LLMService → Assessment
+    VariantInput → Normalize → MyVariantClient + FDAClient + CGIClient + CIViCClient + SemanticScholar/PubMed → Evidence → LLMService → VariantInsight
 
 Orchestrates the pipeline with async concurrency for single and batch processing.
 
@@ -43,10 +43,10 @@ from oncomind.utils import normalize_variant
 
 class InsightEngine:
     """
-    Engine for variant assessment.
+    Engine for variant insight generation.
 
     Uses async/await patterns to enable concurrent processing of multiple variants,
-    significantly improving performance for batch assessments.
+    significantly improving performance for batch processing.
     """
 
     def __init__(self, llm_model: str = "gpt-4o-mini", llm_temperature: float = 0.0, enable_logging: bool = True, enable_vicc: bool = True, enable_civic_assertions: bool = True, enable_clinical_trials: bool = True, enable_semantic_scholar: bool = True):
@@ -105,13 +105,13 @@ class InsightEngine:
             await self.pubmed_client.__aexit__(exc_type, exc_val, exc_tb)
 
     async def get_insight(self, variant_input: VariantInput) -> VariantInsight:
-        """Assess a single variant.
+        """Generate insight for a single variant.
 
         Chains multiple async operations:
         1. Normalize variant notation (V600E, Val600Glu, p.V600E → V600E)
         2. Validate variant type (only SNPs and small indels allowed)
         3. Fetch evidence from MyVariant API and FDA API in parallel
-        4. Send combined evidence to LLM for assessment
+        4. Send combined evidence to LLM for insight generation
 
         The 'await' keyword yields control during I/O, allowing other tasks to run.
         """
@@ -545,7 +545,7 @@ class InsightEngine:
 
                 # Convert to LiteratureKnowledge model
                 from oncomind.models.evidence.literature_knowledge import (
-                    LiteratureKnowledge, DrugResistance, DrugSensitivity, TierRecommendation
+                    LiteratureKnowledge, DrugResistance, DrugSensitivity
                 )
 
                 # Build DrugResistance objects, handling both dict and string formats
@@ -569,26 +569,23 @@ class InsightEngine:
                     ],
                     clinical_significance=knowledge_data.get("clinical_significance", ""),
                     evidence_level=knowledge_data.get("evidence_level", "None"),
-                    tier_recommendation=TierRecommendation(
-                        **knowledge_data.get("tier_recommendation", {"tier": "III", "rationale": ""})
-                    ),
                     references=knowledge_data.get("references", []),
                     key_findings=knowledge_data.get("key_findings", []),
                     confidence=knowledge_data.get("confidence", 0.0),
                 )
 
 
-        # Step 4: Assess with LLM (must run sequentially since it depends on evidence)
+        # Step 4: Generate insight with LLM (must run sequentially since it depends on evidence)
         # Use original variant notation for display/reporting
         # Use resolved tumor type for evidence filtering and FDA matching
-        assessment = await self.llm_service.assess_variant(
+        insight = await self.llm_service.get_variant_insight(
             gene=variant_input.gene,
             variant=variant_input.variant,  # Keep original for display
             tumor_type=resolved_tumor_type,  # Use resolved tumor type
             evidence=evidence,
         )
 
-        return assessment
+        return insight
 
     async def batch_report(
         self, variants: list[VariantInput]

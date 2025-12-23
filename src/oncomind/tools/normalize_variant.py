@@ -9,15 +9,15 @@ This tool normalizes variant notations across different formats:
 - Indels (del, ins, dup, fs)
 
 Usage:
-    python -m tumorboard.tools.normalize_variant BRAF V600E
-    python -m tumorboard.tools.normalize_variant BRAF Val600Glu
-    python -m tumorboard.tools.normalize_variant BRAF p.V600E
-    python -m tumorboard.tools.normalize_variant ALK fusion
-    python -m tumorboard.tools.normalize_variant --batch variants.txt
-    echo "BRAF,V600E" | python -m tumorboard.tools.normalize_variant --stdin
+    python -m oncomind.tools.normalize_variant BRAF V600E
+    python -m oncomind.tools.normalize_variant BRAF Val600Glu
+    python -m oncomind.tools.normalize_variant BRAF p.V600E
+    python -m oncomind.tools.normalize_variant ALK fusion
+    python -m oncomind.tools.normalize_variant --batch variants.txt
+    echo "BRAF,V600E" | python -m oncomind.tools.normalize_variant --stdin
 
     # With genomic lookup (requires network)
-    python -m tumorboard.tools.normalize_variant BRAF V600E --lookup
+    python -m oncomind.tools.normalize_variant BRAF V600E --lookup
 
 Output formats:
     --format json    JSON output (default)
