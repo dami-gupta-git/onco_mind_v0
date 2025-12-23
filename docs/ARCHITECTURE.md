@@ -7,78 +7,78 @@ This document describes the architecture of OncoMind, an AI-powered cancer varia
 OncoMind follows a layered architecture that separates concerns into distinct modules:
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        User Interfaces                               │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐  │
-│  │    CLI      │  │  Streamlit  │  │      Python API             │  │
-│  │  (mind)     │  │    App      │  │  (process_variant)          │  │
-│  └──────┬──────┘  └──────┬──────┘  └─────────────┬───────────────┘  │
-└─────────┼────────────────┼───────────────────────┼──────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                       User Interfaces                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────────┐  │
+│  │    CLI      │  │  Streamlit  │  │      Python API           │  │
+│  │   (mind)    │  │    App      │  │   (process_variant)       │  │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────┬─────────────┘  │
+└─────────┼────────────────┼───────────────────────┼────────────────┘
           │                │                       │
           ▼                ▼                       ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Public API Layer                                │
-│  ┌─────────────────────────────────────────────────────────────────┐│
-│  │  api_public/annotate.py                                         ││
-│  │  - process_variant(variant_str, tumor_type, config)             ││
-│  │  - process_variants(variants, tumor_type, config)               ││
-│  │  - AnnotationConfig                                             ││
-│  └─────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                      Public API Layer                             │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  api_public/annotate.py                                     │  │
+│  │  - process_variant(variant_str, tumor_type, config)         │  │
+│  │  - process_variants(variants, tumor_type, config)           │  │
+│  │  - AnnotationConfig                                         │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
           │
           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Normalization Layer                              │
-│  ┌─────────────────────────────────────────────────────────────────┐│
-│  │  normalization/                                                 ││
-│  │  - input_parser.py: parse_variant_input("BRAF V600E")          ││
-│  │  - hgvs_utils.py: normalize_variant, classify_variant_type     ││
-│  │  → Output: ParsedVariant                                        ││
-│  └─────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                     Normalization Layer                           │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  normalization/                                             │  │
+│  │  - input_parser.py: parse_variant_input("BRAF V600E")       │  │
+│  │  - hgvs_utils.py: normalize_variant, classify_variant_type  │  │
+│  │  → Output: ParsedVariant                                    │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
           │
           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   Evidence Aggregation Layer                         │
-│  ┌─────────────────────────────────────────────────────────────────┐│
-│  │  evidence/builder.py                                            ││
-│  │  - EvidenceBuilder (async context manager)                      ││
-│  │  - build_evidence_panel(parsed_variant, tumor_type)             ││
-│  │  - Parallel API fetching with asyncio.gather()                  ││
-│  └─────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                   Evidence Aggregation Layer                      │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  evidence/builder.py                                        │  │
+│  │  - EvidenceBuilder (async context manager)                  │  │
+│  │  - build_evidence_panel(parsed_variant, tumor_type)         │  │
+│  │  - Parallel API fetching with asyncio.gather()              │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
           │
-          ├──────────────────────────────────────────┐
-          ▼                                          ▼
-┌─────────────────────────────┐    ┌─────────────────────────────────┐
-│      API Clients Layer      │    │       LLM Layer (Optional)      │
-│  ┌───────────────────────┐  │    │  ┌───────────────────────────┐  │
-│  │ api/myvariant.py      │  │    │  │ llm/service.py            │  │
-│  │ api/civic.py          │  │    │  │ - score_paper_relevance   │  │
-│  │ api/vicc.py           │  │    │  │ - extract_variant_knowledge│  │
-│  │ api/fda.py            │  │    │  │ - generate_insight        │  │
-│  │ api/cgi.py            │  │    │  └───────────────────────────┘  │
-│  │ api/pubmed.py         │  │    └─────────────────────────────────┘
-│  │ api/semantic_scholar.py│  │
+          ├────────────────────────────────────┐
+          ▼                                    ▼
+┌─────────────────────────────┐  ┌─────────────────────────────────┐
+│     API Clients Layer       │  │      LLM Layer (Optional)       │
+│  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │
+│  │ api/myvariant.py      │  │  │  │ llm/service.py            │  │
+│  │ api/civic.py          │  │  │  │ - score_paper_relevance   │  │
+│  │ api/vicc.py           │  │  │  │ - extract_variant_knowledge│ │
+│  │ api/fda.py            │  │  │  │ - get_variant_insight     │  │
+│  │ api/cgi.py            │  │  │  └───────────────────────────┘  │
+│  │ api/pubmed.py         │  │  └─────────────────────────────────┘
+│  │ api/semantic_scholar.py│ │
 │  │ api/clinicaltrials.py │  │
 │  │ api/oncotree.py       │  │
 │  └───────────────────────┘  │
 └─────────────────────────────┘
           │
           ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Models Layer                                  │
-│  ┌─────────────────────────────────────────────────────────────────┐│
-│  │  models/evidence/evidence_panel.py                              ││
-│  │  - EvidencePanel (top-level output)                             ││
-│  │    ├── identifiers: VariantIdentifiers                          ││
-│  │    ├── kb: KnowledgebaseEvidence                                ││
-│  │    ├── functional: FunctionalScores                             ││
-│  │    ├── clinical: ClinicalContext                                ││
-│  │    ├── literature: LiteratureEvidence                           ││
-│  │    └── meta: EvidenceMeta                                       ││
-│  └─────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                        Models Layer                               │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  models/evidence/evidence_panel.py                          │  │
+│  │  - EvidencePanel (top-level output)                         │  │
+│  │    ├── identifiers: VariantIdentifiers                      │  │
+│  │    ├── kb: KnowledgebaseEvidence                            │  │
+│  │    ├── functional: FunctionalScores                         │  │
+│  │    ├── clinical: ClinicalContext                            │  │
+│  │    ├── literature: LiteratureEvidence                       │  │
+│  │    └── meta: EvidenceMeta                                   │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Core Design Principles
@@ -204,15 +204,16 @@ class EvidenceBuilder:
     ) -> EvidencePanel:
         # Parallel fetch from all sources
         results = await asyncio.gather(
-            self._fetch_myvariant(),
-            self._fetch_fda(),
-            self._fetch_vicc(),
-            self._fetch_civic(),
-            self._fetch_trials(),
-            self._fetch_literature(),
+            self.myvariant_client.fetch_evidence(...),
+            self.fda_client.fetch_drug_approvals(...),
+            asyncio.to_thread(self.cgi_client.fetch_biomarkers, ...),
+            fetch_vicc(),            # local async function
+            fetch_civic_assertions(), # local async function
+            fetch_clinical_trials(),  # local async function
+            fetch_literature(),       # local async function
             return_exceptions=True,
         )
-        
+
         # Assemble into EvidencePanel
         return EvidencePanel(
             identifiers=...,
@@ -322,18 +323,27 @@ Optional LLM-powered analysis:
 ```python
 class LLMService:
     """LLM service for literature analysis."""
-    
+
+    async def get_variant_insight(
+        self,
+        variant_input: VariantInput,
+        evidence: Evidence,
+    ) -> VariantInsight:
+        """Generate LLM-powered insight narrative for a variant."""
+
     async def score_paper_relevance(
         self,
         title: str,
-        abstract: str,
+        abstract: str | None,
+        tldr: str | None,
         gene: str,
         variant: str,
         tumor_type: str | None,
     ) -> dict:
         """Score paper relevance and extract signals."""
-        # Returns: is_relevant, signal_type, drugs_mentioned, key_finding
-    
+        # Returns: relevance_score, is_relevant, signal_type,
+        #          drugs_mentioned, key_finding, confidence
+
     async def extract_variant_knowledge(
         self,
         gene: str,

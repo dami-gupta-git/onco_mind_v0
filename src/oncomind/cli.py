@@ -23,6 +23,8 @@ from dotenv import load_dotenv
 
 
 from oncomind import process_variant, AnnotationConfig
+from oncomind.engine import InsightEngine
+from oncomind.models import VariantInput
 
 # Suppress litellm's async cleanup warnings (harmless internal warnings)
 warnings.filterwarnings("ignore", message=".*async_success_handler.*")
@@ -38,7 +40,7 @@ app = typer.Typer(
 
 
 @app.command()
-def annotate(
+def process(
     variant_str: str = typer.Argument(..., help="Variant (e.g., 'BRAF V600E' or 'EGFR L858R in NSCLC')"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
@@ -55,7 +57,7 @@ def annotate(
         mind annotate "EGFR L858R in NSCLC"
         mind annotate "TP53 R248W" --output result.json
     """
-    async def run_annotation() -> None:
+    async def get_insight() -> None:
         print(f"\nAnnotating {variant_str}...")
         if tumor:
             print(f"  Tumor type: {tumor}")
@@ -101,11 +103,11 @@ def annotate(
                 json.dump(output_data, f, indent=2)
             print(f"\nSaved to {output}")
 
-    asyncio.run(run_annotation())
+    asyncio.run(get_insight())
 
 
 @app.command()
-def process(
+def process_with_llm(
     gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
     variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
@@ -118,7 +120,7 @@ def process(
     """Process a single variant with LLM-generated insight narrative.
 
     This uses the legacy InsightEngine for full LLM narrative generation.
-    For faster annotation without LLM, use 'mind annotate' instead.
+    For faster annotation without LLM, use 'mind process' instead.
     """
     # Import legacy engine only when needed
     from oncomind.engine import InsightEngine
