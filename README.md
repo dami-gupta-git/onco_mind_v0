@@ -1,32 +1,46 @@
 # OncoMind
 
-**AI-powered cancer variant annotation and evidence synthesis**
+**Grounded context for cancer variant reasoning. What happens next, with receipts.**
 
-OncoMind aggregates evidence from multiple cancer databases and uses LLMs to synthesize actionable insights for somatic variants. It provides a unified interface for variant annotation, combining structured database queries with intelligent literature analysis.
+For common variants like BRAF V600E, databases have the answers. For everything else, there's a 2-hour PubMed rabbit hole. OncoMind does that search for you — and shows its work.
 
 > **Disclaimer**: This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.
 
+## The Problem
+
+Variant interpretation tools like CIViC, OncoKB, and CancerVar are excellent for well-characterized mutations. But for less common variants, researchers still spend hours manually searching PubMed, ClinicalTrials.gov, and Google Scholar for case reports, functional studies, and resistance mechanisms.
+
+OncoMind automates that workflow: aggregate databases, search literature, synthesize findings, and cite sources — in seconds instead of hours.
+
+## What Makes OncoMind Different
+
+| Feature | Legacy Tools | OncoMind |
+|---------|--------------|----------|
+| **Output format** | 50-page PDFs, 10K-row CSVs | LLM-ready context blocks |
+| **Source disagreement** | Pick one, hide the rest | Surface conflicts explicitly |
+| **Uncertainty** | Implied | Quantified (ensemble agreement) |
+| **Claims without sources** | Common | Forbidden by design |
+| **Resistance mechanisms** | What the variant *is* | What happens *next* |
+
 ## Features
 
-- **Multi-source evidence aggregation**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels, ClinicalTrials.gov
+- **Multi-source aggregation**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels, ClinicalTrials.gov
 - **Functional predictions**: AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD frequencies
-- **Literature search**: Semantic Scholar and PubMed with relevance scoring
-- **LLM-powered synthesis**: Extract resistance/sensitivity signals from literature
-- **Flexible input**: Free-text variants, CSV files, VCF files, or programmatic API
-- **Strongly-typed output**: `EvidencePanel` model with organized evidence sections
+- **Literature search**: Semantic Scholar and PubMed with LLM relevance scoring
+- **Evidence synthesis**: Extract resistance/sensitivity signals from abstracts
+- **Conflict detection**: Flag when databases disagree
+- **Source attribution**: Every claim links to a PMID, FDA label, or database entry
+- **Strongly-typed output**: Pydantic `EvidencePanel` model for programmatic use
 
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/oncomind.git
 cd oncomind/onco_mind_v0
 
-# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install in development mode
 pip install -e ".[dev]"
 ```
 
@@ -39,182 +53,130 @@ import asyncio
 from oncomind import process_variant, AnnotationConfig
 
 async def main():
-    # Simple annotation (no LLM, fast)
+    # Fast annotation (no LLM)
     panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
 
-    # Access structured evidence
     print(f"Gene: {panel.identifiers.gene}")
-    print(f"FDA Approved Drugs: {panel.clinical.get_approved_drugs()}")
+    print(f"FDA Approved: {panel.clinical.get_approved_drugs()}")
     print(f"Clinical Trials: {len(panel.clinical.clinical_trials)}")
-    print(f"Evidence Sources: {panel.kb.get_evidence_sources()}")
+    print(f"Sources: {panel.meta.sources_with_data}")
 
-    # With LLM enhancement for literature analysis
+    # With LLM synthesis for literature analysis
     config = AnnotationConfig(enable_llm=True, llm_model="gpt-4o-mini")
-    panel = await process_variant("EGFR L858R", tumor_type="NSCLC", config=config)
+    panel = await process_variant("EGFR S768I", tumor_type="NSCLC", config=config)
+
+    # LLM-extracted insights from literature
+    print(panel.literature.literature_knowledge)
 
 asyncio.run(main())
-```
-
-### Synchronous API
-
-```python
-from oncomind import process_variant_sync
-
-# For scripts without async support
-panel = process_variant_sync("BRAF V600E", tumor_type="Melanoma")
-print(panel.clinical.get_approved_drugs())
-```
-
-### Batch Processing
-
-```python
-from oncomind import process_variants
-
-# From list of strings
-panels = await process_variants(["BRAF V600E", "EGFR L858R", "KRAS G12C"])
-
-# From CSV file
-panels = await process_variants("variants.csv", tumor_type="NSCLC")
-
-# From pandas DataFrame
-import pandas as pd
-df = pd.DataFrame({"gene": ["BRAF", "EGFR"], "variant": ["V600E", "L858R"]})
-panels = await process_variants(df)
 ```
 
 ### CLI
 
 ```bash
-# Annotate a single variant
-mind annotate "BRAF V600E" --tumor Melanoma
+# Basic annotation
+mind process "BRAF V600E" --tumor Melanoma
+
+# With LLM synthesis
+mind process "EGFR S768I" --tumor NSCLC --llm
 
 # Save to JSON
-mind annotate "EGFR L858R in NSCLC" --output result.json
+mind process "KRAS G12C" --tumor NSCLC --output result.json
+```
 
-# With LLM enhancement
-mind annotate "KRAS G12C" --tumor NSCLC --llm
+### LLM-Ready Context
 
-# Legacy command with full LLM narrative
-mind process BRAF V600E --tumor Melanoma --model gpt-4o-mini
+OncoMind outputs context blocks designed for injection into downstream LLM systems:
+
+```python
+# Get a dense, grounded context block
+context = panel.to_knowledge_header()
+
+# Returns something like:
+# "BRAF V600E in melanoma. Oncogenic driver via constitutive MAPK activation.
+#  FDA-approved: dabrafenib + trametinib, vemurafenib + cobimetinib.
+#  Resistance typical at 6-12 months via NRAS (20%), MEK1/2 (5-10%), or BRAF amp.
+#  Sources: CIViC:assertion:12, FDA label, PMID:22735384"
 ```
 
 ## Configuration
 
-Create a `.env` file with your API keys:
+Create a `.env` file:
 
 ```bash
 # Required for LLM features
 OPENAI_API_KEY=your-openai-key
 
-# Optional: for enhanced literature search
+# Optional: enhanced literature search (recommended)
 SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 
 # Optional: other LLM providers
 ANTHROPIC_API_KEY=your-anthropic-key
-GROQ_API_KEY=your-groq-key
 ```
 
 ## EvidencePanel Structure
 
-The `EvidencePanel` is the primary output, organizing evidence into logical sections:
-
 ```python
-panel = await process_variant("BRAF V600E")
+panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
 
-# Identifiers - variant IDs and HGVS notation
-panel.identifiers.gene          # "BRAF"
-panel.identifiers.variant       # "V600E"
-panel.identifiers.cosmic_id     # "COSM476"
-panel.identifiers.hgvs_protein  # "p.V600E"
+# Identifiers
+panel.identifiers.gene              # "BRAF"
+panel.identifiers.variant           # "V600E"
+panel.identifiers.cosmic_id         # "COSM476"
+panel.identifiers.hgvs_protein      # "p.V600E"
 
 # Knowledgebase evidence
-panel.kb.civic              # CIViC evidence entries
-panel.kb.civic_assertions   # CIViC curated assertions
-panel.kb.clinvar            # ClinVar entries
-panel.kb.vicc               # VICC MetaKB associations
-panel.kb.cgi_biomarkers     # CGI biomarker evidence
+panel.kb.civic_assertions           # CIViC curated assertions
+panel.kb.vicc                       # VICC MetaKB (OncoKB, CIViC, MOAlmanac)
+panel.kb.cgi_biomarkers             # CGI biomarker evidence
+panel.kb.clinvar                    # ClinVar entries
 
-# Functional predictions
+# Functional scores
 panel.functional.alphamissense_score       # 0.98
 panel.functional.alphamissense_prediction  # "P" (Pathogenic)
 panel.functional.cadd_score                # 32.0
 panel.functional.gnomad_exome_af           # 0.00001
 
 # Clinical context
-panel.clinical.tumor_type           # "Melanoma"
-panel.clinical.fda_approvals        # FDA-approved drugs
-panel.clinical.clinical_trials      # Matching trials
+panel.clinical.fda_approvals        # FDA-approved therapies
+panel.clinical.clinical_trials      # Matching active trials
 panel.clinical.gene_role            # "oncogene"
 panel.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib"]
 
 # Literature
-panel.literature.pubmed_articles      # PubMed articles
-panel.literature.literature_knowledge # LLM-extracted insights
+panel.literature.pubmed_articles         # Retrieved articles
+panel.literature.literature_knowledge    # LLM-synthesized insights
 
-# Metadata
-panel.meta.sources_queried    # ["MyVariant", "FDA", "CIViC", ...]
-panel.meta.sources_with_data  # Sources that returned evidence
-panel.meta.evidence_strength  # "Strong" / "Moderate" / "Weak"
+# Metadata & trust
+panel.meta.sources_queried          # All sources attempted
+panel.meta.sources_with_data        # Sources that returned evidence
+panel.meta.sources_failed           # Sources that errored
+panel.meta.conflicts                # Cross-source disagreements
 ```
 
 ## Supported Variant Types
 
-OncoMind currently supports **SNPs and small indels**:
+**Currently supported:**
+- Missense mutations (V600E, L858R)
+- Nonsense mutations (R248*)
+- Small insertions/deletions (E746_A750del)
+- Frameshift mutations (K132fs)
 
-- Missense mutations (e.g., V600E, L858R)
-- Nonsense mutations (e.g., R248*)
-- Small insertions/deletions (e.g., E746_A750del)
-- Frameshift mutations (e.g., K132fs)
-
-**Not yet supported**: Fusions, amplifications, copy number variants, large structural variants.
+**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](ROADMAP.md))
 
 ## Data Sources
 
 | Source | Data Type | Access |
 |--------|-----------|--------|
 | [CIViC](https://civicdb.org/) | Curated variant-drug associations | Free API |
+| [VICC MetaKB](https://search.cancervariants.org/) | Aggregated knowledgebases | Free API |
 | [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) | Clinical significance | Via MyVariant.info |
 | [COSMIC](https://cancer.sanger.ac.uk/cosmic) | Somatic mutation catalog | Via MyVariant.info |
-| [VICC MetaKB](https://search.cancervariants.org/) | Aggregated knowledgebases | Free API |
 | [CGI](https://www.cancergenomeinterpreter.org/) | Biomarker annotations | Local database |
 | [FDA](https://www.fda.gov/) | Drug approvals | OpenFDA API |
 | [ClinicalTrials.gov](https://clinicaltrials.gov/) | Active trials | Free API |
-| [Semantic Scholar](https://www.semanticscholar.org/) | Literature | Free API (key recommended) |
+| [Semantic Scholar](https://www.semanticscholar.org/) | Literature | Free API |
 | [PubMed](https://pubmed.ncbi.nlm.nih.gov/) | Literature | Free E-utilities |
-
-## Project Structure
-
-```
-src/oncomind/
-├── __init__.py           # Public API exports
-├── cli.py                # Command-line interface
-├── engine.py             # Legacy InsightEngine
-├── api/                  # API clients
-│   ├── civic.py          # CIViC GraphQL client
-│   ├── myvariant.py      # MyVariant.info client
-│   ├── vicc.py           # VICC MetaKB client
-│   ├── fda.py            # OpenFDA client
-│   ├── pubmed.py         # PubMed E-utilities
-│   └── ...
-├── api_public/           # Public API
-│   └── annotate.py       # process_variant, process_variants
-├── models/               # Pydantic models
-│   └── evidence/
-│       ├── evidence_panel.py  # EvidencePanel model
-│       ├── civic.py           # CIViC evidence models
-│       └── ...
-├── normalization/        # Input parsing
-│   ├── input_parser.py   # parse_variant_input
-│   └── hgvs_utils.py     # Variant normalization
-├── evidence/             # Evidence aggregation
-│   └── builder.py        # EvidenceBuilder
-├── embeddings/           # Feature extraction (experimental)
-│   └── features.py       # extract_features
-├── experimental/         # Experimental features
-│   └── tiering.py        # Non-authoritative tier computation
-└── llm/                  # LLM services
-    └── service.py        # LLM-based analysis
-```
 
 ## Development
 
@@ -235,21 +197,10 @@ ruff format src/oncomind
 
 ## Streamlit App
 
-A web interface is available in the `streamlit/` directory:
-
 ```bash
 cd streamlit
 streamlit run app.py
 ```
-
-## Roadmap
-
-- [ ] Fusion/amplification support
-- [ ] VCF annotation pipeline
-- [ ] ESMFold protein structure visualization
-- [ ] SpliceAI integration
-- [ ] Multi-agent workflow (LangGraph)
-- [ ] Pre-fetched literature cache
 
 ## License
 
