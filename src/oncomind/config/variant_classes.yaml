@@ -1,0 +1,374 @@
+# Variant Class Configuration for FDA Approval Matching
+#
+# This file defines which variants qualify for FDA approvals based on
+# the language in FDA drug labels. FDA approvals are often variant-class-specific
+# (e.g., "BRAF V600" not "any BRAF mutation").
+#
+# Structure:
+#   GENE:
+#     classes:
+#       class_name:
+#         pattern: "text to match in FDA indication"
+#         variants: [list of variants that qualify]
+#         require_explicit: true/false (if true, only match if pattern found)
+#     special_rules:
+#       - description of any special handling needed
+
+BRAF:
+  description: "BRAF inhibitors are V600-specific. Non-V600 mutations (G469A, K601E) do not respond."
+  require_explicit: true  # Must find V600 pattern to match
+  classes:
+    V600:
+      patterns:
+        - "v600"
+        - "v600e"
+        - "v600k"
+      variants:
+        - V600E
+        - V600K
+        - V600D
+        - V600R
+
+KRAS:
+  description: "KRAS G12C has specific inhibitors. Other KRAS mutations may exclude anti-EGFR therapy."
+  require_explicit: true  # Must match a class pattern, no default approval
+  classes:
+    G12C:
+      patterns:
+        - "g12c"
+        - "kras g12c"
+      variants:
+        - G12C
+    # Generic KRAS-mutated (for anti-EGFR exclusion)
+    any_mutation:
+      patterns:
+        - "kras mutation"
+        - "kras-mutated"
+        - "kras-positive"
+      variants: ["*"]  # Any KRAS mutation qualifies
+      exclude_patterns:
+        - "wild-type"
+        - "wildtype"
+
+NRAS:
+  description: "NRAS mutations exclude anti-EGFR therapy in colorectal cancer."
+  require_explicit: true
+  classes:
+    any_mutation:
+      patterns:
+        - "nras mutation"
+        - "nras-mutated"
+        - "nras-positive"
+        - "ras mutation"
+        - "ras-mutated"
+      variants: ["*"]
+      exclude_patterns:
+        - "wild-type"
+        - "wildtype"
+
+EGFR:
+  description: "EGFR TKIs have different approvals for common, uncommon, and resistance mutations."
+  require_explicit: true  # Resistance mutations like T790M need explicit matching
+  classes:
+    common:
+      patterns:
+        - "common"
+        - "exon 19"
+        - "l858r"
+      variants:
+        - L858R
+        - EXON19DEL
+        - E746_A750DEL
+        - E746_T751DEL
+        - L747_P753DEL
+    uncommon:
+      patterns:
+        - "uncommon"
+        - "g719"
+        - "l861q"
+        - "s768i"
+      variants:
+        - G719A
+        - G719C
+        - G719S
+        - G719X
+        - L861Q
+        - S768I
+    T790M:
+      patterns:
+        - "t790m mutation-positive"
+        - "t790m-positive"
+        - "egfr t790m"
+      variants:
+        - T790M
+      require_positive_context: true  # Must be in approval context, not exclusion
+    # Extracellular domain mutations (exon 1-16) - NOT responsive to TKIs
+    # These mutations are found primarily in glioblastoma (not NSCLC)
+    # Reference: PMID 25636926 (R108K in GBM), PMID 28371874
+    extracellular:
+      patterns:
+        - "extracellular"
+        - "ectodomain"
+      variants:
+        - R108K  # Exon 3 - insensitive to gefitinib/erlotinib
+        - R108G
+        - A289V  # Exon 7 - glioblastoma variant
+        - A289T
+        - A289D
+        - G598V  # Exon 15
+        - G598A
+      clinical_guidance:
+        tier: "III"
+        rationale: "Extracellular domain mutations are NOT responsive to TKIs (gefitinib, erlotinib, osimertinib)"
+        note: "These mutations are primarily found in glioblastoma, not NSCLC"
+    # Generic EGFR-mutated (covers KINASE DOMAIN mutations only)
+    # FDA approvals for "EGFR mutation" in NSCLC refer to exon 18-21 (kinase domain)
+    # Extracellular domain mutations (exon 1-16) are NOT responsive to TKIs
+    any_mutation:
+      patterns:
+        - "egfr mutation"
+        - "egfr-mutated"
+        - "egfr-positive"
+        - "(egfr) mutation"  # FDA label format with parentheses
+        - "egfr) mutation"   # Partial match for "(egfr) mutation"
+      variants: ["*"]
+      exclude_variants:
+        - T790M  # Resistance mutations need explicit approval
+        - C797S
+        # Extracellular domain mutations (exon 1-16) - NOT responsive to TKIs
+        # Reference: PMID 25636926, PMID 28371874
+        - R108K  # Exon 3 - insensitive to gefitinib/erlotinib
+        - R108G
+        - A289V  # Exon 7 - glioblastoma variant
+        - A289T
+        - A289D
+        - G598V  # Exon 15
+        - G598A
+
+KIT:
+  description: "KIT mutations in GIST have exon-specific responses. Exon 17 mutations (D816V, Y823D) cause imatinib resistance."
+  require_explicit: true  # D816 mutations need special handling for GIST vs mastocytosis
+  classes:
+    exon_9:
+      patterns:
+        - "exon 9"
+      variants:
+        - A502_Y503DUP
+        - Y503_F504INSAY
+      codon_range: [503, 510]
+    exon_11:
+      patterns:
+        - "exon 11"
+        - "kit-positive"
+        - "kit-mutated"
+        - "gist"
+      variants:
+        - W557R
+        - W557G
+        - W557_K558DEL
+        - K558N
+        - K558E
+        - V559D
+        - V559A
+        - V559G
+        - V560D
+        - V560G
+        - V560E
+        - L576P
+      codon_range: [550, 591]
+    exon_13:
+      patterns:
+        - "exon 13"
+      variants:
+        - K642E
+      codon_range: [627, 664]
+    exon_17_resistance:
+      # Exon 17 activation loop mutations cause primary/secondary imatinib resistance
+      # References:
+      #   - PMID 21475850: Secondary resistance via exon 17 mutations (Y823D) in GIST
+      #   - PMID 19164557 (PNAS): KIT kinase mutants show unique resistance mechanisms
+      #   - PMID 16849480 (Blood): Dasatinib inhibits D816V with IC50 ~37-79 nM
+      patterns:
+        - "d816v"
+        - "d816h"
+        - "y823d"
+        - "exon 17"
+      variants:
+        - D816V
+        - D816H
+        - D816Y
+        - D820Y
+        - N822K
+        - Y823D  # Secondary resistance mutation (PMID 21475850)
+      codon_range: [788, 828]
+      resistance_profile:
+        # IC50 values from in vitro studies
+        imatinib:
+          ic50_nM: ">10000"
+          status: "resistant"
+          reference: "PMID 19164557"
+        sunitinib:
+          ic50_nM: ">1000"
+          status: "resistant"
+          note: "536-fold faster autoactivation than WT KIT"
+          reference: "PMID 19164557"
+        sorafenib:
+          ic50_nM: ">5000"
+          status: "resistant"
+          reference: "PMC3992122"
+        regorafenib:
+          status: "resistant"
+          reference: "PMC4688306"
+        dasatinib:
+          ic50_nM: "37-79"
+          status: "sensitive"
+          note: "Comparable to wild-type KIT inhibition"
+          reference: "PMID 16849480"
+      clinical_guidance:
+        tier: "II"
+        rationale: "Resistance marker excluding standard GIST therapies; dasatinib may be effective"
+        excludes_drugs:
+          - imatinib
+          - sunitinib
+          - sorafenib
+          - regorafenib
+        potential_therapies:
+          - drug: dasatinib
+            evidence_level: "preclinical/case reports"
+            note: "IC50 37-79 nM, comparable to WT KIT"
+      special_rules:
+        # D816 in GIST = imatinib resistance, but approved in mastocytosis
+        - tumor_exclusion: ["gist", "gastrointestinal stromal"]
+          unless_explicit: true  # Only match GIST if D816V explicitly in label
+
+FGFR2:
+  description: "FGFR2 fusions/rearrangements in cholangiocarcinoma. Kinase domain point mutations are acquired resistance."
+  require_explicit: true  # Must match fusion/rearrangement pattern, NOT point mutations
+  classes:
+    # FDA approval is for FUSIONS/REARRANGEMENTS only
+    fusion:
+      patterns:
+        - "fgfr2 fusion"
+        - "fgfr2 rearrangement"
+        - "other rearrangement"
+      variants:
+        - FUSION
+        - REARRANGEMENT
+        # Specific fusion partners if needed
+    # Kinase domain point mutations are ACQUIRED RESISTANCE mutations
+    # NOT covered by pemigatinib approval (which is for fusions only)
+    # Reference: PMID 33096036, PMID 32203698 - acquired resistance mutations
+    kinase_domain_resistance:
+      patterns:
+        - "n549"  # Only match if explicitly mentioned in approval context
+        - "v564"
+        - "e565"
+        - "l617"
+        - "k659"
+      variants:
+        - N549H
+        - N549K
+        - N549S
+        - V564F
+        - V564I
+        - V564L
+        - E565A
+        - L617V
+        - L617M
+        - K659E
+        - K659M
+        - K659N
+      resistance_profile:
+        pemigatinib:
+          status: "resistant"
+          note: "Acquired gatekeeper/hinge mutations cause resistance"
+          reference: "PMID 33096036"
+        infigratinib:
+          status: "resistant"
+          reference: "PMID 32203698"
+        futibatinib:
+          status: "sensitive"
+          note: "Irreversible inhibitor retains activity against some resistance mutations"
+          reference: "PMID 33096036"
+      clinical_guidance:
+        tier: "II"
+        rationale: "Acquired resistance mutation - excludes reversible FGFR inhibitors"
+        excludes_drugs:
+          - pemigatinib
+          - infigratinib
+        potential_therapies:
+          - drug: futibatinib
+            evidence_level: "clinical"
+            note: "Irreversible inhibitor may retain activity"
+
+FGFR3:
+  description: "FGFR3 mutations in bladder cancer."
+  classes:
+    susceptible:
+      patterns:
+        - "susceptible fgfr3"
+        - "fgfr3 genetic alteration"
+        - "fgfr3 alteration"
+        - "fgfr3 mutation"
+        - "fgfr3-mutated"
+        - "fgfr3-positive"
+      variants:
+        - S249C
+        - R248C
+        - G370C
+        - Y373C
+        - G380R
+        - K650E
+        - K650M
+        - K650N
+        - K650Q
+        - K650T
+
+# Genes with broad "any mutation" approvals (no class-specific validation needed)
+# These use the default behavior: return True if gene mentioned without exclusions
+
+PIK3CA:
+  description: "PIK3CA inhibitors (alpelisib) approved for any PIK3CA mutation in breast cancer."
+  default_approve: true  # Any mutation qualifies if gene mentioned
+
+ALK:
+  description: "ALK inhibitors approved for ALK rearrangements/fusions."
+  default_approve: true
+
+ROS1:
+  description: "ROS1 inhibitors approved for ROS1 rearrangements/fusions."
+  default_approve: true
+
+RET:
+  description: "RET inhibitors approved for RET fusions and mutations."
+  default_approve: true
+
+MET:
+  description: "MET inhibitors approved for MET exon 14 skipping and amplification."
+  classes:
+    exon14:
+      patterns:
+        - "exon 14"
+        - "exon14"
+        - "met exon 14 skipping"
+      variants: ["*"]  # Any exon 14 mutation
+
+NTRK:
+  description: "TRK inhibitors approved for any NTRK fusion."
+  default_approve: true
+
+HER2:
+  description: "HER2/ERBB2 targeted therapies."
+  default_approve: true
+
+# Global exclusion patterns (apply to all genes)
+global_exclusions:
+  - "{gene} wild-type"
+  - "{gene} wild type"
+  - "{gene} wildtype"
+  - "wild-type {gene}"
+  - "wild type {gene}"
+  - "wildtype {gene}"
+  - "{gene}-negative"
+  - "without {gene} mutation"
+  - "without mutations"

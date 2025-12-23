@@ -1,0 +1,12 @@
+services:
+  tumorboard:
+    build:
+      context: ..
+      dockerfile: streamlit/Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - ../.env
+    volumes:
+      - ../benchmarks:/app/benchmarks
+      - ../data:/app/data
