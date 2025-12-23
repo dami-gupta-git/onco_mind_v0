@@ -37,8 +37,15 @@ class SemanticScholarError(Exception):
 
 
 class SemanticScholarRateLimitError(SemanticScholarError):
-    """Exception raised when Semantic Scholar rate limit (429) is hit."""
-    pass
+    """Exception raised when Semantic Scholar rate limit (429) is hit.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header)
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -255,6 +262,24 @@ class SemanticScholarClient:
             await asyncio.sleep(self.RATE_LIMIT_DELAY - elapsed)
         self._last_request_time = time.time()
 
+    def _parse_retry_after(self, response: httpx.Response) -> float | None:
+        """Parse Retry-After header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Seconds to wait, or None if header not present/parseable
+        """
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return None
+
+        try:
+            return float(retry_after)
+        except ValueError:
+            return None
+
     async def get_paper_by_pmid(self, pmid: str) -> SemanticPaperInfo | None:
         """Get paper information by PubMed ID.
 
@@ -449,7 +474,10 @@ class SemanticScholarClient:
 
             # Check for rate limit before raising for other errors
             if response.status_code == 429:
-                raise SemanticScholarRateLimitError("Semantic Scholar rate limit exceeded")
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
 
             response.raise_for_status()
             data = response.json()
@@ -470,7 +498,10 @@ class SemanticScholarClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
-                raise SemanticScholarRateLimitError("Semantic Scholar rate limit exceeded")
+                retry_after = self._parse_retry_after(e.response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
             return []
         except httpx.HTTPError:
             return []

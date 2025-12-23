@@ -27,8 +27,15 @@ from tenacity import (
 
 
 class ClinicalTrialsRateLimitError(Exception):
-    """Raised when rate limited by ClinicalTrials.gov API."""
-    pass
+    """Raised when rate limited by ClinicalTrials.gov API.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header)
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 class ClinicalTrialsError(Exception):
@@ -306,6 +313,28 @@ class ClinicalTrialsClient:
         except Exception:
             return None
 
+    def _parse_retry_after(self, response: httpx.Response) -> float | None:
+        """Parse Retry-After header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Seconds to wait, or None if header not present/parseable
+        """
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return None
+
+        try:
+            # Retry-After can be seconds (integer) or HTTP-date
+            # Try parsing as seconds first (most common)
+            return float(retry_after)
+        except ValueError:
+            # Could be HTTP-date format, but for simplicity return None
+            # and let tenacity handle the backoff
+            return None
+
     @retry(
         retry=retry_if_exception_type(ClinicalTrialsRateLimitError),
         stop=stop_after_attempt(3),
@@ -335,8 +364,10 @@ class ClinicalTrialsClient:
 
             # Check for rate limit errors (429 or 403)
             if response.status_code in (429, 403):
+                retry_after = self._parse_retry_after(response)
                 raise ClinicalTrialsRateLimitError(
-                    f"Rate limited by ClinicalTrials.gov (status {response.status_code})"
+                    f"Rate limited by ClinicalTrials.gov (status {response.status_code})",
+                    retry_after=retry_after,
                 )
 
             response.raise_for_status()
@@ -344,8 +375,10 @@ class ClinicalTrialsClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (429, 403):
+                retry_after = self._parse_retry_after(e.response)
                 raise ClinicalTrialsRateLimitError(
-                    f"Rate limited by ClinicalTrials.gov (status {e.response.status_code})"
+                    f"Rate limited by ClinicalTrials.gov (status {e.response.status_code})",
+                    retry_after=retry_after,
                 )
             raise ClinicalTrialsError(f"HTTP error: {e}")
 
