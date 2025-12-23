@@ -169,7 +169,8 @@ class TestEvidenceSummary:
 
         summary_header = evidence.format_evidence_summary_header(tumor_type="melanoma")
         assert "EVIDENCE SUMMARY" in summary_header
-        assert "TIER" in summary_header
+        # Summary includes sensitivity/resistance breakdown (tier moved to experimental module)
+        assert "Sensitivity" in summary_header or "Resistance" in summary_header
 
     @pytest.mark.integration
     @pytest.mark.asyncio
