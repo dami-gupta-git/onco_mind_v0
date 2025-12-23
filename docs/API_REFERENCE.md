@@ -360,31 +360,62 @@ except APIError as e:
 
 ## CLI Reference
 
+### Main Command
+
 ```bash
-# Basic insight
+mind insight GENE VARIANT [OPTIONS]
+```
+
+### CLI Modes
+
+| Mode | Flag | Speed | Output |
+|------|------|-------|--------|
+| **Default** | (none) | ~12s | Structured evidence + LLM clinical summary |
+| **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
+| **Full** | `--full` | ~25s | + Literature search + Literature panel + enhanced narrative |
+
+### Output Panels by Mode
+
+| Panel | Lite | Default | Full |
+|-------|------|---------|------|
+| Variant Insight | ✓ | ✓ | ✓ |
+| Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
+| Clinical Evidence | ✓ | ✓ | ✓ |
+| Literature | - | - | ✓ |
+| Clinical Summary | - | ✓ | ✓ |
+
+### Examples
+
+```bash
+# Default: structured evidence + LLM narrative (~12s)
 mind insight BRAF V600E --tumor Melanoma
+mind insight PIK3CA H1047R -t "Breast Cancer"
 
-# With LLM synthesis
-mind insight BRAF V600E --tumor Melanoma --llm
+# Lite mode: structured evidence only, no LLM (~7s)
+mind insight EGFR L858R -t NSCLC --lite
 
-# Output to file
-mind insight KRAS G12C --tumor NSCLC --output result.json
+# Full mode: + literature search + enhanced narrative (~25s)
+mind insight KRAS G12C -t NSCLC --full
 
-# Full LLM narrative mode
-mind insight-llm BRAF V600E --tumor Melanoma
+# Save to JSON
+mind insight BRAF V600E -t Melanoma --output result.json
 
 # Batch processing
-mind batch variants.csv --output results.json
+mind batch variants.json --output results.json
+mind batch variants.json --lite              # Fastest: no LLM
+mind batch variants.json --full              # Slowest: with literature
 
 # Help
 mind --help
 mind insight --help
 ```
 
-**CLI Options:**
+### CLI Options
+
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--tumor` | `-t` | Tumor type context |
-| `--llm` | | Enable LLM synthesis |
-| `--output` | `-o` | Output file path |
-| `--format` | `-f` | Output format (json, csv, markdown) |
+| `--lite` | | Lite mode: structured evidence only, no LLM |
+| `--full` | | Full mode: include literature search + enhanced narrative |
+| `--model` | `-m` | LLM model (default: gpt-4o-mini) |
+| `--output` | `-o` | Output file path (JSON) |
