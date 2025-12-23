@@ -84,10 +84,9 @@ def insight(
         else:
             mode_str = "default"
 
-        tumor_suffix = f" [dim]({tumor})[/dim]" if tumor else ""
+        tumor_suffix = f" [dim]in[/dim] {tumor}" if tumor else ""
         mode_suffix = f" [dim][{mode_str}][/dim]" if mode_str != "default" else ""
-        console.print(f"\n[dim]Generating insight for[/dim] [bold cyan]{gene} {variant}[/bold cyan]{tumor_suffix}{mode_suffix}\n", highlight=False)
-
+        console.print(f"\n[dim]Generating insight ...[/dim]\n", highlight=False)
         # Step 1: Fetch evidence
         enable_literature = full  # Only fetch literature in full mode
         config = EvidenceBuilderConfig(enable_literature=enable_literature)
@@ -138,11 +137,21 @@ def insight(
 
         # === RENDER OUTPUT ===
 
+        # Variant header panel
+        variant_title = f"{gene} {variant}"
+        if tumor:
+            variant_title += f" [dim]in[/dim] {tumor}"
+        from rich.align import Align
+        from rich.box import DOUBLE
+        console.print(Panel(
+            Align.center(f"[bold bright_white]{variant_title}[/bold bright_white]"),
+            border_style="bold bright_white",
+            box=DOUBLE,
+            padding=(0, 2),
+        ))
+
         # Build header content with all variant info
-        tumor_display = tumor or "Not specified"
         header_lines = []
-        header_lines.append(f"[bold white]{gene} {variant}[/bold white]")
-        header_lines.append(f"[dim]Tumor:[/dim] {tumor_display}")
 
         # IDs row
         ids = []
@@ -155,7 +164,7 @@ def insight(
         if ids:
             header_lines.append(f"[dim]{' | '.join(ids)}[/dim]")
 
-        header_lines.append("")  # Blank line before details
+
 
         # ClinVar significance
         if panel.clinical.clinvar_clinical_significance:
