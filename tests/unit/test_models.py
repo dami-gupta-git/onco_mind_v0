@@ -122,7 +122,7 @@ class TestEvidence:
 
 
 class TestActionabilityAssessment:
-    """Tests for VariantReport model."""
+    """Tests for VariantInsight model."""
 
     def test_assessment_creation(self):
         """Test creating an assessment."""
@@ -162,7 +162,7 @@ class TestActionabilityAssessment:
             dbsnp_id="rs113488022",
             hgvs_protein="NP_004324.2:p.Val600Glu",
         )
-        report = assessment.to_report()
+        report = assessment.get_insight()
         assert "BRAF" in report
         assert "V600E" in report
         assert "Melanoma" in report
@@ -198,7 +198,7 @@ class TestActionabilityAssessment:
             summary="General assessment",
             rationale="Test rationale",
         )
-        report = assessment.to_report()
+        report = assessment.get_insight()
         assert "KRAS" in report
         assert "G12C" in report
         assert "Not specified" in report

@@ -103,7 +103,7 @@ class Validator:
         )
 
         # Assess the variant
-        assessment = await self.engine.process_variant(variant_input)
+        assessment = await self.engine.get_insight(variant_input)
 
         # Compare with expected
         is_correct = assessment.tier == entry.expected_tier

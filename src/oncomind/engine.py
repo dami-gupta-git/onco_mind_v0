@@ -30,7 +30,7 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient
 from oncomind.api.pubmed import PubMedClient, PubMedArticle, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 from oncomind.llm.service import LLMService
-from oncomind.models.report import VariantReport
+from oncomind.models.insight import VariantInsight
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCAssertionEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
@@ -41,7 +41,7 @@ from oncomind.models.variant import VariantInput
 from oncomind.utils import normalize_variant
 
 
-class ReportingEngine:
+class InsightEngine:
     """
     Engine for variant assessment.
 
@@ -104,7 +104,7 @@ class ReportingEngine:
         if self.pubmed_client:
             await self.pubmed_client.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def process_variant(self, variant_input: VariantInput) -> VariantReport:
+    async def get_insight(self, variant_input: VariantInput) -> VariantInsight:
         """Assess a single variant.
 
         Chains multiple async operations:
@@ -592,7 +592,7 @@ class ReportingEngine:
 
     async def batch_report(
         self, variants: list[VariantInput]
-    ) -> list[VariantReport]:
+    ) -> list[VariantInsight]:
         """
         Process multiple variants concurrently.
 
@@ -601,7 +601,7 @@ class ReportingEngine:
         """
         
         # Create coroutines for each variant
-        tasks = [self.process_variant(variant) for variant in variants]
+        tasks = [self.get_insight(variant) for variant in variants]
 
         # Run all tasks concurrently, capturing exceptions instead of raising
         results = await asyncio.gather(*tasks, return_exceptions=True)

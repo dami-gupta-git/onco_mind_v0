@@ -1,6 +1,6 @@
 # TumorBoard Docker Guide
 
-Simple guide to running TumorBoard with Docker.
+Simple guide to running OncoMind with Docker.
 
 ## Quick Start
 

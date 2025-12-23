@@ -1,10 +1,10 @@
 services:
-  tumorboard:
+  oncomind:
     build:
       context: ..
       dockerfile: streamlit/Dockerfile
     ports:
-      - "8501:8501"
+      - "8502:8502"
     env_file:
       - ../.env
     volumes:
