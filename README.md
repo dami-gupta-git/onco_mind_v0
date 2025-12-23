@@ -44,6 +44,11 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
+> **Note:** All dependencies are managed in `pyproject.toml`. If you encounter `ModuleNotFoundError` after pulling updates, reinstall with:
+> ```bash
+> pip install -e . --force-reinstall
+> ```
+
 ## Quick Start
 
 ### Python API

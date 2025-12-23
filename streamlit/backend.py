@@ -21,6 +21,7 @@ async def get_variant_annotation(
     variant: str,
     tumor_type: Optional[str] = None,
     enable_llm: bool = False,
+    enable_literature: bool = True,
     model: str = "gpt-4o-mini",
     temperature: float = 0.1
 ) -> Dict[str, Any]:
@@ -35,6 +36,7 @@ async def get_variant_annotation(
         variant: Variant notation (e.g., V600E)
         tumor_type: Optional tumor type (e.g., Melanoma)
         enable_llm: Enable LLM enhancement for literature analysis
+        enable_literature: Enable literature search (disable for fast mode)
         model: LLM model to use (if enable_llm=True)
         temperature: LLM temperature (0.0-1.0)
 
@@ -44,6 +46,7 @@ async def get_variant_annotation(
     try:
         config = AnnotationConfig(
             enable_llm=enable_llm,
+            enable_literature=enable_literature,
             llm_model=model,
             llm_temperature=temperature,
         )
@@ -338,96 +341,55 @@ async def batch_get_variant_insights(
     variants: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
     temperature: float = 0.1,
-    progress_callback: Optional[Callable[[int, int], None]] = None
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    enable_llm: bool = False,
+    enable_literature: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Generate annotations for multiple variants with LLM narrative.
+    Generate annotations for multiple variants.
 
-    This uses the legacy InsightEngine for full LLM narrative generation.
-    For faster batch annotation without LLM, use batch_get_variant_annotations.
+    Uses the new public API with configurable LLM and literature options.
 
     Args:
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
         model: LLM model to use
         temperature: LLM temperature (0.0-1.0)
         progress_callback: Optional callback(current, total) for progress updates
+        enable_llm: Enable LLM enhancement
+        enable_literature: Enable literature search (disable for fast mode)
 
     Returns:
         List of annotation results
     """
-    try:
-        # Import legacy engine
-        from oncomind.engine import InsightEngine
-        from oncomind.models.variant import VariantInput
+    results = []
+    total = len(variants)
 
-        # Create insight engine
-        engine = InsightEngine(llm_model=model, llm_temperature=temperature)
+    for i, v in enumerate(variants):
+        if progress_callback:
+            progress_callback(i + 1, total)
 
-        # Create variant inputs
-        variant_inputs = [
-            VariantInput(
+        try:
+            result = await get_variant_annotation(
                 gene=v['gene'],
                 variant=v['variant'],
-                tumor_type=v.get('tumor_type')
+                tumor_type=v.get('tumor_type'),
+                enable_llm=enable_llm,
+                enable_literature=enable_literature,
+                model=model,
+                temperature=temperature
             )
-            for v in variants
-        ]
+            results.append(result)
+        except Exception as e:
+            results.append({
+                "variant": {
+                    "gene": v['gene'],
+                    "variant": v['variant'],
+                    "tumor_type": v.get('tumor_type'),
+                },
+                "error": str(e)
+            })
 
-        # Run batch processing
-        async with engine:
-            # Process with progress tracking
-            results = []
-            for i, variant_input in enumerate(variant_inputs):
-                if progress_callback:
-                    progress_callback(i + 1, len(variant_inputs))
-
-                try:
-                    insight = await engine.get_insight(variant_input)
-
-                    # Convert to dict
-                    result = {
-                        "variant": {
-                            "gene": insight.gene,
-                            "variant": insight.variant,
-                            "tumor_type": insight.tumor_type,
-                        },
-                        "insight": {
-                            "summary": insight.summary,
-                            "rationale": insight.rationale,
-                            "evidence_strength": insight.evidence_strength,
-                        },
-                        "identifiers": {
-                            "cosmic_id": insight.cosmic_id,
-                            "ncbi_gene_id": insight.ncbi_gene_id,
-                            "dbsnp_id": insight.dbsnp_id,
-                            "clinvar_id": insight.clinvar_id,
-                        },
-                        "recommended_therapies": [
-                            {
-                                "drug_name": therapy.drug_name,
-                                "evidence_level": therapy.evidence_level,
-                                "approval_status": therapy.approval_status,
-                                "clinical_context": therapy.clinical_context,
-                            }
-                            for therapy in insight.recommended_therapies
-                        ],
-                    }
-                    results.append(result)
-
-                except Exception as e:
-                    results.append({
-                        "variant": {
-                            "gene": variant_input.gene,
-                            "variant": variant_input.variant,
-                            "tumor_type": variant_input.tumor_type,
-                        },
-                        "error": str(e)
-                    })
-
-            return results
-
-    except Exception as e:
-        return [{"error": f"Batch annotation generation failed: {str(e)}"}]
+    return results
 
 
 # Future feature placeholders

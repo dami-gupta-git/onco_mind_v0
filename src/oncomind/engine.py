@@ -243,10 +243,8 @@ class InsightEngine:
                                 return (merged_articles[:6], "pubmed")
                             except PubMedRateLimitError:
                                 wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
-                                print(f"  Rate limit hit on both APIs, waiting {wait_time}s...")
                                 await asyncio.sleep(wait_time)
-                        # All retries exhausted
-                        print("  Warning: Literature search unavailable (rate limits)")
+                        # All retries exhausted - silently return empty
                         return ([], None)
             elif self.pubmed_client:
                 # Only PubMed available - search both types with retry
@@ -275,9 +273,8 @@ class InsightEngine:
                         return (merged_articles[:6], "pubmed")
                     except PubMedRateLimitError:
                         wait_time = 2 ** attempt
-                        print(f"  PubMed rate limit hit, waiting {wait_time}s...")
                         await asyncio.sleep(wait_time)
-                print("  Warning: Literature search unavailable (rate limits)")
+                # All retries exhausted - silently return empty
                 return ([], None)
             return ([], None)
 

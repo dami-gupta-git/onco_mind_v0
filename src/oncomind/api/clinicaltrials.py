@@ -142,6 +142,7 @@ class ClinicalTrialsClient:
     BASE_URL = "https://clinicaltrials.gov/api/v2/studies"
     DEFAULT_TIMEOUT = 30.0
     DEFAULT_PAGE_SIZE = 20
+    USER_AGENT = "OncoMind/0.1.0 (contact: oncomind-research@example.com)"
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
         """Initialize the ClinicalTrials client.
@@ -151,10 +152,14 @@ class ClinicalTrialsClient:
         """
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
+        self._headers = {
+            "User-Agent": self.USER_AGENT,
+            "Accept": "application/json",
+        }
 
     async def __aenter__(self) -> "ClinicalTrialsClient":
         """Async context manager entry."""
-        self._client = httpx.AsyncClient(timeout=self.timeout)
+        self._client = httpx.AsyncClient(timeout=self.timeout, headers=self._headers)
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
@@ -166,7 +171,7 @@ class ClinicalTrialsClient:
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
+            self._client = httpx.AsyncClient(timeout=self.timeout, headers=self._headers)
         return self._client
 
     def _build_search_query(
@@ -317,12 +322,12 @@ class ClinicalTrialsClient:
             response = await client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             data = response.json()
-        except httpx.HTTPError as e:
+        except httpx.HTTPError:
             # Don't fail the pipeline on clinical trials API error
-            print(f"ClinicalTrials.gov API warning: {e}")
+            # Silently return empty - the meta.sources_failed will indicate the issue
             return []
-        except Exception as e:
-            print(f"ClinicalTrials.gov parse warning: {e}")
+        except Exception:
+            # Parse error - silently return empty
             return []
 
         # Parse studies
