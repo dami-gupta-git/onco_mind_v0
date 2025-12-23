@@ -41,14 +41,32 @@ with tab1:
         variant = st.text_input("Variant", placeholder="e.g., V600E, L858R", key="variant_input")
         tumor = st.text_input("Tumor Type (optional)", placeholder="e.g., Melanoma, NSCLC", key="tumor_input")
 
-        st.subheader("Options")
-        fast_mode = st.checkbox("⚡ Fast Mode", value=True, help="Skip literature search for faster results")
-        enable_llm = st.checkbox("🤖 Enable LLM", value=False, help="Use LLM for literature synthesis (slower)")
+        st.subheader("Mode")
+        mode = st.radio(
+            "Analysis Mode",
+            options=["Default", "Lite", "Full"],
+            index=0,
+            horizontal=True,
+            help="Lite: ~7s, no LLM | Default: ~12s, with LLM | Full: ~25s, with literature"
+        )
+
+        # Mode descriptions
+        mode_info = {
+            "Lite": "⚡ **Lite** (~7s): Structured evidence only, no LLM narrative",
+            "Default": "🎯 **Default** (~12s): Structured evidence + LLM clinical summary",
+            "Full": "📚 **Full** (~25s): + Literature search + enhanced narrative"
+        }
+        st.caption(mode_info[mode])
+
+        # Derive settings from mode
+        enable_llm = mode in ["Default", "Full"]
+        enable_literature = mode == "Full"
 
         # Only show LLM options if LLM is enabled
         if enable_llm:
-            model_name = st.selectbox("LLM Model", list(MODELS.keys()))
-            temperature = st.slider("Temperature", 0.0, 1.0, 0.1, 0.05)
+            with st.expander("LLM Settings"):
+                model_name = st.selectbox("LLM Model", list(MODELS.keys()))
+                temperature = st.slider("Temperature", 0.0, 1.0, 0.1, 0.05)
         else:
             model_name = list(MODELS.keys())[0]
             temperature = 0.1
@@ -78,14 +96,12 @@ with tab1:
                         f"Your variant '{variant}' is classified as '{variant_type}'."
                     )
                 else:
-                    mode_desc = "fast" if fast_mode else "full"
-                    llm_desc = " with LLM" if enable_llm else ""
-                    with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode_desc}{llm_desc})..."):
+                    with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode} mode)..."):
                         # Use fast annotation API or legacy insight engine
                         result = asyncio.run(get_variant_annotation(
                             gene, variant, tumor or None,
                             enable_llm=enable_llm,
-                            enable_literature=not fast_mode,
+                            enable_literature=enable_literature,
                             model=MODELS[model_name],
                             temperature=temperature
                         ))
@@ -139,12 +155,20 @@ with tab2:
     st.subheader("Batch Variant Insight")
     st.markdown("**CSV Format:** Must contain `gene`, `variant`, and optionally `tumor_type` columns")
 
-    col1, col2, col3 = st.columns([1, 1, 1])
+    col1, col2 = st.columns([2, 1])
     with col1:
-        fast_mode_batch = st.checkbox("⚡ Fast Mode", value=True, help="Skip literature search", key="batch_fast")
+        mode_batch = st.radio(
+            "Analysis Mode",
+            options=["Default", "Lite", "Full"],
+            index=0,
+            horizontal=True,
+            help="Lite: ~7s/variant | Default: ~12s/variant | Full: ~25s/variant",
+            key="batch_mode"
+        )
+        # Derive settings from mode
+        enable_llm_batch = mode_batch in ["Default", "Full"]
+        enable_literature_batch = mode_batch == "Full"
     with col2:
-        enable_llm_batch = st.checkbox("🤖 Enable LLM", value=False, help="LLM synthesis", key="batch_llm")
-    with col3:
         if enable_llm_batch:
             model_name_batch = st.selectbox("Model", list(MODELS.keys()), key="batch_model")
         else:
@@ -166,7 +190,7 @@ with tab2:
                     variants, MODELS[model_name_batch], 0.1,
                     lambda i, t: (progress_bar.progress(i/t), status_text.text(f"Processing {i}/{t}...")),
                     enable_llm=enable_llm_batch,
-                    enable_literature=not fast_mode_batch
+                    enable_literature=enable_literature_batch
                 ))
                 status_text.text("✅ Batch processing complete!")
                 progress_bar.progress(1.0)
