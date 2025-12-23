@@ -1,4 +1,4 @@
-"""Configuration module for TumorBoard."""
+"""Configuration module for OncoMind."""
 
 from oncomind.config.variant_classes import VariantClassConfig, load_variant_classes
 

@@ -245,28 +245,6 @@ class TestVEPMyVariantIntegration:
             # Note: VEP may not always return predictions, so we just check structure
             assert isinstance(evidence.civic, list)
 
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_tier_hint_uses_functional_predictions(self):
-        """Tier hint should incorporate functional predictions when available."""
-        from oncomind.api.myvariant import MyVariantClient
-
-        async with MyVariantClient() as client:
-            # Use a variant likely to have predictions
-            evidence = await client.fetch_evidence("TP53", "R248W")
-
-            tier_hint = evidence.get_tier_hint(tumor_type="breast cancer")
-
-            assert tier_hint is not None
-            assert "TIER" in tier_hint
-
-            # If we have functional predictions, they may appear in tier hint
-            if evidence.polyphen2_prediction or evidence.cadd_score:
-                # The tier hint might mention predictions for VUS
-                # (though TP53 R248W is well-characterized and won't be VUS)
-                pass  # Just verify no crash
-
-
 class TestVEPCaching:
     """Tests for VEP client caching behavior."""
 

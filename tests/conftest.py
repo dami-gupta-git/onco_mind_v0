@@ -43,30 +43,11 @@ def sample_evidence():
 
 
 @pytest.fixture
-def sample_gold_standard_entry():
-    """Sample gold standard entry for testing."""
-    from oncomind.models.assessment import ActionabilityTier
-    from oncomind.models.validation import GoldStandardEntry
-
-    return GoldStandardEntry(
-        gene="BRAF",
-        variant="V600E",
-        tumor_type="Melanoma",
-        expected_tier=ActionabilityTier.TIER_I,
-        notes="FDA-approved BRAF inhibitors for melanoma",
-        references=["PMID:22356324"],
-    )
-
-
-@pytest.fixture
 def mock_llm_response():
     """Mock LLM response for testing."""
     return """{
-        "tier": "Tier I",
-        "confidence_score": 0.95,
         "summary": "BRAF V600E is a well-established actionable mutation in melanoma with FDA-approved targeted therapies.",
         "rationale": "Multiple FDA-approved BRAF inhibitors (vemurafenib, dabrafenib, encorafenib) exist for this mutation in melanoma. Strong clinical evidence from multiple phase III trials.",
-        "evidence_strength": "Strong",
         "recommended_therapies": [
             {
                 "drug_name": "Vemurafenib",
@@ -81,6 +62,5 @@ def mock_llm_response():
                 "clinical_context": "First-line therapy"
             }
         ],
-        "clinical_trials_available": true,
         "references": ["Chapman PB et al. NEJM 2011", "Hauschild A et al. Lancet 2012"]
     }"""

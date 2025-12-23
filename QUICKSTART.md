@@ -1,10 +1,10 @@
-# TumorBoard Quick Start Guide
+# OncoMind Quick Start Guide
 
-This guide will get you up and running with TumorBoard in 5 minutes.
+This guide will get you up and running with OncoMind in 5 minutes.
 
 ## Choose Your Interface
 
-TumorBoard is available as:
+OncoMind is available as:
 - **🐳 Docker**: One-command deployment (easiest!)
 - **🌐 Web Application**: Modern Angular UI with Flask REST API
 - **💻 Command-Line Interface**: Python CLI tool for batch processing

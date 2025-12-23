@@ -90,7 +90,7 @@ class CGIClient:
     """
 
     BIOMARKERS_URL = "https://www.cancergenomeinterpreter.org/data/biomarkers/cgi_biomarkers_latest.tsv"
-    CACHE_DIR = Path.home() / ".cache" / "tumorboard"
+    CACHE_DIR = Path.home() / ".cache" / "oncomind"
     CACHE_FILE = CACHE_DIR / "cgi_biomarkers.tsv"
     CACHE_MAX_AGE = timedelta(days=7)  # Re-download after 7 days
 

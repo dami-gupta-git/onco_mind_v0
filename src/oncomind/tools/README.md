@@ -1,6 +1,6 @@
-# TumorBoard Command-Line Tools
+# OncoMind Command-Line Tools
 
-This directory contains command-line utilities for TumorBoard.
+This directory contains command-line utilities for OncoMind.
 
 ## Variant Normalization Tool
 

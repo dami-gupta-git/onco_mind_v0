@@ -216,7 +216,7 @@ class TestCGIClient:
         with patch.object(Path, "exists", return_value=False):
             assert client._cache_is_valid() is False
 
-    @patch("tumorboard.api.cgi.CGIClient._load_biomarkers")
+    @patch("oncomind.api.cgi.CGIClient._load_biomarkers")
     def test_fetch_biomarkers_egfr_g719s(self, mock_load):
         """Test fetching biomarkers for EGFR G719S."""
         client = CGIClient()
@@ -267,7 +267,7 @@ class TestCGIClient:
         assert "Afatinib" in drugs
         assert "Gefitinib" in drugs
 
-    @patch("tumorboard.api.cgi.CGIClient._load_biomarkers")
+    @patch("oncomind.api.cgi.CGIClient._load_biomarkers")
     def test_fetch_biomarkers_no_match(self, mock_load):
         """Test fetching biomarkers with no matching results."""
         client = CGIClient()
@@ -290,7 +290,7 @@ class TestCGIClient:
 
         assert len(biomarkers) == 0
 
-    @patch("tumorboard.api.cgi.CGIClient._load_biomarkers")
+    @patch("oncomind.api.cgi.CGIClient._load_biomarkers")
     def test_fetch_fda_approved_only(self, mock_load):
         """Test fetch_fda_approved filters for FDA-approved only."""
         client = CGIClient()
@@ -338,7 +338,7 @@ class TestCGIClient:
         assert biomarkers[0].is_fda_approved() is True
         assert biomarkers[0].association == "Responsive"
 
-    @patch("tumorboard.api.cgi.CGIClient._load_biomarkers")
+    @patch("oncomind.api.cgi.CGIClient._load_biomarkers")
     def test_fetch_biomarkers_wildcard_pattern(self, mock_load):
         """Test fetching biomarkers using wildcard pattern matching."""
         client = CGIClient()

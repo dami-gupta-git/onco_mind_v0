@@ -221,49 +221,6 @@ class TestPubMedEvidenceIntegration:
             assert has_lit, "Should detect literature resistance evidence"
             assert len(pmids) > 0, "Should have PMIDs"
 
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_tier_hint_includes_pubmed(self):
-        """Tier hint should include PubMed evidence for resistance markers."""
-        from oncomind.models.evidence import Evidence, PubMedEvidence
-        from oncomind.api.pubmed import PubMedClient
-
-        async with PubMedClient() as client:
-            articles = await client.search_resistance_literature("EGFR", "C797S", max_results=3)
-
-            # Convert to PubMedEvidence
-            pubmed_evidence = []
-            for article in articles:
-                pubmed_evidence.append(PubMedEvidence(
-                    pmid=article.pmid,
-                    title=article.title,
-                    abstract=article.abstract,
-                    authors=article.authors,
-                    journal=article.journal,
-                    year=article.year,
-                    doi=article.doi,
-                    url=article.url,
-                    signal_type=article.get_signal_type(),
-                    drugs_mentioned=article.extract_drug_mentions(),
-                ))
-
-            evidence = Evidence(
-                variant_id="EGFR:C797S",
-                gene="EGFR",
-                variant="C797S",
-                pubmed_articles=pubmed_evidence,
-            )
-
-            # Get tier hint
-            tier_hint = evidence.get_tier_hint("Lung Adenocarcinoma")
-
-            # Should indicate Tier II with literature evidence
-            assert "TIER II" in tier_hint, f"Expected Tier II indicator, got: {tier_hint}"
-            assert "PMID" in tier_hint or "literature" in tier_hint.lower(), (
-                f"Should mention literature/PMIDs, got: {tier_hint}"
-            )
-
-
 class TestPubMedErrorHandling:
     """Tests for error handling and edge cases."""
 

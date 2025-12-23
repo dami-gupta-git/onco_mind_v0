@@ -1,6 +1,6 @@
-# TumorBoard Streamlit Application
+# OncoMind Streamlit Application
 
-Clean, single-container Streamlit implementation of TumorBoard variant actionability assessment.
+Clean, single-container Streamlit implementation of OncoMind variant insight generation.
 
 ## Quick Start
 
@@ -23,10 +23,10 @@ http://localhost:8502
 
 ## Features
 
-### 🔬 Single Variant Assessment
+### 🔬 Single Variant Insight
 - Input gene, variant, and tumor type (The tumor type should exactly match values from the OncoTree ontology or CIViC database)
 - Select LLM model (OpenAI, Anthropic, Google, Groq)
-- Get comprehensive assessment with:
+- Get comprehensive insight with:
   - AMP/ASCO/CAP tier classification
   - Confidence score
   - Evidence strength

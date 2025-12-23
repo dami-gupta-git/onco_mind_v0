@@ -1,4 +1,4 @@
-"""Logging configuration for TumorBoard LLM decisions.
+"""Logging configuration for OncoMind LLM decisions.
 
 Provides structured logging for LLM interactions, decision tracking, and debugging.
 By default, LLM logging is disabled. Enable it explicitly when needed for debugging.
@@ -27,7 +27,7 @@ class LLMDecisionLogger:
             enable_file_logging: Whether to write logs to files (default: False)
             enable_console_logging: Whether to print logs to console (default: False)
         """
-        self.logger = logging.getLogger("tumorboard.llm")
+        self.logger = logging.getLogger("oncomind.llm")
         self.logger.setLevel(logging.INFO)
         self.enable_console_logging = enable_console_logging
 
