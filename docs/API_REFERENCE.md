@@ -378,11 +378,11 @@ mind insight GENE VARIANT [OPTIONS]
 
 | Panel | Lite | Default | Full |
 |-------|------|---------|------|
-| Variant Insight | ✓ | ✓ | ✓ |
+| Evidence Summary | ✓ | ✓ | ✓ |
 | Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
 | Clinical Evidence | ✓ | ✓ | ✓ |
 | Literature | - | - | ✓ |
-| Clinical Summary | - | ✓ | ✓ |
+| Variant Insight | - | ✓ | ✓ |
 
 ### Examples
 

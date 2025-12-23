@@ -105,11 +105,11 @@ mind insight BRAF V600E -t Melanoma --output result.json
 
 | Panel | Lite | Default | Full |
 |-------|------|---------|------|
-| Variant Insight | ✓ | ✓ | ✓ |
+| Evidence Summary | ✓ | ✓ | ✓ |
 | Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
 | Clinical Evidence | ✓ | ✓ | ✓ |
 | Literature | - | - | ✓ |
-| Clinical Summary | - | ✓ | ✓ |
+| Variant Insight | - | ✓ | ✓ |
 
 ### LLM-Ready Context
 

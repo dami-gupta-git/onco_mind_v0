@@ -182,7 +182,7 @@ def insight(
 
         console.print(Panel(
             "\n".join(header_lines),
-            title="[bold]Variant Insight[/bold]",
+            title="[bold]Evidence Summary[/bold]",
             border_style="blue",
             padding=(0, 2),
         ))
@@ -276,7 +276,7 @@ def insight(
             wrapped_summary = textwrap.fill(insight_result.summary, width=74)
             console.print(Panel(
                 wrapped_summary,
-                title="[bold]Clinical Summary[/bold]",
+                title="[bold]Variant Insight[/bold]",
                 border_style="magenta",
                 padding=(1, 2),
             ))
