@@ -22,7 +22,7 @@ import typer
 from dotenv import load_dotenv
 
 
-from oncomind import get_insight, AnnotationConfig
+from oncomind import get_insight, InsightConfig
 from oncomind.engine import InsightEngine
 from oncomind.models import VariantInput
 
@@ -69,7 +69,7 @@ def insight(
         if fast:
             print("  Mode: fast (skipping literature)")
 
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=llm,
             llm_model=model,
             enable_literature=not fast,
@@ -178,7 +178,7 @@ def batch(
         raise typer.Exit(1)
 
     async def run_batch() -> None:
-        from oncomind import get_insights, AnnotationConfig
+        from oncomind import get_insights, InsightConfig
 
         with open(input_file, "r") as f:
             data = json.load(f)
@@ -198,7 +198,7 @@ def batch(
         if not llm:
             print("  LLM: disabled")
 
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=llm,
             llm_model=model,
             llm_temperature=temperature,

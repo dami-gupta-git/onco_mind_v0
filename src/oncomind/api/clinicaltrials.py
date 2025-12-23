@@ -11,12 +11,24 @@ Key Design:
 - Searches by gene+variant keyword and cancer type
 - Filters for recruiting/active trials only
 - Returns structured trial information
+- Rate limiting: ~50 requests/minute, exponential backoff on 429/403
 """
 
 from typing import Any
 from dataclasses import dataclass
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
+
+class ClinicalTrialsRateLimitError(Exception):
+    """Raised when rate limited by ClinicalTrials.gov API."""
+    pass
 
 
 class ClinicalTrialsError(Exception):
@@ -137,12 +149,31 @@ class ClinicalTrialsClient:
     clinical trials by gene, variant, and cancer type.
 
     API Documentation: https://clinicaltrials.gov/data-api/api
+
+    Rate Limiting:
+    - ~50 requests/minute per IP
+    - Exponential backoff with jitter on 429/403 errors
+    - Request only necessary fields to reduce payload
     """
 
     BASE_URL = "https://clinicaltrials.gov/api/v2/studies"
     DEFAULT_TIMEOUT = 30.0
-    DEFAULT_PAGE_SIZE = 20
+    DEFAULT_PAGE_SIZE = 100  # Increased to reduce total requests
     USER_AGENT = "OncoMind/0.1.0 (contact: oncomind-research@example.com)"
+
+    # Only request fields we actually use (reduces payload size)
+    FIELDS = [
+        "protocolSection.identificationModule.nctId",
+        "protocolSection.identificationModule.briefTitle",
+        "protocolSection.identificationModule.officialTitle",
+        "protocolSection.statusModule.overallStatus",
+        "protocolSection.designModule.phases",
+        "protocolSection.conditionsModule.conditions",
+        "protocolSection.armsInterventionsModule.interventions",
+        "protocolSection.descriptionModule.briefSummary",
+        "protocolSection.eligibilityModule.eligibilityCriteria",
+        "protocolSection.sponsorCollaboratorsModule.leadSponsor",
+    ]
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
         """Initialize the ClinicalTrials client.
@@ -275,6 +306,52 @@ class ClinicalTrialsClient:
         except Exception:
             return None
 
+    @retry(
+        retry=retry_if_exception_type(ClinicalTrialsRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=2, max=15, jitter=1),
+        reraise=True,
+    )
+    async def _make_request(
+        self,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Make API request with retry on rate limit.
+
+        Args:
+            params: Query parameters for the API request
+
+        Returns:
+            Parsed JSON response
+
+        Raises:
+            ClinicalTrialsRateLimitError: If rate limited after retries
+            ClinicalTrialsError: For other API errors
+        """
+        client = self._get_client()
+
+        try:
+            response = await client.get(self.BASE_URL, params=params)
+
+            # Check for rate limit errors (429 or 403)
+            if response.status_code in (429, 403):
+                raise ClinicalTrialsRateLimitError(
+                    f"Rate limited by ClinicalTrials.gov (status {response.status_code})"
+                )
+
+            response.raise_for_status()
+            return response.json()
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code in (429, 403):
+                raise ClinicalTrialsRateLimitError(
+                    f"Rate limited by ClinicalTrials.gov (status {e.response.status_code})"
+                )
+            raise ClinicalTrialsError(f"HTTP error: {e}")
+
+        except httpx.HTTPError as e:
+            raise ClinicalTrialsError(f"Network error: {e}")
+
     async def search_trials(
         self,
         gene: str,
@@ -295,17 +372,16 @@ class ClinicalTrialsClient:
         Returns:
             List of ClinicalTrial objects
         """
-        client = self._get_client()
-
         # Build query
         query = self._build_search_query(gene, variant, tumor_type)
 
-        # Build parameters
+        # Build parameters - request only needed fields to reduce payload
         params: dict[str, Any] = {
             'query.term': query,
-            'pageSize': min(max_results * 2, 50),  # Fetch extra for filtering
+            'pageSize': min(max_results * 2, self.DEFAULT_PAGE_SIZE),
             'countTotal': 'true',
             'format': 'json',
+            'fields': '|'.join(self.FIELDS),  # Only fetch fields we need
         }
 
         # Add condition filter if tumor type specified
@@ -318,17 +394,8 @@ class ClinicalTrialsClient:
         else:
             params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING'
 
-        try:
-            response = await client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-        except httpx.HTTPError:
-            # Don't fail the pipeline on clinical trials API error
-            # Silently return empty - the meta.sources_failed will indicate the issue
-            return []
-        except Exception:
-            # Parse error - silently return empty
-            return []
+        # Make request - let errors propagate for caller to handle retry
+        data = await self._make_request(params)
 
         # Parse studies
         studies = data.get('studies', [])

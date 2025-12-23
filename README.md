@@ -55,7 +55,7 @@ pip install -e ".[dev]"
 
 ```python
 import asyncio
-from oncomind import get_insight, AnnotationConfig
+from oncomind import get_insight, InsightConfig
 
 async def main():
     # Fast annotation (no LLM)
@@ -67,7 +67,7 @@ async def main():
     print(f"Sources: {panel.meta.sources_with_data}")
 
     # With LLM synthesis for literature analysis
-    config = AnnotationConfig(enable_llm=True, llm_model="gpt-4o-mini")
+    config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
     panel = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
 
     # LLM-extracted insights from literature

@@ -20,6 +20,12 @@ import asyncio
 import xml.etree.ElementTree as ET
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 
 class PubMedError(Exception):
@@ -267,6 +273,12 @@ class PubMedClient:
 
         return ' AND '.join(query_parts)
 
+    @retry(
+        retry=retry_if_exception_type(PubMedRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=5, jitter=0.5),
+        reraise=True,
+    )
     async def _search_pmids(self, query: str, max_results: int = 10) -> list[str]:
         """Search PubMed and return PMIDs.
 
@@ -276,6 +288,9 @@ class PubMedClient:
 
         Returns:
             List of PMIDs
+
+        Raises:
+            PubMedRateLimitError: If rate limited after retries
         """
         client = self._get_client()
 
@@ -309,6 +324,12 @@ class PubMedClient:
         except Exception:
             return []
 
+    @retry(
+        retry=retry_if_exception_type(PubMedRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=5, jitter=0.5),
+        reraise=True,
+    )
     async def _fetch_articles(self, pmids: list[str]) -> list[PubMedArticle]:
         """Fetch article details for given PMIDs.
 
@@ -317,6 +338,9 @@ class PubMedClient:
 
         Returns:
             List of PubMedArticle objects
+
+        Raises:
+            PubMedRateLimitError: If rate limited after retries
         """
         if not pmids:
             return []

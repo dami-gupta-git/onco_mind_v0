@@ -30,7 +30,7 @@ from oncomind.api.cgi import CGIClient
 from oncomind.api.oncotree import OncoTreeClient
 from oncomind.api.vicc import VICCClient
 from oncomind.api.civic import CIViCClient
-from oncomind.api.clinicaltrials import ClinicalTrialsClient
+from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 
@@ -232,51 +232,42 @@ class EvidenceBuilder:
         variant: str,
         tumor_type: str | None,
     ) -> tuple[list, str | None]:
-        """Fetch literature from PubMed with fast retry.
+        """Fetch literature from PubMed (fallback from Semantic Scholar).
 
-        Uses short backoff: 0.5s, 1s between retries (max 2 retries).
+        Retry is handled by tenacity in PubMedClient.
         """
         if not self.pubmed_client:
             return [], None
 
-        import random
+        try:
+            resistance_articles, variant_articles = await asyncio.gather(
+                self.pubmed_client.search_resistance_literature(
+                    gene=gene,
+                    variant=variant,
+                    tumor_type=tumor_type,
+                    max_results=self.config.max_literature_results // 2,
+                ),
+                self.pubmed_client.search_variant_literature(
+                    gene=gene,
+                    variant=variant,
+                    tumor_type=tumor_type,
+                    max_results=self.config.max_literature_results // 2,
+                ),
+            )
 
-        max_retries = 2  # Reduced from 4 for speed
-        for attempt in range(max_retries):
-            try:
-                resistance_articles, variant_articles = await asyncio.gather(
-                    self.pubmed_client.search_resistance_literature(
-                        gene=gene,
-                        variant=variant,
-                        tumor_type=tumor_type,
-                        max_results=self.config.max_literature_results // 2,
-                    ),
-                    self.pubmed_client.search_variant_literature(
-                        gene=gene,
-                        variant=variant,
-                        tumor_type=tumor_type,
-                        max_results=self.config.max_literature_results // 2,
-                    ),
-                )
+            # Merge and deduplicate by pmid
+            seen_pmids = set()
+            merged_articles = []
+            for article in resistance_articles + variant_articles:
+                if article.pmid not in seen_pmids:
+                    seen_pmids.add(article.pmid)
+                    merged_articles.append(article)
 
-                # Merge and deduplicate by pmid
-                seen_pmids = set()
-                merged_articles = []
-                for article in resistance_articles + variant_articles:
-                    if article.pmid not in seen_pmids:
-                        seen_pmids.add(article.pmid)
-                        merged_articles.append(article)
+            return merged_articles[:self.config.max_literature_results], "pubmed"
 
-                return merged_articles[:self.config.max_literature_results], "pubmed"
-
-            except PubMedRateLimitError:
-                if attempt < max_retries - 1:
-                    # Short backoff: 0.5s, 1s + small jitter
-                    wait_time = 0.5 * (attempt + 1) + random.uniform(0, 0.3)
-                    await asyncio.sleep(wait_time)
-
-        # Silently return empty - meta.sources_failed will indicate the issue
-        return [], None
+        except PubMedRateLimitError:
+            # After tenacity retries exhausted, return empty
+            return [], None
 
     async def build_evidence_panel(
         self,
@@ -334,8 +325,13 @@ class EvidenceBuilder:
             return []
 
         async def fetch_clinical_trials():
-            if self.clinical_trials_client:
-                sources_queried.append("ClinicalTrials.gov")
+            """Fetch clinical trials. Retry is handled by tenacity in client."""
+            if not self.clinical_trials_client:
+                return []
+
+            sources_queried.append("ClinicalTrials.gov")
+
+            try:
                 return await self.clinical_trials_client.search_trials(
                     gene=gene,
                     variant=normalized_variant,
@@ -343,7 +339,9 @@ class EvidenceBuilder:
                     recruiting_only=True,
                     max_results=self.config.max_clinical_trials,
                 )
-            return []
+            except ClinicalTrialsRateLimitError:
+                # After tenacity retries exhausted, return empty
+                return []
 
         async def fetch_literature():
             if self.config.enable_literature:

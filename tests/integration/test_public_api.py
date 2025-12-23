@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from oncomind import get_insight, get_insights, AnnotationConfig, EvidencePanel
+from oncomind import get_insight, get_insights, InsightConfig, EvidencePanel
 
 
 class TestGetInsightFastMode:
@@ -18,7 +18,7 @@ class TestGetInsightFastMode:
     @pytest.mark.asyncio
     async def test_fast_mode_skips_literature(self):
         """Fast mode should skip literature search."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -35,7 +35,7 @@ class TestGetInsightFastMode:
     @pytest.mark.asyncio
     async def test_fast_mode_still_fetches_databases(self):
         """Fast mode should still fetch database evidence."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -54,7 +54,7 @@ class TestGetInsightFastMode:
         """Fast mode should complete quickly."""
         import time
 
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -75,7 +75,7 @@ class TestGetInsightFullMode:
     @pytest.mark.asyncio
     async def test_full_mode_includes_literature(self):
         """Full mode should include literature search."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=True,
             enable_llm=False,
         )
@@ -96,7 +96,7 @@ class TestGetInsightLLMOptions:
     @pytest.mark.asyncio
     async def test_llm_disabled_by_default(self):
         """LLM should be disabled by default."""
-        config = AnnotationConfig()
+        config = InsightConfig()
 
         assert config.enable_llm is False
 
@@ -104,7 +104,7 @@ class TestGetInsightLLMOptions:
     @pytest.mark.asyncio
     async def test_config_llm_model_setting(self):
         """LLM model should be configurable."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=True,
             llm_model="gpt-4o-mini",
             llm_temperature=0.2,
@@ -122,7 +122,7 @@ class TestGetInsights:
     @pytest.mark.asyncio
     async def test_batch_with_list_of_strings(self):
         """Batch should work with list of variant strings."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -141,7 +141,7 @@ class TestGetInsights:
     @pytest.mark.asyncio
     async def test_batch_with_progress_callback(self):
         """Batch should call progress callback."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -166,7 +166,7 @@ class TestGetInsights:
     @pytest.mark.asyncio
     async def test_batch_fast_mode(self):
         """Batch fast mode should skip literature for all variants."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -185,7 +185,7 @@ class TestGetInsights:
     @pytest.mark.asyncio
     async def test_batch_with_tumor_type(self):
         """Batch should apply tumor type to all variants."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -202,12 +202,12 @@ class TestGetInsights:
             assert panel.clinical.tumor_type == "NSCLC"
 
 
-class TestAnnotationConfig:
-    """Tests for AnnotationConfig."""
+class TestInsightConfig:
+    """Tests for InsightConfig."""
 
     def test_default_config(self):
         """Default config should have sensible defaults."""
-        config = AnnotationConfig()
+        config = InsightConfig()
 
         assert config.enable_vicc is True
         assert config.enable_civic_assertions is True
@@ -219,7 +219,7 @@ class TestAnnotationConfig:
 
     def test_fast_mode_config(self):
         """Fast mode config should disable literature."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
         )
 
@@ -228,7 +228,7 @@ class TestAnnotationConfig:
 
     def test_llm_config(self):
         """LLM config should be customizable."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=True,
             llm_model="gpt-4o",
             llm_temperature=0.5,
@@ -246,7 +246,7 @@ class TestEvidencePanelOutput:
     @pytest.mark.asyncio
     async def test_panel_has_required_sections(self):
         """EvidencePanel should have all required sections."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -265,7 +265,7 @@ class TestEvidencePanelOutput:
     @pytest.mark.asyncio
     async def test_panel_serialization(self):
         """EvidencePanel should serialize to JSON."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )
@@ -289,7 +289,7 @@ class TestEvidencePanelOutput:
     @pytest.mark.asyncio
     async def test_panel_summary_stats(self):
         """EvidencePanel should provide summary stats."""
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
         )

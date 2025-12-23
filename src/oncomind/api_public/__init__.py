@@ -16,14 +16,14 @@ evidence organized into sections:
 - meta: Processing metadata
 """
 
-from oncomind.api_public.annotate import (
+from oncomind.api_public.insight import (
     get_insight,
     get_insights,
-    AnnotationConfig,
+    InsightConfig,
 )
 
 __all__ = [
     "get_insight",
     "get_insights",
-    "AnnotationConfig",
+    "InsightConfig",
 ]

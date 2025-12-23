@@ -13,9 +13,10 @@ Supports two modes:
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
-from oncomind import get_insight, get_insights, AnnotationConfig
+from oncomind import get_insight, get_insights, InsightConfig
 
 
+# Alias for backward compatibility with app.py
 async def get_variant_annotation(
     gene: str,
     variant: str,
@@ -25,10 +26,25 @@ async def get_variant_annotation(
     model: str = "gpt-4o-mini",
     temperature: float = 0.1
 ) -> Dict[str, Any]:
-    """
-    Generate annotation for a single variant using the new public API.
+    """Alias for get_single_variant_insight (backward compatibility)."""
+    return await get_single_variant_insight(
+        gene, variant, tumor_type, enable_llm, enable_literature, model, temperature
+    )
 
-    This is the recommended function for variant annotation.
+
+async def get_single_variant_insight(
+    gene: str,
+    variant: str,
+    tumor_type: Optional[str] = None,
+    enable_llm: bool = False,
+    enable_literature: bool = True,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.1
+) -> Dict[str, Any]:
+    """
+    Generate insight for a single variant using the public API.
+
+    This is the recommended function for variant insight.
     Returns EvidencePanel data.
 
     Args:
@@ -41,10 +57,10 @@ async def get_variant_annotation(
         temperature: LLM temperature (0.0-1.0)
 
     Returns:
-        Dict containing annotation results with identifiers, evidence, etc.
+        Dict containing insight results with identifiers, evidence, etc.
     """
     try:
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=enable_llm,
             enable_literature=enable_literature,
             llm_model=model,
@@ -100,7 +116,7 @@ async def get_variant_annotation(
         }
 
     except Exception as e:
-        return {"error": f"Annotation generation failed: {str(e)}"}
+        return {"error": f"Insight generation failed: {str(e)}"}
 
 
 def _generate_summary(panel) -> str:
@@ -259,7 +275,7 @@ async def get_variant_insight(
         }
 
     except Exception as e:
-        return {"error": f"Annotation generation failed: {str(e)}"}
+        return {"error": f"Insight generation failed: {str(e)}"}
 
 
 async def batch_get_variant_annotations(
@@ -285,7 +301,7 @@ async def batch_get_variant_annotations(
         List of annotation results
     """
     try:
-        config = AnnotationConfig(
+        config = InsightConfig(
             enable_llm=enable_llm,
             llm_model=model,
             llm_temperature=temperature,
@@ -334,7 +350,7 @@ async def batch_get_variant_annotations(
         return results
 
     except Exception as e:
-        return [{"error": f"Batch annotation generation failed: {str(e)}"}]
+        return [{"error": f"Batch insight generation failed: {str(e)}"}]
 
 
 async def batch_get_variant_insights(

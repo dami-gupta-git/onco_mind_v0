@@ -23,6 +23,12 @@ from dataclasses import dataclass, field
 import asyncio
 
 import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 
 class SemanticScholarError(Exception):
@@ -395,6 +401,12 @@ class SemanticScholarClient:
         except Exception:
             return None
 
+    @retry(
+        retry=retry_if_exception_type(SemanticScholarRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        reraise=True,
+    )
     async def search_papers(
         self,
         query: str,
@@ -412,6 +424,9 @@ class SemanticScholarClient:
 
         Returns:
             List of SemanticPaperInfo objects
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
         """
         client = self._get_client()
         url = f"{self.BASE_URL}/paper/search"
@@ -453,9 +468,6 @@ class SemanticScholarClient:
 
             return papers
 
-        except SemanticScholarRateLimitError:
-            # Re-raise rate limit errors for caller to handle
-            raise
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 raise SemanticScholarRateLimitError("Semantic Scholar rate limit exceeded")
