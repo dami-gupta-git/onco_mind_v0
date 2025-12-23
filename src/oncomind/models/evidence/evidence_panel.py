@@ -251,7 +251,7 @@ class EvidencePanel(BaseModel):
     - meta: Processing metadata
 
     Example:
-        >>> panel = process_variant("BRAF V600E", tumor_type="Melanoma")
+        >>> panel = get_insight("BRAF V600E", tumor_type="Melanoma")
         >>> print(panel.identifiers.gene, panel.identifiers.variant)
         BRAF V600E
         >>> print(panel.clinical.get_approved_drugs())

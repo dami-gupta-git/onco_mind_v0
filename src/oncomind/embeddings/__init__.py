@@ -11,7 +11,7 @@ This is a placeholder for future implementation.
 
 Example (future):
     >>> from oncomind.embeddings import extract_features, create_embedding
-    >>> panel = await process_variant("BRAF V600E")
+    >>> panel = await get_insight("BRAF V600E")
     >>> features = extract_features(panel)  # dict of numeric features
     >>> embedding = create_embedding(panel)  # dense vector
 """

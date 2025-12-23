@@ -50,11 +50,11 @@ pip install -e ".[dev]"
 
 ```python
 import asyncio
-from oncomind import process_variant, AnnotationConfig
+from oncomind import get_insight, AnnotationConfig
 
 async def main():
     # Fast annotation (no LLM)
-    panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
+    panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
     print(f"Gene: {panel.identifiers.gene}")
     print(f"FDA Approved: {panel.clinical.get_approved_drugs()}")
@@ -63,7 +63,7 @@ async def main():
 
     # With LLM synthesis for literature analysis
     config = AnnotationConfig(enable_llm=True, llm_model="gpt-4o-mini")
-    panel = await process_variant("EGFR S768I", tumor_type="NSCLC", config=config)
+    panel = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
 
     # LLM-extracted insights from literature
     print(panel.literature.literature_knowledge)
@@ -74,14 +74,20 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Basic annotation
-mind process "BRAF V600E" --tumor Melanoma
+# Basic insight
+mind insight PIK3CA H1047R --tumor "Breast Cancer"
+mind insight PIK3CA H1047R -t "Breast Cancer"
+
 
 # With LLM synthesis
-mind process "EGFR S768I" --tumor NSCLC --llm
+mind insight PIK3CA H1047R --tumor "Breast Cancer" --llm
 
 # Save to JSON
-mind process "KRAS G12C" --tumor NSCLC --output result.json
+mind insight KRAS G12C --tumor NSCLC --output result.json
+
+# Full LLM narrative (separate gene and variant args)
+mind insight-llm BRAF V600E --tumor Melanoma
+mind insight-llm IDH1 R132H -t "Acute Myeloid Leukemia"
 ```
 
 ### LLM-Ready Context
@@ -117,7 +123,7 @@ ANTHROPIC_API_KEY=your-anthropic-key
 ## EvidencePanel Structure
 
 ```python
-panel = await process_variant("BRAF V600E", tumor_type="Melanoma")
+panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
 # Identifiers
 panel.identifiers.gene              # "BRAF"
@@ -162,7 +168,7 @@ panel.meta.conflicts                # Cross-source disagreements
 - Small insertions/deletions (E746_A750del)
 - Frameshift mutations (K132fs)
 
-**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](ROADMAP.md))
+**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](docs/ROADMAP.md))
 
 ## Data Sources
 

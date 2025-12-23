@@ -45,10 +45,26 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 - [ ] Flag discrepancies between CIViC, VICC/OncoKB, CGI
 - [ ] Surface evidence level disagreements (e.g., Tier I vs Tier II)
 
+### Structured Literature Synthesis
+- [ ] `LiteratureSynthesis` model with key papers, resistance/sensitivity signals
+- [ ] `KeyPaper` model: PMID, title, year, relevance score, key finding
+- [ ] `DrugSignal` model: drug, signal type, evidence level, mechanism, supporting PMIDs
+- [ ] Summary paragraph with evidence gaps
+- [ ] Confidence and cross-paper agreement metrics
+
+### Evidence Gap Identification
+- [ ] `panel.meta.evidence_gaps` field populated automatically
+- [ ] Detect missing evidence: no trials, no resistance data, no functional studies
+- [ ] Detect limited tumor-specific data
+- [ ] Surface conflicting evidence as a gap type
+- [ ] Suggested next steps (where to focus manual effort)
+
 ### Deliverables
 - [ ] Updated Pydantic models with attribution
 - [ ] Conflict detection logic in `EvidenceBuilder`
-- [ ] Unit tests for conflict scenarios
+- [ ] Evidence gap detection in `EvidenceBuilder`
+- [ ] `LiteratureSynthesis` output in `panel.literature`
+- [ ] Unit tests for conflict and gap scenarios
 
 ---
 
@@ -115,7 +131,34 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 
 ---
 
-## v0.5: Ensemble LLM & Uncertainty
+## v0.5: Visualizations
+
+**Goal:** Make evidence tangible and explorable.
+
+### Evidence Visualizations
+- [ ] **Evidence gap radar**: Spider chart showing evidence completeness across categories
+- [ ] **Conflict heatmap**: Which sources agree/disagree for a variant
+- [ ] **Resistance trajectory**: Timeline showing typical resistance evolution (e.g., L858R → T790M → C797S)
+- [ ] **Evidence network**: Graph showing variant → drug → outcome relationships
+
+### Embedding Visualizations
+- [ ] **Variant landscape map**: t-SNE/UMAP of variant embeddings, colored by drug response
+- [ ] Cluster similar variants by evidence profile
+- [ ] Interactive tooltips with variant details
+
+### Streamlit Integration
+- [ ] Visualization components in Streamlit app
+- [ ] Interactive exploration of evidence
+- [ ] Export as static images for reports
+
+### Deliverables
+- [ ] Visualization module (`oncomind.viz`)
+- [ ] Streamlit visualization tab
+- [ ] Example outputs in documentation
+
+---
+
+## v0.6: Ensemble LLM & Uncertainty
 
 **Goal:** Quantify uncertainty in LLM extractions.
 
@@ -141,7 +184,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 
 ---
 
-## v0.6: Clinical Intelligence
+## v0.7: Clinical Intelligence
 
 **Goal:** Move from "what the variant is" to "what happens next."
 
@@ -176,7 +219,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 
 ---
 
-## v0.7: LLM Infrastructure
+## v0.8: LLM Infrastructure
 
 **Goal:** Position OncoMind as the context layer for AI oncology applications.
 
@@ -207,15 +250,50 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 
 These are tracked but not scheduled:
 
+### Gene Summaries
+- Gene-level context beyond variant annotation
+- Background, function, pathway, hotspot variants
+- Variant frequency by tumor type (from COSMIC/cBioPortal)
+- Approved therapies, resistance patterns, common co-mutations
+- Options: pre-curated for top 50 genes, or dynamic generation with LLM
+
+### Clinical Question Answering
+- Answer specific questions, not generate reports
+- "Should I try drug X given variant Y and tumor Z?"
+- "What's the expected response duration?"
+- "What should I monitor for resistance?"
+- Grounded in evidence with citations, not open-ended generation
+- Surface contradictions and evidence gaps in answer
+
+### Trial Matching Engine
+- Reasoning across eligibility criteria, not just keyword matching
+- LLM-parsed eligibility: required variants, excluded variants, prior therapy requirements
+- Match patient profile against parsed criteria
+- Output: match confidence, rationale, potential issues
+- Scope: variant/therapy matching (avoid full PHI-based patient matching)
+
+### Multi-Variant Reasoning
+- Input: multiple variants together (e.g., EGFR L858R + TP53 + MET amp)
+- Co-occurrence impact on prognosis/resistance
+- Literature search for variant combinations
+- Combined therapeutic implications
+
+### Dynamic Evidence Synthesis
+- Real-time reasoning across sources with temporal weighting
+- Recent papers vs old FDA labels — recency matters
+- Conflict analysis and resolution hints
+- Synthesis narrative with explicit caveats
+
+### Contextual Question-Answering
+- "What does this variant mean for a patient who already failed X therapy?"
+- Reasoning with treatment history context
+- Ranked therapeutic options with rationale specific to prior therapy
+- Suggested resistance testing based on clinical trajectory
+
 ### Embeddings & Vector Search
 - Embed `EvidencePanel` for similarity search
 - Use case: "Find variants with similar evidence profiles"
 - Depends on: concrete use case emerging
-
-### Compound Variant Analysis
-- Multi-variant input (e.g., EGFR L858R + T790M)
-- Co-occurrence impact on prognosis/resistance
-- Literature search for variant combinations
 
 ### Pathway Context
 - Gene → pathway membership (KEGG, Reactome)

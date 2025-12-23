@@ -59,7 +59,7 @@ def extract_features(
         Dictionary of feature name → value mappings.
 
     Example:
-        >>> panel = await process_variant("BRAF V600E")
+        >>> panel = await get_insight("BRAF V600E")
         >>> features = extract_features(panel)
         >>> print(features["alphamissense_score"])
         0.98

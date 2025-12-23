@@ -17,7 +17,7 @@ class PubMedEvidence(BaseModel):
     year: str | None = Field(None, description="Publication year")
     doi: str | None = Field(None, description="DOI")
     url: str = Field(..., description="PubMed URL")
-    signal_type: str = Field("unknown", description="resistance, sensitivity, mixed, or unknown")
+    signal_type: str | None = Field(None, description="resistance, sensitivity, mixed, prognostic, unclear, or None")
     drugs_mentioned: list[str] = Field(default_factory=list, description="Drugs mentioned in article")
 
     # Semantic Scholar enrichment fields
@@ -30,11 +30,11 @@ class PubMedEvidence(BaseModel):
 
     def is_resistance_evidence(self) -> bool:
         """Check if this article provides resistance evidence."""
-        return self.signal_type in ['resistance', 'mixed']
+        return self.signal_type is not None and self.signal_type in ['resistance', 'mixed']
 
     def is_sensitivity_evidence(self) -> bool:
         """Check if this article provides sensitivity evidence."""
-        return self.signal_type in ['sensitivity', 'mixed']
+        return self.signal_type is not None and self.signal_type in ['sensitivity', 'mixed']
 
     def get_summary(self, max_length: int = 300) -> str:
         """Get a brief summary of the article."""

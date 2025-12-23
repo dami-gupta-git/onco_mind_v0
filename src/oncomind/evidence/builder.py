@@ -600,8 +600,14 @@ class EvidenceBuilder:
         if gene_context:
             if gene_context.role:
                 gene_role = gene_context.role.value
-            gene_class = gene_context.functional_class
-            pathway = gene_context.pathway
+            # GeneContext doesn't have functional_class/pathway - derive from role
+            if gene_context.role:
+                gene_class = gene_context.role.value  # Use role as the class
+            # Check for pathway-actionable TSGs
+            from oncomind.models.gene_context import get_pathway_actionable_info
+            pathway_info = get_pathway_actionable_info(gene_context.gene)
+            if pathway_info:
+                pathway = pathway_info.get("pathway")
 
         # Build the EvidencePanel
         panel = EvidencePanel(

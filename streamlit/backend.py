@@ -2,18 +2,18 @@
 Backend logic for OncoMind Streamlit app.
 
 Integrates with the oncomind package for:
-- Variant annotation generation (single and batch)
+- Variant insight generation (single and batch)
 - Evidence gathering from multiple databases
 
 Supports two modes:
-- Fast annotation mode: Uses new public API (no LLM, returns EvidencePanel)
-- Full insight mode: Uses legacy InsightEngine (with LLM narrative)
+- Fast insight mode: Uses new public API (no LLM, returns EvidencePanel)
+- Full insight mode: Uses InsightEngine (with LLM narrative)
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
-from oncomind import process_variant, process_variants, AnnotationConfig
+from oncomind import get_insight, get_insights, AnnotationConfig
 
 
 async def get_variant_annotation(
@@ -52,7 +52,7 @@ async def get_variant_annotation(
         variant_str = f"{gene} {variant}"
 
         # Get evidence panel
-        panel = await process_variant(variant_str, tumor_type=tumor_type, config=config)
+        panel = await get_insight(variant_str, tumor_type=tumor_type, config=config)
 
         # Convert to dict for JSON serialization
         return {
@@ -297,7 +297,7 @@ async def batch_get_variant_annotations(
 
         # Process variants
         results = []
-        panels = await process_variants(
+        panels = await get_insights(
             variant_strs,
             config=config,
             progress_callback=progress_callback,
