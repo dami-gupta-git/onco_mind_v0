@@ -13,12 +13,12 @@ For synchronous usage:
 __version__ = "0.1.0"
 
 # Public API
-from oncomind.api_public.annotate import (
+from oncomind.api_public.insight import (
     get_insight,
     get_insights,
     get_insight_sync,
     get_insights_sync,
-    AnnotationConfig,
+    InsightConfig,
 )
 
 # Core models
@@ -33,7 +33,7 @@ __all__ = [
     "get_insights",
     "get_insight_sync",
     "get_insights_sync",
-    "AnnotationConfig",
+    "InsightConfig",
     # Core models
     "EvidencePanel",
     "ParsedVariant",

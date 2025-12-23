@@ -36,13 +36,13 @@ from oncomind.normalization import (
 
 
 @dataclass
-class AnnotationConfig:
-    """Configuration for the annotation pipeline.
+class InsightConfig:
+    """Configuration for the insight pipeline.
 
     Controls data sources, LLM integration, and output options.
 
     Example:
-        >>> config = AnnotationConfig(
+        >>> config = InsightConfig(
         ...     enable_llm=True,
         ...     llm_model="gpt-4o-mini",
         ...     enable_literature=True,
@@ -87,7 +87,7 @@ class AnnotationConfig:
 async def get_insight(
     variant_str: str,
     tumor_type: str | None = None,
-    config: AnnotationConfig | None = None,
+    config: InsightConfig | None = None,
 ) -> EvidencePanel:
     """Get insight for a single variant and return aggregated evidence.
 
@@ -121,7 +121,7 @@ async def get_insight(
         >>> print(panel.clinical.tumor_type)
         lung cancer
     """
-    config = config or AnnotationConfig()
+    config = config or InsightConfig()
 
     # Parse the variant string
     parsed = parse_variant_input(variant_str, tumor_type)
@@ -150,7 +150,7 @@ async def get_insight(
 async def get_insights(
     variants: list[str] | list[dict] | pd.DataFrame | Path | str,
     tumor_type: str | None = None,
-    config: AnnotationConfig | None = None,
+    config: InsightConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[EvidencePanel]:
     """Get insights for multiple variants and return aggregated evidence.
@@ -182,7 +182,7 @@ async def get_insights(
         ...     progress_callback=lambda i, t: print(f"{i}/{t}")
         ... )
     """
-    config = config or AnnotationConfig()
+    config = config or InsightConfig()
     parsed_variants: list[ParsedVariant] = []
 
     # Parse input based on type
@@ -348,7 +348,7 @@ def _parse_vcf(path: Path) -> list[ParsedVariant]:
 
 async def _apply_llm_enhancement(
     panel: EvidencePanel,
-    config: AnnotationConfig,
+    config: InsightConfig,
 ) -> EvidencePanel:
     """Apply LLM enhancement to an EvidencePanel.
 
@@ -452,7 +452,7 @@ async def _apply_llm_enhancement(
 def get_insight_sync(
     variant_str: str,
     tumor_type: str | None = None,
-    config: AnnotationConfig | None = None,
+    config: InsightConfig | None = None,
 ) -> EvidencePanel:
     """Synchronous wrapper for get_insight.
 
@@ -466,7 +466,7 @@ def get_insight_sync(
 def get_insights_sync(
     variants: list[str] | list[dict] | pd.DataFrame | Path | str,
     tumor_type: str | None = None,
-    config: AnnotationConfig | None = None,
+    config: InsightConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[EvidencePanel]:
     """Synchronous wrapper for get_insights.
@@ -483,5 +483,5 @@ __all__ = [
     "get_insights",
     "get_insight_sync",
     "get_insights_sync",
-    "AnnotationConfig",
+    "InsightConfig",
 ]

@@ -19,10 +19,10 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                      Public API Layer                             │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  api_public/annotate.py                                     │  │
+│  │  api_public/insight.py                                      │  │
 │  │  - get_insight(variant_str, tumor_type, config)             │  │
 │  │  - get_insights(variants, tumor_type, config)               │  │
-│  │  - AnnotationConfig                                         │  │
+│  │  - InsightConfig                                            │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
           │
@@ -99,7 +99,7 @@ The core annotation pipeline is deterministic and does not require LLM:
 panel = await get_insight("BRAF V600E")
 
 # With LLM enhancement (slower, adds literature analysis)
-config = AnnotationConfig(enable_llm=True)
+config = InsightConfig(enable_llm=True)
 panel = await get_insight("BRAF V600E", config=config)
 ```
 
@@ -134,7 +134,7 @@ else:
 
 ## Module Details
 
-### Public API (`api_public/annotate.py`)
+### Public API (`api_public/insight.py`)
 
 The single entry point for users:
 
@@ -142,7 +142,7 @@ The single entry point for users:
 async def get_insight(
     variant_str: str,              # "BRAF V600E" or "EGFR L858R in NSCLC"
     tumor_type: str | None = None, # Optional tumor context
-    config: AnnotationConfig | None = None,
+    config: InsightConfig | None = None,
 ) -> EvidencePanel:
 ```
 
@@ -471,11 +471,11 @@ User Input: ["BRAF V600E", "EGFR L858R", "KRAS G12C"]
 
 ## Configuration
 
-### AnnotationConfig
+### InsightConfig
 
 ```python
 @dataclass
-class AnnotationConfig:
+class InsightConfig:
     # Evidence sources
     enable_vicc: bool = True
     enable_civic_assertions: bool = True
@@ -538,21 +538,65 @@ for i, result in enumerate(results):
         sources_with_data.append(source_names[i])
 ```
 
-### Rate Limiting
+### Rate Limiting & Retry Strategy
 
-Literature clients implement retry with backoff:
+All API clients use **tenacity** for standardized retry with exponential backoff and jitter:
 
 ```python
-async def _fetch_pubmed_literature(self, ...):
-    for attempt in range(3):
-        try:
-            return await self.pubmed_client.search(...)
-        except PubMedRateLimitError:
-            wait_time = 2 ** attempt
-            await asyncio.sleep(wait_time)
-    
-    return [], None  # Graceful degradation
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
+class ClinicalTrialsClient:
+    @retry(
+        retry=retry_if_exception_type(ClinicalTrialsRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=2, max=15, jitter=1),
+        reraise=True,
+    )
+    async def _make_request(self, params):
+        # Request logic...
+        if response.status_code == 429:
+            raise ClinicalTrialsRateLimitError("Rate limited")
 ```
+
+**Retry Configuration by Client:**
+
+| Client | Trigger | Attempts | Backoff (initial → max) | Jitter |
+|--------|---------|----------|-------------------------|--------|
+| MyVariant | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| FDA | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| OncoTree | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| Semantic Scholar | `SemanticScholarRateLimitError` | 3 | 1s → 10s | ±1s |
+| PubMed | `PubMedRateLimitError` | 3 | 0.5s → 5s | ±0.5s |
+| ClinicalTrials | `ClinicalTrialsRateLimitError` | 3 | 2s → 15s | ±1s |
+
+**Design Principles:**
+
+1. **Client-level retry**: Each client handles its own retry logic with tenacity decorators
+2. **Rate limit errors**: Clients raise specific `*RateLimitError` exceptions on 429/403
+3. **Exponential backoff with jitter**: Prevents thundering herd on batch requests
+4. **Reraise after exhaustion**: After 3 attempts, error propagates to builder
+5. **Graceful degradation**: Builder catches final errors and returns empty results
+
+**Cross-Client Fallback:**
+
+The builder layer handles Semantic Scholar → PubMed fallback (cross-client logic):
+
+```python
+async def _fetch_literature(self, gene, variant, tumor_type):
+    try:
+        # Try Semantic Scholar first (better citation data)
+        return await self.semantic_scholar_client.search_papers(...)
+    except SemanticScholarRateLimitError:
+        # Fall back to PubMed if S2 exhausted retries
+        return await self._fetch_pubmed_literature(gene, variant, tumor_type)
+```
+
+This separation keeps retry logic in clients while allowing the builder to implement cross-client failover strategies.
 
 ### Variant Validation
 
@@ -622,12 +666,14 @@ Planned caching layers:
 
 | API | Rate Limit | Strategy |
 |-----|------------|----------|
-| MyVariant.info | 1000/day free | Batching |
+| MyVariant.info | 1000/day free | Tenacity retry (3 attempts, 2-10s backoff) |
 | VICC MetaKB | Unlimited | None needed |
 | CIViC | Unlimited | None needed |
-| Semantic Scholar | 100/5min free | API key + backoff |
-| PubMed | 3/sec, 10/sec with key | Backoff |
-| ClinicalTrials.gov | Reasonable use | None needed |
+| Semantic Scholar | 1 RPS (free), 10 RPS (key) | Tenacity retry + PubMed fallback |
+| PubMed | 3/sec, 10/sec with key | Tenacity retry (3 attempts, 0.5-5s backoff) |
+| ClinicalTrials.gov | ~50/min | Tenacity retry (3 attempts, 2-15s backoff) |
+| FDA OpenFDA | Reasonable use | Tenacity retry (3 attempts, 2-10s backoff) |
+| OncoTree | Unlimited | Tenacity retry for transient failures |
 
 ## Testing Strategy
 
