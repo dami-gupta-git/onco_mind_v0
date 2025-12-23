@@ -79,21 +79,37 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Basic insight
-mind insight PIK3CA H1047R --tumor "Breast Cancer"
+# Default: structured evidence + LLM narrative (~12s)
+mind insight BRAF V600E --tumor Melanoma
 mind insight PIK3CA H1047R -t "Breast Cancer"
 
+# Lite mode: structured evidence only, no LLM (~7s)
+mind insight EGFR L858R -t NSCLC --lite
 
-# With LLM synthesis
-mind insight PIK3CA H1047R --tumor "Breast Cancer" --llm
+# Full mode: + literature search + enhanced narrative (~25s)
+mind insight KRAS G12C -t NSCLC --full
 
 # Save to JSON
-mind insight KRAS G12C --tumor NSCLC --output result.json
-
-# Full LLM narrative (separate gene and variant args)
-mind insight-llm BRAF V600E --tumor Melanoma
-mind insight-llm IDH1 R132H -t "Acute Myeloid Leukemia"
+mind insight BRAF V600E -t Melanoma --output result.json
 ```
+
+#### CLI Modes
+
+| Mode | Flag | Speed | Output |
+|------|------|-------|--------|
+| **Default** | (none) | ~12s | Structured evidence + LLM clinical summary |
+| **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
+| **Full** | `--full` | ~25s | + Literature search + Literature panel + enhanced narrative |
+
+**Output panels by mode:**
+
+| Panel | Lite | Default | Full |
+|-------|------|---------|------|
+| Variant Insight | ✓ | ✓ | ✓ |
+| Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
+| Clinical Evidence | ✓ | ✓ | ✓ |
+| Literature | - | - | ✓ |
+| Clinical Summary | - | ✓ | ✓ |
 
 ### LLM-Ready Context
 

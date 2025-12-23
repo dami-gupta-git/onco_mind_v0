@@ -92,15 +92,26 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 
 ### 2. LLM as Optional Enhancement
 
-The core annotation pipeline is deterministic and does not require LLM:
+The core annotation pipeline is deterministic. LLM can be enabled for clinical narrative synthesis:
 
 ```python
-# Fast, deterministic annotation (no LLM)
-panel = await get_insight("BRAF V600E")
+# Default: structured evidence + LLM narrative (~12s)
+panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-# With LLM enhancement (slower, adds literature analysis)
-config = InsightConfig(enable_llm=True)
+# Lite: fast, no LLM (~7s)
+config = InsightConfig(enable_llm=False)
 panel = await get_insight("BRAF V600E", config=config)
+
+# Full: + literature search + enhanced narrative (~25s)
+config = InsightConfig(enable_llm=True, enable_literature=True)
+panel = await get_insight("BRAF V600E", config=config)
+```
+
+**CLI equivalent:**
+```bash
+mind insight BRAF V600E -t Melanoma           # Default
+mind insight BRAF V600E -t Melanoma --lite    # Lite
+mind insight BRAF V600E -t Melanoma --full    # Full
 ```
 
 ### 3. Async-First Design
@@ -683,8 +694,9 @@ features = extract_features(panel)
 ### Parallel Fetching
 
 Evidence sources are queried in parallel:
-- ~2-5 seconds for full annotation (without LLM)
-- ~10-15 seconds with LLM literature analysis
+- **Lite mode** (`--lite`): ~7 seconds — structured evidence only, no LLM
+- **Default mode**: ~12 seconds — structured evidence + LLM clinical narrative
+- **Full mode** (`--full`): ~25 seconds — + literature search + enhanced narrative
 
 ### Caching (Future)
 

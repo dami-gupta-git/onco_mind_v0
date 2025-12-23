@@ -100,46 +100,31 @@ echo "OPENAI_API_KEY=sk-..." > .env
 
 The `.env` file is automatically loaded when you run `oncomind` commands!
 
-## Your First Assessment
+## Your First Insight
 
-Assess the BRAF V600E mutation in melanoma:
+Get insight on the BRAF V600E mutation in melanoma:
 
 ```bash
-oncomind assess BRAF V600E --tumor "Melanoma"
+mind insight BRAF V600E --tumor Melanoma
 ```
 
-You should see output like:
-```
-================================================================================
-VARIANT ACTIONABILITY ASSESSMENT REPORT
-================================================================================
+### CLI Modes
 
-Variant: BRAF V600E
-Tumor Type: Melanoma
+| Mode | Flag | Speed | Output |
+|------|------|-------|--------|
+| **Default** | (none) | ~12s | Structured evidence + LLM clinical summary |
+| **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
+| **Full** | `--full` | ~25s | + Literature search + enhanced narrative |
 
-Tier: Tier I
-Confidence: 95.0%
-Evidence Strength: Strong
+```bash
+# Fast mode - just the structured evidence
+mind insight EGFR L858R -t NSCLC --lite
 
---------------------------------------------------------------------------------
-SUMMARY
---------------------------------------------------------------------------------
-BRAF V600E is a well-established actionable mutation in melanoma...
+# Full mode - includes literature search
+mind insight KRAS G12C -t NSCLC --full
 
---------------------------------------------------------------------------------
-RECOMMENDED THERAPIES (2)
---------------------------------------------------------------------------------
-
-1. Vemurafenib
-   Evidence Level: FDA-approved
-   Approval Status: Approved
-   Clinical Context: First-line therapy
-
-2. Dabrafenib + Trametinib
-   Evidence Level: FDA-approved
-   Approval Status: Approved
-   Clinical Context: First-line therapy
-...
+# Save output to JSON
+mind insight BRAF V600E -t Melanoma --output result.json
 ```
 
 ## Batch Processing
@@ -165,9 +150,15 @@ RECOMMENDED THERAPIES (2)
 ]
 ```
 
-2. Run batch assessment:
+2. Run batch processing:
 ```bash
-oncomind batch my_variants.json --output my_results.json
+mind batch my_variants.json --output my_results.json
+
+# Fast mode (no LLM)
+mind batch my_variants.json --output my_results.json --lite
+
+# Full mode (with literature)
+mind batch my_variants.json --output my_results.json --full
 ```
 
 3. View results:
@@ -175,49 +166,17 @@ oncomind batch my_variants.json --output my_results.json
 cat my_results.json
 ```
 
-## Validate Against Gold Standard
-
-Run validation to see how well the model performs:
-
-```bash
-oncomind validate benchmarks/gold_standard.json
-```
-
-This will output metrics like:
-```
-================================================================================
-VALIDATION REPORT
-================================================================================
-
-Total Cases: 15
-Correct Predictions: 13
-Overall Accuracy: 86.67%
-Average Confidence: 87.50%
-
---------------------------------------------------------------------------------
-PER-TIER METRICS
---------------------------------------------------------------------------------
-
-Tier I:
-  Precision: 90.00%
-  Recall: 90.00%
-  F1 Score: 90.00%
-...
-```
-
 ## Try Different Models
 
-Use Claude instead of GPT:
+Use a different LLM model for the narrative:
 
 ```bash
+# Use GPT-4o for better accuracy
+mind insight BRAF V600E --tumor Melanoma --model gpt-4o
+
+# Use Claude (requires ANTHROPIC_API_KEY)
 export ANTHROPIC_API_KEY="sk-ant-..."
-oncomind assess BRAF V600E --tumor "Melanoma" --model claude-3-sonnet-20240229
-```
-
-Or GPT-4 for potentially better accuracy:
-
-```bash
-oncomind assess BRAF V600E --tumor "Melanoma" --model gpt-4o
+mind insight BRAF V600E --tumor Melanoma --model claude-3-5-sonnet-20241022
 ```
 
 ## Next Steps

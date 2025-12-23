@@ -1,16 +1,16 @@
 """Command-line interface for OncoMind.
 
 ARCHITECTURE:
-    CLI Commands → get_insight/get_insights → EvidencePanel/VariantInsight
+    CLI Commands → EvidenceBuilder → EvidencePanel
+                 → LLMService → VariantInsight (optional)
 
-Two main workflows:
-- insight: Uses new public API (EvidencePanel output)
-- insight-llm: Uses InsightEngine (VariantInsight output with LLM narrative)
+Main command:
+    mind insight GENE VARIANT [--tumor] [--lite|--full]
 
-Key Design:
-- Typer framework for auto-help and type validation
-- asyncio.run() bridges sync CLI → async API
-- Flexible I/O: stdout or JSON file output
+Modes:
+    (default)  Structured evidence + LLM narrative (~12s)
+    --lite     Structured evidence only, no LLM (~7s)
+    --full     + Literature search + enhanced narrative (~25s)
 """
 
 import asyncio
@@ -23,8 +23,6 @@ from dotenv import load_dotenv
 
 
 from oncomind import get_insight, InsightConfig
-from oncomind.engine import InsightEngine
-from oncomind.models import VariantInput
 
 # Suppress litellm's async cleanup warnings (harmless internal warnings)
 warnings.filterwarnings("ignore", message=".*async_success_handler.*")
@@ -44,116 +42,262 @@ def insight(
     gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
     variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
+    lite: bool = typer.Option(False, "--lite", help="Lite mode: structured evidence only, no LLM"),
+    full: bool = typer.Option(False, "--full", help="Full mode: include literature search + enhanced narrative"),
+    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
-    llm: bool = typer.Option(False, "--llm/--no-llm", help="Enable LLM enhancement"),
-    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (if --llm enabled)"),
-    fast: bool = typer.Option(False, "--fast", "-f", help="Fast mode: skip literature search"),
 ) -> None:
-    """Get insight for a single variant and return evidence panel.
+    """Get variant insight with structured evidence and optional LLM narrative.
 
-    This is the recommended command for variant insight.
-    Returns structured EvidencePanel output.
+    By default, fetches evidence from all databases and generates an LLM summary.
+
+    Modes:
+        (default)  Structured evidence + LLM narrative (~12s)
+        --lite     Structured evidence only, no LLM (~7s)
+        --full     + Literature search + enhanced narrative (~25s)
 
     Examples:
         mind insight BRAF V600E --tumor Melanoma
-        mind insight EGFR L858R -t NSCLC
+        mind insight EGFR L858R -t NSCLC --lite
+        mind insight KRAS G12D -t CRC --full
         mind insight TP53 R248W --output result.json
-        mind insight KRAS G12D -t NSCLC --fast  # Skip literature for speed
     """
-    variant_str = f"{gene} {variant}"
+    if lite and full:
+        print("Error: Cannot use both --lite and --full")
+        raise typer.Exit(1)
+
+    from rich.console import Console
+    from rich.panel import Panel
+    from oncomind.evidence.builder import EvidenceBuilder, EvidenceBuilderConfig
+    from oncomind.llm.service import LLMService
+    from oncomind.models.evidence import Evidence
+    import textwrap
+
+    console = Console(width=80)
 
     async def run_insight() -> None:
-        print(f"\nGetting insight for {gene} {variant}...")
-        if tumor:
-            print(f"  Tumor type: {tumor}")
-        if fast:
-            print("  Mode: fast (skipping literature)")
+        # Determine mode
+        if lite:
+            mode_str = "lite"
+        elif full:
+            mode_str = "full"
+        else:
+            mode_str = "default"
 
-        config = InsightConfig(
-            enable_llm=llm,
-            llm_model=model,
-            enable_literature=not fast,
-        )
+        tumor_suffix = f" [dim]({tumor})[/dim]" if tumor else ""
+        mode_suffix = f" [dim][{mode_str}][/dim]" if mode_str != "default" else ""
+        console.print(f"\n[dim]Generating insight for[/dim] [bold cyan]{gene} {variant}[/bold cyan]{tumor_suffix}{mode_suffix}\n", highlight=False)
 
-        panel = await get_insight(variant_str, tumor_type=tumor, config=config)
+        # Step 1: Fetch evidence
+        enable_literature = full  # Only fetch literature in full mode
+        config = EvidenceBuilderConfig(enable_literature=enable_literature)
+        async with EvidenceBuilder(config) as builder:
+            panel = await builder.build_evidence_panel(f"{gene} {variant}", tumor_type=tumor)
 
-        # Print summary
-        print(f"\n{'='*60}")
-        print(f"EVIDENCE PANEL: {panel.identifiers.gene} {panel.identifiers.variant}")
-        print(f"{'='*60}")
+        # Step 2: Generate LLM narrative (unless --lite)
+        insight_result = None
+        if not lite:
+            # Convert EvidencePanel to Evidence for LLM
+            evidence = Evidence(
+                variant_id=panel.identifiers.variant_id,
+                gene=panel.identifiers.gene,
+                variant=panel.identifiers.variant,
+                cosmic_id=panel.identifiers.cosmic_id,
+                ncbi_gene_id=panel.identifiers.ncbi_gene_id,
+                dbsnp_id=panel.identifiers.dbsnp_id,
+                clinvar_id=panel.identifiers.clinvar_id,
+                hgvs_genomic=panel.identifiers.hgvs_genomic,
+                hgvs_protein=panel.identifiers.hgvs_protein,
+                hgvs_transcript=panel.identifiers.hgvs_transcript,
+                transcript_id=panel.identifiers.transcript_id,
+                transcript_consequence=panel.identifiers.transcript_consequence,
+                civic=panel.kb.civic,
+                civic_assertions=panel.kb.civic_assertions,
+                clinvar=panel.kb.clinvar,
+                cosmic=panel.kb.cosmic,
+                cgi_biomarkers=panel.kb.cgi_biomarkers,
+                vicc=panel.kb.vicc,
+                fda_approvals=panel.clinical.fda_approvals,
+                clinical_trials=panel.clinical.clinical_trials,
+                alphamissense_score=panel.functional.alphamissense_score,
+                alphamissense_prediction=panel.functional.alphamissense_prediction,
+                cadd_score=panel.functional.cadd_score,
+                polyphen2_prediction=panel.functional.polyphen2_prediction,
+                sift_prediction=panel.functional.sift_prediction,
+                gnomad_exome_af=panel.functional.gnomad_exome_af,
+                clinvar_clinical_significance=panel.clinical.clinvar_clinical_significance,
+            )
 
-        stats = panel.get_summary_stats()
-        print(f"Tumor Type: {stats['tumor_type'] or 'Not specified'}")
-        print(f"Evidence Sources: {', '.join(stats['evidence_sources']) or 'None'}")
-        print(f"FDA Approved Drugs: {', '.join(stats['fda_approved_drugs']) or 'None'}")
-        print(f"Clinical Trials: {stats['clinical_trials_count']}")
-        print(f"PubMed Articles: {stats['pubmed_articles_count']}")
+            # Add literature to evidence if in full mode
+            if full and panel.literature.pubmed_articles:
+                evidence.pubmed_articles = panel.literature.pubmed_articles
+                evidence.literature_knowledge = panel.literature.literature_knowledge
 
-        # Functional scores
+            llm_service = LLMService(model=model, temperature=0.1)
+            insight_result = await llm_service.get_variant_insight(gene, variant, tumor, evidence)
+
+        # === RENDER OUTPUT ===
+
+        # Build header content with all variant info
+        tumor_display = tumor or "Not specified"
+        header_lines = []
+        header_lines.append(f"[bold white]{gene} {variant}[/bold white]")
+        header_lines.append(f"[dim]Tumor:[/dim] {tumor_display}")
+
+        # IDs row
+        ids = []
+        if panel.identifiers.cosmic_id:
+            ids.append(f"COSMIC:{panel.identifiers.cosmic_id}")
+        if panel.identifiers.dbsnp_id:
+            ids.append(f"dbSNP:{panel.identifiers.dbsnp_id}")
+        if panel.identifiers.clinvar_id:
+            ids.append(f"ClinVar:{panel.identifiers.clinvar_id}")
+        if ids:
+            header_lines.append(f"[dim]{' | '.join(ids)}[/dim]")
+
+        header_lines.append("")  # Blank line before details
+
+        # ClinVar significance
+        if panel.clinical.clinvar_clinical_significance:
+            header_lines.append(f"[dim]ClinVar:[/dim]            {panel.clinical.clinvar_clinical_significance}")
+
+        # Functional predictions
         func_summary = panel.functional.get_pathogenicity_summary()
         if func_summary != "No functional predictions available":
-            print(f"\nFunctional Predictions:")
-            print(f"  {func_summary}")
+            header_lines.append(f"[dim]Pathogenicity:[/dim]      {func_summary}")
 
-        # Gene context
+        # Evidence strength (only if LLM was used)
+        if insight_result and insight_result.evidence_strength:
+            strength_color = {"Strong": "green", "Moderate": "yellow", "Weak": "red"}.get(insight_result.evidence_strength, "white")
+            header_lines.append(f"[dim]Evidence Strength:[/dim]  [{strength_color}]{insight_result.evidence_strength}[/{strength_color}]")
+
+        # Gene role
         if panel.clinical.gene_role:
-            print(f"\nGene Context:")
-            print(f"  Role: {panel.clinical.gene_role}")
-            if panel.clinical.pathway:
-                print(f"  Pathway: {panel.clinical.pathway}")
+            header_lines.append(f"[dim]Gene Role:[/dim]          {panel.clinical.gene_role}")
 
-        print(f"{'='*60}")
+        # Evidence sources
+        sources = panel.kb.get_evidence_sources()
+        if sources:
+            header_lines.append(f"[dim]Evidence Sources:[/dim]   {', '.join(sources)}")
 
-        # Save JSON output if requested
+        console.print(Panel(
+            "\n".join(header_lines),
+            title="[bold]Variant Insight[/bold]",
+            border_style="blue",
+            padding=(0, 2),
+        ))
+
+        # Therapies section
+        if insight_result and insight_result.recommended_therapies:
+            therapy_names = [t.drug_name for t in insight_result.recommended_therapies]
+            console.print(Panel(
+                "[bold green]" + ", ".join(therapy_names) + "[/bold green]",
+                title="[bold]Recommended Therapies[/bold]",
+                border_style="green",
+                padding=(0, 2),
+            ))
+        elif panel.clinical.fda_approvals:
+            drugs = panel.clinical.get_approved_drugs()
+            if drugs:
+                console.print(Panel(
+                    "[bold green]" + ", ".join(drugs[:5]) + "[/bold green]",
+                    title="[bold]FDA Approved Drugs[/bold]",
+                    border_style="green",
+                    padding=(0, 2),
+                ))
+
+        # Clinical evidence details (CIViC/CGI/Trials in one box)
+        has_clinical_evidence = panel.kb.civic_assertions or panel.kb.cgi_biomarkers or panel.clinical.clinical_trials
+        if has_clinical_evidence:
+            evidence_lines = []
+
+            if panel.kb.civic_assertions:
+                evidence_lines.append("[bold]CIViC Assertions:[/bold]")
+                for a in panel.kb.civic_assertions[:3]:
+                    therapies = ", ".join(a.therapies) if a.therapies else "N/A"
+                    evidence_lines.append(f"  • {therapies} → {a.significance}")
+
+            if panel.kb.cgi_biomarkers:
+                if evidence_lines:
+                    evidence_lines.append("")
+                evidence_lines.append("[bold]CGI Biomarkers:[/bold]")
+                for b in panel.kb.cgi_biomarkers[:3]:
+                    fda_tag = " [green](FDA)[/green]" if b.fda_approved else ""
+                    evidence_lines.append(f"  • {b.drug}: {b.association}{fda_tag}")
+
+            if panel.clinical.clinical_trials:
+                if evidence_lines:
+                    evidence_lines.append("")
+                trials_count = len(panel.clinical.clinical_trials)
+                variant_specific = sum(1 for t in panel.clinical.clinical_trials if t.variant_specific)
+                evidence_lines.append("[bold]Clinical Trials:[/bold]")
+                trials_text = f"  {trials_count} recruiting"
+                if variant_specific:
+                    trials_text += f" ({variant_specific} variant-specific)"
+                evidence_lines.append(trials_text)
+
+            console.print(Panel(
+                "\n".join(evidence_lines),
+                title="[bold]Clinical Evidence[/bold]",
+                border_style="cyan",
+                padding=(0, 2),
+            ))
+
+        # Literature section (only in full mode)
+        if full and panel.literature.pubmed_articles:
+            lit_lines = []
+            lit_lines.append(f"[bold]PubMed Articles ({len(panel.literature.pubmed_articles)}):[/bold]")
+            for article in panel.literature.pubmed_articles[:3]:
+                title = article.title[:55] + "..." if len(article.title) > 55 else article.title
+                lit_lines.append(f"  • PMID:{article.pmid} {title}")
+
+            if panel.literature.literature_knowledge:
+                lk = panel.literature.literature_knowledge
+                if lk.resistance_mechanisms:
+                    lit_lines.append("")
+                    lit_lines.append("[bold]Resistance Mechanisms:[/bold]")
+                    for r in lk.resistance_mechanisms[:2]:
+                        lit_lines.append(f"  • {r.drug}: {r.mechanism}")
+                if lk.sensitivity_markers:
+                    lit_lines.append("")
+                    lit_lines.append("[bold]Sensitivity Markers:[/bold]")
+                    for s in lk.sensitivity_markers[:2]:
+                        lit_lines.append(f"  • {s.drug}: {s.marker}")
+
+            console.print(Panel(
+                "\n".join(lit_lines),
+                title="[bold]Literature[/bold]",
+                border_style="yellow",
+                padding=(0, 2),
+            ))
+
+        # LLM Narrative (unless --lite)
+        if insight_result:
+            wrapped_summary = textwrap.fill(insight_result.summary, width=74)
+            console.print(Panel(
+                wrapped_summary,
+                title="[bold]Clinical Summary[/bold]",
+                border_style="magenta",
+                padding=(1, 2),
+            ))
+
+        # Save JSON if requested
         if output:
-            output_data = panel.model_dump(mode="json")
+            output_data = {
+                "panel": panel.model_dump(mode="json"),
+            }
+            if insight_result:
+                output_data["narrative"] = {
+                    "summary": insight_result.summary,
+                    "rationale": insight_result.rationale,
+                    "recommended_therapies": [t.model_dump() for t in insight_result.recommended_therapies],
+                    "evidence_strength": insight_result.evidence_strength,
+                }
             with open(output, "w") as f:
                 json.dump(output_data, f, indent=2)
-            print(f"\nSaved to {output}")
+            console.print(f"\n[dim]Saved to {output}[/dim]")
 
     asyncio.run(run_insight())
-
-
-@app.command(name="insight-llm")
-def insight_llm(
-    gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
-    variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
-    tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
-    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model"),
-    temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
-    log: bool = typer.Option(True, "--log/--no-log", help="Enable LLM decision logging"),
-    vicc: bool = typer.Option(True, "--vicc/--no-vicc", help="Enable VICC MetaKB integration"),
-) -> None:
-    """Get insight for a single variant with LLM-generated narrative.
-
-    This uses the InsightEngine for full LLM narrative generation.
-    For faster insight without LLM, use 'mind insight' instead.
-    """
-    # Import engine only when needed
-    from oncomind.engine import InsightEngine
-    from oncomind.models import VariantInput
-
-    async def run_llm_insight() -> None:
-        variant_input = VariantInput(gene=gene, variant=variant, tumor_type=tumor)
-
-        if tumor:
-            print(f"\nGetting insight for {gene} {variant} in {tumor}...")
-        else:
-            print(f"\nGetting insight for {gene} {variant}...")
-
-        async with InsightEngine(llm_model=model, llm_temperature=temperature, enable_logging=log, enable_vicc=vicc) as engine:
-            result = await engine.get_insight(variant_input)
-
-            print(result.get_insight())
-
-            if output:
-                output_data = result.model_dump(mode="json")
-                with open(output, "w") as f:
-                    json.dump(output_data, f, indent=2)
-                print(f"Saved to {output}")
-
-    asyncio.run(run_llm_insight())
 
 
 @app.command()
@@ -162,16 +306,19 @@ def batch(
     output: Path = typer.Option("results.json", "--output", "-o", help="Output file"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model"),
     temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
-    fast: bool = typer.Option(False, "--fast", "-f", help="Fast mode: skip literature search"),
-    llm: bool = typer.Option(True, "--llm/--no-llm", help="Enable LLM synthesis (use --no-llm for faster results)"),
+    lite: bool = typer.Option(False, "--lite", help="Lite mode: skip LLM synthesis"),
+    full: bool = typer.Option(False, "--full", help="Full mode: include literature search"),
 ) -> None:
     """Batch process multiple variants.
 
     Examples:
         mind batch variants.json --output results.json
-        mind batch variants.json --fast --no-llm  # Fastest mode
-        mind batch variants.json --fast            # Skip literature, keep LLM
+        mind batch variants.json --lite              # Fastest: no LLM
+        mind batch variants.json --full              # Slowest: with literature
     """
+    if lite and full:
+        print("Error: Cannot use both --lite and --full")
+        raise typer.Exit(1)
 
     if not input_file.exists():
         print(f"Error: Input file not found: {input_file}")
@@ -187,22 +334,20 @@ def batch(
         variant_strs = []
         tumor_types = []
         for item in data:
-            gene = item.get('gene', '')
-            variant = item.get('variant', '')
-            variant_strs.append(f"{gene} {variant}")
+            g = item.get('gene', '')
+            v = item.get('variant', '')
+            variant_strs.append(f"{g} {v}")
             tumor_types.append(item.get('tumor_type'))
 
+        mode_str = "lite" if lite else ("full" if full else "default")
         print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
-        if fast:
-            print("  Mode: fast (skipping literature)")
-        if not llm:
-            print("  LLM: disabled")
+        print(f"  Mode: {mode_str}")
 
         config = InsightConfig(
-            enable_llm=llm,
+            enable_llm=not lite,
             llm_model=model,
             llm_temperature=temperature,
-            enable_literature=not fast,
+            enable_literature=full,
         )
 
         def progress_callback(current: int, total: int) -> None:

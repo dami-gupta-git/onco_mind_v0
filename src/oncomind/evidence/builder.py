@@ -24,6 +24,10 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env file before accessing environment variables
+
 from oncomind.api.myvariant import MyVariantClient
 from oncomind.api.fda import FDAClient
 from oncomind.api.cgi import CGIClient
