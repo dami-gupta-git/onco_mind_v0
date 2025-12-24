@@ -25,7 +25,7 @@ def sample_variant_input():
 @pytest.fixture
 def sample_evidence():
     """Sample evidence for testing."""
-    from oncomind.models.evidence import CIViCEvidence, Evidence
+    from oncomind.models.evidence import CIViCEvidence, EvidenceForLLM
 
     civic_ev = CIViCEvidence(
         evidence_type="Predictive",
@@ -39,7 +39,7 @@ def sample_evidence():
         rating=5,
     )
 
-    return Evidence(
+    return EvidenceForLLM(
         variant_id="BRAF:V600E",
         gene="BRAF",
         variant="V600E",
