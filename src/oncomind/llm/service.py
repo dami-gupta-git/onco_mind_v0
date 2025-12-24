@@ -3,7 +3,7 @@
 import json
 from litellm import acompletion
 from oncomind.llm.prompts import create_annotation_prompt
-from oncomind.models import Evidence
+from oncomind.models import EvidenceForLLM
 from oncomind.models.insight import VariantInsight, RecommendedTherapy
 from oncomind.models.gene_context import get_oncogene_mutation_class
 
@@ -28,7 +28,7 @@ class LLMService:
         gene: str,
         variant: str,
         tumor_type: str | None,
-        evidence: Evidence,
+        evidence: EvidenceForLLM,
     ) -> VariantInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -166,7 +166,7 @@ class LLMService:
                 })
             )
 
-    def _compute_evidence_strength(self, evidence: Evidence, tumor_type: str | None) -> str:
+    def _compute_evidence_strength(self, evidence: EvidenceForLLM, tumor_type: str | None) -> str:
         """Compute evidence strength from aggregated evidence.
 
         Returns "Strong", "Moderate", or "Weak" based on:

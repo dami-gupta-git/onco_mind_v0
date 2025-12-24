@@ -3,7 +3,7 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.evidence import Evidence
+from oncomind.models.evidence.evidence import EvidenceForLLM
 from oncomind.models.evidence.evidence_panel import (
     EvidencePanel,
     VariantIdentifiers,
@@ -20,7 +20,7 @@ from oncomind.models.evidence.vicc import VICCEvidence
 
 __all__ = [
     # Core aggregation models
-    "Evidence",
+    "EvidenceForLLM",
     "EvidencePanel",
     # EvidencePanel components
     "VariantIdentifiers",

@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from oncomind.models.insight import VariantInsight, RecommendedTherapy
-from oncomind.models.evidence import CIViCEvidence, Evidence, VICCEvidence
+from oncomind.models.evidence import CIViCEvidence, EvidenceForLLM, VICCEvidence
 from oncomind.models.variant import VariantInput
 
 
@@ -87,7 +87,7 @@ class TestEvidence:
 
     def test_evidence_has_evidence(self):
         """Test has_evidence method."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -99,7 +99,7 @@ class TestEvidence:
 
     def test_evidence_with_identifiers(self):
         """Test creating evidence with database identifiers."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -202,7 +202,7 @@ class TestEvidenceStats:
 
     def test_compute_stats_sensitivity_only(self):
         """Test stats when all evidence is sensitivity."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -222,7 +222,7 @@ class TestEvidenceStats:
 
     def test_compute_stats_resistance_only(self):
         """Test stats when all evidence is resistance."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="KRAS:G12V",
             gene="KRAS",
             variant="G12V",
@@ -240,7 +240,7 @@ class TestEvidenceStats:
 
     def test_compute_stats_sensitivity_dominant(self):
         """Test stats when sensitivity strongly predominates (>80%)."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:S768I",
             gene="EGFR",
             variant="S768I",
@@ -269,7 +269,7 @@ class TestEvidenceStats:
 
     def test_compute_stats_mixed_signals(self):
         """Test stats when signals are mixed (neither dominates)."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -289,7 +289,7 @@ class TestEvidenceStats:
 
     def test_detect_conflicts(self):
         """Test detection of conflicting evidence for the same drug."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:S768I",
             gene="EGFR",
             variant="S768I",
@@ -310,7 +310,7 @@ class TestEvidenceStats:
 
     def test_format_evidence_summary_header(self):
         """Test that summary header is formatted correctly."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -329,7 +329,7 @@ class TestEvidenceStats:
 
     def test_format_evidence_summary_header_with_conflicts(self):
         """Test that conflicts appear in the summary header."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:S768I",
             gene="EGFR",
             variant="S768I",
@@ -346,7 +346,7 @@ class TestEvidenceStats:
 
     def test_evidence_level_breakdown(self):
         """Test that evidence levels are correctly counted."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -369,7 +369,7 @@ class TestLowQualityMinorityFilter:
 
     def test_filter_drops_low_quality_resistance_when_high_quality_sensitivity(self):
         """When we have Level A/B sensitivity and only C/D resistance (<=2), drop resistance."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -389,7 +389,7 @@ class TestLowQualityMinorityFilter:
 
     def test_filter_drops_low_quality_sensitivity_when_high_quality_resistance(self):
         """When we have Level A/B resistance and only C/D sensitivity (<=2), drop sensitivity."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="KRAS:G12V",
             gene="KRAS",
             variant="G12V",
@@ -409,7 +409,7 @@ class TestLowQualityMinorityFilter:
 
     def test_filter_keeps_both_when_both_have_high_quality(self):
         """When both sensitivity and resistance have high-quality evidence, keep both."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -426,7 +426,7 @@ class TestLowQualityMinorityFilter:
 
     def test_filter_keeps_both_when_low_quality_but_many_entries(self):
         """Keep low-quality minority if there are more than 2 entries (might be real signal)."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="TEST:V123A",
             gene="TEST",
             variant="V123A",
@@ -450,7 +450,7 @@ class TestDrugAggregation:
 
     def test_aggregate_single_drug_sensitivity_only(self):
         """Aggregate multiple entries for a single drug with only sensitivity."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -473,7 +473,7 @@ class TestDrugAggregation:
 
     def test_aggregate_single_drug_resistance_only(self):
         """Aggregate multiple entries for a single drug with only resistance."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="KRAS:G12V",
             gene="KRAS",
             variant="G12V",
@@ -494,7 +494,7 @@ class TestDrugAggregation:
 
     def test_aggregate_drug_mixed_with_clear_winner(self):
         """Aggregate drug with mixed signals but clear sensitivity winner (3:1)."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:S768I",
             gene="EGFR",
             variant="S768I",
@@ -516,7 +516,7 @@ class TestDrugAggregation:
 
     def test_aggregate_drug_truly_mixed(self):
         """Aggregate drug with truly mixed signals (no clear winner)."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -537,7 +537,7 @@ class TestDrugAggregation:
 
     def test_aggregate_multiple_drugs(self):
         """Aggregate evidence for multiple drugs."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -560,7 +560,7 @@ class TestDrugAggregation:
 
     def test_format_drug_aggregation_summary(self):
         """Test formatted drug aggregation summary for LLM."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="EGFR:L858R",
             gene="EGFR",
             variant="L858R",
@@ -581,7 +581,7 @@ class TestDrugAggregation:
 
     def test_aggregate_empty_evidence(self):
         """Test aggregation with no drug evidence."""
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="TEST:V123A",
             gene="TEST",
             variant="V123A",

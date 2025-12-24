@@ -11,7 +11,7 @@ from oncomind.api.fda import FDAClient
 from oncomind.api.cgi import CGIClient
 from oncomind.api.vicc import VICCClient
 from oncomind.api.civic import CIViCClient
-from oncomind.models.evidence.evidence import Evidence
+from oncomind.models.evidence.evidence import EvidenceForLLM
 from oncomind.models.evidence.fda import FDAApproval
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -260,7 +260,7 @@ class TestCIViCAssertions:
                 max_results=10
             )
 
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -311,7 +311,7 @@ class TestCGIBiomarkers:
             tumor_type="lung"
         )
 
-        evidence = Evidence(
+        evidence = EvidenceForLLM(
             variant_id="KRAS:G12C",
             gene="KRAS",
             variant="G12C",

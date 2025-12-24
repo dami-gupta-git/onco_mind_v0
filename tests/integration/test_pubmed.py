@@ -186,7 +186,7 @@ class TestPubMedEvidenceIntegration:
     @pytest.mark.asyncio
     async def test_evidence_model_integration(self):
         """PubMed articles should integrate with Evidence model."""
-        from oncomind.models.evidence import Evidence, PubMedEvidence
+        from oncomind.models.evidence import EvidenceForLLM, PubMedEvidence
         from oncomind.api.pubmed import PubMedClient
 
         async with PubMedClient() as client:
@@ -208,8 +208,8 @@ class TestPubMedEvidenceIntegration:
                     drugs_mentioned=article.extract_drug_mentions(),
                 ))
 
-            # Create Evidence model with PubMed articles
-            evidence = Evidence(
+            # Create EvidenceForLLM model with PubMed articles
+            evidence = EvidenceForLLM(
                 variant_id="EGFR:C797S",
                 gene="EGFR",
                 variant="C797S",

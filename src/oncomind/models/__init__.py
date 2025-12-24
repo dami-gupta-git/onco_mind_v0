@@ -8,14 +8,14 @@ from oncomind.models.insight import (
 from oncomind.models.evidence.civic import CIViCEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.evidence import Evidence
+from oncomind.models.evidence.evidence import EvidenceForLLM
 
 from oncomind.models.variant import VariantInput
 
 __all__ = [
     "VariantInput",
     "VariantAnnotations",
-    "Evidence",
+    "EvidenceForLLM",
     "CIViCEvidence",
     "ClinVarEvidence",
     "COSMICEvidence",
