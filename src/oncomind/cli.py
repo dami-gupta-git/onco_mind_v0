@@ -76,6 +76,10 @@ def insight(
     console = Console(width=80)
 
     async def run_insight() -> None:
+        # Two pieces of data are generated:
+        # 1. EvidencePanel
+        # 2. LLM Insight
+
         # Determine mode
         if lite:
             mode_str = "lite"
@@ -93,7 +97,7 @@ def insight(
         async with EvidenceBuilder(config) as builder:
             panel = await builder.build_evidence_panel(f"{gene} {variant}", tumor_type=tumor)
 
-        # Step 2: Generate LLM narrative (unless --lite)
+        # Step 2: Generate LLM Insight (unless --lite)
         insight_result = None
         if not lite:
             # Convert EvidencePanel to Evidence for LLM
@@ -132,6 +136,7 @@ def insight(
                 evidence.pubmed_articles = panel.literature.pubmed_articles
                 evidence.literature_knowledge = panel.literature.literature_knowledge
 
+            # Get LLM Insight
             llm_service = LLMService(model=model, temperature=0.1)
             insight_result = await llm_service.get_llm_insight(gene, variant, tumor, evidence)
 
