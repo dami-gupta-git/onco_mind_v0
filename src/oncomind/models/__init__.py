@@ -2,7 +2,7 @@
 
 from oncomind.models.annotations import VariantAnnotations
 from oncomind.models.insight import (
-    VariantInsight,
+    LLMInsight,
     RecommendedTherapy,
 )
 from oncomind.models.evidence.civic import CIViCEvidence
@@ -20,5 +20,5 @@ __all__ = [
     "ClinVarEvidence",
     "COSMICEvidence",
     "RecommendedTherapy",
-    "VariantInsight",
+    "LLMInsight",
 ]
