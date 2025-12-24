@@ -37,9 +37,9 @@ with tab1:
     with col1:
         st.subheader("Input")
 
-        gene = st.text_input("Gene Symbol", placeholder="e.g., BRAF, EGFR, TP53", key="gene_input")
-        variant = st.text_input("Variant", placeholder="e.g., V600E, L858R", key="variant_input")
-        tumor = st.text_input("Tumor Type (optional)", placeholder="e.g., Melanoma, NSCLC", key="tumor_input")
+        gene = st.text_input("Gene Symbol", value="BRAF", placeholder="e.g., BRAF, EGFR, TP53", key="gene_input")
+        variant = st.text_input("Variant", value="V600E", placeholder="e.g., V600E, L858R", key="variant_input")
+        tumor = st.text_input("Tumor Type (optional)", value="Melanoma", placeholder="e.g., Melanoma, NSCLC", key="tumor_input")
 
         st.subheader("Mode")
         mode = st.radio(
