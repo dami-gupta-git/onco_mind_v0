@@ -237,7 +237,7 @@ def _extract_therapies(panel) -> List[Dict[str, Any]]:
                 "drug_name": drug_name,
                 "evidence_level": "A",
                 "approval_status": "FDA Approved",
-                "clinical_context": approval.indication[:200] if approval.indication else "",
+                "clinical_context": approval.indication if approval.indication else "",
             })
 
     # From CGI biomarkers

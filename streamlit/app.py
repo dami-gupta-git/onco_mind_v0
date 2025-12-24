@@ -235,7 +235,8 @@ with tab1:
                     for t in therapies:
                         drug = t.get('drug_name', 'Unknown')
                         drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
-                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} | {(t.get('clinical_context', '') or '')[:50]} |")
+                        context = (t.get('clinical_context', '') or '')[:50]
+                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} | {context}{'...' if len(t.get('clinical_context', '') or '') > 50 else ''} |")
 
                     table_header = "| Drug | Level | Status | Context |\n|------|-------|--------|---------|"
                     st.markdown(table_header + "\n" + "\n".join(table_rows))
@@ -279,17 +280,21 @@ with tab1:
             if panel and panel.get('clinical', {}).get('clinical_trials'):
                 trials = panel['clinical']['clinical_trials']
                 with st.expander(f"🏥 Clinical Trials ({len(trials)})", expanded=False):
+                    # Build table with clickable NCT links
+                    trial_rows = []
                     for trial in trials[:10]:
                         nct_id = trial.get('nct_id', 'Unknown')
                         title = trial.get('title', 'No title')[:80]
                         status = trial.get('status', 'Unknown')
-                        phase = trial.get('phase', '')
+                        phase = trial.get('phase', 'N/A')
+                        variant_tag = " 🎯" if trial.get('variant_specific') else ""
 
                         # Clickable NCT link
                         nct_link = f"[{nct_id}](https://clinicaltrials.gov/study/{nct_id})"
-                        variant_tag = " 🎯" if trial.get('variant_specific') else ""
-                        st.markdown(f"- {nct_link}{variant_tag} - {title}...")
-                        st.caption(f"   {status} | {phase}")
+                        trial_rows.append(f"| {nct_link}{variant_tag} | {status} | {phase} | {title}... |")
+
+                    table_header = "| NCT ID | Status | Phase | Title |\n|--------|--------|-------|-------|"
+                    st.markdown(table_header + "\n" + "\n".join(trial_rows))
 
             # Card 8: Knowledge Base Evidence
             if panel and panel.get('kb'):
@@ -330,16 +335,20 @@ with tab1:
             if panel and panel.get('literature', {}).get('pubmed_articles'):
                 articles = panel['literature']['pubmed_articles']
                 with st.expander(f"📄 Literature ({len(articles)} articles)", expanded=False):
+                    # Build table with clickable PubMed links
+                    article_rows = []
                     for article in articles[:10]:
                         pmid = article.get('pmid', '')
-                        title = article.get('title', 'No title')[:70]
-                        year = article.get('year', '')
-                        journal = article.get('journal', '')
+                        title = article.get('title', 'No title')
+                        year = article.get('year', 'N/A')
+                        journal = article.get('journal', 'N/A')
 
                         # Clickable PubMed link
                         pmid_link = f"[PMID:{pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)"
-                        st.markdown(f"- {pmid_link} - {title}...")
-                        st.caption(f"   {journal} ({year})")
+                        article_rows.append(f"| {pmid_link} | {year} | {journal} | {title} |")
+
+                    table_header = "| PMID | Year | Journal | Title |\n|------|------|---------|-------|"
+                    st.markdown(table_header + "\n" + "\n".join(article_rows))
 
                     # Literature knowledge summary if available
                     lit_knowledge = panel['literature'].get('literature_knowledge')
