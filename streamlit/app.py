@@ -122,20 +122,40 @@ with tab1:
 
             st.success(f"✅ Insight Ready: **{gene_display} {variant_display}**")
 
-            # Top metrics row
-            metrics_col = st.columns(4)
-            metrics_col[0].metric("Evidence Strength", result['insight'].get('evidence_strength', 'N/A'))
-            metrics_col[1].metric("Therapies", len(result.get('recommended_therapies', [])))
+            # Variant header with metrics (matching CLI style)
+            tumor_display = result.get('variant', {}).get('tumor_type')
+            header_text = f"{gene_display} {variant_display}"
+            if tumor_display:
+                header_text += f" in {tumor_display}"
+
+            # Build metrics line
+            evidence_strength = result['insight'].get('evidence_strength', 'N/A')
+            therapies_count = len(result.get('recommended_therapies', []))
             clinvar_sig = result.get('clinvar', {}).get('clinical_significance', 'N/A') or 'N/A'
-            metrics_col[2].metric("ClinVar", clinvar_sig)
             am_score = result.get('annotations', {}).get('alphamissense_score')
-            metrics_col[3].metric("AlphaMissense", f"{am_score:.2f}" if am_score else 'N/A')
+            am_display = f"{am_score:.2f}" if am_score else 'N/A'
 
-            # Card 1: Summary (always expanded)
+            metrics_line = f"Evidence: {evidence_strength} | Therapies: {therapies_count} | ClinVar: {clinvar_sig} | AlphaMissense: {am_display}"
+
+            st.markdown(
+                f'<div style="background-color: #1e3a5f; padding: 16px 24px; border-radius: 8px; '
+                f'border: 2px solid #4a90d9; text-align: center; margin-bottom: 16px;">'
+                f'<div style="color: white; font-size: 1.4em; font-weight: bold; margin-bottom: 8px;">{header_text}</div>'
+                f'<div style="color: #a0c4e8; font-size: 0.95em;">{metrics_line}</div></div>',
+                unsafe_allow_html=True
+            )
+
+            # Card 1: Summary (always expanded) - 1-line summary
             with st.expander("📋 Summary", expanded=True):
-                st.markdown(result['insight'].get('summary', 'No summary available'))
+                st.info(result['insight'].get('summary', 'No summary available'))
 
-            # Card 2: Identifiers & Links
+            # Card 2: LLM Insight (only when LLM mode is enabled)
+            llm_narrative = result['insight'].get('llm_narrative')
+            if llm_narrative:
+                with st.expander("🤖 LLM Insight", expanded=True):
+                    st.markdown(llm_narrative)
+
+            # Card 3: Identifiers & Links
             with st.expander("🔗 Identifiers & External Links", expanded=True):
                 ids = result.get('identifiers', {})
                 hgvs = result.get('hgvs', {})
