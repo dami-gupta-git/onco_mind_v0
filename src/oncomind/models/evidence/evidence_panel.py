@@ -284,6 +284,36 @@ class EvidencePanel(BaseModel):
             self.literature.has_literature()
         )
 
+    def get_summary(self) -> str:
+        """Generate a summary of the variant evidence.
+
+        This is the primary human-readable summary used by both CLI and UI.
+
+        Example:
+            "BRAF V600E is a missense variant (NC_000007.14:g.140753336A>T).
+             It is associated with FDA-approved therapies: Dabrafenib, Vemurafenib, Encorafenib."
+        """
+        parts = []
+
+        # Variant identity with mutation type
+        variant_desc = f"{self.identifiers.gene} {self.identifiers.variant}"
+        if self.identifiers.variant_type:
+            variant_desc += f" is a {self.identifiers.variant_type} variant"
+        parts.append(variant_desc)
+
+        # HGVS notation
+        if self.identifiers.hgvs_genomic:
+            parts.append(f"({self.identifiers.hgvs_genomic})")
+        parts.append(".")
+
+
+        # FDA-approved therapies
+        drugs = self.clinical.get_approved_drugs()
+        if drugs:
+            parts.append(f"It is associated with FDA-approved therapies: {', '.join(drugs[:3])}.")
+
+        return " ".join(parts)
+
     def get_summary_stats(self) -> dict[str, Any]:
         """Get summary statistics about the evidence."""
         return {

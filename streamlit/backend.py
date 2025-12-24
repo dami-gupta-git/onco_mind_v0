@@ -177,7 +177,7 @@ def _build_response(panel, llm_insight=None) -> Dict[str, Any]:
             "tumor_type": panel.clinical.tumor_type,
         },
         "insight": {
-            "summary": llm_insight.summary if llm_insight else _generate_summary(panel),
+            "summary": llm_insight.llm_summary if llm_insight else panel.get_summary(),
             "rationale": llm_insight.rationale if llm_insight else None,
             "evidence_strength": llm_insight.evidence_strength if llm_insight else panel.meta.evidence_strength,
         },
@@ -223,33 +223,6 @@ def _build_response(panel, llm_insight=None) -> Dict[str, Any]:
         ),
         "evidence_panel": panel.model_dump(mode="json"),
     }
-
-
-def _generate_summary(panel) -> str:
-    """Generate a summary string from an EvidencePanel."""
-    parts = []
-
-    gene = panel.identifiers.gene
-    variant = panel.identifiers.variant
-    parts.append(f"{gene} {variant}")
-
-    if panel.clinical.gene_role:
-        parts.append(f"({panel.clinical.gene_role})")
-
-    drugs = panel.clinical.get_approved_drugs()
-    if drugs:
-        parts.append(f"has FDA-approved therapies: {', '.join(drugs[:3])}")
-    else:
-        parts.append("has no FDA-approved targeted therapies")
-
-    if panel.clinical.clinical_trials:
-        variant_specific = sum(1 for t in panel.clinical.clinical_trials if t.variant_specific)
-        if variant_specific:
-            parts.append(f"with {variant_specific} variant-specific clinical trials")
-        else:
-            parts.append(f"with {len(panel.clinical.clinical_trials)} relevant clinical trials")
-
-    return " ".join(parts)
 
 
 def _extract_therapies(panel) -> List[Dict[str, Any]]:

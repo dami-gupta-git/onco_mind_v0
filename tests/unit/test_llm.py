@@ -46,7 +46,7 @@ class TestLLMService:
             assert insight.gene == "BRAF"
             assert insight.variant == "V600E"
             assert insight.tumor_type == "Melanoma"
-            assert "BRAF V600E" in insight.summary
+            assert "BRAF V600E" in insight.llm_summary
 
     @pytest.mark.asyncio
     async def test_get_llm_insight_with_markdown(self, sample_evidence):
@@ -76,7 +76,7 @@ class TestLLMService:
             )
 
             assert insight.gene == "BRAF"
-            assert insight.summary == "Test summary for the variant."
+            assert insight.llm_summary == "Test summary for the variant."
 
     @pytest.mark.asyncio
     async def test_llm_service_with_custom_temperature(self, sample_evidence):

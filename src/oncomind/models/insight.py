@@ -30,7 +30,7 @@ class LLMInsight(VariantAnnotations):
     gene: str
     variant: str
     tumor_type: str | None
-    summary: str = Field(..., description="Human-readable summary of the variant")
+    llm_summary: str = Field(..., description="LLM-generated narrative summary of the variant")
     recommended_therapies: list[RecommendedTherapy] = Field(default_factory=list)
     rationale: str = Field(..., description="Detailed rationale for clinical interpretation")
     evidence_strength: str | None = Field(
@@ -95,7 +95,7 @@ class LLMInsight(VariantAnnotations):
 
         # Clinical narrative - soft-wrapped
         content_lines.append("")
-        wrapped_summary = textwrap.fill(self.summary, width=74)
+        wrapped_summary = textwrap.fill(self.llm_summary, width=74)
         content_lines.append(wrapped_summary)
 
         # Therapies section
