@@ -4,7 +4,7 @@ import json
 from litellm import acompletion
 from oncomind.llm.prompts import create_annotation_prompt
 from oncomind.models import EvidenceForLLM
-from oncomind.models.insight import VariantInsight, RecommendedTherapy
+from oncomind.models.insight import LLMInsight, RecommendedTherapy
 from oncomind.models.gene_context import get_oncogene_mutation_class
 
 from oncomind.utils.logging_config import get_logger
@@ -29,7 +29,7 @@ class LLMService:
         variant: str,
         tumor_type: str | None,
         evidence: EvidenceForLLM,
-    ) -> VariantInsight:
+    ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
         Args:
@@ -39,7 +39,7 @@ class LLMService:
             evidence: Aggregated evidence from databases
 
         Returns:
-            VariantInsight with annotations and LLM-generated summary
+            LLMInsight with annotations and LLM-generated summary
         """
         # Get evidence summary for context
         evidence_summary = evidence.summary_compact(tumor_type=tumor_type)
@@ -122,7 +122,7 @@ class LLMService:
             evidence_strength = self._compute_evidence_strength(evidence, tumor_type)
 
             # Build insight with LLM narrative
-            insight = VariantInsight(
+            insight = LLMInsight(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
@@ -146,7 +146,7 @@ class LLMService:
 
         except Exception as e:
             # On LLM failure, return insight with basic evidence summary
-            return VariantInsight(
+            return LLMInsight(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,

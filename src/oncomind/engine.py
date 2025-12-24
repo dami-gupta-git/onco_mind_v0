@@ -35,7 +35,7 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient
 from oncomind.api.pubmed import PubMedClient, PubMedArticle, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 from oncomind.llm.service import LLMService
-from oncomind.models.insight import VariantInsight
+from oncomind.models.insight import LLMInsight
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCAssertionEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
@@ -109,7 +109,7 @@ class InsightEngine:
         if self.pubmed_client:
             await self.pubmed_client.__aexit__(exc_type, exc_val, exc_tb)
 
-    async def get_insight(self, variant_input: VariantInput) -> VariantInsight:
+    async def get_insight(self, variant_input: VariantInput) -> LLMInsight:
         """Generate insight for a single variant.
 
         Chains multiple async operations:
@@ -591,7 +591,7 @@ class InsightEngine:
 
     async def batch_report(
         self, variants: list[VariantInput]
-    ) -> list[VariantInsight]:
+    ) -> list[LLMInsight]:
         """
         Process multiple variants concurrently.
 

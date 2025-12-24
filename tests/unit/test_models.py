@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from oncomind.models.insight import VariantInsight, RecommendedTherapy
+from oncomind.models.insight import LLMInsight, RecommendedTherapy
 from oncomind.models.evidence import CIViCEvidence, EvidenceForLLM, VICCEvidence
 from oncomind.models.variant import VariantInput
 
@@ -120,12 +120,12 @@ class TestEvidence:
         assert evidence.hgvs_transcript == "NM_004333.4:c.1799T>A"
 
 
-class TestVariantInsight:
-    """Tests for VariantInsight model."""
+class TestLLMInsight:
+    """Tests for LLMInsight model."""
 
     def test_insight_creation(self):
         """Test creating an insight."""
-        insight = VariantInsight(
+        insight = LLMInsight(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
@@ -141,7 +141,7 @@ class TestVariantInsight:
 
     def test_to_report(self):
         """Test simple report generation."""
-        insight = VariantInsight(
+        insight = LLMInsight(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
@@ -169,7 +169,7 @@ class TestVariantInsight:
 
     def test_insight_without_tumor(self):
         """Test creating an insight without tumor type."""
-        insight = VariantInsight(
+        insight = LLMInsight(
             gene="KRAS",
             variant="G12C",
             tumor_type=None,
@@ -183,7 +183,7 @@ class TestVariantInsight:
 
     def test_to_report_without_tumor(self):
         """Test report generation without tumor type."""
-        insight = VariantInsight(
+        insight = LLMInsight(
             gene="KRAS",
             variant="G12C",
             tumor_type=None,

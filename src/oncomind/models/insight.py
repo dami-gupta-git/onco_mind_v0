@@ -20,16 +20,11 @@ class RecommendedTherapy(BaseModel):
     )
 
 
-class VariantInsight(VariantAnnotations):
-    """Complete annotation insight for a variant.
+class LLMInsight(VariantAnnotations):
+    """LLM-generated narrative insight for a variant.
 
-    This model provides comprehensive variant annotations including:
-    - Database identifiers (COSMIC, ClinVar, dbSNP)
-    - HGVS notations
-    - Functional predictions (AlphaMissense, CADD, PolyPhen2)
-    - Clinical significance from ClinVar
-    - Therapeutic options from evidence databases
-    - LLM-generated summary and rationale
+    This contains the LLM's synthesized interpretation of the evidence,
+    including clinical summary, recommended therapies, and rationale.
     """
 
     gene: str
