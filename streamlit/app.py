@@ -3,7 +3,7 @@ import streamlit as st
 import pandas as pd
 import asyncio
 import json
-from backend import get_variant_insight, get_variant_annotation, batch_get_variant_insights
+from backend import get_variant_insight, batch_get_variant_insights
 
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 st.title("🧬 OncoMind: Variant Insight")
@@ -98,7 +98,7 @@ with tab1:
                 else:
                     with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode} mode)..."):
                         # Use fast annotation API or legacy insight engine
-                        result = asyncio.run(get_variant_annotation(
+                        result = asyncio.run(get_variant_insight(
                             gene, variant, tumor or None,
                             enable_llm=enable_llm,
                             enable_literature=enable_literature,

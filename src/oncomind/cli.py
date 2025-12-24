@@ -155,6 +155,16 @@ def insight(
             padding=(0, 2),
         ))
 
+        # Summary panel (first panel after header - same as UI)
+        summary_text = panel.get_summary()
+        wrapped_summary = textwrap.fill(summary_text, width=74)
+        console.print(Panel(
+            wrapped_summary,
+            title="[bold]Summary[/bold]",
+            border_style="bright_white",
+            padding=(0, 2),
+        ))
+
         # Build header content with all variant info
         header_lines = []
 
@@ -287,7 +297,7 @@ def insight(
 
         # LLM Narrative (unless --lite)
         if insight_result:
-            wrapped_summary = textwrap.fill(insight_result.summary, width=74)
+            wrapped_summary = textwrap.fill(insight_result.llm_summary, width=74)
             console.print(Panel(
                 wrapped_summary,
                 title="[bold]Variant Insight[/bold]",
@@ -302,7 +312,7 @@ def insight(
             }
             if insight_result:
                 output_data["narrative"] = {
-                    "summary": insight_result.summary,
+                    "llm_summary": insight_result.llm_summary,
                     "rationale": insight_result.rationale,
                     "recommended_therapies": [t.model_dump() for t in insight_result.recommended_therapies],
                     "evidence_strength": insight_result.evidence_strength,

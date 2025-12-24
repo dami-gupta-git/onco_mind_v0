@@ -129,7 +129,7 @@ class TestLLMInsight:
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
-            summary="Test summary",
+            llm_summary="Test summary",
             rationale="Test rationale",
             evidence_strength="Strong",
             cosmic_id="COSM476",
@@ -145,7 +145,7 @@ class TestLLMInsight:
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
-            summary="Test summary",
+            llm_summary="Test summary",
             rationale="Test rationale",
             evidence_strength="Strong",
             recommended_therapies=[
@@ -173,7 +173,7 @@ class TestLLMInsight:
             gene="KRAS",
             variant="G12C",
             tumor_type=None,
-            summary="General insight without tumor context",
+            llm_summary="General insight without tumor context",
             rationale="Test rationale",
             evidence_strength="Weak",
         )
@@ -187,7 +187,7 @@ class TestLLMInsight:
             gene="KRAS",
             variant="G12C",
             tumor_type=None,
-            summary="General insight",
+            llm_summary="General insight",
             rationale="Test rationale",
             evidence_strength="Weak",
         )
