@@ -5,18 +5,25 @@ Integrates with the oncomind package for:
 - Variant insight generation (single and batch)
 - Evidence gathering from multiple databases
 
-Supports two modes:
-- Fast insight mode: Uses new public API (no LLM, returns EvidencePanel)
-- Full insight mode: Uses InsightEngine (with LLM narrative)
+ARCHITECTURE:
+    All paths use EvidenceBuilder → EvidencePanel
+    With optional LLMService → LLMInsight for narrative generation
+
+Modes:
+    - Lite mode: EvidenceBuilder only (fast, no LLM)
+    - Default mode: EvidenceBuilder + LLMService narrative
+    - Full mode: EvidenceBuilder + Literature + LLMService narrative
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional, Callable
 
 from oncomind import get_insight, get_insights, InsightConfig
+from oncomind.evidence import EvidenceBuilder, EvidenceBuilderConfig
+from oncomind.llm.service import LLMService
+from oncomind.models.evidence import EvidenceForLLM
 
 
-# Alias for backward compatibility with app.py
 async def get_variant_annotation(
     gene: str,
     variant: str,
@@ -26,33 +33,17 @@ async def get_variant_annotation(
     model: str = "gpt-4o-mini",
     temperature: float = 0.1
 ) -> Dict[str, Any]:
-    """Alias for get_single_variant_insight (backward compatibility)."""
-    return await get_single_variant_insight(
-        gene, variant, tumor_type, enable_llm, enable_literature, model, temperature
-    )
-
-
-async def get_single_variant_insight(
-    gene: str,
-    variant: str,
-    tumor_type: Optional[str] = None,
-    enable_llm: bool = False,
-    enable_literature: bool = True,
-    model: str = "gpt-4o-mini",
-    temperature: float = 0.1
-) -> Dict[str, Any]:
     """
-    Generate insight for a single variant using the public API.
+    Generate insight for a single variant.
 
-    This is the recommended function for variant insight.
-    Returns EvidencePanel data.
+    This is the primary function for variant insight in the UI.
 
     Args:
         gene: Gene symbol (e.g., BRAF)
         variant: Variant notation (e.g., V600E)
         tumor_type: Optional tumor type (e.g., Melanoma)
-        enable_llm: Enable LLM enhancement for literature analysis
-        enable_literature: Enable literature search (disable for fast mode)
+        enable_llm: Enable LLM narrative generation
+        enable_literature: Enable literature search
         model: LLM model to use (if enable_llm=True)
         temperature: LLM temperature (0.0-1.0)
 
@@ -60,29 +51,42 @@ async def get_single_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
-        config = InsightConfig(
-            enable_llm=enable_llm,
-            enable_literature=enable_literature,
-            llm_model=model,
-            llm_temperature=temperature,
-        )
+        # Step 1: Build evidence panel using EvidenceBuilder
+        config = EvidenceBuilderConfig(enable_literature=enable_literature)
+        async with EvidenceBuilder(config) as builder:
+            panel = await builder.build_evidence_panel(f"{gene} {variant}", tumor_type=tumor_type)
 
-        # Build variant string
-        variant_str = f"{gene} {variant}"
+        # Step 2: Generate LLM narrative if enabled
+        llm_insight = None
+        if enable_llm:
+            # Convert EvidencePanel to EvidenceForLLM for the LLM service
+            evidence = _panel_to_evidence_for_llm(panel)
 
-        # Get evidence panel
-        panel = await get_insight(variant_str, tumor_type=tumor_type, config=config)
+            # Add literature if available
+            if panel.literature.pubmed_articles:
+                evidence.pubmed_articles = panel.literature.pubmed_articles
+                evidence.literature_knowledge = panel.literature.literature_knowledge
 
-        # Convert to dict for JSON serialization
-        return {
+            # Generate LLM insight
+            llm_service = LLMService(model=model, temperature=temperature)
+            llm_insight = await llm_service.get_llm_insight(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                evidence=evidence,
+            )
+
+        # Build response
+        result = {
             "variant": {
                 "gene": panel.identifiers.gene,
                 "variant": panel.identifiers.variant,
                 "tumor_type": panel.clinical.tumor_type,
             },
             "insight": {
-                "summary": _generate_summary(panel),
-                "evidence_strength": panel.meta.evidence_strength,
+                "summary": llm_insight.summary if llm_insight else _generate_summary(panel),
+                "rationale": llm_insight.rationale if llm_insight else None,
+                "evidence_strength": llm_insight.evidence_strength if llm_insight else panel.meta.evidence_strength,
             },
             "identifiers": {
                 "cosmic_id": panel.identifiers.cosmic_id,
@@ -111,12 +115,59 @@ async def get_single_variant_insight(
                 "id": panel.identifiers.transcript_id,
                 "consequence": panel.identifiers.transcript_consequence,
             },
-            "recommended_therapies": _extract_therapies(panel),
+            "recommended_therapies": (
+                [
+                    {
+                        "drug_name": t.drug_name,
+                        "evidence_level": t.evidence_level,
+                        "approval_status": t.approval_status,
+                        "clinical_context": t.clinical_context,
+                    }
+                    for t in llm_insight.recommended_therapies
+                ]
+                if llm_insight
+                else _extract_therapies(panel)
+            ),
             "evidence_panel": panel.model_dump(mode="json"),
         }
 
+        return result
+
     except Exception as e:
         return {"error": f"Insight generation failed: {str(e)}"}
+
+
+def _panel_to_evidence_for_llm(panel) -> EvidenceForLLM:
+    """Convert an EvidencePanel to EvidenceForLLM for LLM consumption."""
+    return EvidenceForLLM(
+        variant_id=panel.identifiers.variant_id,
+        gene=panel.identifiers.gene,
+        variant=panel.identifiers.variant,
+        cosmic_id=panel.identifiers.cosmic_id,
+        ncbi_gene_id=panel.identifiers.ncbi_gene_id,
+        dbsnp_id=panel.identifiers.dbsnp_id,
+        clinvar_id=panel.identifiers.clinvar_id,
+        hgvs_genomic=panel.identifiers.hgvs_genomic,
+        hgvs_protein=panel.identifiers.hgvs_protein,
+        hgvs_transcript=panel.identifiers.hgvs_transcript,
+        transcript_id=panel.identifiers.transcript_id,
+        transcript_consequence=panel.identifiers.transcript_consequence,
+        civic=panel.kb.civic,
+        civic_assertions=panel.kb.civic_assertions,
+        clinvar=panel.kb.clinvar,
+        cosmic=panel.kb.cosmic,
+        cgi_biomarkers=panel.kb.cgi_biomarkers,
+        vicc=panel.kb.vicc,
+        fda_approvals=panel.clinical.fda_approvals,
+        clinical_trials=panel.clinical.clinical_trials,
+        alphamissense_score=panel.functional.alphamissense_score,
+        alphamissense_prediction=panel.functional.alphamissense_prediction,
+        cadd_score=panel.functional.cadd_score,
+        polyphen2_prediction=panel.functional.polyphen2_prediction,
+        sift_prediction=panel.functional.sift_prediction,
+        gnomad_exome_af=panel.functional.gnomad_exome_af,
+        clinvar_clinical_significance=panel.clinical.clinvar_clinical_significance,
+    )
 
 
 def _generate_summary(panel) -> str:
@@ -182,6 +233,23 @@ def _extract_therapies(panel) -> List[Dict[str, Any]]:
     return unique_therapies[:10]
 
 
+# Backward compatibility alias
+async def get_single_variant_insight(
+    gene: str,
+    variant: str,
+    tumor_type: Optional[str] = None,
+    enable_llm: bool = False,
+    enable_literature: bool = True,
+    model: str = "gpt-4o-mini",
+    temperature: float = 0.1
+) -> Dict[str, Any]:
+    """Alias for get_variant_annotation (backward compatibility)."""
+    return await get_variant_annotation(
+        gene, variant, tumor_type, enable_llm, enable_literature, model, temperature
+    )
+
+
+# Backward compatibility alias - routes to get_variant_annotation with enable_llm=True
 async def get_variant_insight(
     gene: str,
     variant: str,
@@ -190,92 +258,20 @@ async def get_variant_insight(
     temperature: float = 0.1
 ) -> Dict[str, Any]:
     """
-    Generate annotation insight for a single variant with LLM narrative.
+    Generate insight with LLM narrative.
 
-    This uses the legacy InsightEngine for full LLM narrative generation.
-    For faster annotation without LLM, use get_variant_annotation instead.
-
-    Args:
-        gene: Gene symbol (e.g., BRAF)
-        variant: Variant notation (e.g., V600E)
-        tumor_type: Optional tumor type (e.g., Melanoma)
-        model: LLM model to use
-        temperature: LLM temperature (0.0-1.0)
-
-    Returns:
-        Dict containing annotation results with identifiers, evidence, etc.
+    This is an alias for get_variant_annotation with enable_llm=True.
+    Maintained for backward compatibility.
     """
-    try:
-        # Import legacy engine
-        from oncomind.engine import InsightEngine
-        from oncomind.models.variant import VariantInput
-
-        # Create insight engine
-        engine = InsightEngine(llm_model=model, llm_temperature=temperature)
-
-        # Create variant input
-        variant_input = VariantInput(
-            gene=gene,
-            variant=variant,
-            tumor_type=tumor_type
-        )
-
-        # Generate insight
-        async with engine:
-            insight = await engine.get_insight(variant_input)
-
-        # Convert to dict for JSON serialization
-        return {
-            "variant": {
-                "gene": insight.gene,
-                "variant": insight.variant,
-                "tumor_type": insight.tumor_type,
-            },
-            "insight": {
-                "summary": insight.summary,
-                "rationale": insight.rationale,
-                "evidence_strength": insight.evidence_strength,
-            },
-            "identifiers": {
-                "cosmic_id": insight.cosmic_id,
-                "ncbi_gene_id": insight.ncbi_gene_id,
-                "dbsnp_id": insight.dbsnp_id,
-                "clinvar_id": insight.clinvar_id,
-            },
-            "hgvs": {
-                "genomic": insight.hgvs_genomic,
-                "protein": insight.hgvs_protein,
-                "transcript": insight.hgvs_transcript,
-            },
-            "clinvar": {
-                "clinical_significance": insight.clinvar_clinical_significance,
-                "accession": insight.clinvar_accession,
-            },
-            "annotations": {
-                "snpeff_effect": insight.snpeff_effect,
-                "polyphen2_prediction": insight.polyphen2_prediction,
-                "cadd_score": insight.cadd_score,
-                "gnomad_exome_af": insight.gnomad_exome_af,
-                "alphamissense_score": insight.alphamissense_score,
-                "alphamissense_prediction": insight.alphamissense_prediction,
-            },
-            "transcript": {
-                "id": insight.transcript_id,
-                "consequence": insight.transcript_consequence,
-            },
-            "recommended_therapies": [
-                {
-                    "drug_name": therapy.drug_name,
-                    "evidence_level": therapy.evidence_level,
-                    "approval_status": therapy.approval_status,
-                    "clinical_context": therapy.clinical_context,
-                }
-                for therapy in insight.recommended_therapies
-            ],
-        }
-
-    except Exception as e:
-        return {"error": f"Insight generation failed: {str(e)}"}
+    return await get_variant_annotation(
+        gene=gene,
+        variant=variant,
+        tumor_type=tumor_type,
+        enable_llm=True,
+        enable_literature=True,
+        model=model,
+        temperature=temperature,
+    )
 
 
 async def batch_get_variant_annotations(
@@ -286,9 +282,7 @@ async def batch_get_variant_annotations(
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Generate annotations for multiple variants using the new public API.
-
-    This is the recommended function for batch annotation.
+    Generate annotations for multiple variants using the public API.
 
     Args:
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
@@ -364,7 +358,7 @@ async def batch_get_variant_insights(
     """
     Generate annotations for multiple variants.
 
-    Uses the new public API with configurable LLM and literature options.
+    Uses the public API with configurable LLM and literature options.
 
     Args:
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
@@ -442,7 +436,6 @@ async def predict_splice_impact(
         Dict with splice scores and positions
     """
     raise NotImplementedError("SpliceAI integration coming soon")
-
 
 
 async def run_agent_workflow(

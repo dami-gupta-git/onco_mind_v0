@@ -1,7 +1,7 @@
 """Evidence builder for aggregating variant evidence into EvidencePanel.
 
-This module provides the core evidence aggregation logic, extracting it from
-the InsightEngine into a reusable, LLM-independent component.
+This module provides the core evidence aggregation logic as a reusable,
+LLM-independent component.
 
 ARCHITECTURE:
     ParsedVariant → build_evidence_panel() → EvidencePanel
