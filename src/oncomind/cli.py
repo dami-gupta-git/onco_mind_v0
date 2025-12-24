@@ -206,29 +206,55 @@ def insight(
 
         console.print(Panel(
             "\n".join(header_lines),
-            title="[bold]Evidence Summary[/bold]",
+            title="[bold]Evidence Overview[/bold]",
             border_style="blue",
             padding=(0, 2),
         ))
 
-        # Therapies section
-        if insight_result and insight_result.recommended_therapies:
-            therapy_names = [t.drug_name for t in insight_result.recommended_therapies]
-            console.print(Panel(
-                "[bold green]" + ", ".join(therapy_names) + "[/bold green]",
-                title="[bold]Recommended Therapies[/bold]",
-                border_style="green",
-                padding=(0, 2),
-            ))
-        elif panel.clinical.fda_approvals:
+        # FDA Approved Drugs (always show if available)
+        if panel.clinical.fda_approvals:
             drugs = panel.clinical.get_approved_drugs()
             if drugs:
                 console.print(Panel(
-                    "[bold green]" + ", ".join(drugs[:5]) + "[/bold green]",
+                    "[bold green]" + ", ".join(drugs) + "[/bold green]",
                     title="[bold]FDA Approved Drugs[/bold]",
                     border_style="green",
                     padding=(0, 2),
                 ))
+
+        # Recommended Therapies (from LLM insight or extracted from panel)
+        therapy_lines = []
+        if insight_result and insight_result.recommended_therapies:
+            # Use LLM-recommended therapies
+            for t in insight_result.recommended_therapies:
+                level = f"Level {t.evidence_level}" if t.evidence_level else ""
+                status = t.approval_status or ""
+                parts = [p for p in [level, status] if p]
+                suffix = f" ({', '.join(parts)})" if parts else ""
+                therapy_lines.append(f"  • {t.drug_name}{suffix}")
+        else:
+            # Extract from panel (lite mode)
+            seen_drugs = set()
+            # From FDA approvals
+            for approval in panel.clinical.fda_approvals:
+                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
+                if drug_name and drug_name not in seen_drugs:
+                    seen_drugs.add(drug_name)
+                    therapy_lines.append(f"  • {drug_name} (Level A, FDA Approved)")
+            # From CGI biomarkers
+            for biomarker in panel.kb.cgi_biomarkers:
+                if biomarker.fda_approved and biomarker.drug and biomarker.drug not in seen_drugs:
+                    seen_drugs.add(biomarker.drug)
+                    level = biomarker.evidence_level or "A"
+                    therapy_lines.append(f"  • {biomarker.drug} (Level {level}, FDA Approved)")
+
+        if therapy_lines:
+            console.print(Panel(
+                "\n".join(therapy_lines),
+                title="[bold]Recommended Therapies[/bold]",
+                border_style="cyan",
+                padding=(0, 2),
+            ))
 
         # Clinical evidence details (CIViC/CGI/Trials in one box)
         has_clinical_evidence = panel.kb.civic_assertions or panel.kb.cgi_biomarkers or panel.clinical.clinical_trials
@@ -262,7 +288,7 @@ def insight(
 
             console.print(Panel(
                 "\n".join(evidence_lines),
-                title="[bold]Clinical Evidence[/bold]",
+                title="[bold]Knowledge Base Evidence[/bold]",
                 border_style="cyan",
                 padding=(0, 2),
             ))
