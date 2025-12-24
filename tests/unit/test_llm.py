@@ -11,7 +11,7 @@ class TestLLMService:
     """Tests for LLMService."""
 
     @pytest.mark.asyncio
-    async def test_get_variant_insight(self, sample_evidence, mock_llm_response):
+    async def test_get_llm_insight(self, sample_evidence, mock_llm_response):
         """Test variant insight generation."""
         service = LLMService()
 
@@ -36,7 +36,7 @@ class TestLLMService:
             mock_response.choices[0].message.content = json.dumps(response_json)
             mock_call.return_value = mock_response
 
-            insight = await service.get_variant_insight(
+            insight = await service.get_llm_insight(
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
@@ -49,7 +49,7 @@ class TestLLMService:
             assert "BRAF V600E" in insight.summary
 
     @pytest.mark.asyncio
-    async def test_get_variant_insight_with_markdown(self, sample_evidence):
+    async def test_get_llm_insight_with_markdown(self, sample_evidence):
         """Test insight generation with markdown-wrapped JSON."""
         service = LLMService()
 
@@ -68,7 +68,7 @@ class TestLLMService:
             mock_response.choices[0].message.content = markdown_response
             mock_call.return_value = mock_response
 
-            insight = await service.get_variant_insight(
+            insight = await service.get_llm_insight(
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
@@ -100,7 +100,7 @@ class TestLLMService:
             mock_response.choices[0].message.content = json.dumps(response_json)
             mock_call.return_value = mock_response
 
-            await service.get_variant_insight(
+            await service.get_llm_insight(
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
@@ -121,7 +121,7 @@ class TestLLMService:
         with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
             mock_call.side_effect = Exception("LLM API error")
 
-            insight = await service.get_variant_insight(
+            insight = await service.get_llm_insight(
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",

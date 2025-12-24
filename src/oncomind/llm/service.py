@@ -23,7 +23,7 @@ class LLMService:
         self.enable_logging = enable_logging
         self.logger = get_logger(enable_console_logging=enable_logging) if enable_logging else None
 
-    async def get_variant_insight(
+    async def get_llm_insight(
         self,
         gene: str,
         variant: str,

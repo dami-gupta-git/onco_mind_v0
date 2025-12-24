@@ -133,7 +133,7 @@ def insight(
                 evidence.literature_knowledge = panel.literature.literature_knowledge
 
             llm_service = LLMService(model=model, temperature=0.1)
-            insight_result = await llm_service.get_variant_insight(gene, variant, tumor, evidence)
+            insight_result = await llm_service.get_llm_insight(gene, variant, tumor, evidence)
 
         # === RENDER OUTPUT ===
 
