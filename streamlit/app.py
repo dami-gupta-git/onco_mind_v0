@@ -173,23 +173,74 @@ with tab1:
                 search_cols[2].markdown(f"[OncoKB](https://www.oncokb.org/gene/{gene_display})")
                 search_cols[3].markdown(f"[cBioPortal](https://www.cbioportal.org/results?cancer_study_list=msk_impact_2017&gene_list={gene_display})")
 
-            # Card 3: Recommended Therapies
+            # Card 3: Evidence Overview
+            with st.expander("📊 Evidence Overview", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    # COSMIC ID
+                    cosmic_id = result.get('identifiers', {}).get('cosmic_id')
+                    st.markdown(f"**COSMIC:** {cosmic_id or 'N/A'}")
+
+                    # ClinVar significance
+                    clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
+                    st.markdown(f"**ClinVar:** {clinvar_sig or 'N/A'}")
+
+                    # Pathogenicity scores
+                    annot = result.get('annotations', {})
+                    am_score = annot.get('alphamissense_score')
+                    am_pred = annot.get('alphamissense_prediction')
+                    pp2 = annot.get('polyphen2_prediction')
+                    path_parts = []
+                    if am_score is not None:
+                        pred_label = {'P': 'Pathogenic', 'B': 'Benign', 'A': 'Ambiguous'}.get(am_pred, am_pred or '')
+                        path_parts.append(f"AlphaMissense: {am_score:.2f} ({pred_label})")
+                    if pp2:
+                        path_parts.append(f"PolyPhen2: {pp2}")
+                    st.markdown(f"**Pathogenicity:** {' | '.join(path_parts) if path_parts else 'N/A'}")
+
+                with col2:
+                    # Evidence strength
+                    evidence_strength = result['insight'].get('evidence_strength')
+                    st.markdown(f"**Evidence Strength:** {evidence_strength or 'N/A'}")
+
+                    # Gene role
+                    gene_role = panel.get('clinical', {}).get('gene_role') if panel else None
+                    st.markdown(f"**Gene Role:** {gene_role or 'N/A'}")
+
+                    # Evidence sources
+                    sources = panel.get('meta', {}).get('sources_with_data', []) if panel else []
+                    st.markdown(f"**Evidence Sources:** {', '.join(sources) if sources else 'N/A'}")
+
+            # Card 4: FDA Approved Drugs
+            fda_approvals = panel.get('clinical', {}).get('fda_approvals', []) if panel else []
+            if fda_approvals:
+                # Deduplicate drug names
+                drug_names = []
+                for approval in fda_approvals:
+                    name = approval.get('brand_name') or approval.get('generic_name') or approval.get('drug_name')
+                    if name and name not in drug_names:
+                        drug_names.append(name)
+                if drug_names:
+                    with st.expander(f"✅ FDA Approved Drugs ({len(drug_names)})", expanded=True):
+                        # Make each drug clickable
+                        drug_links = [f"[{name}](https://www.drugs.com/search.php?searchterm={name.replace(' ', '+')})" for name in drug_names]
+                        st.markdown(", ".join(drug_links))
+
+            # Card 5: Recommended Therapies
             therapies = result.get('recommended_therapies', [])
             if therapies:
                 with st.expander(f"💊 Recommended Therapies ({len(therapies)})", expanded=True):
+                    # Build table with clickable drug links
+                    table_rows = []
                     for t in therapies:
                         drug = t.get('drug_name', 'Unknown')
-                        level = t.get('evidence_level', 'N/A')
-                        status = t.get('approval_status', '')
-                        context = t.get('clinical_context', '')
-
-                        # Create clickable drug link
                         drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
-                        st.markdown(f"- **{drug_link}** (Level {level}) - {status}")
-                        if context:
-                            st.caption(f"   {context[:150]}...")
+                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} | {(t.get('clinical_context', '') or '')[:50]} |")
 
-            # Card 4: Functional Predictions
+                    table_header = "| Drug | Level | Status | Context |\n|------|-------|--------|---------|"
+                    st.markdown(table_header + "\n" + "\n".join(table_rows))
+
+            # Card 6: Functional Predictions
             annotations = result.get('annotations', {})
             with st.expander("🧬 Functional Predictions", expanded=False):
                 col1, col2, col3 = st.columns(3)
@@ -224,7 +275,7 @@ with tab1:
                     else:
                         st.write("Not found in gnomAD (rare)")
 
-            # Card 5: Clinical Trials
+            # Card 7: Clinical Trials
             if panel and panel.get('clinical', {}).get('clinical_trials'):
                 trials = panel['clinical']['clinical_trials']
                 with st.expander(f"🏥 Clinical Trials ({len(trials)})", expanded=False):
@@ -240,7 +291,7 @@ with tab1:
                         st.markdown(f"- {nct_link}{variant_tag} - {title}...")
                         st.caption(f"   {status} | {phase}")
 
-            # Card 6: Knowledge Base Evidence
+            # Card 8: Knowledge Base Evidence
             if panel and panel.get('kb'):
                 kb = panel['kb']
                 has_kb_data = kb.get('civic_assertions') or kb.get('cgi_biomarkers') or kb.get('vicc')
@@ -275,7 +326,7 @@ with tab1:
                                 sig = v.get('clinical_significance', 'Unknown')
                                 st.markdown(f"- {source}: {drugs} → {sig}")
 
-            # Card 7: Literature (Full mode only)
+            # Card 9: Literature (Full mode only)
             if panel and panel.get('literature', {}).get('pubmed_articles'):
                 articles = panel['literature']['pubmed_articles']
                 with st.expander(f"📄 Literature ({len(articles)} articles)", expanded=False):
