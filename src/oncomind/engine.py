@@ -580,7 +580,7 @@ class InsightEngine:
         # Step 4: Generate insight with LLM (must run sequentially since it depends on evidence)
         # Use original variant notation for display/reporting
         # Use resolved tumor type for evidence filtering and FDA matching
-        insight = await self.llm_service.get_variant_insight(
+        insight = await self.llm_service.get_llm_insight(
             gene=variant_input.gene,
             variant=variant_input.variant,  # Keep original for display
             tumor_type=resolved_tumor_type,  # Use resolved tumor type
