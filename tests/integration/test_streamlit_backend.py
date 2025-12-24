@@ -11,17 +11,17 @@ from pathlib import Path
 streamlit_dir = Path(__file__).parent.parent.parent / "streamlit"
 sys.path.insert(0, str(streamlit_dir))
 
-from backend import get_variant_annotation, batch_get_variant_insights
+from backend import get_variant_insight, batch_get_variant_insights
 
 
-class TestGetVariantAnnotation:
-    """Tests for get_variant_annotation function."""
+class TestGetVariantInsight:
+    """Tests for get_variant_insight function."""
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_basic_annotation(self):
         """Basic annotation should work."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             enable_llm=False,
@@ -36,7 +36,7 @@ class TestGetVariantAnnotation:
     @pytest.mark.asyncio
     async def test_annotation_with_tumor_type(self):
         """Annotation with tumor type should work."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
@@ -51,7 +51,7 @@ class TestGetVariantAnnotation:
     @pytest.mark.asyncio
     async def test_fast_mode_annotation(self):
         """Fast mode (no literature) should work."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="EGFR",
             variant="L858R",
             enable_llm=False,
@@ -65,7 +65,7 @@ class TestGetVariantAnnotation:
     @pytest.mark.asyncio
     async def test_annotation_returns_expected_keys(self):
         """Annotation should return expected structure."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             enable_llm=False,
@@ -84,7 +84,7 @@ class TestGetVariantAnnotation:
     @pytest.mark.asyncio
     async def test_annotation_insight_section(self):
         """Annotation insight section should have summary."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             enable_llm=False,
@@ -205,7 +205,7 @@ class TestBackendOptions:
     @pytest.mark.asyncio
     async def test_llm_disabled_literature_enabled(self):
         """LLM disabled with literature enabled should work."""
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             enable_llm=False,
@@ -221,7 +221,7 @@ class TestBackendOptions:
         import time
 
         start = time.time()
-        result = await get_variant_annotation(
+        result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
             enable_llm=False,
