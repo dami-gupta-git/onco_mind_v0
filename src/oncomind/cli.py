@@ -142,14 +142,33 @@ def insight(
 
         # === RENDER OUTPUT ===
 
-        # Variant header panel
+        # Variant header panel with metrics
         variant_title = f"{gene} {variant}"
         if tumor:
             variant_title += f" [dim]in[/dim] {tumor}"
+
+        # Build metrics line (same as UI)
+        evidence_strength = insight_result.evidence_strength if insight_result else panel.meta.evidence_strength or "N/A"
+        therapies_count = len(insight_result.recommended_therapies) if insight_result else len(panel.clinical.fda_approvals)
+        clinvar_sig = panel.clinical.clinvar_clinical_significance or "N/A"
+        am_score = panel.functional.alphamissense_score
+        am_display = f"{am_score:.2f}" if am_score else "N/A"
+
+        # Color-code evidence strength
+        strength_color = {"Strong": "green", "Moderate": "yellow", "Weak": "red"}.get(evidence_strength, "white")
+        metrics_line = f"[dim]Evidence:[/dim] [{strength_color}]{evidence_strength}[/{strength_color}] [dim]|[/dim] [dim]Therapies:[/dim] {therapies_count} [dim]|[/dim] [dim]ClinVar:[/dim] {clinvar_sig} [dim]|[/dim] [dim]AlphaMissense:[/dim] {am_display}"
+
         from rich.align import Align
         from rich.box import DOUBLE
+        from rich.console import Group
+
+        # Center each line individually
+        title_line = Align.center(f"[bold bright_white]{variant_title}[/bold bright_white]")
+        metrics_centered = Align.center(metrics_line)
+        header_content = Group(title_line, metrics_centered)
+
         console.print(Panel(
-            Align.center(f"[bold bright_white]{variant_title}[/bold bright_white]"),
+            header_content,
             border_style="bold bright_white",
             box=DOUBLE,
             padding=(0, 2),
@@ -159,11 +178,21 @@ def insight(
         summary_text = panel.get_summary()
         wrapped_summary = textwrap.fill(summary_text, width=74)
         console.print(Panel(
-            wrapped_summary,
+            f"[cyan]{wrapped_summary}[/cyan]",
             title="[bold]Summary[/bold]",
-            border_style="bright_white",
+            border_style="cyan",
             padding=(0, 2),
         ))
+
+        # LLM Insight (right after Summary, only when LLM mode is enabled)
+        if insight_result:
+            wrapped_llm = textwrap.fill(insight_result.llm_summary, width=74)
+            console.print(Panel(
+                wrapped_llm,
+                title="[bold]LLM Insight[/bold]",
+                border_style="magenta",
+                padding=(1, 2),
+            ))
 
         # Build header content with all variant info
         header_lines = []
@@ -189,11 +218,6 @@ def insight(
         func_summary = panel.functional.get_pathogenicity_summary()
         if func_summary != "No functional predictions available":
             header_lines.append(f"[dim]Pathogenicity:[/dim]      {func_summary}")
-
-        # Evidence strength (only if LLM was used)
-        if insight_result and insight_result.evidence_strength:
-            strength_color = {"Strong": "green", "Moderate": "yellow", "Weak": "red"}.get(insight_result.evidence_strength, "white")
-            header_lines.append(f"[dim]Evidence Strength:[/dim]  [{strength_color}]{insight_result.evidence_strength}[/{strength_color}]")
 
         # Gene role
         if panel.clinical.gene_role:
@@ -300,6 +324,8 @@ def insight(
             for article in panel.literature.pubmed_articles[:3]:
                 title = article.title[:55] + "..." if len(article.title) > 55 else article.title
                 lit_lines.append(f"  • PMID:{article.pmid} {title}")
+            if len(panel.literature.pubmed_articles) > 3:
+                lit_lines.append("  ...")
 
             if panel.literature.literature_knowledge:
                 lk = panel.literature.literature_knowledge
@@ -319,16 +345,6 @@ def insight(
                 title="[bold]Literature[/bold]",
                 border_style="yellow",
                 padding=(0, 2),
-            ))
-
-        # LLM Narrative (unless --lite)
-        if insight_result:
-            wrapped_summary = textwrap.fill(insight_result.llm_summary, width=74)
-            console.print(Panel(
-                wrapped_summary,
-                title="[bold]Variant Insight[/bold]",
-                border_style="magenta",
-                padding=(1, 2),
             ))
 
         # Save JSON if requested

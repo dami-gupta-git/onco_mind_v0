@@ -177,7 +177,8 @@ def _build_response(panel, llm_insight=None) -> Dict[str, Any]:
             "tumor_type": panel.clinical.tumor_type,
         },
         "insight": {
-            "summary": llm_insight.llm_summary if llm_insight else panel.get_summary(),
+            "summary": panel.get_summary(),  # Always 1-line summary
+            "llm_narrative": llm_insight.llm_summary if llm_insight else None,  # LLM insight when available
             "rationale": llm_insight.rationale if llm_insight else None,
             "evidence_strength": llm_insight.evidence_strength if llm_insight else panel.meta.evidence_strength,
         },
