@@ -309,8 +309,8 @@ class InsightEngine:
         if isinstance(evidence, Exception):
             print(f"  Warning: MyVariant API failed: {str(evidence)}")
             # Create empty evidence object
-            from oncomind.models.evidence import Evidence
-            evidence = Evidence(
+            from oncomind.models.evidence import EvidenceForLLM
+            evidence = EvidenceForLLM(
                 variant_id=f"{variant_input.gene}:{normalized_variant}",
                 gene=variant_input.gene,
                 variant=normalized_variant,

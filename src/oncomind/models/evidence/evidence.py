@@ -32,8 +32,13 @@ _variant_config = load_variant_classes()
 
 
 
-class Evidence(VariantAnnotations):
-    """Aggregated evidence from multiple sources."""
+class EvidenceForLLM(VariantAnnotations):
+    """Flattened evidence context prepared for LLM consumption.
+
+    This is NOT the primary evidence model. Use EvidencePanel for
+    structured evidence. This class exists solely to format evidence
+    for LLM prompts.
+    """
 
     variant_id: str
     gene: str

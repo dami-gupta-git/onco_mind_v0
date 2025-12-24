@@ -70,7 +70,7 @@ def insight(
     from rich.panel import Panel
     from oncomind.evidence.builder import EvidenceBuilder, EvidenceBuilderConfig
     from oncomind.llm.service import LLMService
-    from oncomind.models.evidence import Evidence
+    from oncomind.models.evidence import EvidenceForLLM
     import textwrap
 
     console = Console(width=80)
@@ -97,7 +97,7 @@ def insight(
         insight_result = None
         if not lite:
             # Convert EvidencePanel to Evidence for LLM
-            evidence = Evidence(
+            evidence = EvidenceForLLM(
                 variant_id=panel.identifiers.variant_id,
                 gene=panel.identifiers.gene,
                 variant=panel.identifiers.variant,
