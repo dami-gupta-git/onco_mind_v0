@@ -32,7 +32,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  normalization/                                             │  │
 │  │  - input_parser.py: parse_variant_input("BRAF V600E")       │  │
-│  │  - hgvs_utils.py: normalize_variant, classify_variant_type  │  │
+│  │  utils/variant_normalization.py: normalize_variant          │  │
 │  │  → Output: ParsedVariant                                    │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -41,8 +41,8 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                   Evidence Aggregation Layer                      │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  evidence/builder.py                                        │  │
-│  │  - EvidenceBuilder (async context manager)                  │  │
+│  │  insight_builder/builder.py                                 │  │
+│  │  - InsightBuilder (async context manager)                   │  │
 │  │  - build_insight(parsed_variant, tumor_type) → Insight      │  │
 │  │  - Parallel API fetching with asyncio.gather()              │  │
 │  └─────────────────────────────────────────────────────────────┘  │
@@ -69,7 +69,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                        Models Layer                               │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  models/evidence/insight.py                                 │  │
+│  │  models/insight/insight.py                                  │  │
 │  │  - Insight (top-level output)                               │  │
 │  │    ├── identifiers: VariantIdentifiers                      │  │
 │  │    ├── kb: KnowledgebaseEvidence                            │  │
@@ -212,12 +212,12 @@ class ParsedVariant:
 - Tumor type extraction from free text
 - Variant type classification
 
-### Evidence Builder (`evidence/builder.py`)
+### Insight Builder (`insight_builder/builder.py`)
 
 Orchestrates parallel API calls and assembles results:
 
 ```python
-class EvidenceBuilder:
+class InsightBuilder:
     """Async context manager for evidence aggregation."""
 
     async def __aenter__(self):
@@ -732,6 +732,6 @@ pytest tests/integration/ -v -m integration
 ### Extension Points
 
 - New API clients: Implement base client pattern
-- New evidence types: Add to models/evidence/
+- New evidence types: Add to models/insight/
 - New normalizers: Add patterns to input_parser.py
 - New LLM tasks: Add methods to llm/service.py

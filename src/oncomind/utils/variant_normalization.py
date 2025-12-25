@@ -303,3 +303,41 @@ def is_snp_or_small_indel(gene: str, variant: str) -> bool:
     """
     norm = VariantNormalizer.normalize_variant(gene, variant)
     return norm['variant_type'] in VariantNormalizer.ALLOWED_VARIANT_TYPES
+
+
+def normalize_protein_change(variant: str) -> Dict[str, Optional[str]]:
+    """Normalize a protein change to multiple standard formats.
+
+    Args:
+        variant: Protein change in any format (V600E, Val600Glu, p.V600E, etc.)
+
+    Returns:
+        Dictionary with normalized representations
+
+    Examples:
+        >>> normalize_protein_change("V600E")
+        {'short_form': 'V600E', 'hgvs_protein': 'p.V600E', ...}
+    """
+    return VariantNormalizer.normalize_protein_change(variant)
+
+
+def classify_variant_type(variant: str) -> str:
+    """Classify the type of variant.
+
+    Args:
+        variant: Variant string in any format
+
+    Returns:
+        Variant type: 'missense', 'nonsense', 'frameshift', 'deletion',
+                     'insertion', 'duplication', 'fusion', 'amplification',
+                     'splice', 'truncating', or 'unknown'
+
+    Examples:
+        >>> classify_variant_type("V600E")
+        'missense'
+        >>> classify_variant_type("R248*")
+        'nonsense'
+        >>> classify_variant_type("fusion")
+        'fusion'
+    """
+    return VariantNormalizer.classify_variant_type(variant)

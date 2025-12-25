@@ -6,6 +6,8 @@ This directory contains command-line utilities for OncoMind.
 
 Normalizes variant notations across different formats to standard representations.
 
+> **Note:** Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic coordinates, use HGVS notation or let MyVariant.info handle the lookup.
+
 ### Supported Input Formats
 
 - **One-letter amino acid codes**: `V600E`
