@@ -118,14 +118,19 @@ async def batch_get_variant_insights(
 
 
 def _build_response(result) -> Dict[str, Any]:
-    """Build the standard response dict from a Result object."""
+    """Build the standard response dict from a Result object.
+
+    Uses the flat Evidence structure where each source is a simple list:
+    - evidence.fda_approvals, .civic_assertions, .civic_evidence, etc.
+    """
     llm = result.llm  # May be None if LLM was not enabled
+    evidence = result.evidence  # Evidence object with flat list structure
 
     return {
         "variant": {
             "gene": result.identifiers.gene,
             "variant": result.identifiers.variant,
-            "tumor_type": result.clinical.tumor_type,
+            "tumor_type": result.context.tumor_type,
         },
         "insight": {
             "summary": result.get_summary(),  # Always 1-line summary
@@ -144,8 +149,7 @@ def _build_response(result) -> Dict[str, Any]:
             "transcript": result.identifiers.hgvs_transcript,
         },
         "clinvar": {
-            "clinical_significance": result.clinical.clinvar_clinical_significance,
-            "accession": result.clinical.clinvar_accession,
+            "clinical_significance": evidence.clinvar_significance,
         },
         "annotations": {
             "snpeff_effect": result.functional.snpeff_effect,
@@ -159,31 +163,116 @@ def _build_response(result) -> Dict[str, Any]:
             "id": result.identifiers.transcript_id,
             "consequence": result.identifiers.transcript_consequence,
         },
-        "evidence_panel": {
-            "clinical": {
-                "clinical_trials": [
-                    {
-                        "nct_id": t.nct_id,
-                        "title": t.title,
-                        "phase": t.phase,
-                        "status": t.status,
-                        "drugs": t.interventions,  # interventions contains drug names
-                        "conditions": t.conditions,
-                        "url": t.url,
-                        "variant_specific": t.variant_specific,
-                    }
-                    for t in result.clinical.clinical_trials
-                ],
-                "fda_approvals": [
-                    {
-                        "drug_name": a.drug_name,
-                        "brand_name": a.brand_name,
-                        "indication": a.indication,
-                    }
-                    for a in result.clinical.fda_approvals
-                ],
-            },
-        },
+        # Per-source evidence (flat lists - frontend decides how to display)
+        "fda_approvals": [
+            {
+                "drug_name": a.drug_name,
+                "brand_name": a.brand_name,
+                "generic_name": a.generic_name,
+                "indication": a.indication,
+                "approval_date": a.approval_date,
+            }
+            for a in evidence.fda_approvals
+        ],
+        "civic_assertions": [
+            {
+                "id": a.assertion_id,
+                "therapies": a.therapies,
+                "disease": a.disease,
+                "significance": a.significance,
+                "amp_level": a.amp_level,
+                "amp_tier": a.amp_tier,
+                "description": a.description,
+            }
+            for a in evidence.civic_assertions
+        ],
+        "civic_evidence": [
+            {
+                "evidence_type": e.evidence_type,
+                "evidence_level": e.evidence_level,
+                "clinical_significance": e.clinical_significance,
+                "disease": e.disease,
+                "drugs": e.drugs,
+                "description": e.description,
+            }
+            for e in evidence.civic_evidence
+        ],
+        "vicc_evidence": [
+            {
+                "source": v.source,
+                "drugs": v.drugs,
+                "disease": v.disease,
+                "response_type": v.response_type,
+                "evidence_level": v.evidence_level,
+            }
+            for v in evidence.vicc_evidence
+        ],
+        "cgi_biomarkers": [
+            {
+                "drug": b.drug,
+                "association": b.association,
+                "tumor_type": b.tumor_type,
+                "evidence_level": b.evidence_level,
+                "fda_approved": b.fda_approved,
+            }
+            for b in evidence.cgi_biomarkers
+        ],
+        "clinvar_entries": [
+            {
+                "clinical_significance": c.clinical_significance,
+                "conditions": c.conditions,
+                "review_status": c.review_status,
+            }
+            for c in evidence.clinvar_entries
+        ],
+        "cosmic_entries": [
+            {
+                "mutation_id": c.mutation_id,
+                "primary_site": c.primary_site,
+                "sample_count": c.sample_count,
+            }
+            for c in evidence.cosmic_entries
+        ],
+        "clinical_trials": [
+            {
+                "nct_id": t.nct_id,
+                "title": t.title,
+                "phase": t.phase,
+                "status": t.status,
+                "drugs": t.interventions,
+                "conditions": t.conditions,
+                "url": t.url,
+                "variant_specific": t.variant_specific,
+            }
+            for t in evidence.clinical_trials
+        ],
+        "pubmed_articles": [
+            {
+                "pmid": a.pmid,
+                "title": a.title,
+                "year": a.year,
+                "journal": a.journal,
+                "signal_type": a.signal_type,
+            }
+            for a in evidence.pubmed_articles
+        ],
+        "literature_knowledge": evidence.literature_knowledge.summary if evidence.literature_knowledge else None,
+        "preclinical_biomarkers": [
+            {
+                "drug": b.drug,
+                "association": b.association,
+                "evidence_level": b.evidence_level,
+            }
+            for b in evidence.preclinical_biomarkers
+        ],
+        "early_phase_biomarkers": [
+            {
+                "drug": b.drug,
+                "association": b.association,
+                "evidence_level": b.evidence_level,
+            }
+            for b in evidence.early_phase_biomarkers
+        ],
         "recommended_therapies": [
             {
                 "drug_name": t.drug_name,
@@ -191,7 +280,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "approval_status": t.approval_status,
                 "clinical_context": t.clinical_context,
             }
-            for t in (llm.recommended_therapies if llm else result.evidence.get_recommended_therapies())
+            for t in (llm.recommended_therapies if llm else evidence.get_recommended_therapies())
         ],
         "result_data": result.model_dump(mode="json"),
     }

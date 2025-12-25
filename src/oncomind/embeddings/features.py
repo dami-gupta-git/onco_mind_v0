@@ -123,28 +123,26 @@ def _extract_functional_features(
 
 def _extract_count_features(panel: Evidence) -> dict[str, int]:
     """Extract evidence count features."""
-    kb = panel.kb
-
     return {
-        "civic_evidence_count": len(kb.civic),
-        "civic_assertion_count": len(kb.civic_assertions),
-        "clinvar_count": len(kb.clinvar),
-        "cosmic_count": len(kb.cosmic),
-        "cgi_biomarker_count": len(kb.cgi_biomarkers),
-        "vicc_count": len(kb.vicc),
-        "fda_approval_count": len(panel.clinical.fda_approvals),
-        "clinical_trial_count": len(panel.clinical.clinical_trials),
-        "pubmed_article_count": len(panel.literature.pubmed_articles),
+        "civic_evidence_count": len(panel.civic_evidence),
+        "civic_assertion_count": len(panel.civic_assertions),
+        "clinvar_count": len(panel.clinvar_entries),
+        "cosmic_count": len(panel.cosmic_entries),
+        "cgi_biomarker_count": len(panel.cgi_biomarkers),
+        "vicc_count": len(panel.vicc_evidence),
+        "fda_approval_count": len(panel.fda_approvals),
+        "clinical_trial_count": len(panel.clinical_trials),
+        "pubmed_article_count": len(panel.pubmed_articles),
         "total_kb_evidence_count": (
-            len(kb.civic) + len(kb.civic_assertions) + len(kb.clinvar) +
-            len(kb.cosmic) + len(kb.cgi_biomarkers) + len(kb.vicc)
+            len(panel.civic_evidence) + len(panel.civic_assertions) + len(panel.clinvar_entries) +
+            len(panel.cosmic_entries) + len(panel.cgi_biomarkers) + len(panel.vicc_evidence)
         ),
     }
 
 
 def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
     """Extract clinical indicator features."""
-    clinical = panel.clinical
+    context = panel.context
 
     # Gene role encoding
     gene_role_encoding = {
@@ -154,24 +152,24 @@ def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
         "DDR": 0.5,
         "MMR": 0.5,
     }
-    gene_role_value = gene_role_encoding.get(clinical.gene_role or "", 0.0)
+    gene_role_value = gene_role_encoding.get(context.gene_role or "", 0.0)
 
     # Count variant-specific trials
     variant_specific_trials = sum(
-        1 for t in clinical.clinical_trials if t.variant_specific
+        1 for t in panel.clinical_trials if t.variant_specific
     )
 
     return {
-        "has_fda_approval": bool(clinical.fda_approvals),
-        "has_clinical_trials": bool(clinical.clinical_trials),
+        "has_fda_approval": bool(panel.fda_approvals),
+        "has_clinical_trials": bool(panel.clinical_trials),
         "has_variant_specific_trials": variant_specific_trials > 0,
         "variant_specific_trial_count": variant_specific_trials,
         "gene_role_value": gene_role_value,
-        "is_oncogene": clinical.gene_role == "oncogene",
-        "is_tsg": clinical.gene_role in ("TSG", "tumor_suppressor"),
-        "is_ddr_gene": clinical.gene_role == "DDR",
-        "has_clinvar_pathogenic": _is_pathogenic(clinical.clinvar_clinical_significance),
-        "has_clinvar_benign": _is_benign(clinical.clinvar_clinical_significance),
+        "is_oncogene": context.gene_role == "oncogene",
+        "is_tsg": context.gene_role in ("TSG", "tumor_suppressor"),
+        "is_ddr_gene": context.gene_role == "DDR",
+        "has_clinvar_pathogenic": _is_pathogenic(panel.clinvar_significance),
+        "has_clinvar_benign": _is_benign(panel.clinvar_significance),
     }
 
 

@@ -95,7 +95,7 @@ def insight(
 
         # Build metrics line
         therapies_count = len(result.llm.recommended_therapies if result.llm else result.evidence.get_recommended_therapies())
-        clinvar_sig = result.clinical.clinvar_clinical_significance or "N/A"
+        clinvar_sig = result.evidence.clinvar_significance or "N/A"
         am_score = result.functional.alphamissense_score
         am_display = f"{am_score:.2f}" if am_score else "N/A"
 
@@ -155,8 +155,8 @@ def insight(
             ids_lines.append("")
 
         # Gene role
-        if result.clinical.gene_role:
-            ids_lines.append(f"[dim]Gene Role:[/dim]    {result.clinical.gene_role}")
+        if result.context.gene_role:
+            ids_lines.append(f"[dim]Gene Role:[/dim]    {result.context.gene_role}")
 
         # Pathogenicity scores
         func_summary = result.functional.get_pathogenicity_summary()
@@ -307,7 +307,7 @@ def batch(
         output_data = []
         for i, result in enumerate(results):
             if tumor_types[i]:
-                result.clinical.tumor_type = tumor_types[i]
+                result.context.tumor_type = tumor_types[i]
             output_data.append(result.model_dump(mode="json"))
 
         with open(output, "w") as f:

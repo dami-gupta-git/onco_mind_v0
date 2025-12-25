@@ -190,9 +190,9 @@ class Conductor:
         return await llm_service.get_llm_insight(
             gene=evidence.identifiers.gene,
             variant=evidence.identifiers.variant,
-            tumor_type=evidence.clinical.tumor_type,
+            tumor_type=evidence.context.tumor_type,
             evidence_summary=evidence_summary,
-            has_clinical_trials=bool(evidence.clinical.clinical_trials),
+            has_clinical_trials=bool(evidence.clinical_trials),
         )
 
 

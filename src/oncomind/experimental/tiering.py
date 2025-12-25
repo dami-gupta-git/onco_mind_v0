@@ -84,13 +84,13 @@ def compute_experimental_tier(
     Returns:
         TierResult with experimental tier, confidence, and rationale
     """
-    tumor = tumor_type or panel.clinical.tumor_type
+    tumor = tumor_type or panel.context.tumor_type
     supporting_evidence: list[str] = []
     rationale_parts: list[str] = []
 
     # Check for Tier I-A: FDA-approved targeted therapy
-    if panel.clinical.fda_approvals:
-        drugs = panel.clinical.get_approved_drugs()
+    if panel.fda_approvals:
+        drugs = panel.get_approved_drugs()
         if drugs:
             supporting_evidence.append(f"FDA-approved drugs: {', '.join(drugs[:3])}")
             rationale_parts.append(
@@ -106,7 +106,7 @@ def compute_experimental_tier(
 
     # Check for Tier I: CIViC assertions with Tier I classification
     tier_i_assertions = [
-        a for a in panel.kb.civic_assertions
+        a for a in panel.civic_assertions
         if a.amp_tier == "Tier I"
     ]
     if tier_i_assertions:
@@ -137,7 +137,7 @@ def compute_experimental_tier(
             )
 
     # Check for Tier II: CGI FDA-approved biomarkers
-    fda_biomarkers = [b for b in panel.kb.cgi_biomarkers if b.fda_approved]
+    fda_biomarkers = [b for b in panel.cgi_biomarkers if b.fda_approved]
     if fda_biomarkers:
         biomarker = fda_biomarkers[0]
         supporting_evidence.append(
@@ -166,7 +166,7 @@ def compute_experimental_tier(
 
     # Check for Tier II: CIViC Tier II assertions
     tier_ii_assertions = [
-        a for a in panel.kb.civic_assertions
+        a for a in panel.civic_assertions
         if a.amp_tier == "Tier II"
     ]
     if tier_ii_assertions:
@@ -182,7 +182,7 @@ def compute_experimental_tier(
         )
 
     # Check for Tier II: VICC Level A/B evidence
-    vicc_high = [v for v in panel.kb.vicc if v.evidence_level in ("A", "B")]
+    vicc_high = [v for v in panel.vicc_evidence if v.evidence_level in ("A", "B")]
     if vicc_high:
         ev = vicc_high[0]
         supporting_evidence.append(
@@ -198,8 +198,8 @@ def compute_experimental_tier(
         )
 
     # Check for clinical trials as Tier II-D (investigational)
-    if panel.clinical.clinical_trials:
-        variant_specific = [t for t in panel.clinical.clinical_trials if t.variant_specific]
+    if panel.clinical_trials:
+        variant_specific = [t for t in panel.clinical_trials if t.variant_specific]
         if variant_specific:
             trial = variant_specific[0]
             supporting_evidence.append(
@@ -216,7 +216,7 @@ def compute_experimental_tier(
                 supporting_evidence=supporting_evidence,
             )
         else:
-            trial = panel.clinical.clinical_trials[0]
+            trial = panel.clinical_trials[0]
             supporting_evidence.append(f"Gene-level trial: {trial.nct_id}")
             rationale_parts.append(
                 "Active clinical trial for this gene (not variant-specific)."
@@ -230,11 +230,11 @@ def compute_experimental_tier(
             )
 
     # Check for Tier III-B: VUS in known cancer gene
-    if panel.clinical.gene_role in ("oncogene", "TSG", "tumor_suppressor"):
-        supporting_evidence.append(f"Gene role: {panel.clinical.gene_role}")
+    if panel.context.gene_role in ("oncogene", "TSG", "tumor_suppressor"):
+        supporting_evidence.append(f"Gene role: {panel.context.gene_role}")
         rationale_parts.append(
             f"{panel.identifiers.gene} is a known cancer gene "
-            f"({panel.clinical.gene_role}), but variant-specific evidence is limited."
+            f"({panel.context.gene_role}), but variant-specific evidence is limited."
         )
         return TierResult(
             tier="Tier III",
@@ -245,11 +245,11 @@ def compute_experimental_tier(
         )
 
     # Check ClinVar for benign classification
-    if panel.clinical.clinvar_clinical_significance:
-        sig = panel.clinical.clinvar_clinical_significance.lower()
+    if panel.clinvar_significance:
+        sig = panel.clinvar_significance.lower()
         if "benign" in sig and "pathogenic" not in sig:
             supporting_evidence.append(
-                f"ClinVar: {panel.clinical.clinvar_clinical_significance}"
+                f"ClinVar: {panel.clinvar_significance}"
             )
             rationale_parts.append("ClinVar classifies this variant as benign.")
             return TierResult(

@@ -118,7 +118,6 @@ with tab1:
             result = st.session_state.single_result
             gene_display = st.session_state.single_gene
             variant_display = st.session_state.single_variant
-            panel = result.get('evidence_panel', {})
 
             tumor_display = result.get('variant', {}).get('tumor_type')
             header_text = f"**{gene_display} {variant_display}**"
@@ -132,7 +131,7 @@ with tab1:
                 st.info(result['insight'].get('summary', 'No summary available'))
 
             # Card 2: Identifiers & Links
-            with st.expander("🔗 Identifiers & External Links", expanded=True):
+            with st.expander("🔗 Identifiers & External Links", expanded=False):
                 ids = result.get('identifiers', {})
                 hgvs = result.get('hgvs', {})
 
@@ -169,174 +168,198 @@ with tab1:
                 search_cols[2].markdown(f"[OncoKB](https://www.oncokb.org/gene/{gene_display})")
                 search_cols[3].markdown(f"[cBioPortal](https://www.cbioportal.org/results?cancer_study_list=msk_impact_2017&gene_list={gene_display})")
 
-            # Card 3: Scores
-            annot = result.get('annotations', {})
-            am_score = annot.get('alphamissense_score')
-            am_pred = annot.get('alphamissense_prediction')
-            pp2 = annot.get('polyphen2_prediction')
-            cadd = annot.get('cadd_score')
-            gnomad = annot.get('gnomad_exome_af')
+            # ==============================================
+            # SOURCE CARDS - Tabbed structure (flat lists from backend)
+            # ==============================================
+            st.markdown("---")
+            st.markdown("### 📊 Evidence by Source")
 
-            # Only show if we have any scores
-            has_scores = am_score is not None or pp2 or cadd is not None or gnomad is not None
-            if has_scores:
-                with st.expander("📊 Scores", expanded=True):
-                    # Build pathogenicity summary like CLI
-                    path_parts = []
-                    if am_score is not None:
-                        pred_label = {'P': 'Pathogenic', 'B': 'Benign', 'A': 'Ambiguous'}.get(am_pred, am_pred or '')
-                        path_parts.append(f"AlphaMissense: {pred_label} ({am_score:.2f})")
-                    if cadd is not None:
-                        path_parts.append(f"CADD: {cadd:.1f}")
-                    if pp2:
-                        path_parts.append(f"PolyPhen2: {pp2}")
+            # Get data from flat lists
+            ids = result.get('identifiers', {})
 
-                    if path_parts:
-                        st.markdown(f"**Pathogenicity:** {' | '.join(path_parts)}")
+            # Collect available sources with counts (flat list structure)
+            fda_approvals = result.get('fda_approvals', [])
+            civic_assertions = result.get('civic_assertions', [])
+            vicc = result.get('vicc_evidence', [])
+            cgi_biomarkers = result.get('cgi_biomarkers', [])
+            clinvar_entries = result.get('clinvar_entries', [])
+            clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
+            cosmic_id = ids.get('cosmic_id')
+            trials = result.get('clinical_trials', [])
+            articles = result.get('pubmed_articles', [])
+            preclinical = result.get('preclinical_biomarkers', [])
+            early_phase = result.get('early_phase_biomarkers', [])
 
-                    if gnomad is not None:
-                        gnomad_display = f"{gnomad:.2e}" if gnomad > 0 else "0"
-                        st.markdown(f"**gnomAD AF:** {gnomad_display}")
+            # Build tab names with counts
+            tab_names = []
+            if fda_approvals:
+                tab_names.append(f"FDA ({len(fda_approvals)})")
+            if civic_assertions:
+                tab_names.append(f"CIViC ({len(civic_assertions)})")
+            if vicc:
+                tab_names.append(f"VICC ({len(vicc)})")
+            if cgi_biomarkers:
+                tab_names.append(f"CGI ({len(cgi_biomarkers)})")
+            if clinvar_entries or clinvar_sig:
+                tab_names.append("ClinVar")
+            if cosmic_id:
+                tab_names.append("COSMIC")
+            if trials:
+                tab_names.append(f"Trials ({len(trials)})")
+            if articles:
+                tab_names.append(f"Literature ({len(articles)})")
+            if preclinical or early_phase:
+                tab_names.append(f"Research ({len(preclinical) + len(early_phase)})")
 
-            # Card 4: LLM Insight (only when LLM mode is enabled)
-            llm_narrative = result['insight'].get('llm_narrative')
-            if llm_narrative:
-                with st.expander("🤖 LLM Insight", expanded=True):
-                    st.markdown(llm_narrative)
+            if tab_names:
+                tabs = st.tabs(tab_names)
+                tab_idx = 0
 
-            # Card 5: Recommended Therapies (title depends on LLM mode)
-            therapies = result.get('recommended_therapies', [])
-            if therapies:
-                # Check if LLM was used (llm_narrative present means LLM mode)
-                is_llm_mode = result['insight'].get('llm_narrative') is not None
-                title = "🤖 LLM Recommended Therapies" if is_llm_mode else "💊 Recommended Therapies"
+                # FDA tab
+                if fda_approvals:
+                    with tabs[tab_idx]:
+                        rows = []
+                        for a in fda_approvals:
+                            drug = a.get('brand_name') or a.get('drug_name', 'Unknown')
+                            indication = (a.get('indication') or '')[:100]
+                            rows.append(f"| {drug} | {indication}... |")
+                        st.markdown("| Drug | Indication |\n|------|------------|" + "\n" + "\n".join(rows))
+                    tab_idx += 1
 
-                with st.expander(f"{title} ({len(therapies)})", expanded=True):
-                    # Build table with clickable drug links
-                    table_rows = []
-                    for t in therapies:
-                        drug = t.get('drug_name', 'Unknown')
-                        drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
-                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} |")
+                # CIViC tab
+                if civic_assertions:
+                    with tabs[tab_idx]:
+                        for a in civic_assertions:
+                            therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
+                            sig = a.get('significance', 'Unknown')
+                            amp = a.get('amp_level', '')
+                            disease = a.get('disease', '')
+                            aid = a.get('id', '')
+                            link = f"[AID:{aid}](https://civicdb.org/assertions/{aid})" if aid else ""
+                            st.markdown(f"- {link} **{therapies_str}** → {sig} ({disease}) [{amp}]")
+                    tab_idx += 1
 
-                    table_header = "| Drug | Level | Status |\n|------|-------|--------|"
-                    st.markdown(table_header + "\n" + "\n".join(table_rows))
+                # VICC tab
+                if vicc:
+                    with tabs[tab_idx]:
+                        sources = {}
+                        for v in vicc:
+                            src = v.get('source', 'unknown')
+                            if src not in sources:
+                                sources[src] = []
+                            sources[src].append(v)
+                        for source, entries in sources.items():
+                            st.markdown(f"**{source.upper()}** ({len(entries)})")
+                            for v in entries[:3]:
+                                drugs = ", ".join(v.get('drugs', [])) or "N/A"
+                                response = v.get('response_type', 'Unknown')
+                                disease = v.get('disease', '')[:30]
+                                st.markdown(f"- {drugs} → {response} ({disease})")
+                    tab_idx += 1
 
-            # Card 6: Functional Predictions
-            annotations = result.get('annotations', {})
-            with st.expander("🧬 Functional Predictions", expanded=False):
-                col1, col2, col3 = st.columns(3)
+                # CGI tab
+                if cgi_biomarkers:
+                    with tabs[tab_idx]:
+                        for b in cgi_biomarkers:
+                            drug = b.get('drug', 'Unknown')
+                            assoc = b.get('association', 'Unknown')
+                            tumor = b.get('tumor_type', '')
+                            level = b.get('evidence_level', '')
+                            st.markdown(f"- **{drug}**: {assoc} in {tumor} ({level})")
+                    tab_idx += 1
 
-                with col1:
-                    st.markdown("**Pathogenicity:**")
-                    am_pred = annotations.get('alphamissense_prediction')
-                    am_score_val = annotations.get('alphamissense_score')
-                    if am_score_val:
-                        pred_label = {'P': 'Pathogenic', 'B': 'Benign', 'A': 'Ambiguous'}.get(am_pred, am_pred)
-                        st.metric("AlphaMissense", f"{am_score_val:.3f}", pred_label)
+                # ClinVar tab
+                if clinvar_entries or clinvar_sig:
+                    with tabs[tab_idx]:
+                        if clinvar_sig:
+                            st.markdown(f"**Clinical Significance:** {clinvar_sig}")
+                        for entry in clinvar_entries:
+                            sig = entry.get('clinical_significance', 'Unknown')
+                            conds = entry.get('conditions', [])
+                            review = entry.get('review_status', '')
+                            st.markdown(f"- {sig}: {', '.join(conds) if conds else 'N/A'} ({review})")
+                    tab_idx += 1
 
-                    pp2 = annotations.get('polyphen2_prediction')
-                    if pp2:
-                        st.metric("PolyPhen2", pp2)
+                # COSMIC tab
+                if cosmic_id:
+                    with tabs[tab_idx]:
+                        cosmic_num = cosmic_id.replace('COSM', '').replace('COSV', '')
+                        st.markdown(f"**COSMIC ID:** [{cosmic_id}](https://cancer.sanger.ac.uk/cosmic/mutation/overview?id={cosmic_num})")
+                        st.caption("Click link to view mutation details in COSMIC database")
+                    tab_idx += 1
 
-                with col2:
-                    st.markdown("**Deleteriousness:**")
-                    cadd = annotations.get('cadd_score')
-                    if cadd:
-                        st.metric("CADD", f"{cadd:.1f}", ">20 = top 1%")
+                # Clinical Trials tab
+                if trials:
+                    with tabs[tab_idx]:
+                        rows = []
+                        for t in trials:
+                            nct = t.get('nct_id', '')
+                            phase = t.get('phase', 'N/A')
+                            status = t.get('status', '')
+                            title = (t.get('title', '') or '')[:50]
+                            link = f"[{nct}](https://clinicaltrials.gov/study/{nct})"
+                            rows.append(f"| {link} | {phase} | {status} | {title}... |")
+                        st.markdown("| NCT ID | Phase | Status | Title |\n|--------|-------|--------|-------|" + "\n" + "\n".join(rows))
+                    tab_idx += 1
 
-                    effect = annotations.get('snpeff_effect')
-                    if effect:
-                        st.write(f"**Effect:** {effect}")
+                # Literature tab
+                if articles:
+                    with tabs[tab_idx]:
+                        rows = []
+                        for a in articles:
+                            pmid = a.get('pmid', '')
+                            year = a.get('year', '')
+                            title = (a.get('title', '') or '')[:50]
+                            journal = (a.get('journal', '') or '')[:15]
+                            link = f"[{pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)"
+                            rows.append(f"| {link} | {year} | {journal} | {title}... |")
+                        st.markdown("| PMID | Year | Journal | Title |\n|------|------|---------|-------|" + "\n" + "\n".join(rows))
+                    tab_idx += 1
 
-                with col3:
-                    st.markdown("**Population Frequency:**")
-                    gnomad = annotations.get('gnomad_exome_af')
-                    if gnomad:
-                        st.metric("gnomAD AF", f"{gnomad:.2e}")
-                    else:
-                        st.write("Not found in gnomAD (rare)")
-
-            # Card 7: Clinical Trials
-            if panel and panel.get('clinical', {}).get('clinical_trials'):
-                trials = panel['clinical']['clinical_trials']
-                with st.expander(f"🏥 Clinical Trials ({len(trials)})", expanded=False):
-                    # Build table with clickable NCT links
-                    trial_rows = []
-                    for trial in trials[:10]:
-                        nct_id = trial.get('nct_id', 'Unknown')
-                        title = trial.get('title', 'No title')[:80]
-                        status = trial.get('status', 'Unknown')
-                        phase = trial.get('phase', 'N/A')
-                        variant_tag = " 🎯" if trial.get('variant_specific') else ""
-
-                        # Clickable NCT link
-                        nct_link = f"[{nct_id}](https://clinicaltrials.gov/study/{nct_id})"
-                        trial_rows.append(f"| {nct_link}{variant_tag} | {status} | {phase} | {title}... |")
-
-                    table_header = "| NCT ID | Status | Phase | Title |\n|--------|--------|-------|-------|"
-                    st.markdown(table_header + "\n" + "\n".join(trial_rows))
-
-            # Card 8: Knowledge Base Evidence
-            if panel and panel.get('kb'):
-                kb = panel['kb']
-                has_kb_data = kb.get('civic_assertions') or kb.get('cgi_biomarkers') or kb.get('vicc')
-                if has_kb_data:
-                    with st.expander("📚 Knowledge Base Evidence", expanded=False):
-                        # CIViC Assertions
-                        if kb.get('civic_assertions'):
-                            st.markdown("**CIViC Assertions:**")
-                            for a in kb['civic_assertions'][:5]:
-                                therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
-                                sig = a.get('significance', 'Unknown')
-                                disease = a.get('disease', '')
-                                aid = a.get('id', '')
-                                link = f"[AID:{aid}](https://civicdb.org/assertions/{aid})" if aid else f"AID:{aid}"
-                                st.markdown(f"- {link}: {therapies_str} → {sig} ({disease})")
-
-                        # CGI Biomarkers
-                        if kb.get('cgi_biomarkers'):
-                            st.markdown("**CGI Biomarkers:**")
-                            for b in kb['cgi_biomarkers'][:5]:
+                # Research tab
+                if preclinical or early_phase:
+                    with tabs[tab_idx]:
+                        st.warning("⚠️ Preclinical/investigational data - not FDA-approved")
+                        if preclinical:
+                            st.markdown("**Preclinical (Cell Line/Animal Models):**")
+                            for b in preclinical:
                                 drug = b.get('drug', 'Unknown')
                                 assoc = b.get('association', 'Unknown')
-                                fda = " ✓ FDA" if b.get('fda_approved') else ""
-                                st.markdown(f"- {drug}: {assoc}{fda}")
+                                st.markdown(f"- {drug}: {assoc}")
+                        if early_phase:
+                            st.markdown("**Early Phase/Case Reports:**")
+                            for b in early_phase:
+                                drug = b.get('drug', 'Unknown')
+                                assoc = b.get('association', 'Unknown')
+                                st.markdown(f"- {drug}: {assoc}")
+            else:
+                st.info("No evidence found from any source")
 
-                        # VICC MetaKB
-                        if kb.get('vicc'):
-                            st.markdown("**VICC MetaKB:**")
-                            for v in kb['vicc'][:5]:
-                                source = v.get('source', 'Unknown')
-                                drugs = ", ".join(v.get('drugs', [])) or "N/A"
-                                sig = v.get('clinical_significance', 'Unknown')
-                                st.markdown(f"- {source}: {drugs} → {sig}")
+            # ==============================================
+            # LLM CARDS - After evidence cards
+            # ==============================================
+            llm_narrative = result['insight'].get('llm_narrative')
+            therapies = result.get('recommended_therapies', [])
 
-            # Card 9: Literature (Full mode only)
-            if panel and panel.get('literature', {}).get('pubmed_articles'):
-                articles = panel['literature']['pubmed_articles']
-                with st.expander(f"📄 Literature ({len(articles)} articles)", expanded=False):
-                    # Build table with clickable PubMed links
-                    article_rows = []
-                    for article in articles[:10]:
-                        pmid = article.get('pmid', '')
-                        title = article.get('title', 'No title')
-                        year = article.get('year', 'N/A')
-                        journal = article.get('journal', 'N/A')
+            if llm_narrative or therapies:
+                st.markdown("---")
+                st.markdown("### 🤖 LLM Analysis")
 
-                        # Clickable PubMed link
-                        pmid_link = f"[PMID:{pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)"
-                        article_rows.append(f"| {pmid_link} | {year} | {journal} | {title} |")
+                # LLM Insight card
+                if llm_narrative:
+                    with st.expander("🤖 LLM Insight", expanded=True):
+                        st.markdown(llm_narrative)
 
-                    table_header = "| PMID | Year | Journal | Title |\n|------|------|---------|-------|"
-                    st.markdown(table_header + "\n" + "\n".join(article_rows))
-
-                    # Literature knowledge summary if available
-                    lit_knowledge = panel['literature'].get('literature_knowledge')
-                    if lit_knowledge:
-                        st.markdown("---")
-                        st.markdown("**LLM-Synthesized Insights:**")
-                        st.info(lit_knowledge)
+                # Recommended Therapies card
+                if therapies:
+                    with st.expander(f"💊 Recommended Therapies ({len(therapies)})", expanded=True):
+                        table_rows = []
+                        for t in therapies:
+                            drug = t.get('drug_name', 'Unknown')
+                            drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
+                            table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} |")
+                        table_header = "| Drug | Level | Status |\n|------|-------|--------|"
+                        st.markdown(table_header + "\n" + "\n".join(table_rows))
 
             # Download and Clear buttons
             st.markdown("---")
