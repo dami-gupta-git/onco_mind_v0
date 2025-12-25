@@ -23,8 +23,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from oncomind.constants import PRIORITY_TUMOR_CODES
-
 
 class OncoTreeAPIError(Exception):
     """Exception raised for OncoTree API errors."""
@@ -136,119 +134,6 @@ class OncoTreeClient:
 
         except Exception:
             return None
-
-    async def search_tumor_types(self, query: str) -> list[dict[str, Any]]:
-        """Search tumor types by code or name (case-insensitive).
-
-        Args:
-            query: Search query (can be code or partial name)
-
-        Returns:
-            List of matching tumor types
-        """
-        try:
-            all_types = await self._fetch_all_tumor_types()
-            query_lower = query.lower()
-            query_upper = query.upper()
-
-            matches = []
-            for tumor_type in all_types:
-                code = tumor_type.get("code", "")
-                name = tumor_type.get("name", "")
-                main_type = tumor_type.get("mainType", "")
-
-                # Match by code (exact or prefix) - case insensitive
-                if code.upper() == query_upper or code.upper().startswith(query_upper):
-                    matches.append(tumor_type)
-                # Match by name (contains) - case insensitive
-                elif query_lower in name.lower() or query_lower in main_type.lower():
-                    matches.append(tumor_type)
-
-            return matches
-
-        except Exception:
-            return []
-
-    async def get_tumor_type_names_for_ui(self, query: str | None = None, limit: int | None = None) -> list[str]:
-        """Get tumor type names formatted for UI display.
-
-        Returns names in format: "Code - Full Name" (e.g., "NSCLC - Non-Small Cell Lung Cancer")
-
-        Prioritizes commonly-used cancer types first, then alphabetical order.
-
-        Args:
-            query: Optional query to filter results
-            limit: Optional limit on number of results (None = all results)
-
-        Returns:
-            List of formatted tumor type names
-        """
-        try:
-            if query:
-                tumor_types = await self.search_tumor_types(query)
-            else:
-                tumor_types = await self._fetch_all_tumor_types()
-
-            print(f"Found {len(tumor_types)} tumor types")
-            # Format as "CODE - Name" for easy matching
-            formatted = []
-            for tumor_type in tumor_types:
-                code = tumor_type.get("code", "")
-                name = tumor_type.get("name", "")
-                if code and name:
-                    formatted.append(f"{code} - {name}")
-
-            # Separate into priority and non-priority using centralized constants
-            priority = []
-            non_priority = []
-
-            for item in formatted:
-                code = item.split(" - ")[0] if " - " in item else ""
-                if code in PRIORITY_TUMOR_CODES:
-                    priority.append(item)
-                else:
-                    non_priority.append(item)
-
-            # Sort each group alphabetically
-            priority.sort()
-            non_priority.sort()
-
-            # Combine: priority first, then rest
-            result = priority + non_priority
-
-            # Apply limit if specified
-            if limit is not None:
-                return result[:limit]
-
-            return result
-
-        except Exception:
-            return []
-
-    def parse_user_input(self, user_input: str) -> str:
-        """Parse user input to extract tumor type.
-
-        Handles formats:
-        - "NSCLC" → "NSCLC"
-        - "Non-Small Cell Lung Cancer" → "Non-Small Cell Lung Cancer"
-        - "NSCLC - Non-Small Cell Lung Cancer" → "NSCLC"
-
-        Args:
-            user_input: Raw user input
-
-        Returns:
-            Cleaned tumor type string
-        """
-        if not user_input:
-            return ""
-
-        user_input = user_input.strip()
-
-        # If format is "CODE - Name", extract the code
-        if " - " in user_input:
-            return user_input.split(" - ")[0].strip()
-
-        return user_input
 
     async def resolve_tumor_type(self, user_input: str) -> str:
         """Resolve user input to a standardized tumor type name.

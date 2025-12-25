@@ -79,38 +79,6 @@ class TestOncoTreeClient:
         await client.close()
 
     @pytest.mark.asyncio
-    async def test_search_tumor_types(self):
-        """Test searching tumor types."""
-        client = OncoTreeClient()
-
-        mock_response = [
-            {"code": "NSCLC", "name": "Non-Small Cell Lung Cancer", "mainType": "Non-Small Cell Lung Cancer", "tissue": "Lung"},
-            {"code": "SCLC", "name": "Small Cell Lung Cancer", "mainType": "Small Cell Lung Cancer", "tissue": "Lung"},
-            {"code": "LUAD", "name": "Lung Adenocarcinoma", "mainType": "Non-Small Cell Lung Cancer", "tissue": "Lung"},
-            {"code": "MEL", "name": "Melanoma", "mainType": "Melanoma", "tissue": "Skin"},
-        ]
-
-        with patch.object(client, "_fetch_all_tumor_types", new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_response
-
-            # Search by partial code
-            ns_results = await client.search_tumor_types("NS")
-            assert len(ns_results) == 1
-            assert ns_results[0]["code"] == "NSCLC"
-
-            # Search by name (case-insensitive)
-            lung_results = await client.search_tumor_types("lung")
-            assert len(lung_results) == 3
-            assert all("lung" in r["name"].lower() or "lung" in r["mainType"].lower() for r in lung_results)
-
-            # Search by exact code (case-insensitive)
-            mel_results = await client.search_tumor_types("mel")
-            assert len(mel_results) == 1
-            assert mel_results[0]["code"] == "MEL"
-
-        await client.close()
-
-    @pytest.mark.asyncio
     async def test_resolve_tumor_type(self):
         """Test resolving user input to full tumor type name."""
         client = OncoTreeClient()
@@ -144,56 +112,6 @@ class TestOncoTreeClient:
             assert resolved_unknown == "UNKNOWN"
 
         await client.close()
-
-    @pytest.mark.asyncio
-    async def test_get_tumor_type_names_for_ui(self):
-        """Test getting formatted tumor type names for UI display."""
-        client = OncoTreeClient()
-
-        mock_response = [
-            {"code": "NSCLC", "name": "Non-Small Cell Lung Cancer"},
-            {"code": "MEL", "name": "Melanoma"},
-            {"code": "LUAD", "name": "Lung Adenocarcinoma"},
-            {"code": "XYZ", "name": "Rare Cancer Type"},
-        ]
-
-        with patch.object(client, "_fetch_all_tumor_types", new_callable=AsyncMock) as mock_fetch:
-            mock_fetch.return_value = mock_response
-
-            # Get all formatted names
-            formatted = await client.get_tumor_type_names_for_ui()
-            assert len(formatted) == 4
-            assert "NSCLC - Non-Small Cell Lung Cancer" in formatted
-            assert "MEL - Melanoma" in formatted
-
-            # Priority types (NSCLC, MEL, LUAD) should come before non-priority (XYZ)
-            # Find indices
-            nsclc_idx = formatted.index("NSCLC - Non-Small Cell Lung Cancer")
-            xyz_idx = formatted.index("XYZ - Rare Cancer Type")
-            assert nsclc_idx < xyz_idx, "Priority types should come first"
-
-            # Test with limit
-            formatted_limited = await client.get_tumor_type_names_for_ui(limit=2)
-            assert len(formatted_limited) == 2
-
-        await client.close()
-
-    def test_parse_user_input(self):
-        """Test parsing user input."""
-        client = OncoTreeClient()
-
-        # Test code format
-        assert client.parse_user_input("NSCLC") == "NSCLC"
-
-        # Test "CODE - Name" format (extract code)
-        assert client.parse_user_input("NSCLC - Non-Small Cell Lung Cancer") == "NSCLC"
-
-        # Test full name
-        assert client.parse_user_input("Non-Small Cell Lung Cancer") == "Non-Small Cell Lung Cancer"
-
-        # Test empty input
-        assert client.parse_user_input("") == ""
-        assert client.parse_user_input("   ") == ""
 
     @pytest.mark.asyncio
     async def test_api_error_handling(self):
