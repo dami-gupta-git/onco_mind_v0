@@ -120,29 +120,12 @@ with tab1:
             variant_display = st.session_state.single_variant
             panel = result.get('evidence_panel', {})
 
-            st.success(f"✅ Insight Ready: **{gene_display} {variant_display}**")
-
-            # Variant header with metrics (matching CLI style)
             tumor_display = result.get('variant', {}).get('tumor_type')
-            header_text = f"{gene_display} {variant_display}"
+            header_text = f"**{gene_display} {variant_display}**"
             if tumor_display:
                 header_text += f" in {tumor_display}"
 
-            # Build metrics line
-            therapies_count = len(result.get('recommended_therapies', []))
-            clinvar_sig = result.get('clinvar', {}).get('clinical_significance', 'N/A') or 'N/A'
-            am_score = result.get('annotations', {}).get('alphamissense_score')
-            am_display = f"{am_score:.2f}" if am_score else 'N/A'
-
-            metrics_line = f"Therapies: {therapies_count} | ClinVar: {clinvar_sig} | AlphaMissense: {am_display}"
-
-            st.markdown(
-                f'<div style="background-color: #1e3a5f; padding: 16px 24px; border-radius: 8px; '
-                f'border: 2px solid #4a90d9; text-align: center; margin-bottom: 16px;">'
-                f'<div style="color: white; font-size: 1.4em; font-weight: bold; margin-bottom: 8px;">{header_text}</div>'
-                f'<div style="color: #a0c4e8; font-size: 0.95em;">{metrics_line}</div></div>',
-                unsafe_allow_html=True
-            )
+            st.success(f"✅ Insight Ready: {header_text}")
 
             # Card 1: Summary (always expanded) - 1-line summary
             with st.expander("📋 Summary", expanded=True):
