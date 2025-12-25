@@ -22,16 +22,10 @@ from oncomind.insight_builder.builder import (
     build_insights,
 )
 
-# Backward compatibility aliases (deprecated)
-EvidenceBuilder = InsightBuilder
-EvidenceBuilderConfig = InsightBuilderConfig
 
 __all__ = [
     "InsightBuilder",
     "InsightBuilderConfig",
-    # Deprecated aliases
-    "EvidenceBuilder",
-    "EvidenceBuilderConfig",
     "build_insight",
     "build_insights",
 ]

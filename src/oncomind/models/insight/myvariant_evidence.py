@@ -2,7 +2,7 @@
 
 This is a simple data class that holds the parsed response from
 the MyVariant.info API. It's used internally by MyVariantClient
-and EvidenceBuilder.
+and InsightBuilder.
 """
 
 from typing import Any
@@ -18,7 +18,7 @@ class MyVariantEvidence(BaseModel):
     """Parsed evidence from MyVariant.info API response.
 
     This is a simple data container for the MyVariant API response.
-    Used by EvidenceBuilder to extract evidence for the Insight model.
+    Used by InsightBuilder to extract evidence for the Insight model.
     """
 
     # Core identifiers
