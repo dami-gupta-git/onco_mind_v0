@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from oncomind.cli import app
 
 
-LLM_INSIGHT_HEADER = "Variant Insight"
+LLM_INSIGHT_HEADER = "LLM Insight"
 runner = CliRunner()
 
 

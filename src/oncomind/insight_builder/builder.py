@@ -51,6 +51,7 @@ from oncomind.models.insight.civic import CIViCAssertionEvidence
 from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.insight.fda import FDAApproval
 from oncomind.models.insight.pubmed import PubMedEvidence
+from oncomind.models.insight.vicc import VICCEvidence
 
 from oncomind.normalization import ParsedVariant
 from oncomind.utils import normalize_variant
@@ -179,6 +180,33 @@ class InsightBuilder:
         except Exception as e:
             print(f"  Warning: OncoTree resolution failed: {str(e)}")
             return tumor_type
+
+    def _handle_result(
+        self,
+        result: Any,
+        source_name: str,
+        sources_with_data: list[str],
+        sources_failed: list[str],
+    ) -> Any:
+        """Handle an API result with error logging.
+
+        Args:
+            result: The result from asyncio.gather (could be Exception)
+            source_name: Name of the source for logging
+            sources_with_data: List to append to if data found
+            sources_failed: List to append to if failed
+
+        Returns:
+            The result if successful, empty list if failed
+        """
+        if isinstance(result, Exception):
+            print(f"  Warning: {source_name} failed: {str(result)}")
+            sources_failed.append(source_name)
+            return []
+        elif result:
+            sources_with_data.append(source_name)
+            return result
+        return []
 
     async def _fetch_literature(
         self,
@@ -346,75 +374,28 @@ class InsightBuilder:
             literature_result,
         ) = results
 
-        # Handle MyVariant result
-        myvariant_evidence = None
-        if isinstance(myvariant_result, Exception):
-            print(f"  Warning: MyVariant API failed: {str(myvariant_result)}")
-            sources_failed.append("MyVariant")
-        else:
-            myvariant_evidence = myvariant_result
-            if myvariant_evidence:
-                sources_with_data.append("MyVariant")
-
-        # Handle FDA result (now returns FDAApproval directly)
-        fda_approvals: list[FDAApproval] = []
-        if isinstance(fda_result, Exception):
-            print(f"  Warning: FDA API failed: {str(fda_result)}")
-            sources_failed.append("FDA")
-        elif fda_result:
-            fda_approvals = fda_result
-            if fda_approvals:
-                sources_with_data.append("FDA")
-
-        # Handle CGI result (now returns CGIBiomarkerEvidence directly)
-        cgi_biomarkers: list[CGIBiomarkerEvidence] = []
-        if isinstance(cgi_result, Exception):
-            print(f"  Warning: CGI biomarkers failed: {str(cgi_result)}")
-            sources_failed.append("CGI")
-        elif cgi_result:
-            cgi_biomarkers = cgi_result
-            if cgi_biomarkers:
-                sources_with_data.append("CGI")
-
-        # Handle VICC result (now returns VICCEvidence directly)
-        vicc_evidence = []
-        if isinstance(vicc_result, Exception):
-            print(f"  Warning: VICC MetaKB API failed: {str(vicc_result)}")
-            sources_failed.append("VICC")
-        elif vicc_result:
-            vicc_evidence = vicc_result
-            if vicc_evidence:
-                sources_with_data.append("VICC")
-
-        # Handle CIViC result (now returns CIViCAssertionEvidence directly)
-        civic_assertions: list[CIViCAssertionEvidence] = []
-        if isinstance(civic_result, Exception):
-            print(f"  Warning: CIViC Assertions API failed: {str(civic_result)}")
-            sources_failed.append("CIViC")
-        elif civic_result:
-            civic_assertions = civic_result
-            if civic_assertions:
-                sources_with_data.append("CIViC")
-
-        # Handle clinical trials result (now returns ClinicalTrialEvidence directly)
-        clinical_trials: list[ClinicalTrialEvidence] = []
-        if isinstance(trials_result, Exception):
-            print(f"  Warning: ClinicalTrials.gov API failed: {str(trials_result)}")
-            sources_failed.append("ClinicalTrials.gov")
-        elif trials_result:
-            clinical_trials = trials_result
-            if clinical_trials:
-                sources_with_data.append("ClinicalTrials.gov")
-
-        # Handle literature result (now returns PubMedEvidence directly)
-        pubmed_articles: list[PubMedEvidence] = []
-        if isinstance(literature_result, Exception):
-            print(f"  Warning: Literature search failed: {str(literature_result)}")
-            sources_failed.append("Literature")
-        elif literature_result:
-            pubmed_articles = literature_result
-            if pubmed_articles:
-                sources_with_data.append("Literature")
+        # Handle results using helper method
+        myvariant_evidence = self._handle_result(
+            myvariant_result, "MyVariant", sources_with_data, sources_failed
+        ) or None  # Downstream code checks `if myvariant_evidence:`
+        fda_approvals: list[FDAApproval] = self._handle_result(
+            fda_result, "FDA", sources_with_data, sources_failed
+        )
+        cgi_biomarkers: list[CGIBiomarkerEvidence] = self._handle_result(
+            cgi_result, "CGI", sources_with_data, sources_failed
+        )
+        vicc_evidence: list[VICCEvidence] = self._handle_result(
+            vicc_result, "VICC", sources_with_data, sources_failed
+        )
+        civic_assertions: list[CIViCAssertionEvidence] = self._handle_result(
+            civic_result, "CIViC", sources_with_data, sources_failed
+        )
+        clinical_trials: list[ClinicalTrialEvidence] = self._handle_result(
+            trials_result, "ClinicalTrials.gov", sources_with_data, sources_failed
+        )
+        pubmed_articles: list[PubMedEvidence] = self._handle_result(
+            literature_result, "Literature", sources_with_data, sources_failed
+        )
 
         # Extract data from MyVariant evidence
         functional_scores = FunctionalScores()
