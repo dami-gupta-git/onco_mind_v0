@@ -36,24 +36,14 @@ class Result(BaseModel):
         return self.evidence.identifiers
 
     @property
-    def clinical(self):
-        """Shortcut to evidence.clinical."""
-        return self.evidence.clinical
-
-    @property
-    def kb(self):
-        """Shortcut to evidence.kb."""
-        return self.evidence.kb
+    def context(self):
+        """Shortcut to evidence.context."""
+        return self.evidence.context
 
     @property
     def functional(self):
         """Shortcut to evidence.functional."""
         return self.evidence.functional
-
-    @property
-    def literature(self):
-        """Shortcut to evidence.literature."""
-        return self.evidence.literature
 
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""

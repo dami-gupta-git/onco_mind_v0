@@ -7,7 +7,7 @@ This module provides:
 Example (evidence only):
     >>> from oncomind.insight_builder import build_evidence
     >>> evidence = await build_evidence("BRAF V600E", tumor_type="Melanoma")
-    >>> print(evidence.clinical.get_approved_drugs())
+    >>> print(evidence.get_approved_drugs())
     ['Dabrafenib', 'Vemurafenib']
 
 Example (with LLM insight):

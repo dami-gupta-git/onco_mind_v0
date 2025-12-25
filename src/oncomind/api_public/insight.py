@@ -115,11 +115,11 @@ async def get_insight(
         >>> result = await get_insight("BRAF V600E", tumor_type="Melanoma")
         >>> print(result.identifiers.gene, result.identifiers.variant)
         BRAF V600E
-        >>> print(result.clinical.get_approved_drugs())
+        >>> print(result.evidence.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib', 'Encorafenib']
 
         >>> result = await get_insight("EGFR L858R in lung cancer")
-        >>> print(result.clinical.tumor_type)
+        >>> print(result.context.tumor_type)
         lung cancer
     """
     config = config or InsightConfig()
@@ -378,10 +378,10 @@ async def _apply_llm_enhancement(
     )
 
     # Score paper relevance and extract knowledge
-    if evidence.literature.pubmed_articles:
+    if evidence.pubmed_articles:
         # Score each paper
         scored_articles = []
-        for article in evidence.literature.pubmed_articles:
+        for article in evidence.pubmed_articles:
             try:
                 relevance = await llm_service.score_paper_relevance(
                     title=article.title,
@@ -389,7 +389,7 @@ async def _apply_llm_enhancement(
                     tldr=article.tldr,
                     gene=evidence.identifiers.gene,
                     variant=evidence.identifiers.variant,
-                    tumor_type=evidence.clinical.tumor_type,
+                    tumor_type=evidence.context.tumor_type,
                 )
 
                 if relevance["is_relevant"]:
@@ -403,7 +403,7 @@ async def _apply_llm_enhancement(
                 print(f"  Warning: Failed to score paper {article.pmid}: {str(e)}")
                 scored_articles.append(article)
 
-        evidence.literature.pubmed_articles = scored_articles
+        evidence.pubmed_articles = scored_articles
 
         # Extract structured knowledge from relevant papers
         if scored_articles:
@@ -422,7 +422,7 @@ async def _apply_llm_enhancement(
                 knowledge_data = await llm_service.extract_variant_knowledge(
                     gene=evidence.identifiers.gene,
                     variant=evidence.identifiers.variant,
-                    tumor_type=evidence.clinical.tumor_type,
+                    tumor_type=evidence.context.tumor_type,
                     paper_contents=paper_contents,
                 )
 
@@ -439,7 +439,7 @@ async def _apply_llm_enhancement(
                     else:
                         resistant_to.append(DrugResistance(drug=str(r), is_predictive=True))
 
-                evidence.literature.literature_knowledge = LiteratureKnowledge(
+                evidence.literature_knowledge = LiteratureKnowledge(
                     mutation_type=knowledge_data.get("mutation_type", "unknown"),
                     is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
                     resistant_to=resistant_to,
@@ -462,9 +462,9 @@ async def _apply_llm_enhancement(
         llm_insight = await llm_service.get_llm_insight(
             gene=evidence.identifiers.gene,
             variant=evidence.identifiers.variant,
-            tumor_type=evidence.clinical.tumor_type,
+            tumor_type=evidence.context.tumor_type,
             evidence_summary=evidence_summary,
-            has_clinical_trials=bool(evidence.clinical.clinical_trials),
+            has_clinical_trials=bool(evidence.clinical_trials),
         )
         return evidence, llm_insight
     except Exception as e:

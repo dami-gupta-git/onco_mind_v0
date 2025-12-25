@@ -41,17 +41,15 @@ from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholar
 from oncomind.models.evidence import (
     Evidence,
     VariantIdentifiers,
-    KnowledgebaseEvidence,
     FunctionalScores,
-    ClinicalContext,
-    LiteratureEvidence,
+    VariantContext,
+    CGIBiomarkerEvidence,
+    CIViCAssertionEvidence,
+    ClinicalTrialEvidence,
+    FDAApproval,
+    PubMedEvidence,
+    VICCEvidence,
 )
-from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
-from oncomind.models.evidence.civic import CIViCAssertionEvidence
-from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.evidence.fda import FDAApproval
-from oncomind.models.evidence.pubmed import PubMedEvidence
-from oncomind.models.evidence.vicc import VICCEvidence
 
 from oncomind.normalization import ParsedVariant
 from oncomind.utils import normalize_variant
@@ -381,9 +379,15 @@ class EvidenceAggregator:
         fda_approvals: list[FDAApproval] = self._handle_result(
             fda_result, "FDA", sources_with_data, sources_failed
         )
-        cgi_biomarkers: list[CGIBiomarkerEvidence] = self._handle_result(
+        all_cgi_biomarkers: list[CGIBiomarkerEvidence] = self._handle_result(
             cgi_result, "CGI", sources_with_data, sources_failed
         )
+
+        # Split CGI biomarkers: FDA-approved go to kb, preclinical go to research
+        cgi_biomarkers = [b for b in all_cgi_biomarkers if b.fda_approved]
+        preclinical_biomarkers = [b for b in all_cgi_biomarkers if not b.fda_approved and b.evidence_level in ("Pre-clinical", "Cell line")]
+        early_phase_biomarkers = [b for b in all_cgi_biomarkers if not b.fda_approved and b.evidence_level not in ("Pre-clinical", "Cell line", None)]
+
         vicc_evidence: list[VICCEvidence] = self._handle_result(
             vicc_result, "VICC", sources_with_data, sources_failed
         )
@@ -467,37 +471,35 @@ class EvidenceAggregator:
             if pathway_info:
                 pathway = pathway_info.get("pathway")
 
-        # Build the Evidence
-        panel = Evidence(
+        # Build the Evidence with flat list structure
+        evidence = Evidence(
             identifiers=VariantIdentifiers(**identifiers_data),
-            kb=KnowledgebaseEvidence(
-                civic=civic_entries,
-                civic_assertions=civic_assertions,
-                clinvar=clinvar_entries,
-                cosmic=cosmic_entries,
-                cgi_biomarkers=cgi_biomarkers,
-                vicc=vicc_evidence,
-            ),
             functional=functional_scores,
-            clinical=ClinicalContext(
+            context=VariantContext(
                 tumor_type=tumor,
                 tumor_type_resolved=resolved_tumor,
-                fda_approvals=fda_approvals,
-                clinical_trials=clinical_trials,
                 gene_role=gene_role,
                 gene_class=gene_class,
                 mutation_class=mutation_class,
                 pathway=pathway,
-                clinvar_clinical_significance=clinvar_significance,
             ),
-            literature=LiteratureEvidence(
-                pubmed_articles=pubmed_articles,
-                literature_knowledge=None,  # Set by LLM layer later
-                key_pmids=[a.pmid for a in pubmed_articles[:5] if a.pmid],
-            ),
+            # Evidence lists (flat structure - frontend decides how to display)
+            fda_approvals=fda_approvals,
+            civic_assertions=civic_assertions,
+            civic_evidence=civic_entries,
+            vicc_evidence=vicc_evidence,
+            cgi_biomarkers=cgi_biomarkers,
+            clinvar_entries=clinvar_entries,
+            clinvar_significance=clinvar_significance,
+            cosmic_entries=cosmic_entries,
+            clinical_trials=clinical_trials,
+            pubmed_articles=pubmed_articles,
+            literature_knowledge=None,  # Set by LLM layer later
+            preclinical_biomarkers=preclinical_biomarkers,
+            early_phase_biomarkers=early_phase_biomarkers,
         )
 
-        return panel
+        return evidence
 
     async def build_evidences(
         self,
@@ -552,7 +554,7 @@ async def build_evidence(
         >>> evidence = await build_evidence("BRAF V600E", tumor_type="Melanoma")
         >>> print(evidence.identifiers.gene)
         BRAF
-        >>> print(evidence.clinical.get_approved_drugs())
+        >>> print(evidence.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib']
     """
     async with EvidenceAggregator(config) as builder:
