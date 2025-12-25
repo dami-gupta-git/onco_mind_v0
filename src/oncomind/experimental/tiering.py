@@ -23,7 +23,7 @@ References:
 from dataclasses import dataclass
 from typing import Any
 
-from oncomind.models.insight import Insight
+from oncomind.models.insight import Evidence
 
 
 @dataclass
@@ -62,7 +62,7 @@ class TierResult:
 
 
 def compute_experimental_tier(
-    panel: Insight,
+    panel: Evidence,
     tumor_type: str | None = None,
 ) -> TierResult:
     """Compute an experimental AMP/ASCO/CAP tier for a variant.
@@ -78,7 +78,7 @@ def compute_experimental_tier(
     - ClinVar pathogenicity
 
     Args:
-        panel: Insight with aggregated evidence
+        panel: Evidence with aggregated evidence
         tumor_type: Optional tumor type for context-specific tiering
 
     Returns:

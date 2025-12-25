@@ -1,31 +1,45 @@
 """Insight building module.
 
-This module provides the InsightBuilder class that orchestrates
-API calls to multiple data sources and aggregates results into
-an Insight object.
+This module provides:
+- EvidenceAggregator: Aggregates evidence from multiple data sources → Evidence
+- Conductor: Orchestrates evidence aggregation + LLM insight generation → Result
 
-Example:
-    >>> from oncomind.insight_builder import build_insight
-    >>> insight = await build_insight("BRAF V600E", tumor_type="Melanoma")
-    >>> print(insight.clinical.get_approved_drugs())
+Example (evidence only):
+    >>> from oncomind.insight_builder import build_evidence
+    >>> evidence = await build_evidence("BRAF V600E", tumor_type="Melanoma")
+    >>> print(evidence.clinical.get_approved_drugs())
     ['Dabrafenib', 'Vemurafenib']
 
-For batch processing:
-    >>> from oncomind.insight_builder import build_insights
-    >>> insights = await build_insights(["BRAF V600E", "EGFR L858R"])
+Example (with LLM insight):
+    >>> from oncomind.insight_builder import conduct, ConductorConfig
+    >>> config = ConductorConfig(enable_llm=True)
+    >>> result = await conduct("BRAF V600E", tumor_type="Melanoma", config=config)
+    >>> print(result.llm.llm_summary)
 """
 
-from oncomind.insight_builder.builder import (
-    InsightBuilder,
-    InsightBuilderConfig,
-    build_insight,
-    build_insights,
+from oncomind.insight_builder.aggregator import (
+    EvidenceAggregator,
+    EvidenceAggregatorConfig,
+    build_evidence,
+    build_evidences,
+)
+from oncomind.insight_builder.conductor import (
+    Conductor,
+    ConductorConfig,
+    conduct,
+    conduct_batch,
 )
 
 
 __all__ = [
-    "InsightBuilder",
-    "InsightBuilderConfig",
-    "build_insight",
-    "build_insights",
+    # Aggregator (evidence only)
+    "EvidenceAggregator",
+    "EvidenceAggregatorConfig",
+    "build_evidence",
+    "build_evidences",
+    # Conductor (evidence + LLM)
+    "Conductor",
+    "ConductorConfig",
+    "conduct",
+    "conduct_batch",
 ]

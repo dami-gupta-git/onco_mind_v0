@@ -11,7 +11,6 @@ Key Design:
 - Structured parsing to typed Evidence models
 - Context manager for session cleanup
 """
-import json
 import re
 from typing import Any
 
@@ -23,7 +22,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from oncomind.api.myvariant_models import MyVariantHit, MyVariantResponse
+from oncomind.models.myvariant import MyVariantHit, MyVariantResponse
 
 from oncomind.models.insight.civic import CIViCEvidence
 from oncomind.models.insight.clinvar import ClinVarEvidence

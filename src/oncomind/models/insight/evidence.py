@@ -1,9 +1,9 @@
-"""Insight - Top-level per-variant evidence aggregation model.
+"""Evidence - Top-level per-variant evidence aggregation model.
 
 This is the primary output of the annotation pipeline, providing a strongly-typed
-container for all evidence gathered about a variant, plus optional LLM narrative.
+container for all structured evidence gathered about a variant from databases and APIs.
 
-Renamed from EvidencePanel to Insight.
+For LLM narrative synthesis, see LLMInsight.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from oncomind.models.insight.vicc import VICCEvidence
 from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.insight.pubmed import PubMedEvidence
 from oncomind.models.insight.literature_knowledge import LiteratureKnowledge
-from oncomind.models.llm_insight import LLMInsight
 
 
 class VariantIdentifiers(BaseModel):
@@ -220,12 +219,14 @@ class LiteratureEvidence(BaseModel):
         return []
 
 
-class Insight(BaseModel):
+class Evidence(BaseModel):
     """Top-level evidence aggregation for a single variant.
 
     This is the primary output of the OncoMind annotation pipeline.
-    It provides strongly-typed access to all evidence gathered about a variant,
-    plus optional LLM-generated narrative.
+    It provides strongly-typed access to all structured evidence gathered
+    about a variant from databases and APIs.
+
+    For LLM narrative synthesis, see LLMInsight.
 
     Structure:
     - identifiers: Core variant info and database IDs
@@ -233,16 +234,13 @@ class Insight(BaseModel):
     - functional: Computational predictions (AlphaMissense, CADD, etc.)
     - clinical: Clinical context (FDA, trials, gene role)
     - literature: Publications and extracted knowledge
-    - llm: Optional LLM-generated narrative insight
 
     Example:
-        >>> insight = get_insight("BRAF V600E", tumor_type="Melanoma")
-        >>> print(insight.identifiers.gene, insight.identifiers.variant)
+        >>> evidence = build_evidence("BRAF V600E", tumor_type="Melanoma")
+        >>> print(evidence.identifiers.gene, evidence.identifiers.variant)
         BRAF V600E
-        >>> print(insight.clinical.get_approved_drugs())
+        >>> print(evidence.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib', 'Encorafenib']
-        >>> if insight.llm:
-        ...     print(insight.llm.llm_summary)
     """
 
     identifiers: VariantIdentifiers = Field(..., description="Variant identifiers and notation")
@@ -257,9 +255,6 @@ class Insight(BaseModel):
     )
     literature: LiteratureEvidence = Field(
         default_factory=LiteratureEvidence, description="Literature evidence"
-    )
-    llm: LLMInsight | None = Field(
-        default=None, description="LLM-generated narrative insight (populated when LLM mode is enabled)"
     )
 
     def has_evidence(self) -> bool:
@@ -457,3 +452,5 @@ class Insight(BaseModel):
                 lines.append("")
 
         return "\n".join(lines) if len(lines) > 1 else ""
+
+

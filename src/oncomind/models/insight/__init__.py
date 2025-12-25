@@ -3,8 +3,8 @@ from oncomind.models.insight.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.insight.clinvar import ClinVarEvidence
 from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.insight.cosmic import COSMICEvidence
-from oncomind.models.insight.insight import (
-    Insight,
+from oncomind.models.insight.evidence import (
+    Evidence,
     VariantIdentifiers,
     KnowledgebaseEvidence,
     FunctionalScores,
@@ -18,8 +18,8 @@ from oncomind.models.insight.vicc import VICCEvidence
 
 __all__ = [
     # Core model
-    "Insight",
-    # Insight components
+    "Evidence",
+    # Evidence components
     "VariantIdentifiers",
     "KnowledgebaseEvidence",
     "FunctionalScores",

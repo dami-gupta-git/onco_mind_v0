@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from oncomind import get_insight, get_insights, InsightConfig, Insight
+from oncomind import get_insight, get_insights, InsightConfig, Result
 
 
 class TestGetInsightFastMode:
@@ -25,7 +25,7 @@ class TestGetInsightFastMode:
 
         panel = await get_insight("BRAF V600E", config=config)
 
-        assert isinstance(panel, Insight)
+        assert isinstance(panel, Result)
         assert panel.identifiers.gene == "BRAF"
         assert panel.identifiers.variant == "V600E"
         # Literature should be empty in fast mode
@@ -63,7 +63,7 @@ class TestGetInsightFastMode:
         panel = await get_insight("EGFR L858R", config=config)
         elapsed = time.time() - start
 
-        assert isinstance(panel, Insight)
+        assert isinstance(panel, Result)
         # Fast mode should complete in under 30 seconds
         assert elapsed < 30, f"Fast mode took {elapsed:.1f}s, expected < 30s"
 
@@ -82,7 +82,7 @@ class TestGetInsightFullMode:
 
         panel = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
 
-        assert isinstance(panel, Insight)
+        assert isinstance(panel, Result)
         assert panel.identifiers.gene == "BRAF"
         # Full mode should attempt literature search
         # (may or may not find articles depending on API availability)
