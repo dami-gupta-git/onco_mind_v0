@@ -1,0 +1,17 @@
+[
+  {
+    "gene": "BRAF",
+    "variant": "V600E",
+    "tumor_type": "Melanoma"
+  },
+  {
+    "gene": "EGFR",
+    "variant": "L858R",
+    "tumor_type": "NSCLC"
+  },
+  {
+    "gene": "TP53",
+    "variant": "R248W",
+    "tumor_type": "Colorectal Cancer"
+  }
+]

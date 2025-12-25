@@ -70,6 +70,7 @@ async def get_variant_insight(
                 variant=variant,
                 tumor_type=tumor_type,
                 evidence=evidence,
+                evidence_strength=panel.meta.evidence_strength,
             )
 
         # Build response

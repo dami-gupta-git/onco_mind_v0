@@ -273,6 +273,52 @@ class EvidenceBuilder:
             # After tenacity retries exhausted, return empty
             return [], None
 
+    def _compute_evidence_strength(
+        self,
+        fda_approvals: list[FDAApproval],
+        civic_assertions: list[CIViCAssertionEvidence],
+        cgi_biomarkers: list[CGIBiomarkerEvidence],
+        clinvar_significance: str | None,
+        tumor_type: str | None,
+    ) -> str:
+        """Compute evidence strength from aggregated evidence.
+
+        Returns "Strong", "Moderate", or "Weak" based on:
+        - FDA approvals (with tumor type matching)
+        - CIViC assertion AMP levels
+        - CGI biomarker FDA approval status
+        - ClinVar clinical significance
+        """
+        # Check for FDA approval (with tumor type matching if specified)
+        if fda_approvals:
+            for approval in fda_approvals:
+                if tumor_type:
+                    parsed = approval.parse_indication_for_tumor(tumor_type)
+                    if parsed.get('tumor_match'):
+                        return "Strong"
+                else:
+                    return "Strong"
+
+        # Check CIViC assertion AMP levels (Tier I = Strong, Tier II = Moderate)
+        for assertion in civic_assertions:
+            amp_tier = assertion.amp_tier
+            if amp_tier == "I":
+                return "Strong"
+            elif amp_tier == "II":
+                return "Moderate"
+
+        # Check CGI biomarkers for FDA approval
+        if any(b.fda_approved for b in cgi_biomarkers):
+            return "Strong"
+
+        # Check ClinVar pathogenicity
+        if clinvar_significance:
+            sig = clinvar_significance.lower()
+            if 'pathogenic' in sig and 'likely' not in sig:
+                return "Moderate"
+
+        return "Weak"
+
     async def build_evidence_panel(
         self,
         variant: ParsedVariant | str,
@@ -630,6 +676,15 @@ class EvidenceBuilder:
             if pathway_info:
                 pathway = pathway_info.get("pathway")
 
+        # Compute evidence strength
+        evidence_strength = self._compute_evidence_strength(
+            fda_approvals=fda_approvals,
+            civic_assertions=civic_assertions,
+            cgi_biomarkers=cgi_biomarkers,
+            clinvar_significance=clinvar_significance,
+            tumor_type=tumor,
+        )
+
         # Build the EvidencePanel
         panel = EvidencePanel(
             identifiers=VariantIdentifiers(**identifiers_data),
@@ -663,6 +718,7 @@ class EvidenceBuilder:
                 sources_with_data=sources_with_data,
                 sources_failed=sources_failed,
                 processing_notes=processing_notes,
+                evidence_strength=evidence_strength,
             ),
         )
 

@@ -29,6 +29,7 @@ class LLMService:
         variant: str,
         tumor_type: str | None,
         evidence: EvidenceForLLM,
+        evidence_strength: str | None = None,
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -37,6 +38,7 @@ class LLMService:
             variant: Variant notation (e.g., V600E)
             tumor_type: Tumor type context
             evidence: Aggregated evidence from databases
+            evidence_strength: Pre-computed evidence strength from EvidenceBuilder
 
         Returns:
             LLMInsight with annotations and LLM-generated summary
@@ -118,9 +120,6 @@ class LLMService:
                     clinical_context=therapy_data.get("clinical_context"),
                 ))
 
-            # Determine evidence strength from evidence
-            evidence_strength = self._compute_evidence_strength(evidence, tumor_type)
-
             # Build insight with LLM narrative
             insight = LLMInsight(
                 gene=gene,
@@ -152,7 +151,7 @@ class LLMService:
                 tumor_type=tumor_type,
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
                 rationale=f"LLM narrative generation failed: {str(e)}",
-                evidence_strength=self._compute_evidence_strength(evidence, tumor_type),
+                evidence_strength=evidence_strength,
                 clinical_trials_available=bool(evidence.clinical_trials),
                 recommended_therapies=[],
                 references=[],
@@ -165,45 +164,6 @@ class LLMService:
                     'transcript_id', 'transcript_consequence'
                 })
             )
-
-    def _compute_evidence_strength(self, evidence: EvidenceForLLM, tumor_type: str | None) -> str:
-        """Compute evidence strength from aggregated evidence.
-
-        Returns "Strong", "Moderate", or "Weak" based on:
-        - FDA approvals
-        - CIViC evidence levels
-        - ClinVar clinical significance
-        """
-        # Check for FDA approval
-        if evidence.fda_approvals:
-            for approval in evidence.fda_approvals:
-                if tumor_type:
-                    parsed = approval.parse_indication_for_tumor(tumor_type)
-                    if parsed.get('tumor_match'):
-                        return "Strong"
-                else:
-                    return "Strong"
-
-        # Check CIViC evidence levels
-        has_level_a = any(ev.evidence_level == 'A' for ev in evidence.civic)
-        has_level_b = any(ev.evidence_level == 'B' for ev in evidence.civic)
-
-        if has_level_a:
-            return "Strong"
-        if has_level_b:
-            return "Moderate"
-
-        # Check ClinVar pathogenicity
-        if evidence.clinvar_clinical_significance:
-            sig = evidence.clinvar_clinical_significance.lower()
-            if 'pathogenic' in sig and 'likely' not in sig:
-                return "Moderate"
-
-        # Check CGI biomarkers
-        if any(b.fda_approved for b in evidence.cgi_biomarkers):
-            return "Strong"
-
-        return "Weak"
 
     async def score_paper_relevance(
         self,
