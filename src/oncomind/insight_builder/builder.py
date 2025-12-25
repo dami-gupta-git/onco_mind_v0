@@ -1,15 +1,15 @@
-"""Evidence builder for aggregating variant evidence into EvidencePanel.
+"""Evidence builder for aggregating variant evidence into Insight.
 
 This module provides the core evidence aggregation logic as a reusable,
 LLM-independent component.
 
 ARCHITECTURE:
-    ParsedVariant → build_evidence_panel() → EvidencePanel
+    ParsedVariant → build_insight() → Insight
 
     The builder:
     1. Fetches evidence from all API clients in parallel
     2. Handles API failures gracefully (logs warnings, continues)
-    3. Assembles results into strongly-typed EvidencePanel
+    3. Assembles results into strongly-typed Insight
     4. Does NOT call LLM services (that's a separate layer)
 
 Key Design:
@@ -38,20 +38,19 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRate
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 
-from oncomind.models.evidence.evidence_panel import (
-    EvidencePanel,
+from oncomind.models.insight import (
+    Insight,
     VariantIdentifiers,
     KnowledgebaseEvidence,
     FunctionalScores,
     ClinicalContext,
     LiteratureEvidence,
-    EvidenceMeta,
 )
-from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
-from oncomind.models.evidence.civic import CIViCAssertionEvidence
-from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.evidence.fda import FDAApproval
-from oncomind.models.evidence.pubmed import PubMedEvidence
+from oncomind.models.insight.cgi import CGIBiomarkerEvidence
+from oncomind.models.insight.civic import CIViCAssertionEvidence
+from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
+from oncomind.models.insight.fda import FDAApproval
+from oncomind.models.insight.pubmed import PubMedEvidence
 
 from oncomind.normalization import ParsedVariant
 from oncomind.utils import normalize_variant
@@ -59,8 +58,8 @@ from oncomind.models.gene_context import get_gene_context, GeneRole
 
 
 @dataclass
-class EvidenceBuilderConfig:
-    """Configuration for the evidence builder.
+class InsightBuilderConfig:
+    """Configuration for the insight builder.
 
     Controls which data sources to query and resource limits.
     """
@@ -88,22 +87,22 @@ class EvidenceBuilderConfig:
     )
 
 
-class EvidenceBuilder:
+class InsightBuilder:
     """Builder for aggregating variant evidence from multiple sources.
 
     Use as an async context manager to ensure proper HTTP session lifecycle:
 
-        async with EvidenceBuilder() as builder:
-            panel = await builder.build_evidence_panel(parsed_variant, tumor_type)
+        async with InsightBuilder() as builder:
+            insight = await builder.build_insight(parsed_variant, tumor_type)
 
     Or for batch processing:
 
-        async with EvidenceBuilder() as builder:
-            panels = await builder.build_evidence_panels(variants, tumor_type)
+        async with InsightBuilder() as builder:
+            insights = await builder.build_insights(variants, tumor_type)
     """
 
-    def __init__(self, config: EvidenceBuilderConfig | None = None):
-        self.config = config or EvidenceBuilderConfig()
+    def __init__(self, config: InsightBuilderConfig | None = None):
+        self.config = config or InsightBuilderConfig()
 
         # Initialize API clients
         self.myvariant_client = MyVariantClient()
@@ -273,65 +272,19 @@ class EvidenceBuilder:
             # After tenacity retries exhausted, return empty
             return [], None
 
-    def _compute_evidence_strength(
-        self,
-        fda_approvals: list[FDAApproval],
-        civic_assertions: list[CIViCAssertionEvidence],
-        cgi_biomarkers: list[CGIBiomarkerEvidence],
-        clinvar_significance: str | None,
-        tumor_type: str | None,
-    ) -> str:
-        """Compute evidence strength from aggregated evidence.
-
-        Returns "Strong", "Moderate", or "Weak" based on:
-        - FDA approvals (with tumor type matching)
-        - CIViC assertion AMP levels
-        - CGI biomarker FDA approval status
-        - ClinVar clinical significance
-        """
-        # Check for FDA approval (with tumor type matching if specified)
-        if fda_approvals:
-            for approval in fda_approvals:
-                if tumor_type:
-                    parsed = approval.parse_indication_for_tumor(tumor_type)
-                    if parsed.get('tumor_match'):
-                        return "Strong"
-                else:
-                    return "Strong"
-
-        # Check CIViC assertion AMP levels (Tier I = Strong, Tier II = Moderate)
-        for assertion in civic_assertions:
-            amp_tier = assertion.amp_tier
-            if amp_tier == "I":
-                return "Strong"
-            elif amp_tier == "II":
-                return "Moderate"
-
-        # Check CGI biomarkers for FDA approval
-        if any(b.fda_approved for b in cgi_biomarkers):
-            return "Strong"
-
-        # Check ClinVar pathogenicity
-        if clinvar_significance:
-            sig = clinvar_significance.lower()
-            if 'pathogenic' in sig and 'likely' not in sig:
-                return "Moderate"
-
-        return "Weak"
-
-    async def build_evidence_panel(
+    async def build_insight(
         self,
         variant: ParsedVariant | str,
         tumor_type: str | None = None,
-    ) -> EvidencePanel:
-        """Build an EvidencePanel for a single variant.
+    ) -> Insight:
+        """Build an Insight for a single variant.
 
         Args:
             variant: ParsedVariant object or variant string (e.g., "BRAF V600E")
             tumor_type: Optional tumor type for context
 
         Returns:
-            EvidencePanel with all aggregated evidence
+            Insight with all aggregated evidence
         """
         # Handle string input
         if isinstance(variant, str):
@@ -479,7 +432,7 @@ class EvidenceBuilder:
             print(f"  Warning: VICC MetaKB API failed: {str(vicc_result)}")
             sources_failed.append("VICC")
         elif vicc_result:
-            from oncomind.models.evidence.vicc import VICCEvidence
+            from oncomind.models.insight.vicc import VICCEvidence
             for assoc in vicc_result:
                 vicc_evidence.append(VICCEvidence(
                     description=assoc.description,
@@ -676,17 +629,8 @@ class EvidenceBuilder:
             if pathway_info:
                 pathway = pathway_info.get("pathway")
 
-        # Compute evidence strength
-        evidence_strength = self._compute_evidence_strength(
-            fda_approvals=fda_approvals,
-            civic_assertions=civic_assertions,
-            cgi_biomarkers=cgi_biomarkers,
-            clinvar_significance=clinvar_significance,
-            tumor_type=tumor,
-        )
-
-        # Build the EvidencePanel
-        panel = EvidencePanel(
+        # Build the Insight
+        panel = Insight(
             identifiers=VariantIdentifiers(**identifiers_data),
             kb=KnowledgebaseEvidence(
                 civic=civic_entries,
@@ -713,33 +657,26 @@ class EvidenceBuilder:
                 literature_knowledge=None,  # Set by LLM layer later
                 key_pmids=[a.pmid for a in pubmed_articles[:5] if a.pmid],
             ),
-            meta=EvidenceMeta(
-                sources_queried=sources_queried,
-                sources_with_data=sources_with_data,
-                sources_failed=sources_failed,
-                processing_notes=processing_notes,
-                evidence_strength=evidence_strength,
-            ),
         )
 
         return panel
 
-    async def build_evidence_panels(
+    async def build_insights(
         self,
         variants: list[ParsedVariant | str],
         tumor_type: str | None = None,
-    ) -> list[EvidencePanel]:
-        """Build EvidencePanels for multiple variants in parallel.
+    ) -> list[Insight]:
+        """Build Insights for multiple variants in parallel.
 
         Args:
             variants: List of ParsedVariant objects or variant strings
             tumor_type: Optional tumor type (applied to all variants)
 
         Returns:
-            List of EvidencePanel objects
+            List of Insight objects
         """
         tasks = [
-            self.build_evidence_panel(v, tumor_type)
+            self.build_insight(v, tumor_type)
             for v in variants
         ]
 
@@ -756,12 +693,12 @@ class EvidenceBuilder:
         return panels
 
 
-async def build_evidence_panel(
+async def build_insight(
     variant: ParsedVariant | str,
     tumor_type: str | None = None,
-    config: EvidenceBuilderConfig | None = None,
-) -> EvidencePanel:
-    """Convenience function to build an EvidencePanel for a single variant.
+    config: InsightBuilderConfig | None = None,
+) -> Insight:
+    """Convenience function to build an Insight for a single variant.
 
     This is the recommended entry point for single-variant annotation.
 
@@ -771,25 +708,25 @@ async def build_evidence_panel(
         config: Optional configuration for the builder
 
     Returns:
-        EvidencePanel with all aggregated evidence
+        Insight with all aggregated evidence
 
     Example:
-        >>> panel = await build_evidence_panel("BRAF V600E", tumor_type="Melanoma")
+        >>> panel = await build_insight("BRAF V600E", tumor_type="Melanoma")
         >>> print(panel.identifiers.gene)
         BRAF
         >>> print(panel.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib']
     """
-    async with EvidenceBuilder(config) as builder:
-        return await builder.build_evidence_panel(variant, tumor_type)
+    async with InsightBuilder(config) as builder:
+        return await builder.build_insight(variant, tumor_type)
 
 
-async def build_evidence_panels(
+async def build_insights(
     variants: list[ParsedVariant | str],
     tumor_type: str | None = None,
-    config: EvidenceBuilderConfig | None = None,
-) -> list[EvidencePanel]:
-    """Convenience function to build EvidencePanels for multiple variants.
+    config: InsightBuilderConfig | None = None,
+) -> list[Insight]:
+    """Convenience function to build Insights for multiple variants.
 
     Args:
         variants: List of ParsedVariant objects or variant strings
@@ -797,15 +734,15 @@ async def build_evidence_panels(
         config: Optional configuration for the builder
 
     Returns:
-        List of EvidencePanel objects
+        List of Insight objects
     """
-    async with EvidenceBuilder(config) as builder:
-        return await builder.build_evidence_panels(variants, tumor_type)
+    async with InsightBuilder(config) as builder:
+        return await builder.build_insights(variants, tumor_type)
 
 
 __all__ = [
-    "EvidenceBuilder",
-    "EvidenceBuilderConfig",
-    "build_evidence_panel",
-    "build_evidence_panels",
+    "InsightBuilder",
+    "InsightBuilderConfig",
+    "build_insight",
+    "build_insights",
 ]

@@ -3,8 +3,8 @@
 import json
 from litellm import acompletion
 from oncomind.llm.prompts import create_annotation_prompt
-from oncomind.models import EvidenceForLLM
-from oncomind.models.insight import LLMInsight, RecommendedTherapy
+from oncomind.models import RecommendedTherapy
+from oncomind.models.llm_insight import LLMInsight
 from oncomind.models.gene_context import get_oncogene_mutation_class
 
 from oncomind.utils.logging_config import get_logger
@@ -28,8 +28,8 @@ class LLMService:
         gene: str,
         variant: str,
         tumor_type: str | None,
-        evidence: EvidenceForLLM,
-        evidence_strength: str | None = None,
+        evidence_summary: str,
+        has_clinical_trials: bool = False,
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -37,14 +37,12 @@ class LLMService:
             gene: Gene symbol (e.g., BRAF)
             variant: Variant notation (e.g., V600E)
             tumor_type: Tumor type context
-            evidence: Aggregated evidence from databases
-            evidence_strength: Pre-computed evidence strength from EvidenceBuilder
+            evidence_summary: Compact text summary of evidence (from Insight.get_evidence_summary_for_llm())
+            has_clinical_trials: Whether clinical trials are available
 
         Returns:
-            LLMInsight with annotations and LLM-generated summary
+            LLMInsight with LLM-generated narrative summary
         """
-        # Get evidence summary for context
-        evidence_summary = evidence.summary_compact(tumor_type=tumor_type)
 
         # Check for oncogene mutation class therapy notes
         therapy_note = None
@@ -121,48 +119,22 @@ class LLMService:
                 ))
 
             # Build insight with LLM narrative
-            insight = LLMInsight(
-                gene=gene,
-                variant=variant,
-                tumor_type=tumor_type,
+            return LLMInsight(
                 llm_summary=data.get("summary", "No summary available"),
                 rationale=data.get("rationale", ""),
-                evidence_strength=evidence_strength,
-                clinical_trials_available=bool(evidence.clinical_trials),
+                clinical_trials_available=has_clinical_trials,
                 recommended_therapies=therapies,
                 references=data.get("references", []),
-                **evidence.model_dump(include={
-                    'cosmic_id', 'ncbi_gene_id', 'dbsnp_id', 'clinvar_id',
-                    'clinvar_clinical_significance', 'clinvar_accession',
-                    'hgvs_genomic', 'hgvs_protein', 'hgvs_transcript',
-                    'snpeff_effect', 'polyphen2_prediction', 'cadd_score', 'gnomad_exome_af',
-                    'alphamissense_score', 'alphamissense_prediction',
-                    'transcript_id', 'transcript_consequence'
-                })
             )
 
-            return insight
-
         except Exception as e:
-            # On LLM failure, return insight with basic evidence summary
+            # On LLM failure, return insight with basic error message
             return LLMInsight(
-                gene=gene,
-                variant=variant,
-                tumor_type=tumor_type,
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
                 rationale=f"LLM narrative generation failed: {str(e)}",
-                evidence_strength=evidence_strength,
-                clinical_trials_available=bool(evidence.clinical_trials),
+                clinical_trials_available=has_clinical_trials,
                 recommended_therapies=[],
                 references=[],
-                **evidence.model_dump(include={
-                    'cosmic_id', 'ncbi_gene_id', 'dbsnp_id', 'clinvar_id',
-                    'clinvar_clinical_significance', 'clinvar_accession',
-                    'hgvs_genomic', 'hgvs_protein', 'hgvs_transcript',
-                    'snpeff_effect', 'polyphen2_prediction', 'cadd_score', 'gnomad_exome_af',
-                    'alphamissense_score', 'alphamissense_prediction',
-                    'transcript_id', 'transcript_consequence'
-                })
             )
 
     async def score_paper_relevance(

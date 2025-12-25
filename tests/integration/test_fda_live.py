@@ -460,7 +460,7 @@ class TestFDALiveAPI:
         tumor type. This means MLH1 V716M in endometrial cancer should be Tier I
         even though the FDA label doesn't specifically mention "endometrial".
         """
-        from oncomind.models.evidence.fda import FDAApproval
+        from oncomind.models.insight.fda import FDAApproval
 
         approvals = await fda_client.fetch_drug_approvals("MLH1", "V716M")
 

@@ -1,21 +1,26 @@
-"""EvidencePanel - Top-level per-variant evidence aggregation model.
+"""Insight - Top-level per-variant evidence aggregation model.
 
 This is the primary output of the annotation pipeline, providing a strongly-typed
-container for all evidence gathered about a variant.
+container for all evidence gathered about a variant, plus optional LLM narrative.
+
+NOTE: EvidencePanel is kept as an alias for backwards compatibility.
 """
+
+from __future__ import annotations
 
 from typing import Any
 from pydantic import BaseModel, Field
 
-from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
-from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.fda import FDAApproval
-from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
-from oncomind.models.evidence.vicc import VICCEvidence
-from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.evidence.pubmed import PubMedEvidence
-from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
+from oncomind.models.insight.civic import CIViCEvidence, CIViCAssertionEvidence
+from oncomind.models.insight.clinvar import ClinVarEvidence
+from oncomind.models.insight.cosmic import COSMICEvidence
+from oncomind.models.insight.fda import FDAApproval
+from oncomind.models.insight.cgi import CGIBiomarkerEvidence
+from oncomind.models.insight.vicc import VICCEvidence
+from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
+from oncomind.models.insight.pubmed import PubMedEvidence
+from oncomind.models.insight.literature_knowledge import LiteratureKnowledge
+from oncomind.models.llm_insight import LLMInsight
 
 
 class VariantIdentifiers(BaseModel):
@@ -215,32 +220,12 @@ class LiteratureEvidence(BaseModel):
         return []
 
 
-class EvidenceMeta(BaseModel):
-    """Metadata about the evidence collection."""
-
-    sources_queried: list[str] = Field(default_factory=list, description="Data sources queried")
-    sources_with_data: list[str] = Field(default_factory=list, description="Sources that returned data")
-    sources_failed: list[str] = Field(default_factory=list, description="Sources that failed")
-
-    evidence_strength: str | None = Field(
-        None, description="Overall evidence strength (Strong/Moderate/Weak)"
-    )
-
-    # Experimental - not part of core API
-    experimental_tier: str | None = Field(
-        None, description="Experimental AMP/ASCO/CAP tier (not authoritative)"
-    )
-
-    processing_notes: list[str] = Field(
-        default_factory=list, description="Notes from processing"
-    )
-
-
-class EvidencePanel(BaseModel):
+class Insight(BaseModel):
     """Top-level evidence aggregation for a single variant.
 
     This is the primary output of the OncoMind annotation pipeline.
-    It provides strongly-typed access to all evidence gathered about a variant.
+    It provides strongly-typed access to all evidence gathered about a variant,
+    plus optional LLM-generated narrative.
 
     Structure:
     - identifiers: Core variant info and database IDs
@@ -248,14 +233,16 @@ class EvidencePanel(BaseModel):
     - functional: Computational predictions (AlphaMissense, CADD, etc.)
     - clinical: Clinical context (FDA, trials, gene role)
     - literature: Publications and extracted knowledge
-    - meta: Processing metadata
+    - llm: Optional LLM-generated narrative insight
 
     Example:
-        >>> panel = get_insight("BRAF V600E", tumor_type="Melanoma")
-        >>> print(panel.identifiers.gene, panel.identifiers.variant)
+        >>> insight = get_insight("BRAF V600E", tumor_type="Melanoma")
+        >>> print(insight.identifiers.gene, insight.identifiers.variant)
         BRAF V600E
-        >>> print(panel.clinical.get_approved_drugs())
+        >>> print(insight.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib', 'Encorafenib']
+        >>> if insight.llm:
+        ...     print(insight.llm.llm_summary)
     """
 
     identifiers: VariantIdentifiers = Field(..., description="Variant identifiers and notation")
@@ -271,8 +258,8 @@ class EvidencePanel(BaseModel):
     literature: LiteratureEvidence = Field(
         default_factory=LiteratureEvidence, description="Literature evidence"
     )
-    meta: EvidenceMeta = Field(
-        default_factory=EvidenceMeta, description="Processing metadata"
+    llm: LLMInsight | None = Field(
+        default=None, description="LLM-generated narrative insight (populated when LLM mode is enabled)"
     )
 
     def has_evidence(self) -> bool:
@@ -324,7 +311,6 @@ class EvidencePanel(BaseModel):
             "fda_approved_drugs": self.clinical.get_approved_drugs(),
             "clinical_trials_count": len(self.clinical.clinical_trials),
             "pubmed_articles_count": len(self.literature.pubmed_articles),
-            "evidence_strength": self.meta.evidence_strength,
             "has_evidence": self.has_evidence(),
         }
 
@@ -361,10 +347,6 @@ class EvidencePanel(BaseModel):
             "civic_evidence_count": len(self.kb.civic),
             "vicc_evidence_count": len(self.kb.vicc),
             "pubmed_articles_count": len(self.literature.pubmed_articles),
-
-            # Meta
-            "evidence_strength": self.meta.evidence_strength,
-            "sources_with_data": ", ".join(self.meta.sources_with_data),
         }
         return flat
 
@@ -393,8 +375,85 @@ class EvidencePanel(BaseModel):
                 "literature": {
                     "pubmed_articles": [],
                 },
-                "meta": {
-                    "evidence_strength": "Strong",
-                },
             }
         }
+
+    def get_evidence_summary_for_llm(self) -> str:
+        """Generate a compact evidence summary for LLM prompt consumption.
+
+        Returns a string with FDA approvals, CGI biomarkers, CIViC assertions,
+        ClinVar significance, and literature - formatted for the LLM to synthesize.
+        """
+        lines = [f"Evidence for {self.identifiers.gene} {self.identifiers.variant}:\n"]
+        tumor_type = self.clinical.tumor_type
+
+        # FDA Approvals
+        if self.clinical.fda_approvals:
+            lines.append(f"FDA Approved Drugs ({len(self.clinical.fda_approvals)}):")
+            for approval in self.clinical.fda_approvals[:5]:
+                drug = approval.brand_name or approval.generic_name or approval.drug_name
+                if tumor_type:
+                    parsed = approval.parse_indication_for_tumor(tumor_type)
+                    if parsed['tumor_match']:
+                        line_info = parsed['line_of_therapy'].upper()
+                        approval_info = parsed['approval_type'].upper()
+                        lines.append(f"  • {drug} [FOR {tumor_type.upper()}]:")
+                        lines.append(f"      Line of therapy: {line_info}")
+                        lines.append(f"      Approval type: {approval_info}")
+                        lines.append(f"      Excerpt: {parsed['indication_excerpt'][:200]}...")
+                    else:
+                        indication = (approval.indication or "")[:300]
+                        lines.append(f"  • {drug} [DIFFERENT TUMOR TYPE]: {indication}...")
+                else:
+                    indication = (approval.indication or "")[:300]
+                    date_str = f" (Approved: {approval.approval_date})" if approval.approval_date else ""
+                    lines.append(f"  • {drug}{date_str}: {indication}...")
+            lines.append("")
+
+        # CGI Biomarkers
+        if self.kb.cgi_biomarkers:
+            approved = [b for b in self.kb.cgi_biomarkers if b.fda_approved]
+            if approved:
+                resistance = [b for b in approved if b.association and 'RESIST' in b.association.upper()]
+                sensitivity = [b for b in approved if b.association and 'RESIST' not in b.association.upper()]
+
+                if resistance:
+                    lines.append(f"CGI FDA-APPROVED RESISTANCE MARKERS ({len(resistance)}):")
+                    for b in resistance[:5]:
+                        lines.append(f"  • {b.drug} [{b.association.upper()}] in {b.tumor_type or 'solid tumors'} - Evidence: {b.evidence_level}")
+                    lines.append("")
+
+                if sensitivity:
+                    lines.append(f"CGI FDA-Approved Sensitivity Biomarkers ({len(sensitivity)}):")
+                    for b in sensitivity[:5]:
+                        lines.append(f"  • {b.drug} [{b.association}] in {b.tumor_type or 'solid tumors'} - Evidence: {b.evidence_level}")
+                    lines.append("")
+
+        # CIViC Assertions
+        if self.kb.civic_assertions:
+            predictive_tier_i = [a for a in self.kb.civic_assertions
+                                  if a.amp_tier == "Tier I" and a.assertion_type == "PREDICTIVE"]
+            if predictive_tier_i:
+                lines.append(f"CIViC PREDICTIVE TIER I ASSERTIONS ({len(predictive_tier_i)}):")
+                for a in predictive_tier_i[:5]:
+                    therapies = ", ".join(a.therapies) if a.therapies else "N/A"
+                    lines.append(f"  • {a.molecular_profile}: {therapies} [{a.significance}]")
+                    lines.append(f"      AMP Level: {a.amp_level}, Disease: {a.disease}")
+                lines.append("")
+
+        # ClinVar
+        if self.clinical.clinvar_clinical_significance:
+            lines.append(f"ClinVar: {self.clinical.clinvar_clinical_significance}")
+            lines.append("")
+
+        # PubMed Literature
+        if self.literature.pubmed_articles:
+            resistance_articles = [a for a in self.literature.pubmed_articles if a.is_resistance_evidence()]
+            if resistance_articles:
+                lines.append(f"PUBMED RESISTANCE LITERATURE ({len(resistance_articles)} articles):")
+                for article in resistance_articles[:3]:
+                    drugs_str = f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]" if article.drugs_mentioned else ""
+                    lines.append(f"  • PMID {article.pmid}: {article.title[:100]}...{drugs_str}")
+                lines.append("")
+
+        return "\n".join(lines) if len(lines) > 1 else ""

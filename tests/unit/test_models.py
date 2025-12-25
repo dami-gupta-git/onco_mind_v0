@@ -3,8 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from oncomind.models.insight import LLMInsight, RecommendedTherapy
-from oncomind.models.evidence import CIViCEvidence, EvidenceForLLM, VICCEvidence
+from oncomind.models.llm_insight import LLMInsight
+from oncomind.models import RecommendedTherapy
+from oncomind.models.insight import CIViCEvidence, VICCEvidence
+from oncomind.models.insight.myvariant_evidence import MyVariantEvidence
 from oncomind.models.variant import VariantInput
 
 
@@ -69,8 +71,8 @@ class TestVariantInput:
         assert variant.gene == "EGFR"
 
 
-class TestEvidence:
-    """Tests for Evidence models."""
+class TestCIViCEvidence:
+    """Tests for CIViC Evidence model."""
 
     def test_civic_evidence_creation(self):
         """Test creating CIViC evidence."""
@@ -85,9 +87,13 @@ class TestEvidence:
         assert civic.evidence_type == "Predictive"
         assert "Vemurafenib" in civic.drugs
 
-    def test_evidence_has_evidence(self):
+
+class TestMyVariantEvidence:
+    """Tests for MyVariantEvidence model."""
+
+    def test_myvariant_evidence_has_evidence(self):
         """Test has_evidence method."""
-        evidence = EvidenceForLLM(
+        evidence = MyVariantEvidence(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -97,9 +103,9 @@ class TestEvidence:
         evidence.civic = [CIViCEvidence(evidence_type="Predictive")]
         assert evidence.has_evidence()
 
-    def test_evidence_with_identifiers(self):
+    def test_myvariant_evidence_with_identifiers(self):
         """Test creating evidence with database identifiers."""
-        evidence = EvidenceForLLM(
+        evidence = MyVariantEvidence(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -126,427 +132,34 @@ class TestLLMInsight:
     def test_insight_creation(self):
         """Test creating an insight."""
         insight = LLMInsight(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
             llm_summary="Test summary",
             rationale="Test rationale",
-            evidence_strength="Strong",
-            cosmic_id="COSM476",
-            ncbi_gene_id="673",
         )
-        assert insight.evidence_strength == "Strong"
-        assert insight.cosmic_id == "COSM476"
-        assert insight.ncbi_gene_id == "673"
+        assert insight.llm_summary == "Test summary"
+        assert insight.rationale == "Test rationale"
 
-    def test_insight_without_tumor(self):
-        """Test creating an insight without tumor type."""
+    def test_insight_with_therapies(self):
+        """Test creating an insight with recommended therapies."""
+        therapy = RecommendedTherapy(
+            drug_name="Vemurafenib",
+            evidence_level="FDA-approved",
+            approval_status="Approved",
+            clinical_context="First-line therapy",
+        )
         insight = LLMInsight(
-            gene="KRAS",
-            variant="G12C",
-            tumor_type=None,
-            llm_summary="General insight without tumor context",
+            llm_summary="Test summary",
             rationale="Test rationale",
-            evidence_strength="Weak",
+            recommended_therapies=[therapy],
         )
-        assert insight.gene == "KRAS"
-        assert insight.tumor_type is None
-        assert insight.evidence_strength == "Weak"
+        assert len(insight.recommended_therapies) == 1
+        assert insight.recommended_therapies[0].drug_name == "Vemurafenib"
 
-
-class TestEvidenceStats:
-    """Tests for evidence statistics and conflict detection."""
-
-    def test_compute_stats_sensitivity_only(self):
-        """Test stats when all evidence is sensitivity."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Osimertinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-            ]
+    def test_insight_defaults(self):
+        """Test LLMInsight default values."""
+        insight = LLMInsight(
+            llm_summary="Test summary",
+            rationale="Test rationale",
         )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert stats['sensitivity_count'] == 3
-        assert stats['resistance_count'] == 0
-        assert stats['dominant_signal'] == 'sensitivity_only'
-        assert stats['conflicts'] == []
-
-    def test_compute_stats_resistance_only(self):
-        """Test stats when all evidence is resistance."""
-        evidence = EvidenceForLLM(
-            variant_id="KRAS:G12V",
-            gene="KRAS",
-            variant="G12V",
-            vicc=[
-                VICCEvidence(drugs=["Cetuximab"], evidence_level="A", is_resistance=True, disease="Colorectal Cancer"),
-                VICCEvidence(drugs=["Panitumumab"], evidence_level="B", is_resistance=True, disease="Colorectal Cancer"),
-            ]
-        )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert stats['sensitivity_count'] == 0
-        assert stats['resistance_count'] == 2
-        assert stats['dominant_signal'] == 'resistance_only'
-
-    def test_compute_stats_sensitivity_dominant(self):
-        """Test stats when sensitivity strongly predominates (>80%)."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:S768I",
-            gene="EGFR",
-            variant="S768I",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="D", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Afatinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                # 1 resistance entry
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="NSCLC"),
-            ]
-        )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert stats['sensitivity_count'] == 7
-        assert stats['resistance_count'] == 1
-        assert stats['dominant_signal'] == 'sensitivity_dominant'
-        # Should have sensitivity percentage > 80%
-        total = stats['sensitivity_count'] + stats['resistance_count']
-        sens_pct = stats['sensitivity_count'] / total * 100
-        assert sens_pct >= 80
-
-    def test_compute_stats_mixed_signals(self):
-        """Test stats when signals are mixed (neither dominates)."""
-        evidence = EvidenceForLLM(
-            variant_id="BRAF:V600E",
-            gene="BRAF",
-            variant="V600E",
-            vicc=[
-                VICCEvidence(drugs=["Dabrafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Dabrafenib"], evidence_level="B", is_resistance=True, disease="Colorectal Cancer"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="B", is_resistance=True, disease="Colorectal Cancer"),
-            ]
-        )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert stats['sensitivity_count'] == 2
-        assert stats['resistance_count'] == 2
-        assert stats['dominant_signal'] == 'mixed'
-
-    def test_detect_conflicts(self):
-        """Test detection of conflicting evidence for the same drug."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:S768I",
-            gene="EGFR",
-            variant="S768I",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="lung adenocarcinoma"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="lung cancer"),
-            ]
-        )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert len(stats['conflicts']) == 1
-        conflict = stats['conflicts'][0]
-        assert conflict['drug'].lower() == 'erlotinib'
-        assert conflict['sensitivity_count'] == 2
-        assert conflict['resistance_count'] == 1
-
-    def test_format_evidence_summary_header(self):
-        """Test that summary header is formatted correctly."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-            ]
-        )
-
-        header = evidence.format_evidence_summary_header()
-
-        assert "EVIDENCE SUMMARY" in header
-        assert "Sensitivity entries: 2" in header
-        assert "sensitivity_only" in header.lower() or "sensitivity" in header.lower()
-        assert "100%" in header  # 100% sensitivity
-
-    def test_format_evidence_summary_header_with_conflicts(self):
-        """Test that conflicts appear in the summary header."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:S768I",
-            gene="EGFR",
-            variant="S768I",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="NSCLC"),
-            ]
-        )
-
-        header = evidence.format_evidence_summary_header()
-
-        assert "CONFLICTS DETECTED" in header
-        assert "Erlotinib" in header
-
-    def test_evidence_level_breakdown(self):
-        """Test that evidence levels are correctly counted."""
-        evidence = EvidenceForLLM(
-            variant_id="BRAF:V600E",
-            gene="BRAF",
-            variant="V600E",
-            vicc=[
-                VICCEvidence(drugs=["Dabrafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Encorafenib"], evidence_level="B", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Dabrafenib"], evidence_level="C", is_resistance=True, disease="CRC"),
-            ]
-        )
-
-        stats = evidence.compute_evidence_stats()
-
-        assert stats['sensitivity_by_level'] == {'A': 2, 'B': 1}
-        assert stats['resistance_by_level'] == {'C': 1}
-
-
-class TestLowQualityMinorityFilter:
-    """Tests for filtering low-quality minority signals."""
-
-    def test_filter_drops_low_quality_resistance_when_high_quality_sensitivity(self):
-        """When we have Level A/B sensitivity and only C/D resistance (<=2), drop resistance."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                # High-quality sensitivity
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                # Low-quality resistance (noise)
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="lung cancer"),
-            ]
-        )
-
-        filtered_sens, filtered_res = evidence.filter_low_quality_minority_signals()
-
-        assert len(filtered_sens) == 2
-        assert len(filtered_res) == 0  # Low-quality resistance dropped
-
-    def test_filter_drops_low_quality_sensitivity_when_high_quality_resistance(self):
-        """When we have Level A/B resistance and only C/D sensitivity (<=2), drop sensitivity."""
-        evidence = EvidenceForLLM(
-            variant_id="KRAS:G12V",
-            gene="KRAS",
-            variant="G12V",
-            vicc=[
-                # High-quality resistance
-                VICCEvidence(drugs=["Cetuximab"], evidence_level="A", is_resistance=True, disease="CRC"),
-                VICCEvidence(drugs=["Panitumumab"], evidence_level="B", is_resistance=True, disease="CRC"),
-                # Low-quality sensitivity (noise)
-                VICCEvidence(drugs=["Cetuximab"], evidence_level="D", is_sensitivity=True, disease="preclinical"),
-            ]
-        )
-
-        filtered_sens, filtered_res = evidence.filter_low_quality_minority_signals()
-
-        assert len(filtered_sens) == 0  # Low-quality sensitivity dropped
-        assert len(filtered_res) == 2
-
-    def test_filter_keeps_both_when_both_have_high_quality(self):
-        """When both sensitivity and resistance have high-quality evidence, keep both."""
-        evidence = EvidenceForLLM(
-            variant_id="BRAF:V600E",
-            gene="BRAF",
-            variant="V600E",
-            vicc=[
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="B", is_resistance=True, disease="CRC"),
-            ]
-        )
-
-        filtered_sens, filtered_res = evidence.filter_low_quality_minority_signals()
-
-        assert len(filtered_sens) == 1
-        assert len(filtered_res) == 1  # Both kept - both have high-quality
-
-    def test_filter_keeps_both_when_low_quality_but_many_entries(self):
-        """Keep low-quality minority if there are more than 2 entries (might be real signal)."""
-        evidence = EvidenceForLLM(
-            variant_id="TEST:V123A",
-            gene="TEST",
-            variant="V123A",
-            vicc=[
-                VICCEvidence(drugs=["DrugA"], evidence_level="A", is_sensitivity=True, disease="cancer"),
-                # 3 low-quality resistance entries - might be real signal
-                VICCEvidence(drugs=["DrugA"], evidence_level="C", is_resistance=True, disease="cancer"),
-                VICCEvidence(drugs=["DrugA"], evidence_level="D", is_resistance=True, disease="cancer"),
-                VICCEvidence(drugs=["DrugA"], evidence_level="C", is_resistance=True, disease="cancer"),
-            ]
-        )
-
-        filtered_sens, filtered_res = evidence.filter_low_quality_minority_signals()
-
-        assert len(filtered_sens) == 1
-        assert len(filtered_res) == 3  # All kept - too many to be noise
-
-
-class TestDrugAggregation:
-    """Tests for drug-level evidence aggregation."""
-
-    def test_aggregate_single_drug_sensitivity_only(self):
-        """Aggregate multiple entries for a single drug with only sensitivity."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="B", is_sensitivity=True, disease="lung adenocarcinoma"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-            ]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-
-        assert len(aggregated) == 1
-        drug = aggregated[0]
-        assert drug['drug'].lower() == 'erlotinib'
-        assert drug['sensitivity_count'] == 3
-        assert drug['resistance_count'] == 0
-        assert drug['net_signal'] == 'SENSITIVE'
-        assert drug['best_level'] == 'A'
-
-    def test_aggregate_single_drug_resistance_only(self):
-        """Aggregate multiple entries for a single drug with only resistance."""
-        evidence = EvidenceForLLM(
-            variant_id="KRAS:G12V",
-            gene="KRAS",
-            variant="G12V",
-            vicc=[
-                VICCEvidence(drugs=["Cetuximab"], evidence_level="A", is_resistance=True, disease="CRC"),
-                VICCEvidence(drugs=["Cetuximab"], evidence_level="B", is_resistance=True, disease="CRC"),
-            ]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-
-        assert len(aggregated) == 1
-        drug = aggregated[0]
-        assert drug['drug'].lower() == 'cetuximab'
-        assert drug['sensitivity_count'] == 0
-        assert drug['resistance_count'] == 2
-        assert drug['net_signal'] == 'RESISTANT'
-
-    def test_aggregate_drug_mixed_with_clear_winner(self):
-        """Aggregate drug with mixed signals but clear sensitivity winner (3:1)."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:S768I",
-            gene="EGFR",
-            variant="S768I",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="NSCLC"),
-            ]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-
-        assert len(aggregated) == 1
-        drug = aggregated[0]
-        assert drug['sensitivity_count'] == 3
-        assert drug['resistance_count'] == 1
-        assert drug['net_signal'] == 'SENSITIVE'  # 3:1 ratio -> SENSITIVE
-
-    def test_aggregate_drug_truly_mixed(self):
-        """Aggregate drug with truly mixed signals (no clear winner)."""
-        evidence = EvidenceForLLM(
-            variant_id="BRAF:V600E",
-            gene="BRAF",
-            variant="V600E",
-            vicc=[
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="A", is_sensitivity=True, disease="Melanoma"),
-                VICCEvidence(drugs=["Vemurafenib"], evidence_level="B", is_resistance=True, disease="CRC"),
-            ]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-
-        assert len(aggregated) == 1
-        drug = aggregated[0]
-        assert drug['sensitivity_count'] == 2
-        assert drug['resistance_count'] == 1
-        assert drug['net_signal'] == 'MIXED'  # 2:1 ratio -> not 3:1, so MIXED
-
-    def test_aggregate_multiple_drugs(self):
-        """Aggregate evidence for multiple drugs."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Gefitinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Osimertinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-            ]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-
-        assert len(aggregated) == 3
-        # Should be sorted by best level (A > B)
-        drug_names = [d['drug'].lower() for d in aggregated]
-        # A-level drugs first
-        assert aggregated[0]['best_level'] == 'A'
-        assert aggregated[1]['best_level'] == 'A'
-        assert aggregated[2]['best_level'] == 'B'
-
-    def test_format_drug_aggregation_summary(self):
-        """Test formatted drug aggregation summary for LLM."""
-        evidence = EvidenceForLLM(
-            variant_id="EGFR:L858R",
-            gene="EGFR",
-            variant="L858R",
-            vicc=[
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="A", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="B", is_sensitivity=True, disease="NSCLC"),
-                VICCEvidence(drugs=["Erlotinib"], evidence_level="C", is_resistance=True, disease="NSCLC"),
-            ]
-        )
-
-        summary = evidence.format_drug_aggregation_summary()
-
-        assert "DRUG-LEVEL SUMMARY" in summary
-        assert "Erlotinib" in summary
-        assert "2 sens" in summary
-        assert "1 res" in summary
-        assert "SENSITIVE" in summary or "MIXED" in summary  # 2:1 ratio
-
-    def test_aggregate_empty_evidence(self):
-        """Test aggregation with no drug evidence."""
-        evidence = EvidenceForLLM(
-            variant_id="TEST:V123A",
-            gene="TEST",
-            variant="V123A",
-            vicc=[]
-        )
-
-        aggregated = evidence.aggregate_evidence_by_drug()
-        assert len(aggregated) == 0
-
-        summary = evidence.format_drug_aggregation_summary()
-        assert summary == ""  # No summary for empty evidence
+        assert insight.clinical_trials_available is False
+        assert insight.recommended_therapies == []
+        assert insight.references == []

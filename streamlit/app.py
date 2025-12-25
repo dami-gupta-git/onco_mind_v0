@@ -129,13 +129,12 @@ with tab1:
                 header_text += f" in {tumor_display}"
 
             # Build metrics line
-            evidence_strength = result['insight'].get('evidence_strength', 'N/A')
             therapies_count = len(result.get('recommended_therapies', []))
             clinvar_sig = result.get('clinvar', {}).get('clinical_significance', 'N/A') or 'N/A'
             am_score = result.get('annotations', {}).get('alphamissense_score')
             am_display = f"{am_score:.2f}" if am_score else 'N/A'
 
-            metrics_line = f"Evidence: {evidence_strength} | Therapies: {therapies_count} | ClinVar: {clinvar_sig} | AlphaMissense: {am_display}"
+            metrics_line = f"Therapies: {therapies_count} | ClinVar: {clinvar_sig} | AlphaMissense: {am_display}"
 
             st.markdown(
                 f'<div style="background-color: #1e3a5f; padding: 16px 24px; border-radius: 8px; '
@@ -219,10 +218,6 @@ with tab1:
                     st.markdown(f"**Pathogenicity:** {' | '.join(path_parts) if path_parts else 'N/A'}")
 
                 with col2:
-                    # Evidence strength
-                    evidence_strength = result['insight'].get('evidence_strength')
-                    st.markdown(f"**Evidence Strength:** {evidence_strength or 'N/A'}")
-
                     # Gene role
                     gene_role = panel.get('clinical', {}).get('gene_role') if panel else None
                     st.markdown(f"**Gene Role:** {gene_role or 'N/A'}")
@@ -448,7 +443,6 @@ with tab2:
                 st.session_state.batch_results = results
                 results_df = pd.DataFrame([{"Gene": r['variant']['gene'], "Variant": r['variant']['variant'],
                     "Tumor": r['variant'].get('tumor_type', 'N/A'),
-                    "Evidence": r['insight'].get('evidence_strength', 'N/A'),
                     "Therapies": len(r.get('recommended_therapies', []))} for r in results if 'error' not in r])
                 st.session_state.batch_df = results_df
 

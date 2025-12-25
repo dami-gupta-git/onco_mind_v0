@@ -6,20 +6,19 @@ Integrates with the oncomind package for:
 - Evidence gathering from multiple databases
 
 ARCHITECTURE:
-    All paths use EvidenceBuilder → EvidencePanel
-    With optional LLMService → LLMInsight for narrative generation
+    All paths use InsightBuilder → Insight
+    With optional LLMService → Insight.llm for narrative generation
 
 Modes:
-    - Lite mode: EvidenceBuilder only (fast, no LLM)
-    - Default mode: EvidenceBuilder + LLMService narrative
-    - Full mode: EvidenceBuilder + Literature + LLMService narrative
+    - Lite mode: InsightBuilder only (fast, no LLM)
+    - Default mode: InsightBuilder + LLMService narrative
+    - Full mode: InsightBuilder + Literature + LLMService narrative
 """
 
 from typing import Any, Dict, List, Optional, Callable
 
-from oncomind.evidence import EvidenceBuilder, EvidenceBuilderConfig
+from oncomind.insight_builder import InsightBuilder, InsightBuilderConfig
 from oncomind.llm.service import LLMService
-from oncomind.models.evidence import EvidenceForLLM
 
 
 async def get_variant_insight(
@@ -47,21 +46,15 @@ async def get_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
-        # Step 1: Build evidence panel using EvidenceBuilder
-        config = EvidenceBuilderConfig(enable_literature=enable_literature)
-        async with EvidenceBuilder(config) as builder:
-            panel = await builder.build_evidence_panel(f"{gene} {variant}", tumor_type=tumor_type)
+        # Step 1: Build insight using InsightBuilder
+        config = InsightBuilderConfig(enable_literature=enable_literature)
+        async with InsightBuilder(config) as builder:
+            insight = await builder.build_insight(f"{gene} {variant}", tumor_type=tumor_type)
 
         # Step 2: Generate LLM narrative if enabled
-        llm_insight = None
         if enable_llm:
-            # Convert EvidencePanel to EvidenceForLLM for the LLM service
-            evidence = _panel_to_evidence_for_llm(panel)
-
-            # Add literature if available
-            if panel.literature.pubmed_articles:
-                evidence.pubmed_articles = panel.literature.pubmed_articles
-                evidence.literature_knowledge = panel.literature.literature_knowledge
+            # Get evidence summary for LLM
+            evidence_summary = insight.get_evidence_summary_for_llm()
 
             # Generate LLM insight
             llm_service = LLMService(model=model, temperature=temperature)
@@ -69,12 +62,15 @@ async def get_variant_insight(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
-                evidence=evidence,
-                evidence_strength=panel.meta.evidence_strength,
+                evidence_summary=evidence_summary,
+                has_clinical_trials=bool(insight.clinical.clinical_trials),
             )
 
+            # Embed LLM insight in the main insight object
+            insight.llm = llm_insight
+
         # Build response
-        return _build_response(panel, llm_insight)
+        return _build_response(insight)
 
     except Exception as e:
         return {"error": f"Insight generation failed: {str(e)}"}
@@ -136,79 +132,72 @@ async def batch_get_variant_insights(
 # === Private helper functions ===
 
 
-def _panel_to_evidence_for_llm(panel) -> EvidenceForLLM:
-    """Convert an EvidencePanel to EvidenceForLLM for LLM consumption."""
-    return EvidenceForLLM(
-        variant_id=panel.identifiers.variant_id,
-        gene=panel.identifiers.gene,
-        variant=panel.identifiers.variant,
-        cosmic_id=panel.identifiers.cosmic_id,
-        ncbi_gene_id=panel.identifiers.ncbi_gene_id,
-        dbsnp_id=panel.identifiers.dbsnp_id,
-        clinvar_id=panel.identifiers.clinvar_id,
-        hgvs_genomic=panel.identifiers.hgvs_genomic,
-        hgvs_protein=panel.identifiers.hgvs_protein,
-        hgvs_transcript=panel.identifiers.hgvs_transcript,
-        transcript_id=panel.identifiers.transcript_id,
-        transcript_consequence=panel.identifiers.transcript_consequence,
-        civic=panel.kb.civic,
-        civic_assertions=panel.kb.civic_assertions,
-        clinvar=panel.kb.clinvar,
-        cosmic=panel.kb.cosmic,
-        cgi_biomarkers=panel.kb.cgi_biomarkers,
-        vicc=panel.kb.vicc,
-        fda_approvals=panel.clinical.fda_approvals,
-        clinical_trials=panel.clinical.clinical_trials,
-        alphamissense_score=panel.functional.alphamissense_score,
-        alphamissense_prediction=panel.functional.alphamissense_prediction,
-        cadd_score=panel.functional.cadd_score,
-        polyphen2_prediction=panel.functional.polyphen2_prediction,
-        sift_prediction=panel.functional.sift_prediction,
-        gnomad_exome_af=panel.functional.gnomad_exome_af,
-        clinvar_clinical_significance=panel.clinical.clinvar_clinical_significance,
-    )
+def _build_response(insight) -> Dict[str, Any]:
+    """Build the standard response dict from an Insight object."""
+    llm = insight.llm  # May be None if LLM was not enabled
 
-
-def _build_response(panel, llm_insight=None) -> Dict[str, Any]:
-    """Build the standard response dict from panel and optional LLM insight."""
     return {
         "variant": {
-            "gene": panel.identifiers.gene,
-            "variant": panel.identifiers.variant,
-            "tumor_type": panel.clinical.tumor_type,
+            "gene": insight.identifiers.gene,
+            "variant": insight.identifiers.variant,
+            "tumor_type": insight.clinical.tumor_type,
         },
         "insight": {
-            "summary": panel.get_summary(),  # Always 1-line summary
-            "llm_narrative": llm_insight.llm_summary if llm_insight else None,  # LLM insight when available
-            "rationale": llm_insight.rationale if llm_insight else None,
-            "evidence_strength": llm_insight.evidence_strength if llm_insight else panel.meta.evidence_strength,
+            "summary": insight.get_summary(),  # Always 1-line summary
+            "llm_narrative": llm.llm_summary if llm else None,  # LLM insight when available
+            "rationale": llm.rationale if llm else None,
         },
         "identifiers": {
-            "cosmic_id": panel.identifiers.cosmic_id,
-            "ncbi_gene_id": panel.identifiers.ncbi_gene_id,
-            "dbsnp_id": panel.identifiers.dbsnp_id,
-            "clinvar_id": panel.identifiers.clinvar_id,
+            "cosmic_id": insight.identifiers.cosmic_id,
+            "ncbi_gene_id": insight.identifiers.ncbi_gene_id,
+            "dbsnp_id": insight.identifiers.dbsnp_id,
+            "clinvar_id": insight.identifiers.clinvar_id,
         },
         "hgvs": {
-            "genomic": panel.identifiers.hgvs_genomic,
-            "protein": panel.identifiers.hgvs_protein,
-            "transcript": panel.identifiers.hgvs_transcript,
+            "genomic": insight.identifiers.hgvs_genomic,
+            "protein": insight.identifiers.hgvs_protein,
+            "transcript": insight.identifiers.hgvs_transcript,
         },
         "clinvar": {
-            "clinical_significance": panel.clinical.clinvar_clinical_significance,
-            "accession": panel.clinical.clinvar_accession,
+            "clinical_significance": insight.clinical.clinvar_clinical_significance,
+            "accession": insight.clinical.clinvar_accession,
         },
         "annotations": {
-            "snpeff_effect": panel.functional.snpeff_effect,
-            "polyphen2_prediction": panel.functional.polyphen2_prediction,
-            "cadd_score": panel.functional.cadd_score,
-            "gnomad_exome_af": panel.functional.gnomad_exome_af,
-            "alphamissense_score": panel.functional.alphamissense_score,
-            "alphamissense_prediction": panel.functional.alphamissense_prediction,
+            "snpeff_effect": insight.functional.snpeff_effect,
+            "polyphen2_prediction": insight.functional.polyphen2_prediction,
+            "cadd_score": insight.functional.cadd_score,
+            "gnomad_exome_af": insight.functional.gnomad_exome_af,
+            "alphamissense_score": insight.functional.alphamissense_score,
+            "alphamissense_prediction": insight.functional.alphamissense_prediction,
         },
         "transcript": {
-            "id": panel.identifiers.transcript_id,
-            "consequence": panel.identifiers.transcript_consequence,
+            "id": insight.identifiers.transcript_id,
+            "consequence": insight.identifiers.transcript_consequence,
+        },
+        "evidence_panel": {
+            "clinical": {
+                "clinical_trials": [
+                    {
+                        "nct_id": t.nct_id,
+                        "title": t.title,
+                        "phase": t.phase,
+                        "status": t.status,
+                        "drugs": t.interventions,  # interventions contains drug names
+                        "conditions": t.conditions,
+                        "url": t.url,
+                        "variant_specific": t.variant_specific,
+                    }
+                    for t in insight.clinical.clinical_trials
+                ],
+                "fda_approvals": [
+                    {
+                        "drug_name": a.drug_name,
+                        "brand_name": a.brand_name,
+                        "indication": a.indication,
+                    }
+                    for a in insight.clinical.fda_approvals
+                ],
+            },
         },
         "recommended_therapies": (
             [
@@ -218,21 +207,21 @@ def _build_response(panel, llm_insight=None) -> Dict[str, Any]:
                     "approval_status": t.approval_status,
                     "clinical_context": t.clinical_context,
                 }
-                for t in llm_insight.recommended_therapies
+                for t in llm.recommended_therapies
             ]
-            if llm_insight
-            else _extract_therapies(panel)
+            if llm
+            else _extract_therapies(insight)
         ),
-        "evidence_panel": panel.model_dump(mode="json"),
+        "insight_data": insight.model_dump(mode="json"),
     }
 
 
-def _extract_therapies(panel) -> List[Dict[str, Any]]:
-    """Extract therapy recommendations from an EvidencePanel."""
+def _extract_therapies(insight) -> List[Dict[str, Any]]:
+    """Extract therapy recommendations from an Insight object."""
     therapies = []
 
     # From FDA approvals
-    for approval in panel.clinical.fda_approvals:
+    for approval in insight.clinical.fda_approvals:
         drug_name = approval.brand_name or approval.generic_name or approval.drug_name
         if drug_name:
             therapies.append({
@@ -243,7 +232,7 @@ def _extract_therapies(panel) -> List[Dict[str, Any]]:
             })
 
     # From CGI biomarkers
-    for biomarker in panel.kb.cgi_biomarkers:
+    for biomarker in insight.kb.cgi_biomarkers:
         if biomarker.fda_approved and biomarker.drug:
             therapies.append({
                 "drug_name": biomarker.drug,

@@ -25,10 +25,10 @@ from tenacity import (
 
 from oncomind.api.myvariant_models import MyVariantHit, MyVariantResponse
 
-from oncomind.models.evidence.civic import  CIViCEvidence
-from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.evidence import EvidenceForLLM
+from oncomind.models.insight.civic import CIViCEvidence
+from oncomind.models.insight.clinvar import ClinVarEvidence
+from oncomind.models.insight.cosmic import COSMICEvidence
+from oncomind.models.insight.myvariant_evidence import MyVariantEvidence
 
 
 class MyVariantAPIError(Exception):
@@ -307,7 +307,7 @@ class MyVariantClient:
 
     def _extract_from_hit(
         self, hit: MyVariantHit, gene: str, variant: str
-    ) -> EvidenceForLLM:
+    ) -> MyVariantEvidence:
         """Extract Evidence fields from a parsed MyVariantHit using Pydantic models.
 
         This method uses Pydantic's automatic parsing instead of manual nested
@@ -462,7 +462,7 @@ class MyVariantClient:
             else:
                 cosmic_evidence = self._parse_cosmic_evidence(cosmic_data.model_dump())
 
-        return EvidenceForLLM(
+        return MyVariantEvidence(
             variant_id=hit.id,
             gene=gene,
             variant=variant,
@@ -764,7 +764,7 @@ class MyVariantClient:
             # Log error but don't fail - return empty evidence
             return []
 
-    async def fetch_evidence(self, gene: str, variant: str) -> EvidenceForLLM:
+    async def fetch_evidence(self, gene: str, variant: str) -> MyVariantEvidence:
         """Fetch evidence for a variant from multiple sources.
 
         Args:
@@ -866,7 +866,7 @@ class MyVariantClient:
                     vep_alphamissense_pred = vep_annotation.alphamissense_prediction
 
                 # Return evidence with fallback data (CIViC, ClinVar, and VEP predictions)
-                return EvidenceForLLM(
+                return MyVariantEvidence(
                     variant_id=f"{gene}:{variant}",
                     gene=gene,
                     variant=variant,

@@ -1,8 +1,8 @@
 """Command-line interface for OncoMind.
 
 ARCHITECTURE:
-    CLI Commands → EvidenceBuilder → EvidencePanel
-                 → LLMService → VariantInsight (optional)
+    CLI Commands → InsightBuilder → Insight
+                 → LLMService → LLMInsight (optional, embedded in Insight.llm)
 
 Main command:
     mind insight GENE VARIANT [--tumor] [--lite|--full]
@@ -68,17 +68,14 @@ def insight(
 
     from rich.console import Console
     from rich.panel import Panel
-    from oncomind.evidence.builder import EvidenceBuilder, EvidenceBuilderConfig
+    from oncomind.insight_builder import InsightBuilder, InsightBuilderConfig
     from oncomind.llm.service import LLMService
-    from oncomind.models.evidence import EvidenceForLLM
     import textwrap
 
     console = Console(width=80)
 
     async def run_insight() -> None:
-        # Two pieces of data are generated:
-        # 1. EvidencePanel
-        # 2. LLM Insight
+        # Generate Insight with optional LLM narrative embedded
 
         # Determine mode
         if lite:
@@ -88,78 +85,46 @@ def insight(
         else:
             mode_str = "default"
 
-        tumor_suffix = f" [dim]in[/dim] {tumor}" if tumor else ""
-        mode_suffix = f" [dim][{mode_str}][/dim]" if mode_str != "default" else ""
         console.print(f"\n[dim]Generating insight ...[/dim]\n", highlight=False)
+
         # Step 1: Fetch evidence
         enable_literature = full  # Only fetch literature in full mode
-        config = EvidenceBuilderConfig(enable_literature=enable_literature)
-        async with EvidenceBuilder(config) as builder:
-            panel = await builder.build_evidence_panel(f"{gene} {variant}", tumor_type=tumor)
+        config = InsightBuilderConfig(enable_literature=enable_literature)
+        async with InsightBuilder(config) as builder:
+            insight = await builder.build_insight(f"{gene} {variant}", tumor_type=tumor)
 
-        # Step 2: Generate LLM Insight (unless --lite)
-        insight_result = None
+        # Step 2: Generate LLM narrative (unless --lite)
         if not lite:
-            # Convert EvidencePanel to Evidence for LLM
-            evidence = EvidenceForLLM(
-                variant_id=panel.identifiers.variant_id,
-                gene=panel.identifiers.gene,
-                variant=panel.identifiers.variant,
-                cosmic_id=panel.identifiers.cosmic_id,
-                ncbi_gene_id=panel.identifiers.ncbi_gene_id,
-                dbsnp_id=panel.identifiers.dbsnp_id,
-                clinvar_id=panel.identifiers.clinvar_id,
-                hgvs_genomic=panel.identifiers.hgvs_genomic,
-                hgvs_protein=panel.identifiers.hgvs_protein,
-                hgvs_transcript=panel.identifiers.hgvs_transcript,
-                transcript_id=panel.identifiers.transcript_id,
-                transcript_consequence=panel.identifiers.transcript_consequence,
-                civic=panel.kb.civic,
-                civic_assertions=panel.kb.civic_assertions,
-                clinvar=panel.kb.clinvar,
-                cosmic=panel.kb.cosmic,
-                cgi_biomarkers=panel.kb.cgi_biomarkers,
-                vicc=panel.kb.vicc,
-                fda_approvals=panel.clinical.fda_approvals,
-                clinical_trials=panel.clinical.clinical_trials,
-                alphamissense_score=panel.functional.alphamissense_score,
-                alphamissense_prediction=panel.functional.alphamissense_prediction,
-                cadd_score=panel.functional.cadd_score,
-                polyphen2_prediction=panel.functional.polyphen2_prediction,
-                sift_prediction=panel.functional.sift_prediction,
-                gnomad_exome_af=panel.functional.gnomad_exome_af,
-                clinvar_clinical_significance=panel.clinical.clinvar_clinical_significance,
-            )
+            # Get evidence summary for LLM
+            evidence_summary = insight.get_evidence_summary_for_llm()
 
-            # Add literature to evidence if in full mode
-            if full and panel.literature.pubmed_articles:
-                evidence.pubmed_articles = panel.literature.pubmed_articles
-                evidence.literature_knowledge = panel.literature.literature_knowledge
-
-            # Get LLM Insight
+            # Get LLM insight
             llm_service = LLMService(model=model, temperature=0.1)
-            insight_result = await llm_service.get_llm_insight(
-                gene, variant, tumor, evidence,
-                evidence_strength=panel.meta.evidence_strength
+            llm_insight = await llm_service.get_llm_insight(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor,
+                evidence_summary=evidence_summary,
+                has_clinical_trials=bool(insight.clinical.clinical_trials),
             )
+
+            # Embed LLM insight in the main insight object
+            insight.llm = llm_insight
 
         # === RENDER OUTPUT ===
 
-        # Variant header panel with metrics
+        # Variant header with metrics
         variant_title = f"{gene} {variant}"
         if tumor:
             variant_title += f" [dim]in[/dim] {tumor}"
 
-        # Build metrics line (same as UI)
-        evidence_strength = insight_result.evidence_strength if insight_result else panel.meta.evidence_strength or "N/A"
-        therapies_count = len(insight_result.recommended_therapies) if insight_result else len(panel.clinical.fda_approvals)
-        clinvar_sig = panel.clinical.clinvar_clinical_significance or "N/A"
-        am_score = panel.functional.alphamissense_score
+        # Build metrics line
+        therapies_count = len(insight.llm.recommended_therapies) if insight.llm else len(insight.clinical.fda_approvals)
+        clinvar_sig = insight.clinical.clinvar_clinical_significance or "N/A"
+        am_score = insight.functional.alphamissense_score
         am_display = f"{am_score:.2f}" if am_score else "N/A"
 
-        # Color-code evidence strength
-        strength_color = {"Strong": "green", "Moderate": "yellow", "Weak": "red"}.get(evidence_strength, "white")
-        metrics_line = f"[dim]Evidence:[/dim] [{strength_color}]{evidence_strength}[/{strength_color}] [dim]|[/dim] [dim]Therapies:[/dim] {therapies_count} [dim]|[/dim] [dim]ClinVar:[/dim] {clinvar_sig} [dim]|[/dim] [dim]AlphaMissense:[/dim] {am_display}"
+        metrics_line = f"[dim]Therapies:[/dim] {therapies_count} [dim]|[/dim] [dim]ClinVar:[/dim] {clinvar_sig} [dim]|[/dim] [dim]AlphaMissense:[/dim] {am_display}"
 
         from rich.align import Align
         from rich.box import DOUBLE
@@ -177,8 +142,8 @@ def insight(
             padding=(0, 2),
         ))
 
-        # Summary panel (first panel after header - same as UI)
-        summary_text = panel.get_summary()
+        # Summary panel
+        summary_text = insight.get_summary()
         wrapped_summary = textwrap.fill(summary_text, width=74)
         console.print(Panel(
             f"[cyan]{wrapped_summary}[/cyan]",
@@ -187,9 +152,9 @@ def insight(
             padding=(0, 2),
         ))
 
-        # LLM Insight (right after Summary, only when LLM mode is enabled)
-        if insight_result:
-            wrapped_llm = textwrap.fill(insight_result.llm_summary, width=74)
+        # LLM Insight (when LLM mode is enabled)
+        if insight.llm:
+            wrapped_llm = textwrap.fill(insight.llm.llm_summary, width=74)
             console.print(Panel(
                 wrapped_llm,
                 title="[bold]LLM Insight[/bold]",
@@ -202,32 +167,30 @@ def insight(
 
         # IDs row
         ids = []
-        if panel.identifiers.cosmic_id:
-            ids.append(f"COSMIC:{panel.identifiers.cosmic_id}")
-        if panel.identifiers.dbsnp_id:
-            ids.append(f"dbSNP:{panel.identifiers.dbsnp_id}")
-        if panel.identifiers.clinvar_id:
-            ids.append(f"ClinVar:{panel.identifiers.clinvar_id}")
+        if insight.identifiers.cosmic_id:
+            ids.append(f"COSMIC:{insight.identifiers.cosmic_id}")
+        if insight.identifiers.dbsnp_id:
+            ids.append(f"dbSNP:{insight.identifiers.dbsnp_id}")
+        if insight.identifiers.clinvar_id:
+            ids.append(f"ClinVar:{insight.identifiers.clinvar_id}")
         if ids:
             header_lines.append(f"[dim]{' | '.join(ids)}[/dim]")
 
-
-
         # ClinVar significance
-        if panel.clinical.clinvar_clinical_significance:
-            header_lines.append(f"[dim]ClinVar:[/dim]            {panel.clinical.clinvar_clinical_significance}")
+        if insight.clinical.clinvar_clinical_significance:
+            header_lines.append(f"[dim]ClinVar:[/dim]            {insight.clinical.clinvar_clinical_significance}")
 
         # Functional predictions
-        func_summary = panel.functional.get_pathogenicity_summary()
+        func_summary = insight.functional.get_pathogenicity_summary()
         if func_summary != "No functional predictions available":
             header_lines.append(f"[dim]Pathogenicity:[/dim]      {func_summary}")
 
         # Gene role
-        if panel.clinical.gene_role:
-            header_lines.append(f"[dim]Gene Role:[/dim]          {panel.clinical.gene_role}")
+        if insight.clinical.gene_role:
+            header_lines.append(f"[dim]Gene Role:[/dim]          {insight.clinical.gene_role}")
 
         # Evidence sources
-        sources = panel.kb.get_evidence_sources()
+        sources = insight.kb.get_evidence_sources()
         if sources:
             header_lines.append(f"[dim]Evidence Sources:[/dim]   {', '.join(sources)}")
 
@@ -239,8 +202,8 @@ def insight(
         ))
 
         # FDA Approved Drugs (always show if available)
-        if panel.clinical.fda_approvals:
-            drugs = panel.clinical.get_approved_drugs()
+        if insight.clinical.fda_approvals:
+            drugs = insight.clinical.get_approved_drugs()
             if drugs:
                 console.print(Panel(
                     "[bold green]" + ", ".join(drugs) + "[/bold green]",
@@ -249,27 +212,27 @@ def insight(
                     padding=(0, 2),
                 ))
 
-        # Recommended Therapies (from LLM insight or extracted from panel)
+        # Recommended Therapies (from LLM insight or extracted from insight)
         therapy_lines = []
-        if insight_result and insight_result.recommended_therapies:
+        if insight.llm and insight.llm.recommended_therapies:
             # Use LLM-recommended therapies
-            for t in insight_result.recommended_therapies:
+            for t in insight.llm.recommended_therapies:
                 level = f"Level {t.evidence_level}" if t.evidence_level else ""
                 status = t.approval_status or ""
                 parts = [p for p in [level, status] if p]
                 suffix = f" ({', '.join(parts)})" if parts else ""
                 therapy_lines.append(f"  • {t.drug_name}{suffix}")
         else:
-            # Extract from panel (lite mode)
+            # Extract from insight (lite mode)
             seen_drugs = set()
             # From FDA approvals
-            for approval in panel.clinical.fda_approvals:
+            for approval in insight.clinical.fda_approvals:
                 drug_name = approval.brand_name or approval.generic_name or approval.drug_name
                 if drug_name and drug_name not in seen_drugs:
                     seen_drugs.add(drug_name)
                     therapy_lines.append(f"  • {drug_name} (Level A, FDA Approved)")
             # From CGI biomarkers
-            for biomarker in panel.kb.cgi_biomarkers:
+            for biomarker in insight.kb.cgi_biomarkers:
                 if biomarker.fda_approved and biomarker.drug and biomarker.drug not in seen_drugs:
                     seen_drugs.add(biomarker.drug)
                     level = biomarker.evidence_level or "A"
@@ -284,29 +247,29 @@ def insight(
             ))
 
         # Clinical evidence details (CIViC/CGI/Trials in one box)
-        has_clinical_evidence = panel.kb.civic_assertions or panel.kb.cgi_biomarkers or panel.clinical.clinical_trials
+        has_clinical_evidence = insight.kb.civic_assertions or insight.kb.cgi_biomarkers or insight.clinical.clinical_trials
         if has_clinical_evidence:
             evidence_lines = []
 
-            if panel.kb.civic_assertions:
+            if insight.kb.civic_assertions:
                 evidence_lines.append("[bold]CIViC Assertions:[/bold]")
-                for a in panel.kb.civic_assertions[:3]:
+                for a in insight.kb.civic_assertions[:3]:
                     therapies = ", ".join(a.therapies) if a.therapies else "N/A"
                     evidence_lines.append(f"  • {therapies} → {a.significance}")
 
-            if panel.kb.cgi_biomarkers:
+            if insight.kb.cgi_biomarkers:
                 if evidence_lines:
                     evidence_lines.append("")
                 evidence_lines.append("[bold]CGI Biomarkers:[/bold]")
-                for b in panel.kb.cgi_biomarkers[:3]:
+                for b in insight.kb.cgi_biomarkers[:3]:
                     fda_tag = " [green](FDA)[/green]" if b.fda_approved else ""
                     evidence_lines.append(f"  • {b.drug}: {b.association}{fda_tag}")
 
-            if panel.clinical.clinical_trials:
+            if insight.clinical.clinical_trials:
                 if evidence_lines:
                     evidence_lines.append("")
-                trials_count = len(panel.clinical.clinical_trials)
-                variant_specific = sum(1 for t in panel.clinical.clinical_trials if t.variant_specific)
+                trials_count = len(insight.clinical.clinical_trials)
+                variant_specific = sum(1 for t in insight.clinical.clinical_trials if t.variant_specific)
                 evidence_lines.append("[bold]Clinical Trials:[/bold]")
                 trials_text = f"  {trials_count} recruiting"
                 if variant_specific:
@@ -321,17 +284,17 @@ def insight(
             ))
 
         # Literature section (only in full mode)
-        if full and panel.literature.pubmed_articles:
+        if full and insight.literature.pubmed_articles:
             lit_lines = []
-            lit_lines.append(f"[bold]PubMed Articles ({len(panel.literature.pubmed_articles)}):[/bold]")
-            for article in panel.literature.pubmed_articles[:3]:
+            lit_lines.append(f"[bold]PubMed Articles ({len(insight.literature.pubmed_articles)}):[/bold]")
+            for article in insight.literature.pubmed_articles[:3]:
                 title = article.title[:55] + "..." if len(article.title) > 55 else article.title
                 lit_lines.append(f"  • PMID:{article.pmid} {title}")
-            if len(panel.literature.pubmed_articles) > 3:
+            if len(insight.literature.pubmed_articles) > 3:
                 lit_lines.append("  ...")
 
-            if panel.literature.literature_knowledge:
-                lk = panel.literature.literature_knowledge
+            if insight.literature.literature_knowledge:
+                lk = insight.literature.literature_knowledge
                 if lk.resistance_mechanisms:
                     lit_lines.append("")
                     lit_lines.append("[bold]Resistance Mechanisms:[/bold]")
@@ -352,18 +315,9 @@ def insight(
 
         # Save JSON if requested
         if output:
-            output_data = {
-                "panel": panel.model_dump(mode="json"),
-            }
-            if insight_result:
-                output_data["narrative"] = {
-                    "llm_summary": insight_result.llm_summary,
-                    "rationale": insight_result.rationale,
-                    "recommended_therapies": [t.model_dump() for t in insight_result.recommended_therapies],
-                    "evidence_strength": insight_result.evidence_strength,
-                }
+            # The insight object now contains everything, including llm if present
             with open(output, "w") as f:
-                json.dump(output_data, f, indent=2)
+                json.dump(insight.model_dump(mode="json"), f, indent=2)
             console.print(f"\n[dim]Saved to {output}[/dim]")
 
     asyncio.run(run_insight())
@@ -422,31 +376,21 @@ def batch(
         def progress_callback(current: int, total: int) -> None:
             print(f"  Processing {current}/{total}...", end='\r')
 
-        panels = await get_insights(variant_strs, config=config, progress_callback=progress_callback)
+        insights = await get_insights(variant_strs, config=config, progress_callback=progress_callback)
         print()  # Clear progress line
 
         # Apply tumor types and build output
         output_data = []
-        for i, panel in enumerate(panels):
+        for i, insight in enumerate(insights):
             if tumor_types[i]:
-                panel.clinical.tumor_type = tumor_types[i]
-            output_data.append(panel.model_dump(mode="json"))
+                insight.clinical.tumor_type = tumor_types[i]
+            output_data.append(insight.model_dump(mode="json"))
 
         with open(output, "w") as f:
             json.dump(output_data, f, indent=2)
 
-        print(f"\nSuccessfully processed {len(panels)}/{len(variant_strs)} variants")
+        print(f"\nSuccessfully processed {len(insights)}/{len(variant_strs)} variants")
         print(f"Results saved to {output}")
-
-        # Summary of evidence strength
-        strength_counts: dict[str, int] = {}
-        for panel in panels:
-            strength = panel.meta.evidence_strength or "Unknown"
-            strength_counts[strength] = strength_counts.get(strength, 0) + 1
-
-        print("\nEvidence Strength Distribution:")
-        for strength, count in sorted(strength_counts.items()):
-            print(f"  {strength}: {count}")
 
     asyncio.run(run_batch())
 

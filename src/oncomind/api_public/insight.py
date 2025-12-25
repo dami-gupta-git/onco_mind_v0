@@ -5,7 +5,7 @@ This module provides the main entry points for OncoMind:
 - get_insights(): Batch get insights for multiple variants
 
 ARCHITECTURE:
-    Input (str/VCF/DataFrame) → parse → build_evidence_panel → EvidencePanel
+    Input (str/VCF/DataFrame) → parse → build_insight → Insight
                                               ↓ (optional)
                                        LLM summarization
 
@@ -21,13 +21,13 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from oncomind.evidence import (
-    EvidenceBuilder,
-    EvidenceBuilderConfig,
-    build_evidence_panel as _build_panel,
-    build_evidence_panels as _build_panels,
+from oncomind.insight_builder import (
+    InsightBuilder,
+    InsightBuilderConfig,
+    build_insight as _build_insight,
+    build_insights as _build_insights,
 )
-from oncomind.models.evidence.evidence_panel import EvidencePanel
+from oncomind.models.insight import Insight
 from oncomind.normalization import (
     parse_variant_input,
     parse_variant_row,
@@ -70,9 +70,9 @@ class InsightConfig:
     # Processing options
     validate_variant_type: bool = True  # Reject fusions/amplifications
 
-    def to_builder_config(self) -> EvidenceBuilderConfig:
-        """Convert to EvidenceBuilderConfig."""
-        return EvidenceBuilderConfig(
+    def to_builder_config(self) -> InsightBuilderConfig:
+        """Convert to InsightBuilderConfig."""
+        return InsightBuilderConfig(
             enable_vicc=self.enable_vicc,
             enable_civic_assertions=self.enable_civic_assertions,
             enable_clinical_trials=self.enable_clinical_trials,
@@ -88,7 +88,7 @@ async def get_insight(
     variant_str: str,
     tumor_type: str | None = None,
     config: InsightConfig | None = None,
-) -> EvidencePanel:
+) -> Insight:
     """Get insight for a single variant and return aggregated evidence.
 
     This is the main entry point for single-variant analysis.
@@ -104,21 +104,21 @@ async def get_insight(
         config: Optional configuration for the insight pipeline.
 
     Returns:
-        EvidencePanel with all aggregated evidence.
+        Insight with all aggregated evidence.
 
     Raises:
         ValueError: If variant string cannot be parsed or variant type
             is not supported (when validate_variant_type=True).
 
     Example:
-        >>> panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
-        >>> print(panel.identifiers.gene, panel.identifiers.variant)
+        >>> insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
+        >>> print(insight.identifiers.gene, insight.identifiers.variant)
         BRAF V600E
-        >>> print(panel.clinical.get_approved_drugs())
+        >>> print(insight.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib', 'Encorafenib']
 
-        >>> panel = await get_insight("EGFR L858R in lung cancer")
-        >>> print(panel.clinical.tumor_type)
+        >>> insight = await get_insight("EGFR L858R in lung cancer")
+        >>> print(insight.clinical.tumor_type)
         lung cancer
     """
     config = config or InsightConfig()
@@ -136,15 +136,15 @@ async def get_insight(
                 f"Got variant: {variant_str}"
             )
 
-    # Build the evidence panel
+    # Build the insight
     builder_config = config.to_builder_config()
-    panel = await _build_panel(parsed, parsed.tumor_type, builder_config)
+    insight = await _build_insight(parsed, parsed.tumor_type, builder_config)
 
     # Apply LLM enhancement if enabled
     if config.enable_llm:
-        panel = await _apply_llm_enhancement(panel, config)
+        insight = await _apply_llm_enhancement(insight, config)
 
-    return panel
+    return insight
 
 
 async def get_insights(
@@ -152,7 +152,7 @@ async def get_insights(
     tumor_type: str | None = None,
     config: InsightConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
-) -> list[EvidencePanel]:
+) -> list[Insight]:
     """Get insights for multiple variants and return aggregated evidence.
 
     Supports various input formats:
@@ -170,14 +170,14 @@ async def get_insights(
         progress_callback: Optional callback(current, total) for progress updates.
 
     Returns:
-        List of EvidencePanel objects.
+        List of Insight objects.
 
     Example:
-        >>> panels = await get_insights(["BRAF V600E", "EGFR L858R"])
-        >>> for panel in panels:
-        ...     print(f"{panel.identifiers.gene} {panel.identifiers.variant}")
+        >>> insights = await get_insights(["BRAF V600E", "EGFR L858R"])
+        >>> for insight in insights:
+        ...     print(f"{insight.identifiers.gene} {insight.identifiers.variant}")
 
-        >>> panels = await get_insights(
+        >>> insights = await get_insights(
         ...     "variants.csv",
         ...     progress_callback=lambda i, t: print(f"{i}/{t}")
         ... )
@@ -229,11 +229,11 @@ async def get_insights(
             valid_variants.append(parsed)
         parsed_variants = valid_variants
 
-    # Build evidence panels
+    # Build insights
     builder_config = config.to_builder_config()
 
-    async with EvidenceBuilder(builder_config) as builder:
-        panels = []
+    async with InsightBuilder(builder_config) as builder:
+        insights = []
         total = len(parsed_variants)
 
         for i, parsed in enumerate(parsed_variants):
@@ -241,10 +241,10 @@ async def get_insights(
                 progress_callback(i, total)
 
             try:
-                panel = await builder.build_evidence_panel(
+                insight = await builder.build_insight(
                     parsed, parsed.tumor_type or tumor_type
                 )
-                panels.append(panel)
+                insights.append(insight)
             except Exception as e:
                 print(f"  Warning: Failed to process {parsed.gene} {parsed.variant}: {str(e)}")
 
@@ -253,11 +253,11 @@ async def get_insights(
 
     # Apply LLM enhancement if enabled
     if config.enable_llm:
-        panels = await asyncio.gather(*[
-            _apply_llm_enhancement(panel, config) for panel in panels
+        insights = await asyncio.gather(*[
+            _apply_llm_enhancement(insight, config) for insight in insights
         ])
 
-    return panels
+    return insights
 
 
 def _parse_csv(path: Path, tumor_type: str | None = None) -> list[ParsedVariant]:
@@ -347,10 +347,10 @@ def _parse_vcf(path: Path) -> list[ParsedVariant]:
 
 
 async def _apply_llm_enhancement(
-    panel: EvidencePanel,
+    insight: Insight,
     config: InsightConfig,
-) -> EvidencePanel:
-    """Apply LLM enhancement to an EvidencePanel.
+) -> Insight:
+    """Apply LLM enhancement to an Insight.
 
     This adds:
     - Paper relevance scoring
@@ -366,18 +366,18 @@ async def _apply_llm_enhancement(
     )
 
     # Score paper relevance and extract knowledge
-    if panel.literature.pubmed_articles:
+    if insight.literature.pubmed_articles:
         # Score each paper
         scored_articles = []
-        for article in panel.literature.pubmed_articles:
+        for article in insight.literature.pubmed_articles:
             try:
                 relevance = await llm_service.score_paper_relevance(
                     title=article.title,
                     abstract=article.abstract,
                     tldr=article.tldr,
-                    gene=panel.identifiers.gene,
-                    variant=panel.identifiers.variant,
-                    tumor_type=panel.clinical.tumor_type,
+                    gene=insight.identifiers.gene,
+                    variant=insight.identifiers.variant,
+                    tumor_type=insight.clinical.tumor_type,
                 )
 
                 if relevance["is_relevant"]:
@@ -391,7 +391,7 @@ async def _apply_llm_enhancement(
                 print(f"  Warning: Failed to score paper {article.pmid}: {str(e)}")
                 scored_articles.append(article)
 
-        panel.literature.pubmed_articles = scored_articles
+        insight.literature.pubmed_articles = scored_articles
 
         # Extract structured knowledge from relevant papers
         if scored_articles:
@@ -408,13 +408,13 @@ async def _apply_llm_enhancement(
 
             try:
                 knowledge_data = await llm_service.extract_variant_knowledge(
-                    gene=panel.identifiers.gene,
-                    variant=panel.identifiers.variant,
-                    tumor_type=panel.clinical.tumor_type,
+                    gene=insight.identifiers.gene,
+                    variant=insight.identifiers.variant,
+                    tumor_type=insight.clinical.tumor_type,
                     paper_contents=paper_contents,
                 )
 
-                from oncomind.models.evidence.literature_knowledge import (
+                from oncomind.models.insight.literature_knowledge import (
                     LiteratureKnowledge, DrugResistance, DrugSensitivity
                 )
 
@@ -427,7 +427,7 @@ async def _apply_llm_enhancement(
                     else:
                         resistant_to.append(DrugResistance(drug=str(r), is_predictive=True))
 
-                panel.literature.literature_knowledge = LiteratureKnowledge(
+                insight.literature.literature_knowledge = LiteratureKnowledge(
                     mutation_type=knowledge_data.get("mutation_type", "unknown"),
                     is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
                     resistant_to=resistant_to,
@@ -444,7 +444,7 @@ async def _apply_llm_enhancement(
             except Exception as e:
                 print(f"  Warning: Failed to extract literature knowledge: {str(e)}")
 
-    return panel
+    return insight
 
 
 # Synchronous wrappers for convenience
@@ -453,12 +453,12 @@ def get_insight_sync(
     variant_str: str,
     tumor_type: str | None = None,
     config: InsightConfig | None = None,
-) -> EvidencePanel:
+) -> Insight:
     """Synchronous wrapper for get_insight.
 
     Use this when you're not in an async context:
 
-        >>> panel = get_insight_sync("BRAF V600E")
+        >>> insight = get_insight_sync("BRAF V600E")
     """
     return asyncio.run(get_insight(variant_str, tumor_type, config))
 
@@ -468,12 +468,12 @@ def get_insights_sync(
     tumor_type: str | None = None,
     config: InsightConfig | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
-) -> list[EvidencePanel]:
+) -> list[Insight]:
     """Synchronous wrapper for get_insights.
 
     Use this when you're not in an async context:
 
-        >>> panels = get_insights_sync(["BRAF V600E", "EGFR L858R"])
+        >>> insights = get_insights_sync(["BRAF V600E", "EGFR L858R"])
     """
     return asyncio.run(get_insights(variants, tumor_type, config, progress_callback))
 

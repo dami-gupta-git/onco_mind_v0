@@ -11,7 +11,7 @@ class TestLLMService:
     """Tests for LLMService."""
 
     @pytest.mark.asyncio
-    async def test_get_llm_insight(self, sample_evidence, mock_llm_response):
+    async def test_get_llm_insight(self):
         """Test variant insight generation."""
         service = LLMService()
 
@@ -40,16 +40,17 @@ class TestLLMService:
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
-                evidence=sample_evidence,
+                evidence_summary="BRAF V600E with FDA approved therapies.",
+                has_clinical_trials=True,
             )
 
-            assert insight.gene == "BRAF"
-            assert insight.variant == "V600E"
-            assert insight.tumor_type == "Melanoma"
             assert "BRAF V600E" in insight.llm_summary
+            assert insight.clinical_trials_available is True
+            assert len(insight.recommended_therapies) == 1
+            assert insight.recommended_therapies[0].drug_name == "Vemurafenib"
 
     @pytest.mark.asyncio
-    async def test_get_llm_insight_with_markdown(self, sample_evidence):
+    async def test_get_llm_insight_with_markdown(self):
         """Test insight generation with markdown-wrapped JSON."""
         service = LLMService()
 
@@ -72,14 +73,13 @@ class TestLLMService:
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
-                evidence=sample_evidence,
+                evidence_summary="Test evidence summary.",
             )
 
-            assert insight.gene == "BRAF"
             assert insight.llm_summary == "Test summary for the variant."
 
     @pytest.mark.asyncio
-    async def test_llm_service_with_custom_temperature(self, sample_evidence):
+    async def test_llm_service_with_custom_temperature(self):
         """Test LLM service with custom temperature parameter."""
         custom_temp = 0.5
         service = LLMService(model="gpt-4o-mini", temperature=custom_temp)
@@ -104,7 +104,7 @@ class TestLLMService:
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
-                evidence=sample_evidence,
+                evidence_summary="Test evidence summary.",
             )
 
             # Verify temperature was passed to acompletion
@@ -114,7 +114,7 @@ class TestLLMService:
             assert call_kwargs["model"] == "gpt-4o-mini"
 
     @pytest.mark.asyncio
-    async def test_llm_failure_fallback(self, sample_evidence):
+    async def test_llm_failure_fallback(self):
         """Test that LLM failure still returns valid insight."""
         service = LLMService()
 
@@ -125,10 +125,9 @@ class TestLLMService:
                 gene="BRAF",
                 variant="V600E",
                 tumor_type="Melanoma",
-                evidence=sample_evidence,
+                evidence_summary="Test evidence summary.",
             )
 
             # Should still get a valid insight with fallback values
-            assert insight.gene == "BRAF"
-            assert insight.variant == "V600E"
+            assert "BRAF V600E" in insight.llm_summary
             assert "failed" in insight.rationale.lower() or "error" in insight.rationale.lower()

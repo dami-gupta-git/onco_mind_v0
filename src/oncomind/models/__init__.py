@@ -1,21 +1,17 @@
 """Data models for OncoMind."""
 
-from oncomind.models.annotations import VariantAnnotations
-from oncomind.models.insight import (
+from oncomind.models.llm_insight import (
     LLMInsight,
-    RecommendedTherapy,
 )
-from oncomind.models.evidence.civic import CIViCEvidence
-from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.evidence import EvidenceForLLM
+from oncomind.models.recommended_therapies import RecommendedTherapy
+from oncomind.models.insight.civic import CIViCEvidence
+from oncomind.models.insight.clinvar import ClinVarEvidence
+from oncomind.models.insight.cosmic import COSMICEvidence
 
 from oncomind.models.variant import VariantInput
 
 __all__ = [
     "VariantInput",
-    "VariantAnnotations",
-    "EvidenceForLLM",
     "CIViCEvidence",
     "ClinVarEvidence",
     "COSMICEvidence",
