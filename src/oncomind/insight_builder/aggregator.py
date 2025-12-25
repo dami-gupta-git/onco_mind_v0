@@ -1,15 +1,15 @@
-"""Evidence builder for aggregating variant evidence into Insight.
+"""Evidence builder for aggregating variant evidence into Evidence.
 
 This module provides the core evidence aggregation logic as a reusable,
 LLM-independent component.
 
 ARCHITECTURE:
-    ParsedVariant → build_insight() → Insight
+    ParsedVariant → build_evidence() → Evidence
 
     The builder:
     1. Fetches evidence from all API clients in parallel
     2. Handles API failures gracefully (logs warnings, continues)
-    3. Assembles results into strongly-typed Insight
+    3. Assembles results into strongly-typed Evidence
     4. Does NOT call LLM services (that's a separate layer)
 
 Key Design:
@@ -39,7 +39,7 @@ from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 
 from oncomind.models.insight import (
-    Insight,
+    Evidence,
     VariantIdentifiers,
     KnowledgebaseEvidence,
     FunctionalScores,
@@ -59,7 +59,7 @@ from oncomind.models.gene_context import get_gene_context, GeneRole
 
 
 @dataclass
-class InsightBuilderConfig:
+class EvidenceAggregatorConfig:
     """Configuration for the insight builder.
 
     Controls which data sources to query and resource limits.
@@ -88,22 +88,22 @@ class InsightBuilderConfig:
     )
 
 
-class InsightBuilder:
+class EvidenceAggregator:
     """Builder for aggregating variant evidence from multiple sources.
 
     Use as an async context manager to ensure proper HTTP session lifecycle:
 
-        async with InsightBuilder() as builder:
-            insight = await builder.build_insight(parsed_variant, tumor_type)
+        async with EvidenceAggregator() as aggregator:
+            evidence = await aggregator.build_evidence(parsed_variant, tumor_type)
 
     Or for batch processing:
 
-        async with InsightBuilder() as builder:
-            insights = await builder.build_insights(variants, tumor_type)
+        async with EvidenceAggregator() as aggregator:
+            evidences = await aggregator.build_evidences(variants, tumor_type)
     """
 
-    def __init__(self, config: InsightBuilderConfig | None = None):
-        self.config = config or InsightBuilderConfig()
+    def __init__(self, config: EvidenceAggregatorConfig | None = None):
+        self.config = config or EvidenceAggregatorConfig()
 
         # Initialize API clients
         self.myvariant_client = MyVariantClient()
@@ -266,19 +266,19 @@ class InsightBuilder:
             # After tenacity retries exhausted, return empty
             return []
 
-    async def build_insight(
+    async def build_evidence(
         self,
         variant: ParsedVariant | str,
         tumor_type: str | None = None,
-    ) -> Insight:
-        """Build an Insight for a single variant.
+    ) -> Evidence:
+        """Build an Evidence for a single variant.
 
         Args:
             variant: ParsedVariant object or variant string (e.g., "BRAF V600E")
             tumor_type: Optional tumor type for context
 
         Returns:
-            Insight with all aggregated evidence
+            Evidence with all aggregated evidence
         """
         # Handle string input
         if isinstance(variant, str):
@@ -467,8 +467,8 @@ class InsightBuilder:
             if pathway_info:
                 pathway = pathway_info.get("pathway")
 
-        # Build the Insight
-        panel = Insight(
+        # Build the Evidence
+        panel = Evidence(
             identifiers=VariantIdentifiers(**identifiers_data),
             kb=KnowledgebaseEvidence(
                 civic=civic_entries,
@@ -499,22 +499,22 @@ class InsightBuilder:
 
         return panel
 
-    async def build_insights(
+    async def build_evidences(
         self,
         variants: list[ParsedVariant | str],
         tumor_type: str | None = None,
-    ) -> list[Insight]:
-        """Build Insights for multiple variants in parallel.
+    ) -> list[Evidence]:
+        """Build Evidence for multiple variants in parallel.
 
         Args:
             variants: List of ParsedVariant objects or variant strings
             tumor_type: Optional tumor type (applied to all variants)
 
         Returns:
-            List of Insight objects
+            List of Evidence objects
         """
         tasks = [
-            self.build_insight(v, tumor_type)
+            self.build_evidence(v, tumor_type)
             for v in variants
         ]
 
@@ -531,12 +531,12 @@ class InsightBuilder:
         return panels
 
 
-async def build_insight(
+async def build_evidence(
     variant: ParsedVariant | str,
     tumor_type: str | None = None,
-    config: InsightBuilderConfig | None = None,
-) -> Insight:
-    """Convenience function to build an Insight for a single variant.
+    config: EvidenceAggregatorConfig | None = None,
+) -> Evidence:
+    """Convenience function to build Evidence for a single variant.
 
     This is the recommended entry point for single-variant annotation.
 
@@ -546,25 +546,25 @@ async def build_insight(
         config: Optional configuration for the builder
 
     Returns:
-        Insight with all aggregated evidence
+        Evidence with all aggregated evidence
 
     Example:
-        >>> panel = await build_insight("BRAF V600E", tumor_type="Melanoma")
-        >>> print(panel.identifiers.gene)
+        >>> evidence = await build_evidence("BRAF V600E", tumor_type="Melanoma")
+        >>> print(evidence.identifiers.gene)
         BRAF
-        >>> print(panel.clinical.get_approved_drugs())
+        >>> print(evidence.clinical.get_approved_drugs())
         ['Dabrafenib', 'Vemurafenib']
     """
-    async with InsightBuilder(config) as builder:
-        return await builder.build_insight(variant, tumor_type)
+    async with EvidenceAggregator(config) as builder:
+        return await builder.build_evidence(variant, tumor_type)
 
 
-async def build_insights(
+async def build_evidences(
     variants: list[ParsedVariant | str],
     tumor_type: str | None = None,
-    config: InsightBuilderConfig | None = None,
-) -> list[Insight]:
-    """Convenience function to build Insights for multiple variants.
+    config: EvidenceAggregatorConfig | None = None,
+) -> list[Evidence]:
+    """Convenience function to build Evidence for multiple variants.
 
     Args:
         variants: List of ParsedVariant objects or variant strings
@@ -572,15 +572,15 @@ async def build_insights(
         config: Optional configuration for the builder
 
     Returns:
-        List of Insight objects
+        List of Evidence objects
     """
-    async with InsightBuilder(config) as builder:
-        return await builder.build_insights(variants, tumor_type)
+    async with EvidenceAggregator(config) as builder:
+        return await builder.build_evidences(variants, tumor_type)
 
 
 __all__ = [
-    "InsightBuilder",
-    "InsightBuilderConfig",
-    "build_insight",
-    "build_insights",
+    "EvidenceAggregator",
+    "EvidenceAggregatorConfig",
+    "build_evidence",
+    "build_evidences",
 ]

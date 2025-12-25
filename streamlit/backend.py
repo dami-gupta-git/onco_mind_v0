@@ -6,19 +6,17 @@ Integrates with the oncomind package for:
 - Evidence gathering from multiple databases
 
 ARCHITECTURE:
-    All paths use InsightBuilder → Insight
-    With optional LLMService → Insight.llm for narrative generation
+    All paths use Conductor → Result (evidence + optional LLM narrative)
 
 Modes:
-    - Lite mode: InsightBuilder only (fast, no LLM)
-    - Default mode: InsightBuilder + LLMService narrative
-    - Full mode: InsightBuilder + Literature + LLMService narrative
+    - Lite mode: Evidence only (fast, no LLM)
+    - Default mode: Evidence + LLM narrative
+    - Full mode: Evidence + Literature + LLM narrative
 """
 
 from typing import Any, Dict, List, Optional, Callable
 
-from oncomind.insight_builder import InsightBuilder, InsightBuilderConfig
-from oncomind.llm.service import LLMService
+from oncomind.insight_builder import Conductor, ConductorConfig
 
 
 async def get_variant_insight(
@@ -46,31 +44,18 @@ async def get_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
-        # Step 1: Build insight using InsightBuilder
-        config = InsightBuilderConfig(enable_literature=enable_literature)
-        async with InsightBuilder(config) as builder:
-            insight = await builder.build_insight(f"{gene} {variant}", tumor_type=tumor_type)
-
-        # Step 2: Generate LLM narrative if enabled
-        if enable_llm:
-            # Get evidence summary for LLM
-            evidence_summary = insight.get_evidence_summary_for_llm()
-
-            # Generate LLM insight
-            llm_service = LLMService(model=model, temperature=temperature)
-            llm_insight = await llm_service.get_llm_insight(
-                gene=gene,
-                variant=variant,
-                tumor_type=tumor_type,
-                evidence_summary=evidence_summary,
-                has_clinical_trials=bool(insight.clinical.clinical_trials),
-            )
-
-            # Embed LLM insight in the main insight object
-            insight.llm = llm_insight
+        # Configure and run the Conductor
+        config = ConductorConfig(
+            enable_literature=enable_literature,
+            enable_llm=enable_llm,
+            llm_model=model,
+            llm_temperature=temperature,
+        )
+        async with Conductor(config) as conductor:
+            result = await conductor.run(f"{gene} {variant}", tumor_type=tumor_type)
 
         # Build response
-        return _build_response(insight)
+        return _build_response(result)
 
     except Exception as e:
         return {"error": f"Insight generation failed: {str(e)}"}
@@ -132,47 +117,47 @@ async def batch_get_variant_insights(
 # === Private helper functions ===
 
 
-def _build_response(insight) -> Dict[str, Any]:
-    """Build the standard response dict from an Insight object."""
-    llm = insight.llm  # May be None if LLM was not enabled
+def _build_response(result) -> Dict[str, Any]:
+    """Build the standard response dict from a Result object."""
+    llm = result.llm  # May be None if LLM was not enabled
 
     return {
         "variant": {
-            "gene": insight.identifiers.gene,
-            "variant": insight.identifiers.variant,
-            "tumor_type": insight.clinical.tumor_type,
+            "gene": result.identifiers.gene,
+            "variant": result.identifiers.variant,
+            "tumor_type": result.clinical.tumor_type,
         },
         "insight": {
-            "summary": insight.get_summary(),  # Always 1-line summary
+            "summary": result.get_summary(),  # Always 1-line summary
             "llm_narrative": llm.llm_summary if llm else None,  # LLM insight when available
             "rationale": llm.rationale if llm else None,
         },
         "identifiers": {
-            "cosmic_id": insight.identifiers.cosmic_id,
-            "ncbi_gene_id": insight.identifiers.ncbi_gene_id,
-            "dbsnp_id": insight.identifiers.dbsnp_id,
-            "clinvar_id": insight.identifiers.clinvar_id,
+            "cosmic_id": result.identifiers.cosmic_id,
+            "ncbi_gene_id": result.identifiers.ncbi_gene_id,
+            "dbsnp_id": result.identifiers.dbsnp_id,
+            "clinvar_id": result.identifiers.clinvar_id,
         },
         "hgvs": {
-            "genomic": insight.identifiers.hgvs_genomic,
-            "protein": insight.identifiers.hgvs_protein,
-            "transcript": insight.identifiers.hgvs_transcript,
+            "genomic": result.identifiers.hgvs_genomic,
+            "protein": result.identifiers.hgvs_protein,
+            "transcript": result.identifiers.hgvs_transcript,
         },
         "clinvar": {
-            "clinical_significance": insight.clinical.clinvar_clinical_significance,
-            "accession": insight.clinical.clinvar_accession,
+            "clinical_significance": result.clinical.clinvar_clinical_significance,
+            "accession": result.clinical.clinvar_accession,
         },
         "annotations": {
-            "snpeff_effect": insight.functional.snpeff_effect,
-            "polyphen2_prediction": insight.functional.polyphen2_prediction,
-            "cadd_score": insight.functional.cadd_score,
-            "gnomad_exome_af": insight.functional.gnomad_exome_af,
-            "alphamissense_score": insight.functional.alphamissense_score,
-            "alphamissense_prediction": insight.functional.alphamissense_prediction,
+            "snpeff_effect": result.functional.snpeff_effect,
+            "polyphen2_prediction": result.functional.polyphen2_prediction,
+            "cadd_score": result.functional.cadd_score,
+            "gnomad_exome_af": result.functional.gnomad_exome_af,
+            "alphamissense_score": result.functional.alphamissense_score,
+            "alphamissense_prediction": result.functional.alphamissense_prediction,
         },
         "transcript": {
-            "id": insight.identifiers.transcript_id,
-            "consequence": insight.identifiers.transcript_consequence,
+            "id": result.identifiers.transcript_id,
+            "consequence": result.identifiers.transcript_consequence,
         },
         "evidence_panel": {
             "clinical": {
@@ -187,7 +172,7 @@ def _build_response(insight) -> Dict[str, Any]:
                         "url": t.url,
                         "variant_specific": t.variant_specific,
                     }
-                    for t in insight.clinical.clinical_trials
+                    for t in result.clinical.clinical_trials
                 ],
                 "fda_approvals": [
                     {
@@ -195,7 +180,7 @@ def _build_response(insight) -> Dict[str, Any]:
                         "brand_name": a.brand_name,
                         "indication": a.indication,
                     }
-                    for a in insight.clinical.fda_approvals
+                    for a in result.clinical.fda_approvals
                 ],
             },
         },
@@ -210,18 +195,18 @@ def _build_response(insight) -> Dict[str, Any]:
                 for t in llm.recommended_therapies
             ]
             if llm
-            else _extract_therapies(insight)
+            else _extract_therapies(result)
         ),
-        "insight_data": insight.model_dump(mode="json"),
+        "result_data": result.model_dump(mode="json"),
     }
 
 
-def _extract_therapies(insight) -> List[Dict[str, Any]]:
-    """Extract therapy recommendations from an Insight object."""
+def _extract_therapies(result) -> List[Dict[str, Any]]:
+    """Extract therapy recommendations from a Result object."""
     therapies = []
 
     # From FDA approvals
-    for approval in insight.clinical.fda_approvals:
+    for approval in result.clinical.fda_approvals:
         drug_name = approval.brand_name or approval.generic_name or approval.drug_name
         if drug_name:
             therapies.append({
@@ -232,7 +217,7 @@ def _extract_therapies(insight) -> List[Dict[str, Any]]:
             })
 
     # From CGI biomarkers
-    for biomarker in insight.kb.cgi_biomarkers:
+    for biomarker in result.kb.cgi_biomarkers:
         if biomarker.fda_approved and biomarker.drug:
             therapies.append({
                 "drug_name": biomarker.drug,
