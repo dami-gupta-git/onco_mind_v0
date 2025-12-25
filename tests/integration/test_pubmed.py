@@ -179,48 +179,6 @@ class TestPubMedSearchQueries:
             assert len(articles) >= 1, "BRAF V600E should have general literature"
 
 
-class TestPubMedEvidenceIntegration:
-    """Tests for PubMed evidence integration with Evidence model."""
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_evidence_model_integration(self):
-        """PubMed articles should integrate with Evidence model."""
-        from oncomind.models.evidence import EvidenceForLLM, PubMedEvidence
-        from oncomind.api.pubmed import PubMedClient
-
-        async with PubMedClient() as client:
-            articles = await client.search_resistance_literature("EGFR", "C797S", max_results=3)
-
-            # Convert to PubMedEvidence models
-            pubmed_evidence = []
-            for article in articles:
-                pubmed_evidence.append(PubMedEvidence(
-                    pmid=article.pmid,
-                    title=article.title,
-                    abstract=article.abstract,
-                    authors=article.authors,
-                    journal=article.journal,
-                    year=article.year,
-                    doi=article.doi,
-                    url=article.url,
-                    signal_type=article.get_signal_type(),
-                    drugs_mentioned=article.extract_drug_mentions(),
-                ))
-
-            # Create EvidenceForLLM model with PubMed articles
-            evidence = EvidenceForLLM(
-                variant_id="EGFR:C797S",
-                gene="EGFR",
-                variant="C797S",
-                pubmed_articles=pubmed_evidence,
-            )
-
-            # Test has_literature_resistance_evidence
-            has_lit, drugs, pmids = evidence.has_literature_resistance_evidence()
-            assert has_lit, "Should detect literature resistance evidence"
-            assert len(pmids) > 0, "Should have PMIDs"
-
 class TestPubMedErrorHandling:
     """Tests for error handling and edge cases."""
 

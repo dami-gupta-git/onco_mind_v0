@@ -2,12 +2,12 @@
 
 Public API:
     >>> from oncomind import get_insight, get_insights
-    >>> panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
-    >>> panels = await get_insights(["BRAF V600E", "EGFR L858R"])
+    >>> insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
+    >>> insights = await get_insights(["BRAF V600E", "EGFR L858R"])
 
 For synchronous usage:
     >>> from oncomind import get_insight_sync
-    >>> panel = get_insight_sync("BRAF V600E")
+    >>> insight = get_insight_sync("BRAF V600E")
 """
 
 __version__ = "0.1.0"
@@ -22,7 +22,7 @@ from oncomind.api_public.insight import (
 )
 
 # Core models
-from oncomind.models.evidence.evidence_panel import EvidencePanel
+from oncomind.models.insight import Insight
 from oncomind.normalization import ParsedVariant, parse_variant_input
 
 __all__ = [
@@ -35,7 +35,7 @@ __all__ = [
     "get_insights_sync",
     "InsightConfig",
     # Core models
-    "EvidencePanel",
+    "Insight",
     "ParsedVariant",
     "parse_variant_input",
 ]

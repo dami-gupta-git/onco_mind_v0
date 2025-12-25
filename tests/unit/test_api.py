@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from oncomind.api.myvariant import MyVariantAPIError, MyVariantClient
 from oncomind.api.fda import FDAAPIError, FDAClient
-from oncomind.models.evidence import CIViCEvidence, ClinVarEvidence
+from oncomind.models.insight import CIViCEvidence, ClinVarEvidence
 
 
 class TestMyVariantClient:

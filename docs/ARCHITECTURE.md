@@ -20,8 +20,8 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │                      Public API Layer                             │
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  api_public/insight.py                                      │  │
-│  │  - get_insight(variant_str, tumor_type, config)             │  │
-│  │  - get_insights(variants, tumor_type, config)               │  │
+│  │  - get_insight(variant_str, tumor_type, config) → Insight   │  │
+│  │  - get_insights(variants, tumor_type, config) → [Insight]   │  │
 │  │  - InsightConfig                                            │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -43,7 +43,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  evidence/builder.py                                        │  │
 │  │  - EvidenceBuilder (async context manager)                  │  │
-│  │  - build_evidence_panel(parsed_variant, tumor_type)         │  │
+│  │  - build_insight(parsed_variant, tumor_type) → Insight      │  │
 │  │  - Parallel API fetching with asyncio.gather()              │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -54,9 +54,9 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │     API Clients Layer       │  │      LLM Layer (Optional)       │
 │  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │
 │  │ api/myvariant.py      │  │  │  │ llm/service.py            │  │
-│  │ api/civic.py          │  │  │  │ - score_paper_relevance   │  │
-│  │ api/vicc.py           │  │  │  │ - extract_variant_knowledge│ │
-│  │ api/fda.py            │  │  │  │ - get_variant_insight     │  │
+│  │ api/civic.py          │  │  │  │ - get_llm_insight()       │  │
+│  │ api/vicc.py           │  │  │  │ - score_paper_relevance   │  │
+│  │ api/fda.py            │  │  │  │ - extract_variant_knowledge│ │
 │  │ api/cgi.py            │  │  │  └───────────────────────────┘  │
 │  │ api/pubmed.py         │  │  └─────────────────────────────────┘
 │  │ api/semantic_scholar.py│ │
@@ -69,14 +69,14 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                        Models Layer                               │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  models/evidence/evidence_panel.py                          │  │
-│  │  - EvidencePanel (top-level output)                         │  │
+│  │  models/evidence/insight.py                                 │  │
+│  │  - Insight (top-level output)                               │  │
 │  │    ├── identifiers: VariantIdentifiers                      │  │
 │  │    ├── kb: KnowledgebaseEvidence                            │  │
 │  │    ├── functional: FunctionalScores                         │  │
 │  │    ├── clinical: ClinicalContext                            │  │
 │  │    ├── literature: LiteratureEvidence                       │  │
-│  │    └── meta: EvidenceMeta                                   │  │
+│  │    └── llm: LLMInsight | None  ← Optional LLM narrative     │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -90,21 +90,40 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 - **API clients** are independent and composable
 - **Models** are strongly-typed with Pydantic
 
-### 2. LLM as Optional Enhancement
+### 2. Unified Output Model
+
+All code paths return a single `Insight` object that contains:
+- Structured evidence from databases (always populated)
+- Optional LLM-generated narrative (when LLM mode is enabled)
+
+```python
+# The Insight model embeds LLM narrative when available
+class Insight(BaseModel):
+    identifiers: VariantIdentifiers    # Gene, variant, IDs
+    kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
+    functional: FunctionalScores       # AlphaMissense, CADD, etc.
+    clinical: ClinicalContext          # FDA, trials, gene role
+    literature: LiteratureEvidence     # PubMed, extracted knowledge
+    llm: LLMInsight | None             # LLM narrative (when enabled)
+```
+
+### 3. LLM as Optional Enhancement
 
 The core annotation pipeline is deterministic. LLM can be enabled for clinical narrative synthesis:
 
 ```python
 # Default: structured evidence + LLM narrative (~12s)
-panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
+insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
+print(insight.llm.llm_summary)  # LLM narrative
 
 # Lite: fast, no LLM (~7s)
 config = InsightConfig(enable_llm=False)
-panel = await get_insight("BRAF V600E", config=config)
+insight = await get_insight("BRAF V600E", config=config)
+print(insight.llm)  # None
 
 # Full: + literature search + enhanced narrative (~25s)
 config = InsightConfig(enable_llm=True, enable_literature=True)
-panel = await get_insight("BRAF V600E", config=config)
+insight = await get_insight("BRAF V600E", config=config)
 ```
 
 **CLI equivalent:**
@@ -114,7 +133,7 @@ mind insight BRAF V600E -t Melanoma --lite    # Lite
 mind insight BRAF V600E -t Melanoma --full    # Full
 ```
 
-### 3. Async-First Design
+### 4. Async-First Design
 
 All I/O operations are async for efficient parallel fetching:
 
@@ -130,7 +149,7 @@ results = await asyncio.gather(
 )
 ```
 
-### 4. Graceful Degradation
+### 5. Graceful Degradation
 
 Individual API failures don't break the pipeline:
 
@@ -154,7 +173,7 @@ async def get_insight(
     variant_str: str,              # "BRAF V600E" or "EGFR L858R in NSCLC"
     tumor_type: str | None = None, # Optional tumor context
     config: InsightConfig | None = None,
-) -> EvidencePanel:
+) -> Insight:
 ```
 
 **Responsibilities:**
@@ -162,7 +181,7 @@ async def get_insight(
 - Validate variant type (SNP/indel only)
 - Orchestrate evidence building
 - Apply optional LLM enhancement
-- Return strongly-typed EvidencePanel
+- Return strongly-typed Insight
 
 ### Normalization (`normalization/`)
 
@@ -200,19 +219,19 @@ Orchestrates parallel API calls and assembles results:
 ```python
 class EvidenceBuilder:
     """Async context manager for evidence aggregation."""
-    
+
     async def __aenter__(self):
         # Initialize all API client sessions
         await self.myvariant_client.__aenter__()
         await self.vicc_client.__aenter__()
         # ...
         return self
-    
-    async def build_evidence_panel(
+
+    async def build_insight(
         self,
         variant: ParsedVariant,
         tumor_type: str | None,
-    ) -> EvidencePanel:
+    ) -> Insight:
         # Parallel fetch from all sources
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(...),
@@ -225,14 +244,15 @@ class EvidenceBuilder:
             return_exceptions=True,
         )
 
-        # Assemble into EvidencePanel
-        return EvidencePanel(
+        # Assemble into Insight
+        return Insight(
             identifiers=...,
             kb=...,
             functional=...,
             clinical=...,
             literature=...,
             meta=...,
+            llm=None,  # Populated later if LLM enabled
         )
 ```
 
@@ -243,19 +263,19 @@ Each client follows a consistent pattern:
 ```python
 class VICCClient:
     """Client for VICC MetaKB API."""
-    
+
     def __init__(self):
         self.base_url = "https://search.cancervariants.org/api/v1"
         self.session: httpx.AsyncClient | None = None
-    
+
     async def __aenter__(self):
         self.session = httpx.AsyncClient(timeout=30.0)
         return self
-    
+
     async def __aexit__(self, *args):
         if self.session:
             await self.session.aclose()
-    
+
     async def fetch_associations(
         self,
         gene: str,
@@ -285,21 +305,29 @@ class VICCClient:
 Pydantic models for type safety and validation:
 
 ```python
-class EvidencePanel(BaseModel):
-    """Top-level evidence aggregation."""
-    
+class Insight(BaseModel):
+    """Top-level evidence aggregation with optional LLM narrative."""
+
     identifiers: VariantIdentifiers    # Gene, variant, IDs
     kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
     functional: FunctionalScores       # AlphaMissense, CADD, etc.
     clinical: ClinicalContext          # FDA, trials, gene role
     literature: LiteratureEvidence     # PubMed, extracted knowledge
-    meta: EvidenceMeta                 # Processing metadata
+    llm: LLMInsight | None             # Optional LLM narrative
+
+    def get_summary(self) -> str:
+        """Generate one-line summary of evidence."""
+        ...
+
+    def get_evidence_summary_for_llm(self) -> str:
+        """Generate compact evidence summary for LLM prompt."""
+        ...
 ```
 
 **Model Hierarchy:**
 
 ```
-EvidencePanel
+Insight
 ├── VariantIdentifiers
 │   ├── gene, variant, variant_type
 │   ├── cosmic_id, clinvar_id, dbsnp_id
@@ -322,9 +350,12 @@ EvidencePanel
 ├── LiteratureEvidence
 │   ├── pubmed_articles: list[PubMedEvidence]
 │   └── literature_knowledge: LiteratureKnowledge | None
-└── EvidenceMeta
-    ├── sources_queried, sources_with_data, sources_failed
-    └── evidence_strength, processing_notes
+└── LLMInsight | None  ← Optional, embedded when LLM mode enabled
+    ├── llm_summary: str
+    ├── rationale: str
+    ├── recommended_therapies: list[RecommendedTherapy]
+    ├── clinical_trials_available: bool
+    └── references: list[str]
 ```
 
 ### LLM Service (`llm/service.py`)
@@ -333,14 +364,17 @@ Optional LLM-powered analysis:
 
 ```python
 class LLMService:
-    """LLM service for literature analysis."""
+    """LLM service for generating variant narratives."""
 
-    async def get_variant_insight(
+    async def get_llm_insight(
         self,
-        variant_input: VariantInput,
-        evidence: Evidence,
-    ) -> VariantInsight:
-        """Generate LLM-powered insight narrative for a variant."""
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+        evidence_summary: str,           # From Insight.get_evidence_summary_for_llm()
+        has_clinical_trials: bool,
+    ) -> LLMInsight:
+        """Generate LLM narrative from evidence summary."""
 
     async def score_paper_relevance(
         self,
@@ -352,8 +386,6 @@ class LLMService:
         tumor_type: str | None,
     ) -> dict:
         """Score paper relevance and extract signals."""
-        # Returns: relevance_score, is_relevant, signal_type,
-        #          drugs_mentioned, key_finding, confidence
 
     async def extract_variant_knowledge(
         self,
@@ -363,31 +395,31 @@ class LLMService:
         paper_contents: list[dict],
     ) -> dict:
         """Extract structured knowledge from papers."""
-        # Returns: resistant_to, sensitive_to, key_findings
 ```
 
-**LLM Integration Pattern:**
+**LLM Integration Flow:**
 
 ```
-Literature Papers
-       │
-       ▼
-┌──────────────────┐
-│ score_paper_     │ ─── Filter irrelevant papers
-│ relevance()      │
-└────────┬─────────┘
-         │ Relevant papers only
-         ▼
-┌──────────────────┐
-│ extract_variant_ │ ─── Extract structured knowledge
-│ knowledge()      │
-└────────┬─────────┘
-         │
-         ▼
-  LiteratureKnowledge
-  ├── resistant_to: [DrugResistance]
-  ├── sensitive_to: [DrugSensitivity]
-  └── key_findings: [str]
+                EvidenceBuilder
+                      │
+                      ▼
+                   Insight (with structured evidence)
+                      │
+                      ▼
+        insight.get_evidence_summary_for_llm()
+                      │
+                      ▼
+        ┌─────────────────────────────────┐
+        │ LLMService.get_llm_insight()    │
+        │   - evidence_summary: str       │
+        │   - has_clinical_trials: bool   │
+        └─────────────────────────────────┘
+                      │
+                      ▼
+                  LLMInsight
+                      │
+                      ▼
+        insight.llm = LLMInsight  ← Embedded in parent
 ```
 
 ## Data Flow
@@ -416,7 +448,7 @@ User Input: "BRAF V600E in Melanoma"
                 │
                 ▼
 ┌─────────────────────────────────┐
-│ 3. Build Evidence Panel         │
+│ 3. Build Insight                │
 │    EvidenceBuilder              │
 │    ┌────────────────────────┐   │
 │    │ Parallel API Calls:    │   │
@@ -432,22 +464,23 @@ User Input: "BRAF V600E in Melanoma"
                 │
                 ▼
 ┌─────────────────────────────────┐
-│ 4. Assemble EvidencePanel       │
+│ 4. Assemble Insight             │
 │    - Merge results              │
 │    - Track failures             │
-│    - Extract identifiers        │
+│    - llm = None                 │
 └───────────────┬─────────────────┘
                 │
                 ▼ (if enable_llm=True)
 ┌─────────────────────────────────┐
-│ 5. LLM Enhancement (Optional)   │
-│    - Score paper relevance      │
-│    - Extract drug signals       │
-│    - Generate insights          │
+│ 5. LLM Enhancement              │
+│    - Get evidence summary       │
+│    - Call LLMService            │
+│    - Embed LLMInsight           │
+│    → insight.llm = LLMInsight   │
 └───────────────┬─────────────────┘
                 │
                 ▼
-         EvidencePanel
+           Insight
 ```
 
 ### Batch Processing
@@ -468,16 +501,16 @@ User Input: ["BRAF V600E", "EGFR L858R", "KRAS G12C"]
 │ Sequential Processing           │
 │ (to respect API rate limits)    │
 │                                 │
-│ Variant 1 ──► EvidencePanel 1   │
-│ Variant 2 ──► EvidencePanel 2   │
-│ Variant 3 ──► EvidencePanel 3   │
+│ Variant 1 ──► Insight 1         │
+│ Variant 2 ──► Insight 2         │
+│ Variant 3 ──► Insight 3         │
 │                                 │
 │ Progress callback:              │
 │   progress_callback(i, total)   │
 └───────────────┬─────────────────┘
                 │
                 ▼
-       list[EvidencePanel]
+         list[Insight]
 ```
 
 ## Configuration
@@ -492,17 +525,17 @@ class InsightConfig:
     enable_civic_assertions: bool = True
     enable_clinical_trials: bool = True
     enable_literature: bool = True
-    
+
     # LLM
     enable_llm: bool = False
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.1
-    
+
     # Limits
     max_vicc_results: int = 15
     max_clinical_trials: int = 10
     max_literature_results: int = 6
-    
+
     # Validation
     validate_variant_type: bool = True
 ```
@@ -517,13 +550,13 @@ class EvidenceBuilderConfig:
     enable_civic_assertions: bool = True
     enable_clinical_trials: bool = True
     enable_literature: bool = True
-    
+
     # Result limits
     max_vicc_results: int = 15
     max_civic_assertions: int = 20
     max_clinical_trials: int = 10
     max_literature_results: int = 6
-    
+
     # API keys
     semantic_scholar_api_key: str | None = None
 ```
@@ -585,61 +618,6 @@ class ClinicalTrialsClient:
 | PubMed | `PubMedRateLimitError` | 3 | 0.5s → 5s | ±0.5s |
 | ClinicalTrials | `ClinicalTrialsRateLimitError` | 3 | 2s → 15s | ±1s |
 
-**Design Principles:**
-
-1. **Client-level retry**: Each client handles its own retry logic with tenacity decorators
-2. **Rate limit errors**: Clients raise specific `*RateLimitError` exceptions on 429/403
-3. **Exponential backoff with jitter**: Prevents thundering herd on batch requests
-4. **Reraise after exhaustion**: After 3 attempts, error propagates to builder
-5. **Graceful degradation**: Builder catches final errors and returns empty results
-6. **Retry-After header support**: All rate limit errors capture `Retry-After` header when present
-
-**Retry-After Header Handling:**
-
-All API clients parse the `Retry-After` HTTP header from 429/403 responses:
-
-```python
-class ClinicalTrialsRateLimitError(Exception):
-    """Raised when rate limited. Captures Retry-After for logging/monitoring."""
-    def __init__(self, message: str, retry_after: float | None = None):
-        super().__init__(message)
-        self.retry_after = retry_after  # Seconds to wait (from header)
-
-def _parse_retry_after(self, response: httpx.Response) -> float | None:
-    retry_after = response.headers.get("Retry-After")
-    if not retry_after:
-        return None
-    try:
-        return float(retry_after)
-    except ValueError:
-        return None  # HTTP-date format not parsed, tenacity handles backoff
-```
-
-**Custom User-Agent Headers:**
-
-All clients identify themselves to avoid security blocks:
-
-| Client | User-Agent |
-|--------|-----------|
-| ClinicalTrials | `OncoMind/0.1.0 (contact: oncomind-research@example.com)` |
-| Others | httpx default (may be customized later) |
-
-**Cross-Client Fallback:**
-
-The builder layer handles Semantic Scholar → PubMed fallback (cross-client logic):
-
-```python
-async def _fetch_literature(self, gene, variant, tumor_type):
-    try:
-        # Try Semantic Scholar first (better citation data)
-        return await self.semantic_scholar_client.search_papers(...)
-    except SemanticScholarRateLimitError:
-        # Fall back to PubMed if S2 exhausted retries
-        return await self._fetch_pubmed_literature(gene, variant, tumor_type)
-```
-
-This separation keeps retry logic in clients while allowing the builder to implement cross-client failover strategies.
-
 ### Variant Validation
 
 Invalid variant types are rejected early:
@@ -662,7 +640,7 @@ Non-authoritative AMP/ASCO/CAP tier computation:
 ```python
 from oncomind.experimental import compute_experimental_tier
 
-result = compute_experimental_tier(panel)
+result = compute_experimental_tier(insight)
 # TierResult(
 #     tier="Tier I",
 #     level="A",
@@ -679,7 +657,7 @@ Feature extraction for ML applications:
 ```python
 from oncomind.embeddings import extract_features
 
-features = extract_features(panel)
+features = extract_features(insight)
 # {
 #     "alphamissense_score": 0.98,
 #     "cadd_score": 32.0,

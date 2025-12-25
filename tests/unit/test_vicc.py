@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from oncomind.api.vicc import VICCClient, VICCAssociation, VICCError
-from oncomind.models.evidence import VICCEvidence
+from oncomind.models.insight import VICCEvidence
 
 
 class TestVICCAssociation:

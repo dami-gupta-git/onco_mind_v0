@@ -119,7 +119,6 @@ class LLMDecisionLogger:
         confidence_score: float,
         summary: str,
         rationale: str,
-        evidence_strength: str | None,
         recommended_therapies: list[dict[str, Any]],
         references: list[str],
         raw_response: str | None = None,
@@ -138,7 +137,6 @@ class LLMDecisionLogger:
                 "confidence_score": confidence_score,
                 "summary": summary,
                 "rationale": rationale,
-                "evidence_strength": evidence_strength,
                 "recommended_therapies": recommended_therapies,
                 "references": references,
             }

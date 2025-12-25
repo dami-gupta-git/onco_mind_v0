@@ -23,7 +23,7 @@ References:
 from dataclasses import dataclass
 from typing import Any
 
-from oncomind.models.evidence.evidence_panel import EvidencePanel
+from oncomind.models.insight.evidence_panel import EvidencePanel
 
 
 @dataclass

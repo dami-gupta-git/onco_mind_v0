@@ -145,7 +145,7 @@ class TestSemanticScholarResistanceSearch:
     @pytest.mark.asyncio
     async def test_search_resistance_literature(self, client):
         """Test searching for resistance literature directly."""
-        from oncomind.models.evidence.pubmed import PubMedEvidence
+        from oncomind.models.insight.pubmed import PubMedEvidence
 
         async with client as ss_client:
             # Search for EGFR C797S resistance papers
