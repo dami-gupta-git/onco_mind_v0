@@ -9,9 +9,9 @@ Complete reference for OncoMind's public API and data structures.
 Primary async function for variant analysis.
 
 ```python
-from oncomind import get_insight, InsightConfig
+from oncomind import get_insight, InsightConfig, Result
 
-panel = await get_insight(
+result = await get_insight(
     variant="BRAF V600E",           # Required: gene + variant string
     tumor_type="Melanoma",          # Optional: tumor context
     config=InsightConfig(...)       # Optional: configuration
@@ -25,7 +25,7 @@ panel = await get_insight(
 | `tumor_type` | `str \| None` | `None` | Tumor type for context-specific evidence |
 | `config` | `InsightConfig` | Default | Configuration options |
 
-**Returns:** `EvidencePanel`
+**Returns:** `Result`
 
 ### `get_insights()`
 
@@ -46,7 +46,7 @@ panels = await get_insights(
 | `tumor_type` | `str \| None` | `None` | Tumor type (applied to all) |
 | `config` | `InsightConfig` | Default | Configuration options |
 
-**Returns:** `list[EvidencePanel]`
+**Returns:** `list[Result]`
 
 ### `get_insight_sync()` / `get_insights_sync()`
 
@@ -89,43 +89,54 @@ config = InsightConfig(
 
 ---
 
-## EvidencePanel Structure
+## Result Structure
 
-The `EvidencePanel` is the core output model containing all variant evidence.
+The `Result` is the core output model containing structured evidence and optional LLM insight.
 
 ```python
-panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
+result = await get_insight("BRAF V600E", tumor_type="Melanoma")
+
+# Result contains:
+# - evidence: Evidence (structured data from databases)
+# - llm: LLMInsight | None (LLM narrative when enabled)
+
+# Property shortcuts on Result delegate to evidence:
+result.identifiers  # → result.evidence.identifiers
+result.kb           # → result.evidence.kb
+result.functional   # → result.evidence.functional
+result.clinical     # → result.evidence.clinical
+result.literature   # → result.evidence.literature
 ```
 
-### `panel.identifiers`
+### `result.identifiers`
 
 Variant identification and normalization.
 
 ```python
-panel.identifiers.gene              # "BRAF"
-panel.identifiers.variant           # "V600E"
-panel.identifiers.variant_input     # Original input string
-panel.identifiers.cosmic_id         # "COSM476"
-panel.identifiers.dbsnp_id          # "rs113488022"
-panel.identifiers.hgvs_protein      # "p.Val600Glu"
-panel.identifiers.hgvs_coding       # "c.1799T>A"
-panel.identifiers.hgvs_genomic      # "NC_000007.14:g.140753336A>T"
-panel.identifiers.transcript_id     # "ENST00000288602"
-panel.identifiers.transcript_consequence  # "missense_variant"
-panel.identifiers.chromosome        # "7"
-panel.identifiers.position          # 140753336
-panel.identifiers.ref               # "A"
-panel.identifiers.alt               # "T"
+result.identifiers.gene              # "BRAF"
+result.identifiers.variant           # "V600E"
+result.identifiers.variant_input     # Original input string
+result.identifiers.cosmic_id         # "COSM476"
+result.identifiers.dbsnp_id          # "rs113488022"
+result.identifiers.hgvs_protein      # "p.Val600Glu"
+result.identifiers.hgvs_coding       # "c.1799T>A"
+result.identifiers.hgvs_genomic      # "NC_000007.14:g.140753336A>T"
+result.identifiers.transcript_id     # "ENST00000288602"
+result.identifiers.transcript_consequence  # "missense_variant"
+result.identifiers.chromosome        # "7"
+result.identifiers.position          # 140753336
+result.identifiers.ref               # "A"
+result.identifiers.alt               # "T"
 ```
 
-### `panel.kb`
+### `result.kb`
 
 Knowledgebase evidence from curated sources.
 
 ```python
 # CIViC curated assertions
-panel.kb.civic_assertions           # list[CIViCAssertion]
-for assertion in panel.kb.civic_assertions:
+result.kb.civic_assertions           # list[CIViCAssertion]
+for assertion in result.kb.civic_assertions:
     assertion.id                    # "12"
     assertion.variant_name          # "V600E"
     assertion.disease               # "Melanoma"
@@ -136,8 +147,8 @@ for assertion in panel.kb.civic_assertions:
     assertion.source                # "PMID:25399551"
 
 # VICC MetaKB (aggregated from OncoKB, CIViC, MOAlmanac, etc.)
-panel.kb.vicc                       # list[VICCAssociation]
-for assoc in panel.kb.vicc:
+result.kb.vicc                       # list[VICCAssociation]
+for assoc in result.kb.vicc:
     assoc.source                    # "oncokb"
     assoc.gene                      # "BRAF"
     assoc.variant                   # "V600E"
@@ -147,61 +158,61 @@ for assoc in panel.kb.vicc:
     assoc.clinical_significance     # "Sensitive"
 
 # CGI biomarkers
-panel.kb.cgi_biomarkers             # list[CGIBiomarker]
+result.kb.cgi_biomarkers             # list[CGIBiomarker]
 
 # ClinVar clinical significance
-panel.kb.clinvar                    # ClinVarEntry | None
-panel.kb.clinvar.clinical_significance  # "Pathogenic"
-panel.kb.clinvar.review_status     # "reviewed by expert panel"
-panel.kb.clinvar.conditions        # ["Melanoma", "Colorectal cancer"]
+result.kb.clinvar                    # ClinVarEntry | None
+result.kb.clinvar.clinical_significance  # "Pathogenic"
+result.kb.clinvar.review_status     # "reviewed by expert panel"
+result.kb.clinvar.conditions        # ["Melanoma", "Colorectal cancer"]
 ```
 
-### `panel.functional`
+### `result.functional`
 
 Computational predictions and population frequencies.
 
 ```python
 # AlphaMissense (Google DeepMind)
-panel.functional.alphamissense_score       # 0.9834 (0-1, higher = pathogenic)
-panel.functional.alphamissense_prediction  # "P" (P=Pathogenic, B=Benign, A=Ambiguous)
+result.functional.alphamissense_score       # 0.9834 (0-1, higher = pathogenic)
+result.functional.alphamissense_prediction  # "P" (P=Pathogenic, B=Benign, A=Ambiguous)
 
 # CADD (Combined Annotation Dependent Depletion)
-panel.functional.cadd_score                # 32.0 (PHRED-scaled, >20 = top 1%)
-panel.functional.cadd_raw                  # 6.23
+result.functional.cadd_score                # 32.0 (PHRED-scaled, >20 = top 1%)
+result.functional.cadd_raw                  # 6.23
 
 # Other predictors
-panel.functional.polyphen2_score           # 0.999
-panel.functional.polyphen2_prediction      # "probably_damaging"
-panel.functional.sift_score                # 0.001
-panel.functional.sift_prediction           # "deleterious"
-panel.functional.revel_score               # 0.92
+result.functional.polyphen2_score           # 0.999
+result.functional.polyphen2_prediction      # "probably_damaging"
+result.functional.sift_score                # 0.001
+result.functional.sift_prediction           # "deleterious"
+result.functional.revel_score               # 0.92
 
 # Population frequencies (gnomAD)
-panel.functional.gnomad_exome_af           # 0.00001 (allele frequency)
-panel.functional.gnomad_genome_af          # 0.000008
+result.functional.gnomad_exome_af           # 0.00001 (allele frequency)
+result.functional.gnomad_genome_af          # 0.000008
 
 # Helper methods
-panel.functional.is_predicted_pathogenic() # True if AlphaMissense = "P"
-panel.functional.is_rare(threshold=0.01)   # True if gnomAD AF < threshold
-panel.functional.get_prediction_summary()  # "Pathogenic (AM=0.98, CADD=32)"
+result.functional.is_predicted_pathogenic() # True if AlphaMissense = "P"
+result.functional.is_rare(threshold=0.01)   # True if gnomAD AF < threshold
+result.functional.get_prediction_summary()  # "Pathogenic (AM=0.98, CADD=32)"
 ```
 
-### `panel.clinical`
+### `result.clinical`
 
 Clinical context including FDA approvals and trials.
 
 ```python
 # FDA-approved therapies
-panel.clinical.fda_approvals        # list[FDAApproval]
-for approval in panel.clinical.fda_approvals:
+result.clinical.fda_approvals        # list[FDAApproval]
+for approval in result.clinical.fda_approvals:
     approval.drug_name              # "Dabrafenib"
     approval.indication             # "BRAF V600E mutant melanoma"
     approval.approval_date          # "2013-05-29"
     approval.label_url              # FDA label URL
 
 # Clinical trials
-panel.clinical.clinical_trials      # list[ClinicalTrial]
-for trial in panel.clinical.clinical_trials:
+result.clinical.clinical_trials      # list[ClinicalTrial]
+for trial in result.clinical.clinical_trials:
     trial.nct_id                    # "NCT04543188"
     trial.title                     # "Study of..."
     trial.status                    # "RECRUITING"
@@ -210,23 +221,23 @@ for trial in panel.clinical.clinical_trials:
     trial.url                       # ClinicalTrials.gov link
 
 # Gene-level context
-panel.clinical.gene_role            # "oncogene" | "tumor_suppressor" | "unknown"
-panel.clinical.gene_summary         # Gene function summary
+result.clinical.gene_role            # "oncogene" | "tumor_suppressor" | "unknown"
+result.clinical.gene_summary         # Gene function summary
 
 # Helper methods
-panel.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib", ...]
-panel.clinical.has_fda_approval()   # True
-panel.clinical.get_recruiting_trials()  # Trials with status="RECRUITING"
+result.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib", ...]
+result.clinical.has_fda_approval()   # True
+result.clinical.get_recruiting_trials()  # Trials with status="RECRUITING"
 ```
 
-### `panel.literature`
+### `result.literature`
 
 Literature evidence and LLM-synthesized insights.
 
 ```python
 # Retrieved articles
-panel.literature.pubmed_articles         # list[PubMedArticle]
-for article in panel.literature.pubmed_articles:
+result.literature.pubmed_articles         # list[PubMedArticle]
+for article in result.literature.pubmed_articles:
     article.pmid                         # "22735384"
     article.title                        # "BRAF inhibitor resistance..."
     article.abstract                     # Full abstract text
@@ -236,64 +247,60 @@ for article in panel.literature.pubmed_articles:
     article.url                          # PubMed link
 
 # Semantic Scholar enrichment (if available)
-panel.literature.semantic_papers         # list[SemanticPaperInfo]
-for paper in panel.literature.semantic_papers:
+result.literature.semantic_papers         # list[SemanticPaperInfo]
+for paper in result.literature.semantic_papers:
     paper.citation_count                 # 1542
     paper.influential_citation_count     # 89
     paper.tldr                           # AI-generated summary
 
 # LLM-synthesized knowledge (requires enable_llm=True)
-panel.literature.literature_knowledge    # str | None
+result.literature.literature_knowledge    # str | None
 # Example: "BRAF V600E shows initial response to vemurafenib but
 #           develops resistance in 6-12 months via NRAS mutations (20%),
 #           MEK1/2 mutations (5-10%), or BRAF amplification..."
 
 # Literature source
-panel.literature.literature_source       # "semantic_scholar" | "pubmed" | None
+result.literature.literature_source       # "semantic_scholar" | "pubmed" | None
 
 # Helper methods
-panel.literature.get_resistance_articles()    # Articles mentioning resistance
-panel.literature.get_sensitivity_articles()   # Articles mentioning sensitivity
+result.literature.get_resistance_articles()    # Articles mentioning resistance
+result.literature.get_sensitivity_articles()   # Articles mentioning sensitivity
 ```
 
-### `panel.meta`
+### `result.llm`
 
-Processing metadata and trust signals.
+LLM-generated clinical narrative (when `enable_llm=True`).
 
 ```python
-# Source tracking
-panel.meta.sources_queried          # ["CIViC", "VICC", "ClinVar", "COSMIC", ...]
-panel.meta.sources_with_data        # ["CIViC", "VICC", "COSMIC"]
-panel.meta.sources_failed           # ["ClinicalTrials.gov"]  # If any errored
-
-# Conflicts between sources
-panel.meta.conflicts                # list[str]
-# Example: ["CIViC reports sensitivity, CGI reports resistance to Drug X"]
-
-# Processing info
-panel.meta.processing_time_ms       # 1234
-panel.meta.timestamp                # "2024-01-15T10:30:00Z"
-
-# Helper methods
-panel.meta.has_conflicts()          # True if any cross-source disagreements
-panel.meta.get_evidence_summary()   # "5 sources, 12 assertions, 2 conflicts"
+# LLM insight is None when LLM is disabled
+if result.llm:
+    result.llm.llm_summary              # Clinical summary narrative
+    result.llm.rationale                # Reasoning behind recommendations
+    result.llm.recommended_therapies    # list[RecommendedTherapy]
+    result.llm.clinical_trials_available # True if trials exist
+    result.llm.references               # list[str] - cited sources
 ```
 
 ---
 
 ## Output Methods
 
-### `to_knowledge_header()`
+### `get_summary()`
 
-Generate a dense, LLM-ready context block.
+Get a one-line summary of the variant evidence.
 
 ```python
-header = panel.to_knowledge_header()
-# Returns:
-# "BRAF V600E in melanoma. Oncogenic driver via constitutive MAPK activation.
-#  FDA-approved: dabrafenib + trametinib, vemurafenib + cobimetinib.
-#  Resistance typical at 6-12 months via NRAS (20%), MEK1/2 (5-10%), or BRAF amp.
-#  Sources: CIViC:assertion:12, FDA label, PMID:22735384"
+summary = result.get_summary()
+# Returns: "BRAF V600E: 5 sources, FDA-approved therapies available"
+```
+
+### `has_evidence()`
+
+Check if any evidence was found.
+
+```python
+if result.has_evidence():
+    print("Evidence found from databases")
 ```
 
 ### `model_dump()`
@@ -301,8 +308,20 @@ header = panel.to_knowledge_header()
 Export to dictionary (Pydantic v2).
 
 ```python
-data = panel.model_dump()           # Full dict
-data = panel.model_dump(mode="json")  # JSON-serializable dict
+data = result.model_dump()           # Full dict
+data = result.model_dump(mode="json")  # JSON-serializable dict
+
+# JSON structure:
+# {
+#   "evidence": {
+#     "identifiers": {...},
+#     "kb": {...},
+#     "functional": {...},
+#     "clinical": {...},
+#     "literature": {...}
+#   },
+#   "llm": {...} | null
+# }
 ```
 
 ### `model_dump_json()`
@@ -310,7 +329,7 @@ data = panel.model_dump(mode="json")  # JSON-serializable dict
 Export to JSON string.
 
 ```python
-json_str = panel.model_dump_json(indent=2)
+json_str = result.model_dump_json(indent=2)
 ```
 
 ---
@@ -349,7 +368,7 @@ from oncomind import get_insight
 from oncomind.exceptions import VariantParseError, APIError
 
 try:
-    panel = await get_insight("INVALID_INPUT")
+    result = await get_insight("INVALID_INPUT")
 except VariantParseError as e:
     print(f"Could not parse variant: {e}")
 except APIError as e:

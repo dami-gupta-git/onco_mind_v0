@@ -20,8 +20,8 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │                      Public API Layer                             │
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  api_public/insight.py                                      │  │
-│  │  - get_insight(variant_str, tumor_type, config) → Insight   │  │
-│  │  - get_insights(variants, tumor_type, config) → [Insight]   │  │
+│  │  - get_insight(variant_str, tumor_type, config) → Result    │  │
+│  │  - get_insights(variants, tumor_type, config) → [Result]    │  │
 │  │  - InsightConfig                                            │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -43,7 +43,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │  insight_builder/builder.py                                 │  │
 │  │  - InsightBuilder (async context manager)                   │  │
-│  │  - build_insight(parsed_variant, tumor_type) → Insight      │  │
+│  │  - build_insight(parsed_variant, tumor_type) → Evidence     │  │
 │  │  - Parallel API fetching with asyncio.gather()              │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -69,13 +69,14 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                        Models Layer                               │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  models/insight/insight.py                                  │  │
-│  │  - Insight (top-level output)                               │  │
-│  │    ├── identifiers: VariantIdentifiers                      │  │
-│  │    ├── kb: KnowledgebaseEvidence                            │  │
-│  │    ├── functional: FunctionalScores                         │  │
-│  │    ├── clinical: ClinicalContext                            │  │
-│  │    ├── literature: LiteratureEvidence                       │  │
+│  │  models/result.py                                           │  │
+│  │  - Result (top-level output)                                │  │
+│  │    ├── evidence: Evidence (structured data)                 │  │
+│  │    │   ├── identifiers: VariantIdentifiers                  │  │
+│  │    │   ├── kb: KnowledgebaseEvidence                        │  │
+│  │    │   ├── functional: FunctionalScores                     │  │
+│  │    │   ├── clinical: ClinicalContext                        │  │
+│  │    │   └── literature: LiteratureEvidence                   │  │
 │  │    └── llm: LLMInsight | None  ← Optional LLM narrative     │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -92,19 +93,28 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 
 ### 2. Unified Output Model
 
-All code paths return a single `Insight` object that contains:
-- Structured evidence from databases (always populated)
-- Optional LLM-generated narrative (when LLM mode is enabled)
+All code paths return a single `Result` object that contains:
+- `evidence`: Structured data from databases (always populated)
+- `llm`: Optional LLM-generated narrative (when LLM mode is enabled)
 
 ```python
-# The Insight model embeds LLM narrative when available
-class Insight(BaseModel):
+# The Result model wraps Evidence and optional LLMInsight
+class Result(BaseModel):
+    evidence: Evidence                 # Structured data (always present)
+    llm: LLMInsight | None             # LLM narrative (when enabled)
+
+    # Property shortcuts for convenience:
+    @property
+    def identifiers(self) -> VariantIdentifiers:
+        return self.evidence.identifiers
+    # ... similar for kb, functional, clinical, literature
+
+class Evidence(BaseModel):
     identifiers: VariantIdentifiers    # Gene, variant, IDs
     kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
     functional: FunctionalScores       # AlphaMissense, CADD, etc.
     clinical: ClinicalContext          # FDA, trials, gene role
     literature: LiteratureEvidence     # PubMed, extracted knowledge
-    llm: LLMInsight | None             # LLM narrative (when enabled)
 ```
 
 ### 3. LLM as Optional Enhancement
@@ -113,17 +123,17 @@ The core annotation pipeline is deterministic. LLM can be enabled for clinical n
 
 ```python
 # Default: structured evidence + LLM narrative (~12s)
-insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
-print(insight.llm.llm_summary)  # LLM narrative
+result = await get_insight("BRAF V600E", tumor_type="Melanoma")
+print(result.llm.llm_summary)  # LLM narrative
 
 # Lite: fast, no LLM (~7s)
 config = InsightConfig(enable_llm=False)
-insight = await get_insight("BRAF V600E", config=config)
-print(insight.llm)  # None
+result = await get_insight("BRAF V600E", config=config)
+print(result.llm)  # None
 
 # Full: + literature search + enhanced narrative (~25s)
 config = InsightConfig(enable_llm=True, enable_literature=True)
-insight = await get_insight("BRAF V600E", config=config)
+result = await get_insight("BRAF V600E", config=config)
 ```
 
 **CLI equivalent:**
@@ -173,7 +183,7 @@ async def get_insight(
     variant_str: str,              # "BRAF V600E" or "EGFR L858R in NSCLC"
     tumor_type: str | None = None, # Optional tumor context
     config: InsightConfig | None = None,
-) -> Insight:
+) -> Result:
 ```
 
 **Responsibilities:**
@@ -181,7 +191,7 @@ async def get_insight(
 - Validate variant type (SNP/indel only)
 - Orchestrate evidence building
 - Apply optional LLM enhancement
-- Return strongly-typed Insight
+- Return strongly-typed Result
 
 ### Normalization (`normalization/`)
 
@@ -231,7 +241,7 @@ class InsightBuilder:
         self,
         variant: ParsedVariant,
         tumor_type: str | None,
-    ) -> Insight:
+    ) -> Evidence:
         # Parallel fetch from all sources
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(...),
@@ -244,15 +254,13 @@ class InsightBuilder:
             return_exceptions=True,
         )
 
-        # Assemble into Insight
-        return Insight(
+        # Assemble into Evidence
+        return Evidence(
             identifiers=...,
             kb=...,
             functional=...,
             clinical=...,
             literature=...,
-            meta=...,
-            llm=None,  # Populated later if LLM enabled
         )
 ```
 
@@ -305,19 +313,33 @@ class VICCClient:
 Pydantic models for type safety and validation:
 
 ```python
-class Insight(BaseModel):
-    """Top-level evidence aggregation with optional LLM narrative."""
+class Result(BaseModel):
+    """Top-level output with structured evidence and optional LLM narrative."""
+
+    evidence: Evidence                 # Structured data (always present)
+    llm: LLMInsight | None             # LLM narrative (when enabled)
+
+    # Property shortcuts for convenience
+    @property
+    def identifiers(self) -> VariantIdentifiers:
+        return self.evidence.identifiers
+
+    def get_summary(self) -> str:
+        """Generate one-line summary of evidence."""
+        ...
+
+    def has_evidence(self) -> bool:
+        """Check if any evidence was found."""
+        ...
+
+class Evidence(BaseModel):
+    """Structured evidence from databases (no LLM field)."""
 
     identifiers: VariantIdentifiers    # Gene, variant, IDs
     kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
     functional: FunctionalScores       # AlphaMissense, CADD, etc.
     clinical: ClinicalContext          # FDA, trials, gene role
     literature: LiteratureEvidence     # PubMed, extracted knowledge
-    llm: LLMInsight | None             # Optional LLM narrative
-
-    def get_summary(self) -> str:
-        """Generate one-line summary of evidence."""
-        ...
 
     def get_evidence_summary_for_llm(self) -> str:
         """Generate compact evidence summary for LLM prompt."""
@@ -327,30 +349,31 @@ class Insight(BaseModel):
 **Model Hierarchy:**
 
 ```
-Insight
-├── VariantIdentifiers
-│   ├── gene, variant, variant_type
-│   ├── cosmic_id, clinvar_id, dbsnp_id
-│   └── hgvs_protein, hgvs_genomic
-├── KnowledgebaseEvidence
-│   ├── civic: list[CIViCEvidence]
-│   ├── civic_assertions: list[CIViCAssertionEvidence]
-│   ├── clinvar: list[ClinVarEvidence]
-│   ├── vicc: list[VICCEvidence]
-│   └── cgi_biomarkers: list[CGIBiomarkerEvidence]
-├── FunctionalScores
-│   ├── alphamissense_score, alphamissense_prediction
-│   ├── cadd_score, polyphen2_prediction, sift_prediction
-│   └── gnomad_exome_af, gnomad_genome_af
-├── ClinicalContext
-│   ├── tumor_type, tumor_type_resolved
-│   ├── fda_approvals: list[FDAApproval]
-│   ├── clinical_trials: list[ClinicalTrialEvidence]
-│   └── gene_role, gene_class, pathway
-├── LiteratureEvidence
-│   ├── pubmed_articles: list[PubMedEvidence]
-│   └── literature_knowledge: LiteratureKnowledge | None
-└── LLMInsight | None  ← Optional, embedded when LLM mode enabled
+Result
+├── evidence: Evidence
+│   ├── VariantIdentifiers
+│   │   ├── gene, variant, variant_type
+│   │   ├── cosmic_id, clinvar_id, dbsnp_id
+│   │   └── hgvs_protein, hgvs_genomic
+│   ├── KnowledgebaseEvidence
+│   │   ├── civic: list[CIViCEvidence]
+│   │   ├── civic_assertions: list[CIViCAssertionEvidence]
+│   │   ├── clinvar: list[ClinVarEvidence]
+│   │   ├── vicc: list[VICCEvidence]
+│   │   └── cgi_biomarkers: list[CGIBiomarkerEvidence]
+│   ├── FunctionalScores
+│   │   ├── alphamissense_score, alphamissense_prediction
+│   │   ├── cadd_score, polyphen2_prediction, sift_prediction
+│   │   └── gnomad_exome_af, gnomad_genome_af
+│   ├── ClinicalContext
+│   │   ├── tumor_type, tumor_type_resolved
+│   │   ├── fda_approvals: list[FDAApproval]
+│   │   ├── clinical_trials: list[ClinicalTrialEvidence]
+│   │   └── gene_role, gene_class, pathway
+│   └── LiteratureEvidence
+│       ├── pubmed_articles: list[PubMedEvidence]
+│       └── literature_knowledge: LiteratureKnowledge | None
+└── llm: LLMInsight | None  ← Optional, when LLM mode enabled
     ├── llm_summary: str
     ├── rationale: str
     ├── recommended_therapies: list[RecommendedTherapy]
@@ -371,7 +394,7 @@ class LLMService:
         gene: str,
         variant: str,
         tumor_type: str | None,
-        evidence_summary: str,           # From Insight.get_evidence_summary_for_llm()
+        evidence_summary: str,           # From Evidence.get_evidence_summary_for_llm()
         has_clinical_trials: bool,
     ) -> LLMInsight:
         """Generate LLM narrative from evidence summary."""
@@ -403,10 +426,10 @@ class LLMService:
                 EvidenceBuilder
                       │
                       ▼
-                   Insight (with structured evidence)
+                   Evidence (structured data)
                       │
                       ▼
-        insight.get_evidence_summary_for_llm()
+        evidence.get_evidence_summary_for_llm()
                       │
                       ▼
         ┌─────────────────────────────────┐
@@ -419,7 +442,7 @@ class LLMService:
                   LLMInsight
                       │
                       ▼
-        insight.llm = LLMInsight  ← Embedded in parent
+        Result(evidence=evidence, llm=llm_insight)
 ```
 
 ## Data Flow
@@ -448,7 +471,7 @@ User Input: "BRAF V600E in Melanoma"
                 │
                 ▼
 ┌─────────────────────────────────┐
-│ 3. Build Insight                │
+│ 3. Build Evidence               │
 │    EvidenceBuilder              │
 │    ┌────────────────────────┐   │
 │    │ Parallel API Calls:    │   │
@@ -464,10 +487,9 @@ User Input: "BRAF V600E in Melanoma"
                 │
                 ▼
 ┌─────────────────────────────────┐
-│ 4. Assemble Insight             │
+│ 4. Assemble Evidence            │
 │    - Merge results              │
 │    - Track failures             │
-│    - llm = None                 │
 └───────────────┬─────────────────┘
                 │
                 ▼ (if enable_llm=True)
@@ -475,12 +497,17 @@ User Input: "BRAF V600E in Melanoma"
 │ 5. LLM Enhancement              │
 │    - Get evidence summary       │
 │    - Call LLMService            │
-│    - Embed LLMInsight           │
-│    → insight.llm = LLMInsight   │
+│    → llm_insight = LLMInsight   │
 └───────────────┬─────────────────┘
                 │
                 ▼
-           Insight
+┌─────────────────────────────────┐
+│ 6. Create Result                │
+│    Result(evidence, llm)        │
+└───────────────┬─────────────────┘
+                │
+                ▼
+             Result
 ```
 
 ### Batch Processing
@@ -501,16 +528,16 @@ User Input: ["BRAF V600E", "EGFR L858R", "KRAS G12C"]
 │ Sequential Processing           │
 │ (to respect API rate limits)    │
 │                                 │
-│ Variant 1 ──► Insight 1         │
-│ Variant 2 ──► Insight 2         │
-│ Variant 3 ──► Insight 3         │
+│ Variant 1 ──► Result 1          │
+│ Variant 2 ──► Result 2          │
+│ Variant 3 ──► Result 3          │
 │                                 │
 │ Progress callback:              │
 │   progress_callback(i, total)   │
 └───────────────┬─────────────────┘
                 │
                 ▼
-         list[Insight]
+         list[Result]
 ```
 
 ## Configuration
@@ -640,7 +667,7 @@ Non-authoritative AMP/ASCO/CAP tier computation:
 ```python
 from oncomind.experimental import compute_experimental_tier
 
-result = compute_experimental_tier(insight)
+tier_result = compute_experimental_tier(result)
 # TierResult(
 #     tier="Tier I",
 #     level="A",
@@ -657,7 +684,7 @@ Feature extraction for ML applications:
 ```python
 from oncomind.embeddings import extract_features
 
-features = extract_features(insight)
+features = extract_features(result)
 # {
 #     "alphamissense_score": 0.98,
 #     "cadd_score": 32.0,
@@ -732,6 +759,6 @@ pytest tests/integration/ -v -m integration
 ### Extension Points
 
 - New API clients: Implement base client pattern
-- New evidence types: Add to models/insight/
+- New evidence types: Add to models/evidence/
 - New normalizers: Add patterns to input_parser.py
 - New LLM tasks: Add methods to llm/service.py

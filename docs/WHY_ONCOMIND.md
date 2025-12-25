@@ -184,20 +184,18 @@ For everything else, we do the literature search you'd do manually — and show 
 ```python
 from oncomind import get_insight
 
-panel = await get_insight("EGFR T790M", tumor_type="NSCLC")
+result = await get_insight("EGFR T790M", tumor_type="NSCLC")
 
 # What do the databases say?
-print(panel.kb.civic_assertions)
-print(panel.clinical.fda_approvals)
+print(result.kb.civic_assertions)
+print(result.clinical.fda_approvals)
 
 # What does the literature say?
-print(panel.literature.literature_knowledge)
+print(result.literature.literature_knowledge)
 
-# What don't we know?
-print(panel.meta.evidence_gaps)
-
-# Where do sources disagree?
-print(panel.meta.conflicts)
+# LLM-generated clinical narrative (when enabled)
+if result.llm:
+    print(result.llm.llm_summary)
 ```
 
 See [README.md](../README.md) for installation and full API documentation.

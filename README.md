@@ -30,7 +30,7 @@ OncoMind automates that workflow: aggregate databases, search literature, synthe
 - **Evidence synthesis**: Extract resistance/sensitivity signals from abstracts
 - **Conflict detection**: Flag when databases disagree
 - **Source attribution**: Every claim links to a PMID, FDA label, or database entry
-- **Strongly-typed output**: Pydantic `Insight` model for programmatic use
+- **Strongly-typed output**: Pydantic `Result` model for programmatic use
 
 ## Installation
 
@@ -55,23 +55,24 @@ pip install -e ".[dev]"
 
 ```python
 import asyncio
-from oncomind import get_insight, InsightConfig
+from oncomind import get_insight, InsightConfig, Result
 
 async def main():
     # Fast annotation (no LLM)
-    panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
+    result = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-    print(f"Gene: {panel.identifiers.gene}")
-    print(f"FDA Approved: {panel.clinical.get_approved_drugs()}")
-    print(f"Clinical Trials: {len(panel.clinical.clinical_trials)}")
-    print(f"Sources: {panel.meta.sources_with_data}")
+    print(f"Gene: {result.identifiers.gene}")
+    print(f"Therapies: {result.evidence.get_recommended_therapies()}")
+    print(f"Clinical Trials: {len(result.clinical.clinical_trials)}")
+    print(f"Summary: {result.get_summary()}")
 
-    # With LLM synthesis for literature analysis
+    # With LLM synthesis for clinical narrative
     config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
-    panel = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
+    result = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
 
-    # LLM-extracted insights from literature
-    print(panel.literature.literature_knowledge)
+    # LLM-generated narrative
+    if result.llm:
+        print(result.llm.llm_summary)
 
 asyncio.run(main())
 ```
@@ -170,27 +171,38 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
-## Insight
+## Result Model
 
-The `Insight` is the core output model with sections for:
+The `Result` is the core output model containing:
+
+| Field | Contents |
+|-------|----------|
+| `evidence` | `Evidence` model with all structured data |
+| `llm` | `LLMInsight` with LLM narrative (optional, only when LLM enabled) |
+
+The `Evidence` model contains:
 
 | Section | Contents |
 |---------|----------|
 | `identifiers` | Gene, variant, HGVS notation, COSMIC/dbSNP IDs |
-| `kb` | CIViC assertions, VICC MetaKB, CGI biomarkers, ClinVar |
-| `functional` | AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD frequencies |
-| `clinical` | FDA approvals, clinical trials, gene role |
-| `literature` | PubMed articles, LLM-synthesized insights |
-| `meta` | Sources queried, conflicts, processing metadata |
+| `kb` | CIViC assertions, VICC MetaKB, CGI biomarkers |
+| `functional` | AlphaMissense, CADD, PolyPhen2, gnomAD frequencies |
+| `clinical` | FDA approvals, clinical trials, gene role, ClinVar significance |
+| `literature` | PubMed articles, literature knowledge |
 
 ```python
-insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
+result = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-insight.identifiers.gene              # "BRAF"
-insight.kb.civic_assertions           # Curated drug-variant associations
-insight.functional.alphamissense_score  # 0.98 (pathogenicity)
-insight.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib"]
-insight.meta.sources_with_data        # ["CIViC", "VICC", "COSMIC", ...]
+# Access via shortcut properties on Result
+result.identifiers.gene                # "BRAF"
+result.kb.civic_assertions             # Curated drug-variant associations
+result.functional.alphamissense_score  # 0.98 (pathogenicity)
+result.clinical.fda_approvals          # FDA-approved therapies
+
+# Helper methods
+result.get_summary()                   # One-line summary
+result.has_evidence()                  # True if any evidence found
+result.evidence.get_recommended_therapies()  # FDA + CGI therapies
 ```
 
 See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentation.
