@@ -556,7 +556,7 @@ class FDAClient:
         Returns:
             List of FDAApproval objects
         """
-        from oncomind.models.insight.fda import FDAApproval
+        from oncomind.models.evidence.fda import FDAApproval
 
         approval_records = await self.fetch_drug_approvals(gene, variant)
         evidence_list = []

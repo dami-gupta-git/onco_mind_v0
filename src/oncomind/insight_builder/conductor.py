@@ -15,11 +15,11 @@ ARCHITECTURE:
 from dataclasses import dataclass
 from typing import Callable
 
-from oncomind.insight_builder.aggregator import (
+from oncomind.insight_builder.evidence_aggregator import (
     EvidenceAggregator,
     EvidenceAggregatorConfig,
 )
-from oncomind.models.insight import Evidence
+from oncomind.models.evidence import Evidence
 from oncomind.models.result import Result
 from oncomind.normalization import ParsedVariant, parse_variant_input
 

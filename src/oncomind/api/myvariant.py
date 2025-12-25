@@ -24,10 +24,10 @@ from tenacity import (
 
 from oncomind.models.myvariant import MyVariantHit, MyVariantResponse
 
-from oncomind.models.insight.civic import CIViCEvidence
-from oncomind.models.insight.clinvar import ClinVarEvidence
-from oncomind.models.insight.cosmic import COSMICEvidence
-from oncomind.models.insight.myvariant_evidence import MyVariantEvidence
+from oncomind.models.evidence.civic import CIViCEvidence
+from oncomind.models.evidence.clinvar import ClinVarEvidence
+from oncomind.models.evidence.cosmic import COSMICEvidence
+from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
 
 
 class MyVariantAPIError(Exception):

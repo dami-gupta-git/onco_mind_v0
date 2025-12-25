@@ -501,7 +501,7 @@ class VICCClient:
         Returns:
             List of VICCEvidence objects
         """
-        from oncomind.models.insight.vicc import VICCEvidence
+        from oncomind.models.evidence.vicc import VICCEvidence
 
         associations = await self.fetch_associations(gene, variant, tumor_type, max_results)
         evidence_list = []

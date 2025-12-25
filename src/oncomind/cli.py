@@ -94,7 +94,7 @@ def insight(
             variant_title += f" [dim]in[/dim] {tumor}"
 
         # Build metrics line
-        therapies_count = len(result.llm.recommended_therapies) if result.llm else len(result.clinical.fda_approvals)
+        therapies_count = len(result.llm.recommended_therapies if result.llm else result.evidence.get_recommended_therapies())
         clinvar_sig = result.clinical.clinvar_clinical_significance or "N/A"
         am_score = result.functional.alphamissense_score
         am_display = f"{am_score:.2f}" if am_score else "N/A"
@@ -127,6 +127,56 @@ def insight(
             padding=(0, 2),
         ))
 
+
+
+        # Build IDs and Scores content
+        ids_lines = []
+
+        # Database Identifiers
+        if result.identifiers.cosmic_id:
+            ids_lines.append(f"[dim]COSMIC:[/dim]       {result.identifiers.cosmic_id}")
+        if result.identifiers.dbsnp_id:
+            ids_lines.append(f"[dim]dbSNP:[/dim]        {result.identifiers.dbsnp_id}")
+        if result.identifiers.clinvar_id:
+            ids_lines.append(f"[dim]ClinVar ID:[/dim]   {result.identifiers.clinvar_id}")
+        if result.identifiers.ncbi_gene_id:
+            ids_lines.append(f"[dim]NCBI Gene:[/dim]    {result.identifiers.ncbi_gene_id}")
+
+        # HGVS notations
+        if result.identifiers.hgvs_protein:
+            ids_lines.append(f"[dim]HGVS.p:[/dim]       {result.identifiers.hgvs_protein}")
+        if result.identifiers.hgvs_transcript:
+            ids_lines.append(f"[dim]HGVS.c:[/dim]       {result.identifiers.hgvs_transcript}")
+        if result.identifiers.hgvs_genomic:
+            ids_lines.append(f"[dim]HGVS.g:[/dim]       {result.identifiers.hgvs_genomic}")
+
+        # Add separator before scores if we have IDs
+        if ids_lines:
+            ids_lines.append("")
+
+        # Gene role
+        if result.clinical.gene_role:
+            ids_lines.append(f"[dim]Gene Role:[/dim]    {result.clinical.gene_role}")
+
+        # Pathogenicity scores
+        func_summary = result.functional.get_pathogenicity_summary()
+        if func_summary != "No functional predictions available":
+            ids_lines.append(f"[dim]Pathogenicity:[/dim] {func_summary}")
+
+        # gnomAD frequency
+        if result.functional.gnomad_exome_af is not None:
+            af = result.functional.gnomad_exome_af
+            ids_lines.append(f"[dim]gnomAD AF:[/dim]    {af:.2e}" if af > 0 else "[dim]gnomAD AF:[/dim]    0")
+
+        # Show panel only if we have content
+        if ids_lines:
+            console.print(Panel(
+                "\n".join(ids_lines),
+                title="[bold]IDs and Scores[/bold]",
+                border_style="blue",
+                padding=(0, 2),
+            ))
+
         # LLM Insight (when LLM mode is enabled)
         if result.llm:
             wrapped_llm = textwrap.fill(result.llm.llm_summary, width=74)
@@ -137,123 +187,22 @@ def insight(
                 padding=(1, 2),
             ))
 
-        # Build header content with all variant info
-        header_lines = []
-
-        # IDs row
-        ids = []
-        if result.identifiers.cosmic_id:
-            ids.append(f"COSMIC:{result.identifiers.cosmic_id}")
-        if result.identifiers.dbsnp_id:
-            ids.append(f"dbSNP:{result.identifiers.dbsnp_id}")
-        if result.identifiers.clinvar_id:
-            ids.append(f"ClinVar:{result.identifiers.clinvar_id}")
-        if ids:
-            header_lines.append(f"[dim]{' | '.join(ids)}[/dim]")
-
-        # ClinVar significance
-        if result.clinical.clinvar_clinical_significance:
-            header_lines.append(f"[dim]ClinVar:[/dim]            {result.clinical.clinvar_clinical_significance}")
-
-        # Functional predictions
-        func_summary = result.functional.get_pathogenicity_summary()
-        if func_summary != "No functional predictions available":
-            header_lines.append(f"[dim]Pathogenicity:[/dim]      {func_summary}")
-
-        # Gene role
-        if result.clinical.gene_role:
-            header_lines.append(f"[dim]Gene Role:[/dim]          {result.clinical.gene_role}")
-
-        # Evidence sources
-        sources = result.kb.get_evidence_sources()
-        if sources:
-            header_lines.append(f"[dim]Evidence Sources:[/dim]   {', '.join(sources)}")
-
-        console.print(Panel(
-            "\n".join(header_lines),
-            title="[bold]Evidence Overview[/bold]",
-            border_style="blue",
-            padding=(0, 2),
-        ))
-
-        # FDA Approved Drugs (always show if available)
-        if result.clinical.fda_approvals:
-            drugs = result.clinical.get_approved_drugs()
-            if drugs:
-                console.print(Panel(
-                    "[bold green]" + ", ".join(drugs) + "[/bold green]",
-                    title="[bold]FDA Approved Drugs[/bold]",
-                    border_style="green",
-                    padding=(0, 2),
-                ))
-
-        # Recommended Therapies (from LLM or extracted from evidence)
+        # Recommended Therapies (from LLM or derived from evidence)
+        therapies = result.llm.recommended_therapies if result.llm else result.evidence.get_recommended_therapies()
         therapy_lines = []
-        if result.llm and result.llm.recommended_therapies:
-            # Use LLM-recommended therapies
-            for t in result.llm.recommended_therapies:
-                level = f"Level {t.evidence_level}" if t.evidence_level else ""
-                status = t.approval_status or ""
-                parts = [p for p in [level, status] if p]
-                suffix = f" ({', '.join(parts)})" if parts else ""
-                therapy_lines.append(f"  • {t.drug_name}{suffix}")
-        else:
-            # Extract from evidence (lite mode)
-            seen_drugs = set()
-            # From FDA approvals
-            for approval in result.clinical.fda_approvals:
-                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
-                if drug_name and drug_name not in seen_drugs:
-                    seen_drugs.add(drug_name)
-                    therapy_lines.append(f"  • {drug_name} (Level A, FDA Approved)")
-            # From CGI biomarkers
-            for biomarker in result.kb.cgi_biomarkers:
-                if biomarker.fda_approved and biomarker.drug and biomarker.drug not in seen_drugs:
-                    seen_drugs.add(biomarker.drug)
-                    level = biomarker.evidence_level or "A"
-                    therapy_lines.append(f"  • {biomarker.drug} (Level {level}, FDA Approved)")
+        for t in therapies:
+            level = f"Level {t.evidence_level}" if t.evidence_level else ""
+            status = t.approval_status or ""
+            parts = [p for p in [level, status] if p]
+            suffix = f" ({', '.join(parts)})" if parts else ""
+            therapy_lines.append(f"  • {t.drug_name}{suffix}")
 
         if therapy_lines:
+            # Title depends on whether LLM was used
+            title = "[bold]LLM Recommended Therapies[/bold]" if result.llm else "[bold]Recommended Therapies[/bold]"
             console.print(Panel(
                 "\n".join(therapy_lines),
-                title="[bold]Recommended Therapies[/bold]",
-                border_style="cyan",
-                padding=(0, 2),
-            ))
-
-        # Clinical evidence details (CIViC/CGI/Trials in one box)
-        has_clinical_evidence = result.kb.civic_assertions or result.kb.cgi_biomarkers or result.clinical.clinical_trials
-        if has_clinical_evidence:
-            evidence_lines = []
-
-            if result.kb.civic_assertions:
-                evidence_lines.append("[bold]CIViC Assertions:[/bold]")
-                for a in result.kb.civic_assertions[:3]:
-                    therapies = ", ".join(a.therapies) if a.therapies else "N/A"
-                    evidence_lines.append(f"  • {therapies} → {a.significance}")
-
-            if result.kb.cgi_biomarkers:
-                if evidence_lines:
-                    evidence_lines.append("")
-                evidence_lines.append("[bold]CGI Biomarkers:[/bold]")
-                for b in result.kb.cgi_biomarkers[:3]:
-                    fda_tag = " [green](FDA)[/green]" if b.fda_approved else ""
-                    evidence_lines.append(f"  • {b.drug}: {b.association}{fda_tag}")
-
-            if result.clinical.clinical_trials:
-                if evidence_lines:
-                    evidence_lines.append("")
-                trials_count = len(result.clinical.clinical_trials)
-                variant_specific = sum(1 for t in result.clinical.clinical_trials if t.variant_specific)
-                evidence_lines.append("[bold]Clinical Trials:[/bold]")
-                trials_text = f"  {trials_count} recruiting"
-                if variant_specific:
-                    trials_text += f" ({variant_specific} variant-specific)"
-                evidence_lines.append(trials_text)
-
-            console.print(Panel(
-                "\n".join(evidence_lines),
-                title="[bold]Knowledge Base Evidence[/bold]",
+                title=title,
                 border_style="cyan",
                 padding=(0, 2),
             ))

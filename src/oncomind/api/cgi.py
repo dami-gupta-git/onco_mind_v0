@@ -332,7 +332,7 @@ class CGIClient:
         Returns:
             List of CGIBiomarkerEvidence objects
         """
-        from oncomind.models.insight.cgi import CGIBiomarkerEvidence
+        from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 
         biomarkers = self.fetch_biomarkers(gene, variant, tumor_type)
         evidence_list = []

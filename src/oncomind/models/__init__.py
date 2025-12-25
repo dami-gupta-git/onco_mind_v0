@@ -3,10 +3,10 @@
 from oncomind.models.llm_insight import LLMInsight
 from oncomind.models.recommended_therapies import RecommendedTherapy
 from oncomind.models.result import Result
-from oncomind.models.insight import Evidence
-from oncomind.models.insight.civic import CIViCEvidence
-from oncomind.models.insight.clinvar import ClinVarEvidence
-from oncomind.models.insight.cosmic import COSMICEvidence
+from oncomind.models.evidence import Evidence
+from oncomind.models.evidence.civic import CIViCEvidence
+from oncomind.models.evidence.clinvar import ClinVarEvidence
+from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.variant import VariantInput
 
 __all__ = [

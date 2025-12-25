@@ -184,54 +184,14 @@ def _build_response(result) -> Dict[str, Any]:
                 ],
             },
         },
-        "recommended_therapies": (
-            [
-                {
-                    "drug_name": t.drug_name,
-                    "evidence_level": t.evidence_level,
-                    "approval_status": t.approval_status,
-                    "clinical_context": t.clinical_context,
-                }
-                for t in llm.recommended_therapies
-            ]
-            if llm
-            else _extract_therapies(result)
-        ),
+        "recommended_therapies": [
+            {
+                "drug_name": t.drug_name,
+                "evidence_level": t.evidence_level,
+                "approval_status": t.approval_status,
+                "clinical_context": t.clinical_context,
+            }
+            for t in (llm.recommended_therapies if llm else result.evidence.get_recommended_therapies())
+        ],
         "result_data": result.model_dump(mode="json"),
     }
-
-
-def _extract_therapies(result) -> List[Dict[str, Any]]:
-    """Extract therapy recommendations from a Result object."""
-    therapies = []
-
-    # From FDA approvals
-    for approval in result.clinical.fda_approvals:
-        drug_name = approval.brand_name or approval.generic_name or approval.drug_name
-        if drug_name:
-            therapies.append({
-                "drug_name": drug_name,
-                "evidence_level": "A",
-                "approval_status": "FDA Approved",
-                "clinical_context": approval.indication if approval.indication else "",
-            })
-
-    # From CGI biomarkers
-    for biomarker in result.kb.cgi_biomarkers:
-        if biomarker.fda_approved and biomarker.drug:
-            therapies.append({
-                "drug_name": biomarker.drug,
-                "evidence_level": biomarker.evidence_level or "A",
-                "approval_status": "FDA Approved (CGI)",
-                "clinical_context": biomarker.tumor_type or "",
-            })
-
-    # Deduplicate by drug name
-    seen_drugs = set()
-    unique_therapies = []
-    for t in therapies:
-        if t["drug_name"] not in seen_drugs:
-            seen_drugs.add(t["drug_name"])
-            unique_therapies.append(t)
-
-    return unique_therapies[:10]

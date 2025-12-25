@@ -27,7 +27,7 @@ from oncomind.insight_builder import (
     build_evidence as _build_evidence,
     build_evidences as _build_evidences,
 )
-from oncomind.models.insight import Evidence
+from oncomind.models.evidence import Evidence
 from oncomind.models.result import Result
 from oncomind.normalization import (
     parse_variant_input,
@@ -426,7 +426,7 @@ async def _apply_llm_enhancement(
                     paper_contents=paper_contents,
                 )
 
-                from oncomind.models.insight.literature_knowledge import (
+                from oncomind.models.evidence.literature_knowledge import (
                     LiteratureKnowledge, DrugResistance, DrugSensitivity
                 )
 

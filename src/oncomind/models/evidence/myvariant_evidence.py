@@ -9,9 +9,9 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from oncomind.models.insight.civic import CIViCEvidence
-from oncomind.models.insight.clinvar import ClinVarEvidence
-from oncomind.models.insight.cosmic import COSMICEvidence
+from oncomind.models.evidence.civic import CIViCEvidence
+from oncomind.models.evidence.clinvar import ClinVarEvidence
+from oncomind.models.evidence.cosmic import COSMICEvidence
 
 
 class MyVariantEvidence(BaseModel):

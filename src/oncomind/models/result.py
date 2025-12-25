@@ -7,7 +7,7 @@ This is the output when LLM synthesis is enabled, combining:
 
 from pydantic import BaseModel, Field
 
-from oncomind.models.insight import Evidence
+from oncomind.models.evidence import Evidence
 from oncomind.models.llm_insight import LLMInsight
 
 
