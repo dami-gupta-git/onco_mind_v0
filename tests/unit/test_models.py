@@ -5,8 +5,8 @@ from pydantic import ValidationError
 
 from oncomind.models.llm_insight import LLMInsight
 from oncomind.models import RecommendedTherapy
-from oncomind.models.insight import CIViCEvidence, VICCEvidence
-from oncomind.models.insight.myvariant_evidence import MyVariantEvidence
+from oncomind.models.evidence import CIViCEvidence, VICCEvidence
+from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
 from oncomind.models.variant import VariantInput
 
 

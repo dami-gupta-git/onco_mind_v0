@@ -44,9 +44,8 @@ class TestGetInsightFastMode:
 
         # Should still have database evidence
         assert panel.identifiers.gene == "BRAF"
-        # BRAF V600E is well-characterized, should have some evidence
-        stats = panel.get_summary_stats()
-        assert len(stats['evidence_sources']) > 0
+        # BRAF V600E is well-characterized, should have evidence (FDA approvals, KB data)
+        assert panel.has_evidence()
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -86,7 +85,8 @@ class TestGetInsightFullMode:
         assert panel.identifiers.gene == "BRAF"
         # Full mode should attempt literature search
         # (may or may not find articles depending on API availability)
-        assert "Literature" in panel.meta.sources_queried
+        # In the new model, literature is stored in panel.literature
+        assert hasattr(panel, 'literature')
 
 
 class TestGetInsightLLMOptions:
@@ -133,7 +133,7 @@ class TestGetInsights:
         )
 
         assert len(panels) == 2
-        assert all(isinstance(p, Insight) for p in panels)
+        assert all(isinstance(p, Result) for p in panels)
         assert panels[0].identifiers.gene == "BRAF"
         assert panels[1].identifiers.gene == "EGFR"
 
@@ -253,13 +253,13 @@ class TestInsightOutput:
 
         panel = await get_insight("BRAF V600E", config=config)
 
-        # Check all sections exist
+        # Check all sections exist (via Result's property shortcuts)
         assert hasattr(panel, 'identifiers')
         assert hasattr(panel, 'kb')
         assert hasattr(panel, 'functional')
         assert hasattr(panel, 'clinical')
         assert hasattr(panel, 'literature')
-        assert hasattr(panel, 'meta')
+        assert hasattr(panel, 'evidence')  # Result has evidence field
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -282,13 +282,14 @@ class TestInsightOutput:
 
         # Should round-trip
         parsed = json.loads(json_str)
-        assert parsed['identifiers']['gene'] == "BRAF"
-        assert parsed['identifiers']['variant'] == "V600E"
+        # In new Result model, identifiers are nested under evidence
+        assert parsed['evidence']['identifiers']['gene'] == "BRAF"
+        assert parsed['evidence']['identifiers']['variant'] == "V600E"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_panel_summary_stats(self):
-        """Insight should provide summary stats."""
+    async def test_panel_summary(self):
+        """Result should provide a summary."""
         config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
@@ -296,10 +297,10 @@ class TestInsightOutput:
 
         panel = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
 
-        stats = panel.get_summary_stats()
+        # Result now has get_summary() method and has_evidence()
+        summary = panel.get_summary()
+        assert isinstance(summary, str)
+        assert len(summary) > 0
 
-        assert 'tumor_type' in stats
-        assert 'evidence_sources' in stats
-        assert 'fda_approved_drugs' in stats
-        assert 'clinical_trials_count' in stats
-        assert 'pubmed_articles_count' in stats
+        # Should have evidence for well-characterized variant
+        assert panel.has_evidence()

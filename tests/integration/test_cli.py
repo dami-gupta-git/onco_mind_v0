@@ -70,10 +70,10 @@ class TestInsightCommand:
             with open(output_path) as f:
                 data = json.load(f)
 
-            # Output has identifiers at top level (Insight model structure)
-            assert 'identifiers' in data
-            assert data['identifiers']['gene'] == "BRAF"
-            assert data['identifiers']['variant'] == "V600E"
+            # Output has Result model structure with evidence nested
+            assert 'evidence' in data
+            assert data['evidence']['identifiers']['gene'] == "BRAF"
+            assert data['evidence']['identifiers']['variant'] == "V600E"
 
     @pytest.mark.integration
     def test_insight_help(self):
