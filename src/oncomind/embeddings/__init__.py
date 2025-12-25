@@ -1,6 +1,6 @@
 """Embeddings module for numeric feature extraction.
 
-This module provides tools to convert EvidencePanel objects into
+This module provides tools to convert Insight objects into
 numeric feature vectors suitable for:
 - Similarity search
 - Clustering
