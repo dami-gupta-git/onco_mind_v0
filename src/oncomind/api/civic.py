@@ -402,6 +402,54 @@ class CIViCClient:
         all_assertions = await self.fetch_assertions(gene, variant, tumor_type, max_results=50)
         return [a for a in all_assertions if a.get_amp_tier() == "Tier I"]
 
+    async def fetch_assertion_evidence(
+        self,
+        gene: str,
+        variant: str | None = None,
+        tumor_type: str | None = None,
+        max_results: int = 50,
+    ) -> list["CIViCAssertionEvidence"]:
+        """Fetch CIViC assertions and convert to evidence model.
+
+        This method fetches assertions and converts them to the
+        CIViCAssertionEvidence model for use in Insight.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Optional variant notation (e.g., "L858R")
+            tumor_type: Optional tumor type to filter results
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of CIViCAssertionEvidence objects
+        """
+        from oncomind.models.insight.civic import CIViCAssertionEvidence
+
+        assertions = await self.fetch_assertions(gene, variant, tumor_type, max_results)
+        evidence_list = []
+
+        for assertion in assertions:
+            evidence_list.append(CIViCAssertionEvidence(
+                assertion_id=assertion.assertion_id,
+                name=assertion.name,
+                amp_level=assertion.amp_level,
+                amp_tier=assertion.get_amp_tier(),
+                amp_level_letter=assertion.get_amp_level(),
+                assertion_type=assertion.assertion_type,
+                significance=assertion.significance,
+                status=assertion.status,
+                molecular_profile=assertion.molecular_profile,
+                disease=assertion.disease,
+                therapies=assertion.therapies,
+                fda_companion_test=assertion.fda_companion_test,
+                nccn_guideline=assertion.nccn_guideline,
+                description=assertion.description,
+                is_sensitivity=assertion.is_sensitivity(),
+                is_resistance=assertion.is_resistance(),
+            ))
+
+        return evidence_list
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

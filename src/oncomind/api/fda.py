@@ -541,6 +541,33 @@ class FDAClient:
         except Exception:
             return None
 
+    async def fetch_approval_evidence(
+        self, gene: str, variant: str | None = None
+    ) -> list["FDAApproval"]:
+        """Fetch FDA drug approvals and convert to evidence model.
+
+        This method fetches approvals and converts them to the
+        FDAApproval model for use in Insight.
+
+        Args:
+            gene: Gene symbol (e.g., "BRAF", "EGFR")
+            variant: Optional variant notation (e.g., "V600E", "L858R")
+
+        Returns:
+            List of FDAApproval objects
+        """
+        from oncomind.models.insight.fda import FDAApproval
+
+        approval_records = await self.fetch_drug_approvals(gene, variant)
+        evidence_list = []
+
+        for record in approval_records:
+            parsed = self.parse_approval_data(record, gene, variant)
+            if parsed:
+                evidence_list.append(FDAApproval(**parsed))
+
+        return evidence_list
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:
