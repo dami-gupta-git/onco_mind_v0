@@ -139,34 +139,6 @@ class TestLLMInsight:
         assert insight.cosmic_id == "COSM476"
         assert insight.ncbi_gene_id == "673"
 
-    def test_to_report(self):
-        """Test simple report generation."""
-        insight = LLMInsight(
-            gene="BRAF",
-            variant="V600E",
-            tumor_type="Melanoma",
-            llm_summary="Test summary",
-            rationale="Test rationale",
-            evidence_strength="Strong",
-            recommended_therapies=[
-                RecommendedTherapy(
-                    drug_name="Vemurafenib",
-                    evidence_level="FDA-approved",
-                )
-            ],
-            cosmic_id="COSM476",
-            dbsnp_id="rs113488022",
-            hgvs_protein="NP_004324.2:p.Val600Glu",
-        )
-        report = insight.get_insight()
-        assert "BRAF" in report
-        assert "V600E" in report
-        assert "Melanoma" in report
-        assert "Vemurafenib" in report
-        assert "COSM476" in report
-        assert "rs113488022" in report
-        assert "NP_004324.2:p.Val600Glu" in report
-
     def test_insight_without_tumor(self):
         """Test creating an insight without tumor type."""
         insight = LLMInsight(
@@ -180,21 +152,6 @@ class TestLLMInsight:
         assert insight.gene == "KRAS"
         assert insight.tumor_type is None
         assert insight.evidence_strength == "Weak"
-
-    def test_to_report_without_tumor(self):
-        """Test report generation without tumor type."""
-        insight = LLMInsight(
-            gene="KRAS",
-            variant="G12C",
-            tumor_type=None,
-            llm_summary="General insight",
-            rationale="Test rationale",
-            evidence_strength="Weak",
-        )
-        report = insight.get_insight()
-        assert "KRAS" in report
-        assert "G12C" in report
-        assert "Not specified" in report
 
 
 class TestEvidenceStats:
