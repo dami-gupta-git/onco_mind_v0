@@ -491,6 +491,56 @@ class ClinicalTrialsClient:
 
         return variant_specific[:max_results]
 
+    async def search_trial_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        recruiting_only: bool = True,
+        max_results: int = 10,
+    ) -> list["ClinicalTrialEvidence"]:
+        """Search for clinical trials and convert to evidence model.
+
+        This method searches for trials and converts them to the
+        ClinicalTrialEvidence model for use in Insight.
+
+        Args:
+            gene: Gene symbol (e.g., "KRAS")
+            variant: Variant notation (e.g., "G12D")
+            tumor_type: Optional tumor type filter
+            recruiting_only: If True, only return recruiting trials
+            max_results: Maximum number of results
+
+        Returns:
+            List of ClinicalTrialEvidence objects
+        """
+        from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
+
+        trials = await self.search_trials(
+            gene=gene,
+            variant=variant,
+            tumor_type=tumor_type,
+            recruiting_only=recruiting_only,
+            max_results=max_results,
+        )
+        evidence_list = []
+
+        for trial in trials:
+            variant_specific = trial.mentions_variant(variant, gene=gene)
+            evidence_list.append(ClinicalTrialEvidence(
+                nct_id=trial.nct_id,
+                title=trial.title,
+                status=trial.status,
+                phase=trial.phase,
+                conditions=trial.conditions,
+                interventions=trial.interventions,
+                sponsor=trial.sponsor,
+                url=trial.url,
+                variant_specific=variant_specific,
+            ))
+
+        return evidence_list
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

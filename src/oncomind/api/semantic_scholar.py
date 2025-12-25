@@ -598,6 +598,83 @@ class SemanticScholarClient:
             limit=max_results,
         )
 
+    async def search_pubmed_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = 6,
+    ) -> list:
+        """Search for literature and convert to PubMedEvidence model.
+
+        This method searches both resistance and variant literature,
+        merges the results, and converts them to PubMedEvidence.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            tumor_type: Optional tumor type filter
+            max_results: Maximum number of results
+
+        Returns:
+            List of PubMedEvidence objects
+        """
+        from oncomind.models.insight.pubmed import PubMedEvidence
+
+        # Search both resistance AND general variant literature
+        resistance_papers, variant_papers = await asyncio.gather(
+            self.search_resistance_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results // 2,
+            ),
+            self.search_variant_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results // 2,
+            ),
+        )
+
+        # Merge and deduplicate by paper_id
+        seen_ids = set()
+        merged_papers = []
+        for paper in resistance_papers + variant_papers:
+            if paper.paper_id not in seen_ids:
+                seen_ids.add(paper.paper_id)
+                merged_papers.append(paper)
+
+        papers = merged_papers[:max_results]
+        evidence_list = []
+
+        for paper in papers:
+            url = (
+                f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}/"
+                if paper.pmid
+                else f"https://www.semanticscholar.org/paper/{paper.paper_id}"
+            )
+            evidence_list.append(PubMedEvidence(
+                pmid=paper.pmid or paper.paper_id,
+                title=paper.title,
+                abstract=paper.abstract or "",
+                authors=[],
+                journal=paper.venue or "",
+                year=str(paper.year) if paper.year else None,
+                doi=None,
+                url=url,
+                signal_type=None,  # Set by LLM layer later
+                drugs_mentioned=[],
+                citation_count=paper.citation_count,
+                influential_citation_count=paper.influential_citation_count,
+                tldr=paper.tldr,
+                is_open_access=paper.is_open_access,
+                open_access_pdf_url=paper.open_access_pdf_url,
+                semantic_scholar_id=paper.paper_id,
+            ))
+
+        return evidence_list
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

@@ -315,3 +315,39 @@ class CGIClient:
             for b in all_biomarkers
             if b.is_fda_approved() and b.association.upper() == "RESPONSIVE"
         ]
+
+    def fetch_biomarker_evidence(
+        self, gene: str, variant: str, tumor_type: str | None = None
+    ) -> list["CGIBiomarkerEvidence"]:
+        """Fetch CGI biomarkers and convert to evidence model.
+
+        This method fetches biomarkers and converts them to the
+        CGIBiomarkerEvidence model for use in Insight.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "G719S")
+            tumor_type: Optional tumor type to filter results
+
+        Returns:
+            List of CGIBiomarkerEvidence objects
+        """
+        from oncomind.models.insight.cgi import CGIBiomarkerEvidence
+
+        biomarkers = self.fetch_biomarkers(gene, variant, tumor_type)
+        evidence_list = []
+
+        for biomarker in biomarkers:
+            evidence_list.append(CGIBiomarkerEvidence(
+                gene=biomarker.gene,
+                alteration=biomarker.alteration,
+                drug=biomarker.drug,
+                drug_status=biomarker.drug_status,
+                association=biomarker.association,
+                evidence_level=biomarker.evidence_level,
+                source=biomarker.source,
+                tumor_type=biomarker.tumor_type,
+                fda_approved=biomarker.is_fda_approved(),
+            ))
+
+        return evidence_list

@@ -580,6 +580,71 @@ class PubMedClient:
 
         return await self._fetch_articles(pmids)
 
+    async def search_pubmed_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = 5,
+    ) -> list:
+        """Search for literature and convert to PubMedEvidence model.
+
+        This method searches BOTH resistance and variant literature,
+        merges and deduplicates by PMID, then converts to PubMedEvidence.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            tumor_type: Optional tumor type filter
+            max_results: Maximum number of results per search type
+
+        Returns:
+            List of PubMedEvidence objects
+        """
+        from oncomind.models.insight.pubmed import PubMedEvidence
+
+        # Search both resistance and variant literature in parallel
+        resistance_articles, variant_articles = await asyncio.gather(
+            self.search_resistance_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results,
+            ),
+            self.search_variant_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results,
+            ),
+        )
+
+        # Merge and deduplicate by pmid
+        seen_pmids: set[str] = set()
+        merged_articles: list[PubMedArticle] = []
+        for article in resistance_articles + variant_articles:
+            if article.pmid not in seen_pmids:
+                seen_pmids.add(article.pmid)
+                merged_articles.append(article)
+
+        # Convert to PubMedEvidence
+        evidence_list = []
+        for article in merged_articles:
+            evidence_list.append(PubMedEvidence(
+                pmid=article.pmid,
+                title=article.title,
+                abstract=article.abstract,
+                authors=article.authors,
+                journal=article.journal,
+                year=article.year,
+                doi=article.doi,
+                url=article.url,
+                signal_type=article.get_signal_type(),
+                drugs_mentioned=article.extract_drug_mentions(),
+            ))
+
+        return evidence_list
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

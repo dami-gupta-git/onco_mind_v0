@@ -185,45 +185,28 @@ class InsightBuilder:
         gene: str,
         variant: str,
         tumor_type: str | None,
-    ) -> tuple[list, str | None]:
+    ) -> list[PubMedEvidence]:
         """Fetch literature from Semantic Scholar with PubMed fallback.
 
         Uses semaphore to limit concurrent requests and avoid rate limits.
+        Returns PubMedEvidence directly using the new *_evidence() methods.
 
         Returns:
-            Tuple of (papers/articles, source_name)
+            List of PubMedEvidence objects
         """
         if not self.semantic_scholar_client:
-            return [], None
+            return []
 
         # Use semaphore to limit concurrent literature API requests
         async with self._literature_semaphore:
             try:
-                # Search both resistance AND general variant literature
-                resistance_papers, variant_papers = await asyncio.gather(
-                    self.semantic_scholar_client.search_resistance_literature(
-                        gene=gene,
-                        variant=variant,
-                        tumor_type=tumor_type,
-                        max_results=self.config.max_literature_results // 2,
-                    ),
-                    self.semantic_scholar_client.search_variant_literature(
-                        gene=gene,
-                        variant=variant,
-                        tumor_type=tumor_type,
-                        max_results=self.config.max_literature_results // 2,
-                    ),
+                # Use new search_pubmed_evidence method
+                return await self.semantic_scholar_client.search_pubmed_evidence(
+                    gene=gene,
+                    variant=variant,
+                    tumor_type=tumor_type,
+                    max_results=self.config.max_literature_results,
                 )
-
-                # Merge and deduplicate by paper_id
-                seen_ids = set()
-                merged_papers = []
-                for paper in resistance_papers + variant_papers:
-                    if paper.paper_id not in seen_ids:
-                        seen_ids.add(paper.paper_id)
-                        merged_papers.append(paper)
-
-                return merged_papers[:self.config.max_literature_results], "semantic_scholar"
 
             except SemanticScholarRateLimitError:
                 # Fall back to PubMed (still within semaphore)
@@ -234,43 +217,26 @@ class InsightBuilder:
         gene: str,
         variant: str,
         tumor_type: str | None,
-    ) -> tuple[list, str | None]:
+    ) -> list[PubMedEvidence]:
         """Fetch literature from PubMed (fallback from Semantic Scholar).
 
+        Returns PubMedEvidence directly using the new *_evidence() method.
         Retry is handled by tenacity in PubMedClient.
         """
         if not self.pubmed_client:
-            return [], None
+            return []
 
         try:
-            resistance_articles, variant_articles = await asyncio.gather(
-                self.pubmed_client.search_resistance_literature(
-                    gene=gene,
-                    variant=variant,
-                    tumor_type=tumor_type,
-                    max_results=self.config.max_literature_results // 2,
-                ),
-                self.pubmed_client.search_variant_literature(
-                    gene=gene,
-                    variant=variant,
-                    tumor_type=tumor_type,
-                    max_results=self.config.max_literature_results // 2,
-                ),
+            return await self.pubmed_client.search_pubmed_evidence(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=self.config.max_literature_results,
             )
-
-            # Merge and deduplicate by pmid
-            seen_pmids = set()
-            merged_articles = []
-            for article in resistance_articles + variant_articles:
-                if article.pmid not in seen_pmids:
-                    seen_pmids.add(article.pmid)
-                    merged_articles.append(article)
-
-            return merged_articles[:self.config.max_literature_results], "pubmed"
 
         except PubMedRateLimitError:
             # After tenacity retries exhausted, return empty
-            return [], None
+            return []
 
     async def build_insight(
         self,
@@ -304,11 +270,11 @@ class InsightBuilder:
         # Resolve tumor type
         resolved_tumor = await self._resolve_tumor_type(tumor)
 
-        # Build async fetch functions
+        # Build async fetch functions (using *_evidence methods)
         async def fetch_vicc():
             if self.vicc_client:
                 sources_queried.append("VICC")
-                return await self.vicc_client.fetch_associations(
+                return await self.vicc_client.fetch_vicc_evidence(
                     gene=gene,
                     variant=normalized_variant,
                     tumor_type=resolved_tumor,
@@ -319,7 +285,7 @@ class InsightBuilder:
         async def fetch_civic_assertions():
             if self.civic_client:
                 sources_queried.append("CIViC")
-                return await self.civic_client.fetch_assertions(
+                return await self.civic_client.fetch_assertion_evidence(
                     gene=gene,
                     variant=normalized_variant,
                     tumor_type=resolved_tumor,
@@ -328,14 +294,14 @@ class InsightBuilder:
             return []
 
         async def fetch_clinical_trials():
-            """Fetch clinical trials. Retry is handled by tenacity in client."""
+            """Fetch clinical trials as evidence. Retry is handled by tenacity in client."""
             if not self.clinical_trials_client:
                 return []
 
             sources_queried.append("ClinicalTrials.gov")
 
             try:
-                return await self.clinical_trials_client.search_trials(
+                return await self.clinical_trials_client.search_trial_evidence(
                     gene=gene,
                     variant=normalized_variant,
                     tumor_type=resolved_tumor,
@@ -350,14 +316,14 @@ class InsightBuilder:
             if self.config.enable_literature:
                 sources_queried.append("Literature")
                 return await self._fetch_literature(gene, normalized_variant, resolved_tumor)
-            return [], None
+            return []
 
-        # Parallel fetch from all sources
+        # Parallel fetch from all sources (using *_evidence methods where available)
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(gene=gene, variant=normalized_variant),
-            self.fda_client.fetch_drug_approvals(gene=gene, variant=normalized_variant),
+            self.fda_client.fetch_approval_evidence(gene=gene, variant=normalized_variant),
             asyncio.to_thread(
-                self.cgi_client.fetch_biomarkers,
+                self.cgi_client.fetch_biomarker_evidence,
                 gene,
                 normalized_variant,
                 resolved_tumor,
@@ -390,174 +356,65 @@ class InsightBuilder:
             if myvariant_evidence:
                 sources_with_data.append("MyVariant")
 
-        # Handle FDA result
+        # Handle FDA result (now returns FDAApproval directly)
         fda_approvals: list[FDAApproval] = []
         if isinstance(fda_result, Exception):
             print(f"  Warning: FDA API failed: {str(fda_result)}")
             sources_failed.append("FDA")
         elif fda_result:
-            for approval_record in fda_result:
-                parsed = self.fda_client.parse_approval_data(
-                    approval_record, gene, normalized_variant
-                )
-                if parsed:
-                    fda_approvals.append(FDAApproval(**parsed))
+            fda_approvals = fda_result
             if fda_approvals:
                 sources_with_data.append("FDA")
 
-        # Handle CGI result
+        # Handle CGI result (now returns CGIBiomarkerEvidence directly)
         cgi_biomarkers: list[CGIBiomarkerEvidence] = []
         if isinstance(cgi_result, Exception):
             print(f"  Warning: CGI biomarkers failed: {str(cgi_result)}")
             sources_failed.append("CGI")
         elif cgi_result:
-            for biomarker in cgi_result:
-                cgi_biomarkers.append(CGIBiomarkerEvidence(
-                    gene=biomarker.gene,
-                    alteration=biomarker.alteration,
-                    drug=biomarker.drug,
-                    drug_status=biomarker.drug_status,
-                    association=biomarker.association,
-                    evidence_level=biomarker.evidence_level,
-                    source=biomarker.source,
-                    tumor_type=biomarker.tumor_type,
-                    fda_approved=biomarker.is_fda_approved(),
-                ))
+            cgi_biomarkers = cgi_result
             if cgi_biomarkers:
                 sources_with_data.append("CGI")
 
-        # Handle VICC result
+        # Handle VICC result (now returns VICCEvidence directly)
         vicc_evidence = []
         if isinstance(vicc_result, Exception):
             print(f"  Warning: VICC MetaKB API failed: {str(vicc_result)}")
             sources_failed.append("VICC")
         elif vicc_result:
-            from oncomind.models.insight.vicc import VICCEvidence
-            for assoc in vicc_result:
-                vicc_evidence.append(VICCEvidence(
-                    description=assoc.description,
-                    gene=assoc.gene,
-                    variant=assoc.variant,
-                    disease=assoc.disease,
-                    drugs=assoc.drugs,
-                    evidence_level=assoc.evidence_level,
-                    response_type=assoc.response_type,
-                    source=assoc.source,
-                    publication_url=assoc.publication_url,
-                    oncogenic=assoc.oncogenic,
-                    is_sensitivity=assoc.is_sensitivity(),
-                    is_resistance=assoc.is_resistance(),
-                    oncokb_level=assoc.get_oncokb_level(),
-                ))
+            vicc_evidence = vicc_result
             if vicc_evidence:
                 sources_with_data.append("VICC")
 
-        # Handle CIViC result
+        # Handle CIViC result (now returns CIViCAssertionEvidence directly)
         civic_assertions: list[CIViCAssertionEvidence] = []
         if isinstance(civic_result, Exception):
             print(f"  Warning: CIViC Assertions API failed: {str(civic_result)}")
             sources_failed.append("CIViC")
         elif civic_result:
-            for assertion in civic_result:
-                civic_assertions.append(CIViCAssertionEvidence(
-                    assertion_id=assertion.assertion_id,
-                    name=assertion.name,
-                    amp_level=assertion.amp_level,
-                    amp_tier=assertion.get_amp_tier(),
-                    amp_level_letter=assertion.get_amp_level(),
-                    assertion_type=assertion.assertion_type,
-                    significance=assertion.significance,
-                    status=assertion.status,
-                    molecular_profile=assertion.molecular_profile,
-                    disease=assertion.disease,
-                    therapies=assertion.therapies,
-                    fda_companion_test=assertion.fda_companion_test,
-                    nccn_guideline=assertion.nccn_guideline,
-                    description=assertion.description,
-                    is_sensitivity=assertion.is_sensitivity(),
-                    is_resistance=assertion.is_resistance(),
-                ))
+            civic_assertions = civic_result
             if civic_assertions:
                 sources_with_data.append("CIViC")
 
-        # Handle clinical trials result
+        # Handle clinical trials result (now returns ClinicalTrialEvidence directly)
         clinical_trials: list[ClinicalTrialEvidence] = []
         if isinstance(trials_result, Exception):
             print(f"  Warning: ClinicalTrials.gov API failed: {str(trials_result)}")
             sources_failed.append("ClinicalTrials.gov")
         elif trials_result:
-            for trial in trials_result:
-                variant_specific = trial.mentions_variant(normalized_variant, gene=gene)
-                clinical_trials.append(ClinicalTrialEvidence(
-                    nct_id=trial.nct_id,
-                    title=trial.title,
-                    status=trial.status,
-                    phase=trial.phase,
-                    conditions=trial.conditions,
-                    interventions=trial.interventions,
-                    sponsor=trial.sponsor,
-                    url=trial.url,
-                    variant_specific=variant_specific,
-                ))
+            clinical_trials = trials_result
             if clinical_trials:
                 sources_with_data.append("ClinicalTrials.gov")
 
-        # Handle literature result
+        # Handle literature result (now returns PubMedEvidence directly)
         pubmed_articles: list[PubMedEvidence] = []
-        literature_source = None
         if isinstance(literature_result, Exception):
             print(f"  Warning: Literature search failed: {str(literature_result)}")
             sources_failed.append("Literature")
         elif literature_result:
-            literature_items, literature_source = literature_result
-            if literature_items:
-                # Convert to PubMedEvidence (basic conversion without LLM scoring)
-                for item in literature_items:
-                    if literature_source == "semantic_scholar":
-                        url = (
-                            f"https://pubmed.ncbi.nlm.nih.gov/{item.pmid}/"
-                            if item.pmid
-                            else f"https://www.semanticscholar.org/paper/{item.paper_id}"
-                        )
-                        pubmed_articles.append(PubMedEvidence(
-                            pmid=item.pmid or item.paper_id,
-                            title=item.title,
-                            abstract=item.abstract or "",
-                            authors=[],
-                            journal=item.venue or "",
-                            year=str(item.year) if item.year else None,
-                            doi=None,
-                            url=url,
-                            signal_type=None,  # Set by LLM layer later
-                            drugs_mentioned=[],
-                            citation_count=item.citation_count,
-                            influential_citation_count=item.influential_citation_count,
-                            tldr=item.tldr,
-                            is_open_access=item.is_open_access,
-                            open_access_pdf_url=item.open_access_pdf_url,
-                            semantic_scholar_id=item.paper_id,
-                        ))
-                    else:
-                        pubmed_articles.append(PubMedEvidence(
-                            pmid=item.pmid,
-                            title=item.title,
-                            abstract=item.abstract,
-                            authors=item.authors,
-                            journal=item.journal,
-                            year=item.year,
-                            doi=item.doi,
-                            url=item.url,
-                            signal_type=None,
-                            drugs_mentioned=[],
-                            citation_count=None,
-                            influential_citation_count=None,
-                            tldr=None,
-                            is_open_access=None,
-                            open_access_pdf_url=None,
-                            semantic_scholar_id=None,
-                        ))
-                if pubmed_articles:
-                    sources_with_data.append("Literature")
+            pubmed_articles = literature_result
+            if pubmed_articles:
+                sources_with_data.append("Literature")
 
         # Extract data from MyVariant evidence
         functional_scores = FunctionalScores()

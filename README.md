@@ -197,6 +197,9 @@ See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentat
 
 ## Supported Variant Types
 
+**Input formats:**
+Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic coordinates, use HGVS notation or let MyVariant.info handle the lookup.
+
 **Currently supported:**
 - Missense mutations (V600E, L858R)
 - Nonsense mutations (R248*)

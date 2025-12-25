@@ -479,3 +479,48 @@ class VICCClient:
         """
         all_assocs = await self.fetch_associations(gene, variant, tumor_type, max_results * 2)
         return [a for a in all_assocs if a.is_resistance()][:max_results]
+
+    async def fetch_vicc_evidence(
+        self,
+        gene: str,
+        variant: str | None = None,
+        tumor_type: str | None = None,
+        max_results: int = 50,
+    ) -> list["VICCEvidence"]:
+        """Fetch VICC associations and convert to evidence model.
+
+        This method fetches associations and converts them to the
+        VICCEvidence model for use in Insight.
+
+        Args:
+            gene: Gene symbol (e.g., "BRAF")
+            variant: Optional variant notation (e.g., "V600E")
+            tumor_type: Optional tumor type to filter results
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of VICCEvidence objects
+        """
+        from oncomind.models.insight.vicc import VICCEvidence
+
+        associations = await self.fetch_associations(gene, variant, tumor_type, max_results)
+        evidence_list = []
+
+        for assoc in associations:
+            evidence_list.append(VICCEvidence(
+                description=assoc.description,
+                gene=assoc.gene,
+                variant=assoc.variant,
+                disease=assoc.disease,
+                drugs=assoc.drugs,
+                evidence_level=assoc.evidence_level,
+                response_type=assoc.response_type,
+                source=assoc.source,
+                publication_url=assoc.publication_url,
+                oncogenic=assoc.oncogenic,
+                is_sensitivity=assoc.is_sensitivity(),
+                is_resistance=assoc.is_resistance(),
+                oncokb_level=assoc.get_oncokb_level(),
+            ))
+
+        return evidence_list
