@@ -138,7 +138,10 @@ def insight(
 
             # Get LLM Insight
             llm_service = LLMService(model=model, temperature=0.1)
-            insight_result = await llm_service.get_llm_insight(gene, variant, tumor, evidence)
+            insight_result = await llm_service.get_llm_insight(
+                gene, variant, tumor, evidence,
+                evidence_strength=panel.meta.evidence_strength
+            )
 
         # === RENDER OUTPUT ===
 
