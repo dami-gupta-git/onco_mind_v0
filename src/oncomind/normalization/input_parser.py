@@ -20,7 +20,7 @@ import re
 from typing import Any
 from dataclasses import dataclass, field
 
-from oncomind.normalization.hgvs_utils import normalize_variant, classify_variant_type
+from oncomind.utils.variant_normalization import normalize_variant, classify_variant_type
 from oncomind.constants import GENE_ALIASES
 
 

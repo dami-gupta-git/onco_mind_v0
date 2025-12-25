@@ -17,7 +17,7 @@ from oncomind.normalization.input_parser import (
     parse_variant_row,
     ParsedVariant,
 )
-from oncomind.normalization.hgvs_utils import (
+from oncomind.utils.variant_normalization import (
     VariantNormalizer,
     normalize_variant,
     normalize_protein_change,

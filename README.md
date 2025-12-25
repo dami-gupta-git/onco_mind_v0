@@ -30,7 +30,7 @@ OncoMind automates that workflow: aggregate databases, search literature, synthe
 - **Evidence synthesis**: Extract resistance/sensitivity signals from abstracts
 - **Conflict detection**: Flag when databases disagree
 - **Source attribution**: Every claim links to a PMID, FDA label, or database entry
-- **Strongly-typed output**: Pydantic `EvidencePanel` model for programmatic use
+- **Strongly-typed output**: Pydantic `Insight` model for programmatic use
 
 ## Installation
 
@@ -170,9 +170,9 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
-## EvidencePanel
+## Insight
 
-The `EvidencePanel` is the core output model with sections for:
+The `Insight` is the core output model with sections for:
 
 | Section | Contents |
 |---------|----------|
@@ -184,13 +184,13 @@ The `EvidencePanel` is the core output model with sections for:
 | `meta` | Sources queried, conflicts, processing metadata |
 
 ```python
-panel = await get_insight("BRAF V600E", tumor_type="Melanoma")
+insight = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-panel.identifiers.gene              # "BRAF"
-panel.kb.civic_assertions           # Curated drug-variant associations
-panel.functional.alphamissense_score  # 0.98 (pathogenicity)
-panel.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib"]
-panel.meta.sources_with_data        # ["CIViC", "VICC", "COSMIC", ...]
+insight.identifiers.gene              # "BRAF"
+insight.kb.civic_assertions           # Curated drug-variant associations
+insight.functional.alphamissense_score  # 0.98 (pathogenicity)
+insight.clinical.get_approved_drugs() # ["Dabrafenib", "Vemurafenib"]
+insight.meta.sources_with_data        # ["CIViC", "VICC", "COSMIC", ...]
 ```
 
 See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentation.
