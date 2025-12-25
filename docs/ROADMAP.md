@@ -24,7 +24,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 - Functional predictions (AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD)
 - Literature search (Semantic Scholar, PubMed)
 - Basic LLM synthesis for literature analysis
-- Pydantic `EvidencePanel` output model
+- Pydantic `Result` output model (wraps `Evidence` + optional `LLMInsight`)
 - CLI and Python API
 
 ---
@@ -41,7 +41,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 
 ### Conflict Detection
 - [ ] Cross-source comparison for therapeutic predictions
-- [ ] `panel.meta.conflicts` field populated automatically
+- [ ] `result.evidence.meta.conflicts` field populated automatically
 - [ ] Flag discrepancies between CIViC, VICC/OncoKB, CGI
 - [ ] Surface evidence level disagreements (e.g., Tier I vs Tier II)
 
@@ -53,7 +53,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 - [ ] Confidence and cross-paper agreement metrics
 
 ### Evidence Gap Identification
-- [ ] `panel.meta.evidence_gaps` field populated automatically
+- [ ] `result.evidence.meta.evidence_gaps` field populated automatically
 - [ ] Detect missing evidence: no trials, no resistance data, no functional studies
 - [ ] Detect limited tumor-specific data
 - [ ] Surface conflicting evidence as a gap type
@@ -63,7 +63,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 - [ ] Updated Pydantic models with attribution
 - [ ] Conflict detection logic in `EvidenceBuilder`
 - [ ] Evidence gap detection in `EvidenceBuilder`
-- [ ] `LiteratureSynthesis` output in `panel.literature`
+- [ ] `LiteratureSynthesis` output in `result.literature`
 - [ ] Unit tests for conflict and gap scenarios
 
 ---
@@ -224,13 +224,13 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 **Goal:** Position OncoMind as the context layer for AI oncology applications.
 
 ### Knowledge Header Export
-- [ ] `panel.to_knowledge_header()` method
+- [ ] `result.to_knowledge_header()` method
 - [ ] Dense, grounded context block format
 - [ ] Optimized for token efficiency
 - [ ] All claims attributed inline
 
 ### Prompt-Ready Output
-- [ ] `panel.to_prompt_context()` for system prompt injection
+- [ ] `result.to_prompt_context()` for system prompt injection
 - [ ] Structured JSON for agent tool use
 - [ ] Markdown format for chat interfaces
 
@@ -240,7 +240,7 @@ OncoMind aims to be the **grounded context layer** for AI-assisted oncology reas
 - [ ] Source coverage assertion
 
 ### Deliverables
-- [ ] Export methods on `EvidencePanel`
+- [ ] Export methods on `Result`
 - [ ] Documentation for downstream integration
 - [ ] Example agent integration
 
@@ -291,7 +291,7 @@ These are tracked but not scheduled:
 - Suggested resistance testing based on clinical trajectory
 
 ### Embeddings & Vector Search
-- Embed `EvidencePanel` for similarity search
+- Embed `Result` for similarity search
 - Use case: "Find variants with similar evidence profiles"
 - Depends on: concrete use case emerging
 

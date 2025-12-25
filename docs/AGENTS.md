@@ -340,8 +340,8 @@ class ClinicalQAAgent:
         """Extract drug, variant, tumor, question type."""
         ...
 
-    async def fetch_variant_evidence(self, variant: str, tumor: str) -> EvidencePanel:
-        """Get OncoMind evidence panel for the variant."""
+    async def fetch_variant_evidence(self, variant: str, tumor: str) -> Result:
+        """Get OncoMind Result for the variant."""
         # Uses existing get_insight()
         ...
 
@@ -374,18 +374,18 @@ async def run(self, question: str) -> ClinicalAnswer:
 
     # Step 2: Fetch variant evidence
     if parsed.variant:
-        panel = await self.fetch_variant_evidence(parsed.variant, parsed.tumor_type)
-        steps.append(f"Retrieved evidence from {len(panel.meta.sources_with_data)} sources")
+        result = await self.fetch_variant_evidence(parsed.variant, parsed.tumor_type)
+        steps.append(f"Fetched variant evidence")
 
     # Step 3: Check if we have enough evidence
-    if not panel.clinical.fda_approvals and not panel.kb.civic_assertions:
+    if not result.clinical.fda_approvals and not result.kb.civic_assertions:
         # Need to search literature
         lit = await self.search_literature(f"{parsed.variant} {parsed.drug} {parsed.tumor_type}")
         steps.append(f"Searched literature, found {len(lit)} papers")
 
     # Step 4: Synthesize answer
     answer = await self.synthesize_answer(parsed, {
-        "panel": panel,
+        "result": result,
         "literature": lit,
     })
     answer.reasoning_steps = steps
@@ -452,7 +452,7 @@ class MultiVariantAnalysis(BaseModel):
     tumor_type: str
 
     # Individual annotations
-    individual_panels: dict[str, EvidencePanel]
+    individual_results: dict[str, Result]
 
     # Interactions
     interactions: list[VariantInteraction]

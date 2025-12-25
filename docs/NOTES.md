@@ -266,7 +266,7 @@ class FaithfulnessCheck(BaseModel):
 
 async def check_faithfulness(
     llm_output: KnowledgeHeader,
-    raw_evidence: EvidencePanel
+    raw_evidence: Result
 ) -> list[FaithfulnessCheck]:
     """Use judge LLM to verify each claim against sources."""
     ...
@@ -486,7 +486,7 @@ class ProfileAnalysis(BaseModel):
     tumor_type: str
 
     # Individual annotations
-    individual_evidence: dict[str, EvidencePanel]
+    individual_evidence: dict[str, Result]
 
     # Combined analysis
     interactions: list[VariantInteraction]
@@ -521,7 +521,7 @@ Answer: "Should I try pembrolizumab given BRAF V600E and melanoma?"
 ```python
 async def answer_clinical_question(
     question: str,  # "Should I try drug X given variant Y and tumor Z?"
-    context: EvidencePanel | None = None
+    context: Result | None = None
 ) -> ClinicalAnswer:
     ...
 
