@@ -22,7 +22,7 @@ from oncomind.api_public.insight import (
 )
 
 # Core models
-from oncomind.models.insight import Evidence
+from oncomind.models.evidence import Evidence
 from oncomind.models.result import Result
 from oncomind.normalization import ParsedVariant, parse_variant_input
 

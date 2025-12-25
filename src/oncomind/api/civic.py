@@ -423,7 +423,7 @@ class CIViCClient:
         Returns:
             List of CIViCAssertionEvidence objects
         """
-        from oncomind.models.insight.civic import CIViCAssertionEvidence
+        from oncomind.models.evidence.civic import CIViCAssertionEvidence
 
         assertions = await self.fetch_assertions(gene, variant, tumor_type, max_results)
         evidence_list = []

@@ -601,7 +601,7 @@ class PubMedClient:
         Returns:
             List of PubMedEvidence objects
         """
-        from oncomind.models.insight.pubmed import PubMedEvidence
+        from oncomind.models.evidence.pubmed import PubMedEvidence
 
         # Search both resistance and variant literature in parallel
         resistance_articles, variant_articles = await asyncio.gather(

@@ -11,15 +11,16 @@ from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, Field
 
-from oncomind.models.insight.civic import CIViCEvidence, CIViCAssertionEvidence
-from oncomind.models.insight.clinvar import ClinVarEvidence
-from oncomind.models.insight.cosmic import COSMICEvidence
-from oncomind.models.insight.fda import FDAApproval
-from oncomind.models.insight.cgi import CGIBiomarkerEvidence
-from oncomind.models.insight.vicc import VICCEvidence
-from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.insight.pubmed import PubMedEvidence
-from oncomind.models.insight.literature_knowledge import LiteratureKnowledge
+from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
+from oncomind.models.evidence.clinvar import ClinVarEvidence
+from oncomind.models.evidence.cosmic import COSMICEvidence
+from oncomind.models.evidence.fda import FDAApproval
+from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+from oncomind.models.evidence.vicc import VICCEvidence
+from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
+from oncomind.models.evidence.pubmed import PubMedEvidence
+from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
+from oncomind.models.recommended_therapies import RecommendedTherapy
 
 
 class VariantIdentifiers(BaseModel):
@@ -292,7 +293,8 @@ class Evidence(BaseModel):
         # FDA-approved therapies
         drugs = self.clinical.get_approved_drugs()
         if drugs:
-            parts.append(f"It is associated with FDA-approved therapies: {', '.join(drugs[:3])}.")
+            ellipsis = "..." if len(drugs) > 3 else ""
+            parts.append(f"It is associated with FDA-approved therapies: {', '.join(drugs[:3])}{ellipsis}.")
 
         return " ".join(parts)
 
@@ -308,6 +310,55 @@ class Evidence(BaseModel):
             "pubmed_articles_count": len(self.literature.pubmed_articles),
             "has_evidence": self.has_evidence(),
         }
+
+    def get_recommended_therapies(self, max_results: int = 10) -> list[RecommendedTherapy]:
+        """Get recommended therapies derived from FDA approvals and CGI biomarkers.
+
+        This provides evidence-based therapy recommendations without LLM synthesis.
+        For LLM-curated recommendations, see LLMInsight.recommended_therapies.
+
+        Args:
+            max_results: Maximum number of therapies to return (default 10)
+
+        Returns:
+            List of RecommendedTherapy objects, deduplicated by drug name
+        """
+        therapies: list[RecommendedTherapy] = []
+        seen_drugs: set[str] = set()
+
+        # From FDA approvals (highest confidence)
+        for approval in self.clinical.fda_approvals:
+            # Format as "Generic (Brand)" when both available
+            if approval.generic_name and approval.brand_name:
+                drug_name = f"{approval.generic_name} ({approval.brand_name})"
+            else:
+                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
+
+            # Use generic name for deduplication
+            dedup_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
+            if drug_name and dedup_key not in seen_drugs:
+                seen_drugs.add(dedup_key)
+                therapies.append(RecommendedTherapy(
+                    drug_name=drug_name,
+                    evidence_level="A",
+                    approval_status="FDA Approved",
+                    clinical_context=approval.indication or "",
+                ))
+
+        # From CGI biomarkers (FDA-approved only)
+        for biomarker in self.kb.cgi_biomarkers:
+            if biomarker.fda_approved and biomarker.drug:
+                dedup_key = biomarker.drug.lower()
+                if dedup_key not in seen_drugs:
+                    seen_drugs.add(dedup_key)
+                    therapies.append(RecommendedTherapy(
+                        drug_name=biomarker.drug,
+                        evidence_level=biomarker.evidence_level or "A",
+                        approval_status="FDA Approved (CGI)",
+                        clinical_context=biomarker.tumor_type or "",
+                    ))
+
+        return therapies[:max_results]
 
     def to_flat_dict(self) -> dict[str, Any]:
         """Convert to a flat dictionary for DataFrame/tabular output.

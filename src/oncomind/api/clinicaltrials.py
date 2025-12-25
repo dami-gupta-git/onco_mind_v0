@@ -514,7 +514,7 @@ class ClinicalTrialsClient:
         Returns:
             List of ClinicalTrialEvidence objects
         """
-        from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
+        from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 
         trials = await self.search_trials(
             gene=gene,

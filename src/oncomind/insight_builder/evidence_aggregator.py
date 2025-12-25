@@ -38,7 +38,7 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRate
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 
-from oncomind.models.insight import (
+from oncomind.models.evidence import (
     Evidence,
     VariantIdentifiers,
     KnowledgebaseEvidence,
@@ -46,12 +46,12 @@ from oncomind.models.insight import (
     ClinicalContext,
     LiteratureEvidence,
 )
-from oncomind.models.insight.cgi import CGIBiomarkerEvidence
-from oncomind.models.insight.civic import CIViCAssertionEvidence
-from oncomind.models.insight.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.insight.fda import FDAApproval
-from oncomind.models.insight.pubmed import PubMedEvidence
-from oncomind.models.insight.vicc import VICCEvidence
+from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+from oncomind.models.evidence.civic import CIViCAssertionEvidence
+from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
+from oncomind.models.evidence.fda import FDAApproval
+from oncomind.models.evidence.pubmed import PubMedEvidence
+from oncomind.models.evidence.vicc import VICCEvidence
 
 from oncomind.normalization import ParsedVariant
 from oncomind.utils import normalize_variant

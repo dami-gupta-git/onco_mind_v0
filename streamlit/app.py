@@ -148,13 +148,7 @@ with tab1:
             with st.expander("📋 Summary", expanded=True):
                 st.info(result['insight'].get('summary', 'No summary available'))
 
-            # Card 2: LLM Insight (only when LLM mode is enabled)
-            llm_narrative = result['insight'].get('llm_narrative')
-            if llm_narrative:
-                with st.expander("🤖 LLM Insight", expanded=True):
-                    st.markdown(llm_narrative)
-
-            # Card 3: Identifiers & Links
+            # Card 2: Identifiers & Links
             with st.expander("🔗 Identifiers & External Links", expanded=True):
                 ids = result.get('identifiers', {})
                 hgvs = result.get('hgvs', {})
@@ -192,68 +186,57 @@ with tab1:
                 search_cols[2].markdown(f"[OncoKB](https://www.oncokb.org/gene/{gene_display})")
                 search_cols[3].markdown(f"[cBioPortal](https://www.cbioportal.org/results?cancer_study_list=msk_impact_2017&gene_list={gene_display})")
 
-            # Card 3: Evidence Overview
-            with st.expander("📊 Evidence Overview", expanded=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    # COSMIC ID
-                    cosmic_id = result.get('identifiers', {}).get('cosmic_id')
-                    st.markdown(f"**COSMIC:** {cosmic_id or 'N/A'}")
+            # Card 3: Scores
+            annot = result.get('annotations', {})
+            am_score = annot.get('alphamissense_score')
+            am_pred = annot.get('alphamissense_prediction')
+            pp2 = annot.get('polyphen2_prediction')
+            cadd = annot.get('cadd_score')
+            gnomad = annot.get('gnomad_exome_af')
 
-                    # ClinVar significance
-                    clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
-                    st.markdown(f"**ClinVar:** {clinvar_sig or 'N/A'}")
-
-                    # Pathogenicity scores
-                    annot = result.get('annotations', {})
-                    am_score = annot.get('alphamissense_score')
-                    am_pred = annot.get('alphamissense_prediction')
-                    pp2 = annot.get('polyphen2_prediction')
+            # Only show if we have any scores
+            has_scores = am_score is not None or pp2 or cadd is not None or gnomad is not None
+            if has_scores:
+                with st.expander("📊 Scores", expanded=True):
+                    # Build pathogenicity summary like CLI
                     path_parts = []
                     if am_score is not None:
                         pred_label = {'P': 'Pathogenic', 'B': 'Benign', 'A': 'Ambiguous'}.get(am_pred, am_pred or '')
-                        path_parts.append(f"AlphaMissense: {am_score:.2f} ({pred_label})")
+                        path_parts.append(f"AlphaMissense: {pred_label} ({am_score:.2f})")
+                    if cadd is not None:
+                        path_parts.append(f"CADD: {cadd:.1f}")
                     if pp2:
                         path_parts.append(f"PolyPhen2: {pp2}")
-                    st.markdown(f"**Pathogenicity:** {' | '.join(path_parts) if path_parts else 'N/A'}")
 
-                with col2:
-                    # Gene role
-                    gene_role = panel.get('clinical', {}).get('gene_role') if panel else None
-                    st.markdown(f"**Gene Role:** {gene_role or 'N/A'}")
+                    if path_parts:
+                        st.markdown(f"**Pathogenicity:** {' | '.join(path_parts)}")
 
-                    # Evidence sources
-                    sources = panel.get('meta', {}).get('sources_with_data', []) if panel else []
-                    st.markdown(f"**Evidence Sources:** {', '.join(sources) if sources else 'N/A'}")
+                    if gnomad is not None:
+                        gnomad_display = f"{gnomad:.2e}" if gnomad > 0 else "0"
+                        st.markdown(f"**gnomAD AF:** {gnomad_display}")
 
-            # Card 4: FDA Approved Drugs
-            fda_approvals = panel.get('clinical', {}).get('fda_approvals', []) if panel else []
-            if fda_approvals:
-                # Deduplicate drug names
-                drug_names = []
-                for approval in fda_approvals:
-                    name = approval.get('brand_name') or approval.get('generic_name') or approval.get('drug_name')
-                    if name and name not in drug_names:
-                        drug_names.append(name)
-                if drug_names:
-                    with st.expander(f"✅ FDA Approved Drugs ({len(drug_names)})", expanded=True):
-                        # Make each drug clickable
-                        drug_links = [f"[{name}](https://www.drugs.com/search.php?searchterm={name.replace(' ', '+')})" for name in drug_names]
-                        st.markdown(", ".join(drug_links))
+            # Card 4: LLM Insight (only when LLM mode is enabled)
+            llm_narrative = result['insight'].get('llm_narrative')
+            if llm_narrative:
+                with st.expander("🤖 LLM Insight", expanded=True):
+                    st.markdown(llm_narrative)
 
-            # Card 5: Recommended Therapies
+            # Card 5: Recommended Therapies (title depends on LLM mode)
             therapies = result.get('recommended_therapies', [])
             if therapies:
-                with st.expander(f"💊 Recommended Therapies ({len(therapies)})", expanded=True):
+                # Check if LLM was used (llm_narrative present means LLM mode)
+                is_llm_mode = result['insight'].get('llm_narrative') is not None
+                title = "🤖 LLM Recommended Therapies" if is_llm_mode else "💊 Recommended Therapies"
+
+                with st.expander(f"{title} ({len(therapies)})", expanded=True):
                     # Build table with clickable drug links
                     table_rows = []
                     for t in therapies:
                         drug = t.get('drug_name', 'Unknown')
                         drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
-                        context = (t.get('clinical_context', '') or '')[:50]
-                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} | {context}{'...' if len(t.get('clinical_context', '') or '') > 50 else ''} |")
+                        table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} |")
 
-                    table_header = "| Drug | Level | Status | Context |\n|------|-------|--------|---------|"
+                    table_header = "| Drug | Level | Status |\n|------|-------|--------|"
                     st.markdown(table_header + "\n" + "\n".join(table_rows))
 
             # Card 6: Functional Predictions

@@ -23,7 +23,7 @@ Future:
 from dataclasses import dataclass, field
 from typing import Any
 
-from oncomind.models.insight import Evidence
+from oncomind.models.evidence import Evidence
 
 
 @dataclass

@@ -619,7 +619,7 @@ class SemanticScholarClient:
         Returns:
             List of PubMedEvidence objects
         """
-        from oncomind.models.insight.pubmed import PubMedEvidence
+        from oncomind.models.evidence.pubmed import PubMedEvidence
 
         # Search both resistance AND general variant literature
         resistance_papers, variant_papers = await asyncio.gather(

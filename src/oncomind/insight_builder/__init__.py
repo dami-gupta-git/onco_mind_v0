@@ -17,7 +17,7 @@ Example (with LLM insight):
     >>> print(result.llm.llm_summary)
 """
 
-from oncomind.insight_builder.aggregator import (
+from oncomind.insight_builder.evidence_aggregator import (
     EvidenceAggregator,
     EvidenceAggregatorConfig,
     build_evidence,
