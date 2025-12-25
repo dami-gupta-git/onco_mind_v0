@@ -3,7 +3,7 @@
 This is the primary output of the annotation pipeline, providing a strongly-typed
 container for all evidence gathered about a variant, plus optional LLM narrative.
 
-NOTE: EvidencePanel is kept as an alias for backwards compatibility.
+Renamed from EvidencePanel to Insight.
 """
 
 from __future__ import annotations

@@ -23,7 +23,7 @@ References:
 from dataclasses import dataclass
 from typing import Any
 
-from oncomind.models.insight.evidence_panel import EvidencePanel
+from oncomind.models.insight import Insight
 
 
 @dataclass
@@ -62,7 +62,7 @@ class TierResult:
 
 
 def compute_experimental_tier(
-    panel: EvidencePanel,
+    panel: Insight,
     tumor_type: str | None = None,
 ) -> TierResult:
     """Compute an experimental AMP/ASCO/CAP tier for a variant.
@@ -71,14 +71,14 @@ def compute_experimental_tier(
     authoritative and should NOT be used for clinical decision-making.
 
     This function uses heuristics based on:
-    - FDA approvals in the EvidencePanel
+    - FDA approvals in the Insight
     - CIViC assertion tiers
     - CGI biomarker FDA approval status
     - VICC evidence levels
     - ClinVar pathogenicity
 
     Args:
-        panel: EvidencePanel with aggregated evidence
+        panel: Insight with aggregated evidence
         tumor_type: Optional tumor type for context-specific tiering
 
     Returns:

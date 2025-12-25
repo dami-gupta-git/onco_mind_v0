@@ -8,7 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from oncomind import get_insight, get_insights, InsightConfig, EvidencePanel
+from oncomind import get_insight, get_insights, InsightConfig, Insight
 
 
 class TestGetInsightFastMode:
@@ -25,7 +25,7 @@ class TestGetInsightFastMode:
 
         panel = await get_insight("BRAF V600E", config=config)
 
-        assert isinstance(panel, EvidencePanel)
+        assert isinstance(panel, Insight)
         assert panel.identifiers.gene == "BRAF"
         assert panel.identifiers.variant == "V600E"
         # Literature should be empty in fast mode
@@ -63,7 +63,7 @@ class TestGetInsightFastMode:
         panel = await get_insight("EGFR L858R", config=config)
         elapsed = time.time() - start
 
-        assert isinstance(panel, EvidencePanel)
+        assert isinstance(panel, Insight)
         # Fast mode should complete in under 30 seconds
         assert elapsed < 30, f"Fast mode took {elapsed:.1f}s, expected < 30s"
 
@@ -82,7 +82,7 @@ class TestGetInsightFullMode:
 
         panel = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
 
-        assert isinstance(panel, EvidencePanel)
+        assert isinstance(panel, Insight)
         assert panel.identifiers.gene == "BRAF"
         # Full mode should attempt literature search
         # (may or may not find articles depending on API availability)
@@ -133,7 +133,7 @@ class TestGetInsights:
         )
 
         assert len(panels) == 2
-        assert all(isinstance(p, EvidencePanel) for p in panels)
+        assert all(isinstance(p, Insight) for p in panels)
         assert panels[0].identifiers.gene == "BRAF"
         assert panels[1].identifiers.gene == "EGFR"
 
@@ -239,13 +239,13 @@ class TestInsightConfig:
         assert config.llm_temperature == 0.5
 
 
-class TestEvidencePanelOutput:
-    """Tests for EvidencePanel output structure."""
+class TestInsightOutput:
+    """Tests for Insight output structure."""
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_panel_has_required_sections(self):
-        """EvidencePanel should have all required sections."""
+        """Insight should have all required sections."""
         config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
@@ -264,7 +264,7 @@ class TestEvidencePanelOutput:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_panel_serialization(self):
-        """EvidencePanel should serialize to JSON."""
+        """Insight should serialize to JSON."""
         config = InsightConfig(
             enable_literature=False,
             enable_llm=False,
@@ -288,7 +288,7 @@ class TestEvidencePanelOutput:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_panel_summary_stats(self):
-        """EvidencePanel should provide summary stats."""
+        """Insight should provide summary stats."""
         config = InsightConfig(
             enable_literature=False,
             enable_llm=False,

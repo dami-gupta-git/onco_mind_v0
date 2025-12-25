@@ -1,13 +1,13 @@
-"""Feature extraction from EvidencePanel.
+"""Feature extraction from Insight.
 
-This module extracts numeric features from EvidencePanel objects,
+This module extracts numeric features from Insight objects,
 creating structured feature dictionaries suitable for:
 - ML model input
 - Similarity computation
 - Clustering and visualization
 
 ARCHITECTURE:
-    EvidencePanel → extract_features() → dict[str, float | int | bool]
+    Insight → extract_features() → dict[str, float | int | bool]
 
 Feature categories:
 1. Functional scores (AlphaMissense, CADD, PolyPhen2, SIFT, etc.)
@@ -23,7 +23,7 @@ Future:
 from dataclasses import dataclass, field
 from typing import Any
 
-from oncomind.models.insight.evidence_panel import EvidencePanel
+from oncomind.models.insight import Insight
 
 
 @dataclass
@@ -46,13 +46,13 @@ class FeatureConfig:
 
 
 def extract_features(
-    panel: EvidencePanel,
+    panel: Insight,
     config: FeatureConfig | None = None,
 ) -> dict[str, Any]:
-    """Extract numeric features from an EvidencePanel.
+    """Extract numeric features from an Insight.
 
     Args:
-        panel: EvidencePanel to extract features from.
+        panel: Insight to extract features from.
         config: Optional configuration for feature extraction.
 
     Returns:
@@ -94,7 +94,7 @@ def extract_features(
 
 
 def _extract_functional_features(
-    panel: EvidencePanel,
+    panel: Insight,
     config: FeatureConfig,
 ) -> dict[str, float]:
     """Extract functional prediction scores."""
@@ -121,7 +121,7 @@ def _extract_functional_features(
     }
 
 
-def _extract_count_features(panel: EvidencePanel) -> dict[str, int]:
+def _extract_count_features(panel: Insight) -> dict[str, int]:
     """Extract evidence count features."""
     kb = panel.kb
 
@@ -142,7 +142,7 @@ def _extract_count_features(panel: EvidencePanel) -> dict[str, int]:
     }
 
 
-def _extract_clinical_features(panel: EvidencePanel) -> dict[str, float | bool]:
+def _extract_clinical_features(panel: Insight) -> dict[str, float | bool]:
     """Extract clinical indicator features."""
     clinical = panel.clinical
 
@@ -176,7 +176,7 @@ def _extract_clinical_features(panel: EvidencePanel) -> dict[str, float | bool]:
 
 
 def _extract_population_features(
-    panel: EvidencePanel,
+    panel: Insight,
     config: FeatureConfig,
 ) -> dict[str, float]:
     """Extract population frequency features."""
