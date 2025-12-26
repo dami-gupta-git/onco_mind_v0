@@ -119,28 +119,24 @@ class Evidence(BaseModel):
 
 ### 3. LLM as Optional Enhancement
 
-The core annotation pipeline is deterministic. LLM can be enabled for clinical narrative synthesis:
+The core annotation pipeline is deterministic. LLM can be enabled for research narrative synthesis:
 
 ```python
-# Default: structured evidence + LLM narrative (~12s)
-result = await get_insight("BRAF V600E", tumor_type="Melanoma")
-print(result.llm.llm_summary)  # LLM narrative
-
-# Lite: fast, no LLM (~7s)
+# Annotation mode: structured evidence only (~7s)
 config = InsightConfig(enable_llm=False)
-result = await get_insight("BRAF V600E", config=config)
+result = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
 print(result.llm)  # None
 
-# Full: + literature search + enhanced narrative (~25s)
-config = InsightConfig(enable_llm=True, enable_literature=True)
-result = await get_insight("BRAF V600E", config=config)
+# LLM mode: + literature search + research narrative (~25s)
+config = InsightConfig(enable_llm=True)
+result = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
+print(result.llm.llm_summary)  # LLM narrative with gaps and hypotheses
 ```
 
 **CLI equivalent:**
 ```bash
-mind insight BRAF V600E -t Melanoma           # Default
-mind insight BRAF V600E -t Melanoma --lite    # Lite
-mind insight BRAF V600E -t Melanoma --full    # Full
+mind insight BRAF V600E -t Melanoma           # Annotation mode (default)
+mind insight BRAF V600E -t Melanoma --llm     # LLM mode
 ```
 
 ### 4. Async-First Design
@@ -712,9 +708,8 @@ features = extract_features(result)
 ### Parallel Fetching
 
 Evidence sources are queried in parallel:
-- **Lite mode** (`--lite`): ~7 seconds — structured evidence only, no LLM
-- **Default mode**: ~12 seconds — structured evidence + LLM clinical narrative
-- **Full mode** (`--full`): ~25 seconds — + literature search + enhanced narrative
+- **Annotation mode** (default): ~7 seconds — structured evidence only, no LLM
+- **LLM mode** (`--llm`): ~25 seconds — + literature search + research narrative + hypothesis generation
 
 ### Caching (Future)
 
