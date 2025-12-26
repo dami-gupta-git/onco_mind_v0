@@ -397,6 +397,42 @@ Research opportunities:
 - LLM output validation (JSON schema, citation verification)
 - Evidence gap detector unit tests
 
+#### Test Coverage Gaps (as of Dec 2024)
+
+**Current Coverage:** 406 tests
+
+**Well-Covered:**
+| Source | Unit Tests | Integration Tests |
+|--------|-----------|-------------------|
+| cBioPortal | 24 | 12 |
+| DepMap | 39 | 17 |
+| CGI | 21 | via evidence_fields |
+| VICC | 25 | 16 |
+| VEP | - | 20 |
+| MyVariant | - | 16 |
+| PubMed | - | 14 |
+| Semantic Scholar | - | 10 |
+| FDA | - | 23 |
+
+**Missing Integration Tests (Priority Order):**
+1. CIViC - Core evidence source, no dedicated API tests
+2. ClinicalTrials.gov - Important for clinical relevance
+3. OncoKB - If enabled, needs coverage
+
+**Missing Unit Tests:**
+- CIViC client
+- ClinicalTrials client
+- PubMed client (only integration)
+- Semantic Scholar client (only integration)
+- FDA client
+- VEP client
+
+**Other Gaps:**
+- End-to-end Conductor tests (full pipeline)
+- Error handling tests (network failures, rate limits)
+- Edge case tests (rare variants, missing data)
+- Performance tests (timeout handling, concurrent API calls)
+
 ### Observability
 - Structured logging with correlation IDs
 - API latency metrics per source
