@@ -615,8 +615,32 @@ with tab1:
                 st.markdown("---")
                 st.markdown("### 🤖 LLM Research Synthesis")
 
-                # Main narrative
-                st.markdown(llm_narrative)
+                # Build formatted narrative from raw components
+                functional_summary = result['insight'].get('functional_summary')
+                biological_context = result['insight'].get('biological_context')
+                therapeutic_landscape = result['insight'].get('therapeutic_landscape')
+
+                # Display structured components with formatting
+                if functional_summary:
+                    st.markdown(f"**Functional Impact:** {functional_summary}")
+                if biological_context:
+                    st.markdown(f"**Biological Context:** {biological_context}")
+                if therapeutic_landscape:
+                    tl_parts = []
+                    if therapeutic_landscape.get("fda_approved"):
+                        tl_parts.append(f"FDA-approved: {', '.join(therapeutic_landscape['fda_approved'])}")
+                    if therapeutic_landscape.get("clinical_evidence"):
+                        tl_parts.append(f"Clinical evidence: {', '.join(therapeutic_landscape['clinical_evidence'])}")
+                    if therapeutic_landscape.get("preclinical"):
+                        tl_parts.append(f"Preclinical: {', '.join(therapeutic_landscape['preclinical'])}")
+                    if therapeutic_landscape.get("resistance_mechanisms"):
+                        tl_parts.append(f"Resistance: {', '.join(therapeutic_landscape['resistance_mechanisms'])}")
+                    if tl_parts:
+                        st.markdown(f"**Therapeutic Landscape:** {'; '.join(tl_parts)}")
+
+                # Fall back to plain narrative if no structured components
+                if not any([functional_summary, biological_context, therapeutic_landscape]):
+                    st.markdown(llm_narrative)
 
                 # Evidence assessment section
                 st.markdown("#### Evidence Assessment")

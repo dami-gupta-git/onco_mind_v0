@@ -138,8 +138,12 @@ def _build_response(result) -> Dict[str, Any]:
         },
         "insight": {
             "summary": result.get_summary(),  # Always 1-line summary
-            "llm_narrative": llm.llm_summary if llm else None,  # LLM insight when available
+            "llm_narrative": llm.llm_summary if llm else None,  # Plain text summary (no formatting)
             "rationale": llm.rationale if llm else None,
+            # Raw component fields for UI formatting
+            "functional_summary": llm.functional_summary if llm else None,
+            "biological_context": llm.biological_context if llm else None,
+            "therapeutic_landscape": llm.therapeutic_landscape if llm else None,
             # Research-focused fields
             "evidence_quality": llm.evidence_quality if llm else None,
             "knowledge_gaps": llm.knowledge_gaps if llm else [],

@@ -17,19 +17,24 @@ class TestLLMService:
 
         # Mock the acompletion call
         with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
-            # Create mock response object
+            # Create mock response object with new format (raw component fields)
             response_json = {
-                "summary": "BRAF V600E is a well-characterized oncogenic mutation with FDA-approved targeted therapies.",
-                "rationale": "Multiple FDA-approved BRAF inhibitors exist for melanoma.",
-                "recommended_therapies": [
-                    {
-                        "drug_name": "Vemurafenib",
-                        "evidence_level": "FDA-approved",
-                        "approval_status": "Approved",
-                        "clinical_context": "First-line"
-                    }
-                ],
-                "references": ["PMID:12345"]
+                "functional_summary": "BRAF V600E is a well-characterized oncogenic mutation.",
+                "biological_context": "Constitutive MAPK pathway activation.",
+                "research_implications": "Multiple FDA-approved BRAF inhibitors exist for melanoma.",
+                "therapeutic_landscape": {
+                    "fda_approved": ["Vemurafenib", "Dabrafenib"],
+                    "clinical_evidence": [],
+                    "preclinical": [],
+                    "resistance_mechanisms": []
+                },
+                "evidence_assessment": {
+                    "overall_quality": "comprehensive",
+                    "well_characterized": ["therapeutic response"],
+                    "knowledge_gaps": [],
+                    "conflicting_evidence": []
+                },
+                "key_references": ["PMID:12345"]
             }
             mock_response = AsyncMock()
             mock_response.choices = [AsyncMock()]
@@ -46,8 +51,8 @@ class TestLLMService:
 
             assert "BRAF V600E" in insight.llm_summary
             assert insight.clinical_trials_available is True
-            assert len(insight.recommended_therapies) == 1
-            assert insight.recommended_therapies[0].drug_name == "Vemurafenib"
+            assert insight.functional_summary == "BRAF V600E is a well-characterized oncogenic mutation."
+            assert insight.therapeutic_landscape["fda_approved"] == ["Vemurafenib", "Dabrafenib"]
 
     @pytest.mark.asyncio
     async def test_get_llm_insight_with_markdown(self):
@@ -55,10 +60,12 @@ class TestLLMService:
         service = LLMService()
 
         response_json = {
-            "summary": "Test summary for the variant.",
-            "rationale": "Test rationale.",
-            "recommended_therapies": [],
-            "references": []
+            "functional_summary": "Test summary for the variant.",
+            "biological_context": "",
+            "research_implications": "",
+            "therapeutic_landscape": {},
+            "evidence_assessment": {},
+            "key_references": []
         }
 
         markdown_response = f"```json\n{json.dumps(response_json)}\n```"
@@ -77,6 +84,7 @@ class TestLLMService:
             )
 
             assert insight.llm_summary == "Test summary for the variant."
+            assert insight.functional_summary == "Test summary for the variant."
 
     @pytest.mark.asyncio
     async def test_llm_service_with_custom_temperature(self):
@@ -88,10 +96,12 @@ class TestLLMService:
         assert service.model == "gpt-4o-mini"
 
         response_json = {
-            "summary": "Test summary for the variant.",
-            "rationale": "Test rationale.",
-            "recommended_therapies": [],
-            "references": []
+            "functional_summary": "Test summary for the variant.",
+            "biological_context": "",
+            "research_implications": "",
+            "therapeutic_landscape": {},
+            "evidence_assessment": {},
+            "key_references": []
         }
 
         with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:

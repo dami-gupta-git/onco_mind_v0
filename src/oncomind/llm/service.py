@@ -112,37 +112,22 @@ class LLMService:
 
             data = json.loads(content)
 
-            # Build research-focused LLM summary from response components
+            # Extract research-focused LLM response components (raw data, no formatting)
             functional_summary = data.get("functional_summary", "")
             biological_context_text = data.get("biological_context", "")
             research_implications = data.get("research_implications", "")
+            therapeutic = data.get("therapeutic_landscape", {})
 
-            # Combine into a comprehensive summary
+            # Build plain text summary (no markdown - UI layer handles formatting)
             summary_parts = []
             if functional_summary:
-                summary_parts.append(f"**Functional Impact:** {functional_summary}")
+                summary_parts.append(functional_summary)
             if biological_context_text:
-                summary_parts.append(f"**Biological Context:** {biological_context_text}")
-
-            # Add therapeutic landscape
-            therapeutic = data.get("therapeutic_landscape", {})
-            if therapeutic:
-                therapy_parts = []
-                if therapeutic.get("fda_approved"):
-                    therapy_parts.append(f"FDA-approved: {', '.join(therapeutic['fda_approved'])}")
-                if therapeutic.get("clinical_evidence"):
-                    therapy_parts.append(f"Clinical evidence: {', '.join(therapeutic['clinical_evidence'])}")
-                if therapeutic.get("preclinical"):
-                    therapy_parts.append(f"Preclinical: {', '.join(therapeutic['preclinical'])}")
-                if therapeutic.get("resistance_mechanisms"):
-                    therapy_parts.append(f"Resistance: {', '.join(therapeutic['resistance_mechanisms'])}")
-                if therapy_parts:
-                    summary_parts.append(f"**Therapeutic Landscape:** {'; '.join(therapy_parts)}")
-
+                summary_parts.append(biological_context_text)
             if research_implications:
-                summary_parts.append(f"**Research Implications:** {research_implications}")
+                summary_parts.append(research_implications)
 
-            llm_summary = "\n\n".join(summary_parts) if summary_parts else "No summary available"
+            llm_summary = " ".join(summary_parts) if summary_parts else "No summary available"
 
             # Extract evidence assessment
             evidence_assessment = data.get("evidence_assessment", {})
@@ -154,13 +139,18 @@ class LLMService:
             # Extract evidence tags for transparency
             evidence_tags = data.get("evidence_tags", [])
 
-            # Build insight with research-focused narrative
+            # Build insight with research-focused narrative and raw component data
             return LLMInsight(
                 llm_summary=llm_summary,
                 rationale=research_implications,
                 clinical_trials_available=has_clinical_trials,
                 therapeutic_evidence=[],  # Therapeutic evidence comes from Evidence.get_therapeutic_evidence()
                 references=data.get("key_references", []),
+                # Raw component data for UI formatting
+                functional_summary=functional_summary or None,
+                biological_context=biological_context_text or None,
+                therapeutic_landscape=therapeutic or None,
+                # Research assessment fields
                 evidence_quality=evidence_quality,
                 knowledge_gaps=knowledge_gaps,
                 well_characterized=well_characterized,

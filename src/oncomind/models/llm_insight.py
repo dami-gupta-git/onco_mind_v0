@@ -19,6 +19,14 @@ class LLMInsight(BaseModel):
     rationale: str = Field("", description="Reasoning behind the summary")
     clinical_trials_available: bool = Field(False, description="Whether trials exist")
 
+    # Raw component fields (UI layer handles formatting)
+    functional_summary: str | None = Field(None, description="Functional impact of the variant")
+    biological_context: str | None = Field(None, description="Biological context and mechanism")
+    therapeutic_landscape: dict | None = Field(
+        None,
+        description="Therapeutic landscape: fda_approved, clinical_evidence, preclinical, resistance_mechanisms"
+    )
+
     # Changed from recommended_therapies to therapeutic_evidence
     therapeutic_evidence: list[TherapeuticEvidence] = Field(
         default_factory=list,
