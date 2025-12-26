@@ -68,16 +68,16 @@ Additional guidelines:
 - Prefer hypotheses that are testable and tied to at least two evidence elements.
 - Maintain a strict JSON output schema as shown below.
 
-CRITICAL: For biological_context, you MUST include the source citation INLINE with each statistic. Look for "Source: [cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section above and copy that markdown link directly into your text next to the numbers.
+CRITICAL: For biological_context, include the source citation ONCE at the end of all cBioPortal statistics. Look for "cite as: ([cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section and copy that markdown link.
 
 Respond ONLY with valid JSON:
 {{
   "functional_summary": "2–3 sentences on what this variant does to protein function and downstream signaling, using only provided evidence.",
-  "biological_context": "2–3 sentences with INLINE source citations. Example: 'BRAF mutations occur in 52% of cases ([cBioPortal: mel_tcga](https://...)), with V600E in 35%.' Copy the markdown link exactly from the Source line in the evidence.",
+  "biological_context": "2–3 sentences. Cite the source ONCE at the end. Example: 'BRAF mutations occur in 52% of cases, with V600E in 35% and PTEN co-mutations in 12% ([cBioPortal: mel_tcga](https://...)).'",
   "therapeutic_landscape": {{
-    "fda_approved": ["Drug names with FDA approval in this variant/tumor context, or empty if none are mentioned in the evidence blocks."],
-    "clinical_evidence": ["Drugs with Phase 2/3 (or similar) data described in the evidence blocks."],
-    "preclinical": ["Agents with preclinical sensitivity/resistance data described in the evidence blocks."],
+    "fda_approved": ["Format: 'BRAND_NAME (generic_name)' e.g., 'ZELBORAF (vemurafenib)'. Use this format for ALL drugs."],
+    "clinical_evidence": ["Format: 'BRAND_NAME (generic_name)' for drugs with Phase 2/3 data. If brand name unknown, use 'generic_name' only."],
+    "preclinical": ["Format: 'BRAND_NAME (generic_name)' for agents with preclinical sensitivity/resistance data."],
     "resistance_mechanisms": ["Resistance mechanisms explicitly mentioned in the evidence blocks (e.g., secondary mutations, bypass pathways, histologic transformation)."]
   }},
   "evidence_assessment": {{

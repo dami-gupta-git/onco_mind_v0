@@ -561,45 +561,57 @@ with tab1:
                     badge = quality_colors.get(evidence_quality.lower(), "⚪")
                     st.markdown(f"**Overall Quality:** {badge} {evidence_quality.capitalize()}")
 
-                # Well-characterized aspects
+                # Well-characterized aspects (single line)
                 well_characterized = result['insight'].get('well_characterized', [])
                 if well_characterized:
-                    st.markdown("**✅ Well Characterized:**")
-                    for item in well_characterized:
-                        st.markdown(f"- {item}")
+                    st.markdown(f"**✅ Well Characterized:** {' · '.join(well_characterized)}")
 
-                # Knowledge gaps
+                # Knowledge gaps (single line)
                 knowledge_gaps = result['insight'].get('knowledge_gaps', [])
                 if knowledge_gaps:
-                    st.markdown("**❓ Knowledge Gaps:**")
-                    for gap in knowledge_gaps:
-                        st.markdown(f"- {gap}")
+                    st.markdown(f"**❓ Knowledge Gaps:** {' · '.join(knowledge_gaps)}")
 
-                # Conflicting evidence
+                # Conflicting evidence (single line)
                 conflicting_evidence = result['insight'].get('conflicting_evidence', [])
                 if conflicting_evidence:
-                    st.markdown("**⚠️ Conflicting Evidence:**")
-                    for conflict in conflicting_evidence:
-                        st.markdown(f"- {conflict}")
+                    st.markdown(f"**⚠️ Conflicting Evidence:** {' · '.join(conflicting_evidence)}")
 
-                # Evidence tags (transparency labels)
+                # Evidence tags (single line)
                 evidence_tags = result['insight'].get('evidence_tags', [])
                 if evidence_tags:
-                    st.markdown("**🏷️ Evidence Types:**")
-                    tags_str = " · ".join(evidence_tags)
-                    st.caption(tags_str)
+                    st.markdown(f"**🏷️ Evidence Types:** {' · '.join(evidence_tags)}")
 
                 # Research implications
                 research_implications = result['insight'].get('research_implications')
                 if research_implications and research_implications != result['insight'].get('rationale'):
                     st.markdown(f"**🔬 Research Implications:** {research_implications}")
 
-                # References
+                # References (make clickable)
                 references = result['insight'].get('references', [])
                 if references:
-                    st.markdown("**📚 Key References:**")
-                    refs_str = ", ".join(references[:5])
-                    st.markdown(f"{refs_str}")
+                    clickable_refs = []
+                    for ref in references[:5]:
+                        ref_str = str(ref).strip()
+                        # Check if it's a PMID
+                        if ref_str.startswith("PMID"):
+                            pmid = ref_str.replace("PMID", "").replace(":", "").strip()
+                            clickable_refs.append(f"[PMID {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)")
+                        elif ref_str.isdigit():
+                            # Just a number, assume it's a PMID
+                            clickable_refs.append(f"[PMID {ref_str}](https://pubmed.ncbi.nlm.nih.gov/{ref_str}/)")
+                        elif "cBioPortal" in ref_str or "cbioportal" in ref_str.lower():
+                            # Extract study ID if present
+                            if ":" in ref_str:
+                                study_id = ref_str.split(":")[-1].strip()
+                                clickable_refs.append(f"[{ref_str}](https://www.cbioportal.org/study/summary?id={study_id})")
+                            else:
+                                clickable_refs.append(ref_str)
+                        elif ref_str.startswith("NCT"):
+                            # Clinical trial ID
+                            clickable_refs.append(f"[{ref_str}](https://clinicaltrials.gov/study/{ref_str})")
+                        else:
+                            clickable_refs.append(ref_str)
+                    st.markdown(f"**📚 Key References:** {', '.join(clickable_refs)}")
 
             # Download and Clear buttons
             st.markdown("---")
