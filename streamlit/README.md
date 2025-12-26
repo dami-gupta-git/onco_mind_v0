@@ -27,13 +27,14 @@ http://localhost:8502
 - Input gene, variant, and tumor type (The tumor type should exactly match values from the OncoTree ontology or CIViC database)
 - Select LLM model (OpenAI, Anthropic, Google, Groq)
 - Get comprehensive insight with:
-  - AMP/ASCO/CAP tier classification
-  - Confidence score
-  - Evidence strength
-  - Recommended therapies
+  - Evidence summary with pathogenicity scores
+  - Recommended therapies (FDA-approved, clinical, preclinical)
   - Database identifiers (COSMIC, ClinVar, dbSNP)
   - HGVS notations
-  - Functional annotations
+  - Functional annotations (AlphaMissense, CADD, PolyPhen2)
+  - cBioPortal co-mutation patterns
+  - 🧬 DepMap preclinical data (gene essentiality, drug sensitivity, cell line models)
+  - Evidence gap analysis and research implications
 
 ### 📊 Batch Upload
 - Upload CSV with variant data

@@ -267,6 +267,46 @@ result.literature.get_resistance_articles()    # Articles mentioning resistance
 result.literature.get_sensitivity_articles()   # Articles mentioning sensitivity
 ```
 
+### `result.evidence.depmap_evidence`
+
+DepMap preclinical research data (gene essentiality, drug sensitivity, cell line models).
+
+```python
+# DepMap evidence (may be None if no data)
+if result.evidence.depmap_evidence:
+    depmap = result.evidence.depmap_evidence
+
+    # Gene essentiality from CRISPR screens
+    if depmap.gene_dependency:
+        depmap.gene_dependency.gene                    # "BRAF"
+        depmap.gene_dependency.mean_dependency_score   # -0.80 (CERES, <-0.5 = essential)
+        depmap.gene_dependency.n_dependent_lines       # 450
+        depmap.gene_dependency.n_total_lines           # 1000
+        depmap.gene_dependency.dependency_pct          # 45.0
+
+    # Drug sensitivities from PRISM screens
+    for ds in depmap.drug_sensitivities:
+        ds.drug_name                   # "trametinib"
+        ds.ic50_nm                     # 8.0 (lower = more sensitive)
+        ds.auc                         # 0.3
+        ds.n_cell_lines                # 10
+
+    # Cell line models with the mutation
+    for cl in depmap.cell_line_models:
+        cl.name                        # "A375"
+        cl.primary_disease             # "Melanoma"
+        cl.subtype                     # "Skin"
+        cl.has_mutation                # True
+        cl.mutation_details            # "V600E"
+
+    # Helper methods
+    depmap.is_essential()              # True if CERES < -0.5
+    depmap.has_data()                  # True if any DepMap data available
+    depmap.get_top_sensitive_drugs(3)  # Top 3 drugs by IC50
+    depmap.get_model_cell_lines(with_mutation_only=True)  # Cell lines with mutation
+    depmap.to_prompt_context()         # Formatted text for LLM
+```
+
 ### `result.llm`
 
 LLM-generated research-focused narrative (when `enable_llm=True`).
@@ -368,14 +408,15 @@ from oncomind.insight_builder.gap_detector import detect_evidence_gaps
 
 # Checks performed:
 # 1. Functional characterization (AlphaMissense, CADD, PolyPhen2)
-# 2. Mechanism/functional studies (gene role, pathway)
+# 2. Mechanism/functional studies (gene role, pathway, DepMap essentiality)
 # 3. Clinical evidence (CIViC assertions, FDA approvals)
 # 4. Tumor-type-specific evidence
-# 5. Drug response data (CGI, VICC, preclinical)
+# 5. Drug response data (CGI, VICC, preclinical, DepMap drug sensitivity)
 # 6. Resistance mechanisms
 # 7. Prevalence/epidemiology (cBioPortal)
 # 8. Clinical trials
-# 9. Literature depth (publication count)
+# 9. Preclinical model systems (DepMap cell lines)
+# 10. Literature depth (publication count)
 
 gaps = detect_evidence_gaps(evidence)
 ```

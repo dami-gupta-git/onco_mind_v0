@@ -36,6 +36,7 @@ OncoMind synthesizes evidence from 10+ sources and explicitly surfaces what we *
 - **Clinical databases**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels
 - **Functional predictions**: AlphaMissense, CADD, PolyPhen2, gnomAD frequencies
 - **Co-mutation patterns**: cBioPortal prevalence and co-occurrence data
+- **Preclinical research**: DepMap gene essentiality (CRISPR screens), drug sensitivity (PRISM), cell line models
 - **Literature**: Semantic Scholar and PubMed with LLM relevance scoring
 - **Clinical trials**: ClinicalTrials.gov integration
 
@@ -264,11 +265,15 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 | [Semantic Scholar](https://www.semanticscholar.org/) | AI-powered literature search | Free API |
 | [PubMed](https://pubmed.ncbi.nlm.nih.gov/) | Biomedical literature | Free E-utilities |
 
+### Preclinical Research
+| Source | Data Type | Access |
+|--------|-----------|--------|
+| [DepMap](https://depmap.org/) | Gene essentiality (CRISPR), drug sensitivity (PRISM), cell line models | Free API |
+
 ### Coming Soon
 | Source | Data Type | Status |
 |--------|-----------|--------|
 | [Reactome](https://reactome.org/) | Pathway context | Planned |
-| [DepMap/CCLE](https://depmap.org/) | Cell line dependencies | Planned |
 
 See [ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
 
