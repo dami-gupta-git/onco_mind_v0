@@ -34,6 +34,7 @@ class LLMService:
         evidence_assessment: dict | None = None,
         literature_summary: str = "",
         has_clinical_trials: bool = False,
+        data_availability: dict | None = None,
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -47,6 +48,8 @@ class LLMService:
                 knowledge_gaps, conflicting_evidence, critical_gaps, significant_gaps
             literature_summary: PubMed literature findings (for full mode)
             has_clinical_trials: Whether clinical trials are available
+            data_availability: Dict with boolean flags for data presence
+                (has_tumor_specific_cbioportal, has_civic_assertions, has_fda_approvals, has_vicc_evidence)
 
         Returns:
             LLMInsight with LLM-generated research-focused narrative
@@ -62,6 +65,15 @@ class LLMService:
                 "significant_gaps": [],
             }
 
+        # Default empty data availability if not provided
+        if data_availability is None:
+            data_availability = {
+                "has_tumor_specific_cbioportal": False,
+                "has_civic_assertions": False,
+                "has_fda_approvals": False,
+                "has_vicc_evidence": False,
+            }
+
         # Create research-focused prompt
         messages = create_research_prompt(
             gene=gene,
@@ -71,6 +83,7 @@ class LLMService:
             evidence_summary=evidence_summary,
             evidence_assessment=evidence_assessment,
             literature_summary=literature_summary,
+            data_availability=data_availability,
         )
 
         # Call LLM for narrative generation
@@ -137,8 +150,6 @@ class LLMService:
             knowledge_gaps = evidence_assessment.get("knowledge_gaps", [])
             well_characterized = evidence_assessment.get("well_characterized", [])
             conflicting_evidence = evidence_assessment.get("conflicting_evidence", [])
-
-            print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
 
             # Extract evidence tags for transparency
             evidence_tags = data.get("evidence_tags", [])
