@@ -447,6 +447,7 @@ class EvidenceAggregator:
                     variant=cbioportal_result.variant,
                     tumor_type=cbioportal_result.tumor_type,
                     study_id=cbioportal_result.study_id,
+                    study_name=cbioportal_result.study_name,
                     total_samples=cbioportal_result.total_samples,
                     samples_with_gene_mutation=cbioportal_result.samples_with_gene_mutation,
                     samples_with_exact_variant=cbioportal_result.samples_with_exact_variant,

@@ -302,6 +302,7 @@ def _build_response(result) -> Dict[str, Any]:
             "variant": evidence.cbioportal_evidence.variant,
             "tumor_type": evidence.cbioportal_evidence.tumor_type,
             "study_id": evidence.cbioportal_evidence.study_id,
+            "study_name": evidence.cbioportal_evidence.study_name,
             "total_samples": evidence.cbioportal_evidence.total_samples,
             "samples_with_gene_mutation": evidence.cbioportal_evidence.samples_with_gene_mutation,
             "samples_with_exact_variant": evidence.cbioportal_evidence.samples_with_exact_variant,

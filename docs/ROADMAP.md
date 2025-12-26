@@ -54,19 +54,44 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 
 ## Near-Term (Q1 2025)
 
-### Reactome/Pathway Integration
-**Goal:** Add pathway context to variant analysis
+### Pathway Context (Lightweight)
+**Goal:** Add pathway context to interpret co-mutations and resistance mechanisms
 
 **Implementation:**
-- Query Reactome API for pathways containing the mutated gene
-- Show pathway hierarchy (pathway → sub-pathway → reaction)
-- Identify druggable nodes in the same pathway
-- Surface pathway bottlenecks and synthetic lethality opportunities
-- Add `pathway_context` field to Evidence model
+- Hard-coded pathway map for ~30 key cancer genes (no API calls)
+- For each gene, define: pathway name, upstream nodes, downstream nodes, parallel pathways
+- Annotate co-mutations with pathway relationships (same-pathway = mutual exclusivity expected)
+- Surface resistance mechanisms via parallel pathway activation
 
-**Research value:** "This variant affects PTEN in the PI3K-AKT pathway. Other druggable nodes: PIK3CA (alpelisib), AKT1 (capivasertib), MTOR (everolimus)."
+**Example data structure:**
+```python
+PATHWAY_CONTEXT = {
+    "BRAF": {
+        "pathway": "MAPK/ERK",
+        "upstream": ["NRAS", "KRAS", "EGFR"],
+        "downstream": ["MAP2K1", "MAP2K2"],  # MEK1/2
+        "parallel": ["PIK3CA", "PTEN", "AKT1"],
+    },
+    "EGFR": {
+        "pathway": "EGFR/RAS/MAPK",
+        "downstream": ["KRAS", "BRAF", "PIK3CA"],
+        "parallel": ["MET", "ERBB2"],
+    },
+}
+```
 
-**Gap detection enhancement:** Add `GapCategory.PATHWAY` - "Pathway effects not characterized"
+**Output example:**
+```
+Pathway: MAPK/ERK signaling
+├── Upstream (same pathway): NRAS (mutually exclusive, 0.9%)
+├── Downstream (drug targets): MEK1/2 → trametinib, cobimetinib
+└── Parallel (resistance): PIK3CA co-mutation in 8% of cases
+
+Research implication: Co-occurring PIK3CA mutations may predict
+resistance to BRAF/MEK inhibition via parallel pathway activation.
+```
+
+**Research value:** Makes co-mutation data interpretable. Explains *why* BRAF/NRAS are mutually exclusive (same pathway) while BRAF/PIK3CA co-occur (parallel pathways, resistance mechanism).
 
 ### DepMap/CCLE Integration ✅ COMPLETE
 **Goal:** Add cell line dependency and drug sensitivity data
@@ -145,6 +170,42 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 - Track preprint → publication progression
 
 **Research value:** "🔬 Preprint (bioRxiv, 2024-12): Reports novel resistance mechanism via XYZ. Not yet peer-reviewed."
+
+### Full-Text Literature Access (PMC)
+**Goal:** Go beyond abstracts for richer evidence extraction
+
+**The problem:** Abstracts miss critical details:
+- Methods (cell line vs clinical trial? what concentrations?)
+- Resistance mechanisms (buried in results/discussion)
+- Subgroup analyses ("In the BRAF V600E cohort specifically...")
+- Quantitative data (IC50 values, response rates)
+- Negative results (abstracts oversell; full text has caveats)
+
+**Implementation (Phase 1 - PMC Open Access):**
+- Check if paper has PMCID (indicates PMC availability)
+- Fetch full text via PMC E-utilities API (free, no key required)
+- Parse XML to extract Methods, Results, Discussion sections
+- Run LLM extraction on richer content
+- Coverage: ~30-40% of oncology papers are open access
+
+**API:**
+```
+GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi
+    ?db=pmc&id=PMC1234567&rettype=xml
+```
+
+**Research value:** "From full text (PMID:12345678): IC50 = 12nM in V600E-mutant lines vs 890nM in wild-type. Resistance emerged at 6 months via NRAS Q61K co-mutation (3/12 patients)."
+
+**Coverage limitations:**
+| Source | Coverage | Access |
+|--------|----------|--------|
+| PMC Open Access | ~30-40% | Free API |
+| Subscription journals | ~60-70% | Requires institutional access or partnerships |
+
+**Future phases:**
+- Unpaywall API for additional OA sources
+- User-provided PDFs for key papers
+- Publisher API partnerships (Elsevier, Springer — business development)
 
 ### Structural Variant Support
 **Goal:** Extend beyond point mutations
@@ -272,6 +333,53 @@ POST /api/v1/watchlist
 - Identify rapidly evolving variants
 
 **Research value:** "KRAS G12C evidence timeline: 2019 (preclinical only) → 2021 (Phase 2 sotorasib) → 2022 (FDA approved) → 2024 (resistance mechanisms emerging)."
+
+### Pathway-Level Gap Analysis
+**Goal:** Answer "What don't we know about the JAK-STAT pathway?"
+
+This is the full vision beyond the lightweight pathway context in Near-Term. Instead of annotating a single variant with pathway context, this enables querying an entire pathway for research gaps.
+
+**The challenge:**
+- Pathways aren't well-defined entities (Reactome: 87 genes, KEGG: 42, MSigDB: 158 for "JAK-STAT")
+- Requires aggregating gaps across many genes with different evidence types
+- Need to weight by biological importance (JAK2 matters more than adapter proteins)
+- LLM context limits make dumping 50+ gene summaries impractical
+
+**Implementation:**
+- Reactome API integration for pathway membership
+- Gene-level gap scoring (new capability)
+- Pathway aggregation logic with importance weighting
+- Smart summarization: which gaps matter most?
+- New CLI: `mind pathway MAPK --tumor NSCLC`
+
+**Output example:**
+```
+JAK-STAT Pathway Gap Analysis
+
+Well-characterized nodes:
+├── JAK2 V617F: comprehensive (FDA drugs, 500+ papers, resistance known)
+├── STAT3: 200+ papers, multiple inhibitors in trials
+└── JAK1: moderate evidence, emerging therapeutics
+
+Under-studied nodes:
+├── STAT5B: limited functional data, no trials
+├── SOCS1: tumor suppressor role unclear in solid tumors
+└── PTPN11: preclinical only, mechanism debated
+
+Pathway-level gaps:
+├── Cross-talk with PI3K: conflicting data
+├── Resistance mechanisms: JAK1 << JAK2 (less studied)
+└── Biomarkers for patient selection: weak
+
+Research opportunities:
+├── "SOCS1 loss as synthetic lethal target"
+├── "JAK1-specific resistance vs JAK2"
+└── "STAT5B in solid tumors"
+```
+
+**Research value:** Genuinely novel capability. Nobody does "pathway gap analysis" well — it's all manual literature review today. This could help PIs identify white space for grant proposals.
+
+**Estimated effort:** 6-12 months (not blocking current release)
 
 ---
 

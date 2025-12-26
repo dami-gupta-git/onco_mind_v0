@@ -411,6 +411,14 @@ with tab1:
                 # cBioPortal tab - co-mutation and prevalence data
                 if cbioportal:
                     with tabs[tab_idx]:
+                        study_name = cbioportal.get('study_name', 'N/A')
+                        study_id = cbioportal.get('study_id', '')
+                        if study_id:
+                            study_url = f"https://www.cbioportal.org/study/summary?id={study_id}"
+                            st.markdown(f"**Study:** [{study_name}]({study_url})")
+                        else:
+                            st.markdown(f"**Study:** {study_name}")
+
                         # Prevalence stats
                         st.markdown("**Prevalence:**")
                         total = cbioportal.get('total_samples', 0)
@@ -418,14 +426,14 @@ with tab1:
                         variant_pct = cbioportal.get('variant_prevalence_pct', 0)
                         gene_count = cbioportal.get('samples_with_gene_mutation', 0)
                         variant_count = cbioportal.get('samples_with_exact_variant', 0)
-                        study = cbioportal.get('study_id', 'N/A')
+                        gene_symbol = cbioportal.get('gene', 'Gene')
+                        variant_name = cbioportal.get('variant', 'variant')
 
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric("Gene Mutation", f"{gene_pct:.1f}%", delta=f"{gene_count}/{total} samples")
+                            st.metric(f"Any {gene_symbol} Alteration", f"{gene_pct:.1f}%", delta=f"{gene_count}/{total} samples")
                         with col2:
-                            st.metric("Exact Variant", f"{variant_pct:.1f}%", delta=f"{variant_count}/{total} samples")
-                        st.caption(f"Study: {study}")
+                            st.metric(f"Exact {variant_name} Variant", f"{variant_pct:.1f}%", delta=f"{variant_count}/{total} samples")
 
                         # Co-occurring mutations
                         co_occurring = cbioportal.get('co_occurring', [])

@@ -196,6 +196,151 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
 # Gene to chromosome mapping for common cancer genes
 # Used for genomic coordinate lookups
 
+# =============================================================================
+# CBIOPORTAL STUDY MAPPINGS
+# =============================================================================
+# Maps tumor types to cBioPortal study IDs
+# First study in list is the primary study used for queries
+# TCGA PanCancer Atlas studies are preferred for broad coverage
+# MSK-IMPACT and institutional studies provide additional depth
+
+CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
+    # Lung
+    "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018", "nsclc_mskcc_2018"],
+    "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
+    "luad": ["luad_tcga_pan_can_atlas_2018"],
+    "lusc": ["lusc_tcga_pan_can_atlas_2018"],
+    "sclc": ["sclc_ucologne_2015"],
+
+    # Melanoma
+    "melanoma": ["skcm_tcga_pan_can_atlas_2018", "mel_ucla_2016", "skcm_mskcc_2014"],
+    "skcm": ["skcm_tcga_pan_can_atlas_2018"],
+
+    # Colorectal
+    "colorectal": ["coadread_tcga_pan_can_atlas_2018", "crc_msk_2017"],
+    "crc": ["coadread_tcga_pan_can_atlas_2018", "crc_msk_2017"],
+    "colon": ["coadread_tcga_pan_can_atlas_2018"],
+    "coad": ["coadread_tcga_pan_can_atlas_2018"],
+    "rectal": ["coadread_tcga_pan_can_atlas_2018"],
+
+    # Breast
+    "breast": ["brca_tcga_pan_can_atlas_2018", "breast_msk_2018"],
+    "brca": ["brca_tcga_pan_can_atlas_2018"],
+
+    # Pancreatic
+    "pancreatic": ["paad_tcga_pan_can_atlas_2018", "paad_qcmg_uq_2016"],
+    "paad": ["paad_tcga_pan_can_atlas_2018"],
+    "pancreas": ["paad_tcga_pan_can_atlas_2018"],
+
+    # Brain
+    "glioblastoma": ["gbm_tcga_pan_can_atlas_2018"],
+    "gbm": ["gbm_tcga_pan_can_atlas_2018"],
+    "glioma": ["lgg_tcga_pan_can_atlas_2018", "gbm_tcga_pan_can_atlas_2018"],
+    "lgg": ["lgg_tcga_pan_can_atlas_2018"],
+
+    # Ovarian
+    "ovarian": ["ov_tcga_pan_can_atlas_2018"],
+    "ov": ["ov_tcga_pan_can_atlas_2018"],
+
+    # Prostate
+    "prostate": ["prad_tcga_pan_can_atlas_2018", "prad_mskcc_2017"],
+    "prad": ["prad_tcga_pan_can_atlas_2018"],
+
+    # Bladder
+    "bladder": ["blca_tcga_pan_can_atlas_2018"],
+    "blca": ["blca_tcga_pan_can_atlas_2018"],
+    "urothelial": ["blca_tcga_pan_can_atlas_2018"],
+
+    # Kidney
+    "kidney": ["kirc_tcga_pan_can_atlas_2018", "kirp_tcga_pan_can_atlas_2018"],
+    "renal": ["kirc_tcga_pan_can_atlas_2018"],
+    "rcc": ["kirc_tcga_pan_can_atlas_2018"],
+    "kirc": ["kirc_tcga_pan_can_atlas_2018"],
+    "kirp": ["kirp_tcga_pan_can_atlas_2018"],
+
+    # Thyroid
+    "thyroid": ["thca_tcga_pan_can_atlas_2018"],
+    "thca": ["thca_tcga_pan_can_atlas_2018"],
+
+    # Head and Neck
+    "head and neck": ["hnsc_tcga_pan_can_atlas_2018"],
+    "hnsc": ["hnsc_tcga_pan_can_atlas_2018"],
+
+    # Liver
+    "liver": ["lihc_tcga_pan_can_atlas_2018"],
+    "lihc": ["lihc_tcga_pan_can_atlas_2018"],
+    "hepatocellular": ["lihc_tcga_pan_can_atlas_2018"],
+    "hcc": ["lihc_tcga_pan_can_atlas_2018"],
+
+    # Gastric/Stomach
+    "gastric": ["stad_tcga_pan_can_atlas_2018"],
+    "stomach": ["stad_tcga_pan_can_atlas_2018"],
+    "stad": ["stad_tcga_pan_can_atlas_2018"],
+
+    # Esophageal
+    "esophageal": ["esca_tcga_pan_can_atlas_2018"],
+    "esca": ["esca_tcga_pan_can_atlas_2018"],
+
+    # Uterine/Endometrial
+    "uterine": ["ucec_tcga_pan_can_atlas_2018"],
+    "endometrial": ["ucec_tcga_pan_can_atlas_2018"],
+    "ucec": ["ucec_tcga_pan_can_atlas_2018"],
+
+    # Cervical
+    "cervical": ["cesc_tcga_pan_can_atlas_2018"],
+    "cesc": ["cesc_tcga_pan_can_atlas_2018"],
+
+    # Cholangiocarcinoma
+    "cholangiocarcinoma": ["chol_tcga_pan_can_atlas_2018"],
+    "chol": ["chol_tcga_pan_can_atlas_2018"],
+    "bile duct": ["chol_tcga_pan_can_atlas_2018"],
+
+    # Sarcoma
+    "sarcoma": ["sarc_tcga_pan_can_atlas_2018"],
+    "sarc": ["sarc_tcga_pan_can_atlas_2018"],
+
+    # GIST
+    "gist": ["gist_mskcc"],
+    "gastrointestinal stromal": ["gist_mskcc"],
+
+    # Mesothelioma
+    "mesothelioma": ["meso_tcga_pan_can_atlas_2018"],
+    "meso": ["meso_tcga_pan_can_atlas_2018"],
+
+    # Adrenocortical
+    "adrenocortical": ["acc_tcga_pan_can_atlas_2018"],
+    "acc": ["acc_tcga_pan_can_atlas_2018"],
+
+    # Pheochromocytoma
+    "pheochromocytoma": ["pcpg_tcga_pan_can_atlas_2018"],
+    "pcpg": ["pcpg_tcga_pan_can_atlas_2018"],
+
+    # Testicular
+    "testicular": ["tgct_tcga_pan_can_atlas_2018"],
+    "tgct": ["tgct_tcga_pan_can_atlas_2018"],
+
+    # Thymoma
+    "thymoma": ["thym_tcga_pan_can_atlas_2018"],
+    "thym": ["thym_tcga_pan_can_atlas_2018"],
+
+    # Uveal Melanoma
+    "uveal melanoma": ["uvm_tcga_pan_can_atlas_2018"],
+    "uvm": ["uvm_tcga_pan_can_atlas_2018"],
+
+    # AML
+    "aml": ["laml_tcga_pan_can_atlas_2018"],
+    "laml": ["laml_tcga_pan_can_atlas_2018"],
+    "acute myeloid leukemia": ["laml_tcga_pan_can_atlas_2018"],
+
+    # Diffuse Large B-Cell Lymphoma
+    "dlbcl": ["dlbc_tcga_pan_can_atlas_2018"],
+    "dlbc": ["dlbc_tcga_pan_can_atlas_2018"],
+}
+
+# Default pan-cancer study when no tumor-specific study is found
+CBIOPORTAL_DEFAULT_STUDY = "msk_impact_2017"
+
+
 GENE_CHROMOSOMES: dict[str, str] = {
     "BRAF": "7",
     "KRAS": "12",
