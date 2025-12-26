@@ -16,7 +16,8 @@ This document describes each external data source OncoMind fetches from, what da
 8. [Semantic Scholar](#semantic-scholar)
 9. [PubMed](#pubmed)
 10. [OncoTree](#oncotree)
-11. [DepMap (Cancer Dependency Map)](#depmap)
+11. [cBioPortal](#cbioportal)
+12. [DepMap (Cancer Dependency Map)](#depmap)
 
 ---
 
@@ -380,6 +381,108 @@ Primary method: `resolve_tumor_type(user_input)` - Resolves user input to standa
 
 ---
 
+## cBioPortal
+
+**API Endpoint:** `https://www.cbioportal.org/api/v2`
+
+**Purpose:** Variant prevalence, co-mutation patterns, and biological context from large-scale cancer genomics studies (TCGA, GENIE, institutional cohorts).
+
+### Data Retrieved
+
+#### Variant Prevalence
+
+| Field | Description |
+|-------|-------------|
+| `gene` | Gene symbol |
+| `variant` | Variant notation |
+| `study_id` | cBioPortal study ID (e.g., "mel_tcga_pan_can_atlas_2018") |
+| `study_name` | Human-readable study name |
+| `sample_count` | Number of samples with the variant |
+| `total_samples` | Total samples in the study |
+| `frequency` | Variant frequency (sample_count / total_samples) |
+| `tumor_type` | Cancer type of the study |
+
+**Example:** BRAF V600E found in 234/448 (52.2%) melanoma samples in TCGA-SKCM
+
+#### Co-Mutation Patterns
+
+| Field | Description |
+|-------|-------------|
+| `gene` | Co-mutated gene |
+| `co_occurrence_count` | Number of samples with both mutations |
+| `co_occurrence_ratio` | Ratio of co-occurrence |
+| `p_value` | Statistical significance of co-occurrence |
+| `log_odds_ratio` | Log odds ratio (positive = co-occurrence, negative = mutual exclusivity) |
+| `tendency` | "co-occurrence" or "mutual_exclusivity" |
+
+**Example:** BRAF V600E co-occurs with CDKN2A loss (p < 0.001), mutually exclusive with NRAS mutations
+
+### Study Selection
+
+cBioPortal contains hundreds of studies. OncoMind prioritizes:
+
+1. **Tumor-specific studies**: If tumor type is provided, searches for matching studies first
+2. **TCGA Pan-Cancer Atlas**: Comprehensive coverage across cancer types
+3. **Large cohort studies**: GENIE, institutional cohorts with >500 samples
+4. **Study relevance**: Filters by cancer type match (e.g., "melanoma" query matches "mel_tcga", "skcm_mskcc")
+
+### Tumor Type Matching
+
+OncoMind maps user-provided tumor types to cBioPortal study IDs:
+
+| User Input | Matched Studies |
+|------------|-----------------|
+| "Melanoma" | mel_tcga_pan_can_atlas_2018, skcm_mskcc_2014, skcm_broad_dfarber |
+| "NSCLC" | nsclc_tcga_pan_can_atlas_2018, luad_tcga, lusc_tcga |
+| "CRC" | coadread_tcga_pan_can_atlas_2018, crc_msk_2017 |
+
+If no tumor-specific study is found, falls back to pan-cancer data with a flag indicating "pan-cancer extrapolation".
+
+### How cBioPortal Data Flows to LLM
+
+cBioPortal data is sent to the LLM as part of the biological context section:
+
+```
+BIOLOGICAL CONTEXT (cBioPortal):
+  BRAF V600E in Melanoma:
+    - Prevalence: 52% of samples (234/448) ([cBioPortal: mel_tcga](https://...))
+    - Top co-mutations: CDKN2A (45%), TP53 (12%), PTEN (8%)
+    - Mutual exclusivity: NRAS (log OR: -3.2, p < 0.001)
+```
+
+The LLM uses this to:
+1. **Contextualize prevalence**: Common vs rare variant in this tumor type
+2. **Identify co-mutation hypotheses**: Co-occurring mutations may suggest synthetic lethality targets
+3. **Flag mutual exclusivity**: Mutually exclusive mutations often act in the same pathway
+4. **Generate research questions**: "Does CDKN2A co-deletion affect BRAF inhibitor response?"
+
+### Data Availability Flags
+
+cBioPortal contributes to evidence quality assessment:
+
+| Flag | Description |
+|------|-------------|
+| `has_tumor_specific_cbioportal` | TRUE if prevalence data exists for the specified tumor type |
+| `has_comutation_data` | TRUE if co-mutation analysis is available |
+
+These flags affect LLM behavior:
+- If `has_tumor_specific_cbioportal` is FALSE, LLM must state "pan-cancer data shown; no {tumor_type}-specific prevalence available"
+- If co-mutation data is missing, this is flagged as a knowledge gap
+
+### Helper Methods
+
+- `get_prevalence(gene, variant, tumor_type)` - Returns variant frequency in matching studies
+- `get_comutations(gene, variant, study_id)` - Returns co-mutation analysis
+- `get_study_url(study_id)` - Returns cBioPortal link for citation
+- `to_prompt_context()` - Formats cBioPortal data for LLM consumption
+
+### Rate Limiting
+
+- No strict rate limits, but requests are batched
+- Concurrent requests limited to avoid overwhelming the API
+
+---
+
 ## DepMap
 
 **API Endpoint:** `https://depmap.org/portal/` (via DepMap Portal API)
@@ -513,6 +616,8 @@ User Query (gene, variant, tumor_type)
            ├──► PubMed ──► Research articles
            │
            ├──► OncoTree ──► Standardized tumor type
+           │
+           ├──► cBioPortal ──► Prevalence, co-mutations, biological context
            │
            └──► DepMap ──► Gene essentiality, drug sensitivity, cell line models
                    │
