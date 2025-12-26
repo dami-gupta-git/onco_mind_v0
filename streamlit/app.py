@@ -638,12 +638,12 @@ with tab1:
                     st.markdown(f"**Overall Quality:** {badge} {evidence_quality.capitalize()}")
 
                 # Well-characterized aspects (single line)
-                well_characterized = result['insight'].get('well_characterized', [])
+                well_characterized = [well.title() for well in result['insight'].get('well_characterized', [])]
                 if well_characterized:
                     st.markdown(f"**✅ Well Characterized:** {' · '.join(well_characterized)}")
 
                 # Knowledge gaps (single line)
-                knowledge_gaps = result['insight'].get('knowledge_gaps', [])
+                knowledge_gaps = [gap.title() for gap in result['insight'].get('knowledge_gaps', [])]
                 if knowledge_gaps:
                     st.markdown(f"**❓ Knowledge Gaps:** {' · '.join(knowledge_gaps)}")
 
@@ -653,7 +653,7 @@ with tab1:
                     st.markdown(f"**⚠️ Conflicting Evidence:** {' · '.join(conflicting_evidence)}")
 
                 # Evidence tags (single line)
-                evidence_tags = result['insight'].get('evidence_tags', [])
+                evidence_tags = [tag.title() for tag in result['insight'].get('evidence_tags', [])]
                 if evidence_tags:
                     st.markdown(f"**🏷️ Evidence Types:** {' · '.join(evidence_tags)}")
 
