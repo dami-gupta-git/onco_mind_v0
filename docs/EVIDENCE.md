@@ -81,13 +81,6 @@ When MyVariant returns no data:
 | `nccn_guideline` | Associated NCCN guideline |
 | `description` | Assertion description |
 
-### Helper Methods
-
-- `is_sensitivity()` - Check if represents sensitivity/response
-- `is_resistance()` - Check if represents resistance
-- `get_amp_tier()` - Extract AMP tier (I, II, III, IV)
-- `get_amp_level()` - Extract level letter (A, B, C, D)
-
 ---
 
 ## VICC MetaKB
@@ -383,103 +376,126 @@ Primary method: `resolve_tumor_type(user_input)` - Resolves user input to standa
 
 ## cBioPortal
 
-**API Endpoint:** `https://www.cbioportal.org/api/v2`
+**API Endpoint:** `https://www.cbioportal.org/api`
 
-**Purpose:** Variant prevalence, co-mutation patterns, and biological context from large-scale cancer genomics studies (TCGA, GENIE, institutional cohorts).
+**Purpose:** Variant prevalence, co-mutation patterns, and biological context from large-scale cancer genomics studies (TCGA, MSK-IMPACT, institutional cohorts).
 
 ### Data Retrieved
 
-#### Variant Prevalence
+OncoMind returns a `CBioPortalEvidence` model with prevalence and co-mutation data:
 
-| Field | Description |
-|-------|-------------|
-| `gene` | Gene symbol |
-| `variant` | Variant notation |
-| `study_id` | cBioPortal study ID (e.g., "mel_tcga_pan_can_atlas_2018") |
-| `study_name` | Human-readable study name |
-| `sample_count` | Number of samples with the variant |
-| `total_samples` | Total samples in the study |
-| `frequency` | Variant frequency (sample_count / total_samples) |
-| `tumor_type` | Cancer type of the study |
+#### Prevalence Fields
 
-**Example:** BRAF V600E found in 234/448 (52.2%) melanoma samples in TCGA-SKCM
+| Field | Type | Description |
+|-------|------|-------------|
+| `gene` | `str` | Gene symbol (e.g., "BRAF") |
+| `variant` | `str \| None` | Variant notation (e.g., "V600E") |
+| `tumor_type` | `str \| None` | Tumor type used for study selection |
+| `study_id` | `str` | cBioPortal study ID (e.g., "skcm_tcga_pan_can_atlas_2018") |
+| `total_samples` | `int` | Total samples in the study |
+| `samples_with_gene_mutation` | `int` | Samples with any mutation in the gene |
+| `samples_with_exact_variant` | `int` | Samples with the exact variant |
+| `gene_prevalence_pct` | `float` | Gene mutation frequency (%) |
+| `variant_prevalence_pct` | `float` | Exact variant frequency (%) |
 
-#### Co-Mutation Patterns
+**Example:** BRAF V600E in melanoma returns:
+- `gene_prevalence_pct`: 51.2% (BRAF mutations overall)
+- `variant_prevalence_pct`: 48.3% (V600E specifically)
+- `samples_with_exact_variant`: 217
+- `total_samples`: 449
 
-| Field | Description |
-|-------|-------------|
-| `gene` | Co-mutated gene |
-| `co_occurrence_count` | Number of samples with both mutations |
-| `co_occurrence_ratio` | Ratio of co-occurrence |
-| `p_value` | Statistical significance of co-occurrence |
-| `log_odds_ratio` | Log odds ratio (positive = co-occurrence, negative = mutual exclusivity) |
-| `tendency` | "co-occurrence" or "mutual_exclusivity" |
+#### Co-Mutation Fields
 
-**Example:** BRAF V600E co-occurs with CDKN2A loss (p < 0.001), mutually exclusive with NRAS mutations
+Each entry in `co_occurring` and `mutually_exclusive` lists contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `gene` | `str` | Co-mutated gene symbol |
+| `count` | `int` | Number of samples with both mutations |
+| `pct` | `float` | Percentage of queried variant samples that also have this mutation |
+| `odds_ratio` | `float \| None` | Odds ratio (>1 = co-occurrence, <1 = mutual exclusivity) |
+
+**Example:** For BRAF V600E in melanoma:
+```python
+co_occurring = [
+    {"gene": "CDKN2A", "count": 98, "pct": 45.2, "odds_ratio": 2.34},
+    {"gene": "TP53", "count": 28, "pct": 12.9, "odds_ratio": 1.56},
+]
+mutually_exclusive = [
+    {"gene": "NRAS", "count": 2, "pct": 0.9, "odds_ratio": 0.08},
+]
+```
 
 ### Study Selection
 
-cBioPortal contains hundreds of studies. OncoMind prioritizes:
+cBioPortal contains hundreds of studies. OncoMind maps tumor types to specific study IDs:
 
-1. **Tumor-specific studies**: If tumor type is provided, searches for matching studies first
-2. **TCGA Pan-Cancer Atlas**: Comprehensive coverage across cancer types
-3. **Large cohort studies**: GENIE, institutional cohorts with >500 samples
-4. **Study relevance**: Filters by cancer type match (e.g., "melanoma" query matches "mel_tcga", "skcm_mskcc")
+| Tumor Type | Study IDs |
+|------------|-----------|
+| Melanoma | skcm_tcga_pan_can_atlas_2018, mel_ucla_2016, skcm_mskcc_2014 |
+| NSCLC | luad_tcga_pan_can_atlas_2018, lusc_tcga_pan_can_atlas_2018, nsclc_tcga_broad_2016 |
+| Colorectal | coadread_tcga_pan_can_atlas_2018, crc_msk_2017 |
+| Breast | brca_tcga_pan_can_atlas_2018, breast_msk_2018 |
+| Pancreatic | paad_tcga_pan_can_atlas_2018 |
+| GIST | gist_mskcc |
 
-### Tumor Type Matching
+If no tumor-specific study is found, falls back to MSK-IMPACT pan-cancer cohort (`msk_impact_2017`).
 
-OncoMind maps user-provided tumor types to cBioPortal study IDs:
+### Co-Mutation Calculation
 
-| User Input | Matched Studies |
-|------------|-----------------|
-| "Melanoma" | mel_tcga_pan_can_atlas_2018, skcm_mskcc_2014, skcm_broad_dfarber |
-| "NSCLC" | nsclc_tcga_pan_can_atlas_2018, luad_tcga, lusc_tcga |
-| "CRC" | coadread_tcga_pan_can_atlas_2018, crc_msk_2017 |
+OncoMind calculates co-occurrence statistics by:
 
-If no tumor-specific study is found, falls back to pan-cancer data with a flag indicating "pan-cancer extrapolation".
+1. Fetching all mutations for the query gene from the selected study
+2. Building sample sets (samples with gene mutation, samples with exact variant)
+3. Fetching mutations for top 20 cancer genes (TP53, KRAS, NRAS, EGFR, PIK3CA, PTEN, etc.)
+4. Calculating odds ratios: `OR = (both × neither) / (only_query × only_other)`
+5. Categorizing: OR > 1.5 with count ≥ 3 → co-occurring; OR < 0.5 with count ≤ 2 → mutually exclusive
 
 ### How cBioPortal Data Flows to LLM
 
-cBioPortal data is sent to the LLM as part of the biological context section:
+The `CBioPortalEvidence.to_prompt_context()` method formats data for LLM consumption:
 
 ```
-BIOLOGICAL CONTEXT (cBioPortal):
-  BRAF V600E in Melanoma:
-    - Prevalence: 52% of samples (234/448) ([cBioPortal: mel_tcga](https://...))
-    - Top co-mutations: CDKN2A (45%), TP53 (12%), PTEN (8%)
-    - Mutual exclusivity: NRAS (log OR: -3.2, p < 0.001)
+Cohort: 449 melanoma samples
+
+PREVALENCE (copy the source citation when quoting these numbers):
+  BRAF mutations: 51.2% (230/449) - cite as: ([cBioPortal: skcm_tcga](https://...))
+  BRAF V600E specifically: 48.3% (217/449) - cite as: ([cBioPortal: skcm_tcga](https://...))
+
+CO-OCCURRING MUTATIONS (cite source when quoting these percentages):
+  - CDKN2A: 45.2% of BRAF-mutant samples (98 cases, OR=2.34) - cite as: ([cBioPortal: ...])
+  - TP53: 12.9% of BRAF-mutant samples (28 cases, OR=1.56) - cite as: ([cBioPortal: ...])
+
+MUTUALLY EXCLUSIVE MUTATIONS:
+  - NRAS: 0.9% co-occurrence (2 cases, OR=0.08) - cite as: ([cBioPortal: ...])
+
+INTERPRETATION:
+  - BRAF mutations frequently co-occur with CDKN2A (45.2%)
+  - BRAF and NRAS mutations are mutually exclusive (0.9%)
 ```
 
 The LLM uses this to:
 1. **Contextualize prevalence**: Common vs rare variant in this tumor type
-2. **Identify co-mutation hypotheses**: Co-occurring mutations may suggest synthetic lethality targets
-3. **Flag mutual exclusivity**: Mutually exclusive mutations often act in the same pathway
+2. **Identify co-mutation hypotheses**: Co-occurring mutations may suggest combination therapy targets or resistance mechanisms
+3. **Flag mutual exclusivity**: Mutually exclusive mutations often act in the same pathway (e.g., BRAF/NRAS in MAPK)
 4. **Generate research questions**: "Does CDKN2A co-deletion affect BRAF inhibitor response?"
 
-### Data Availability Flags
+### Evidence Gap Detection
 
-cBioPortal contributes to evidence quality assessment:
+cBioPortal data contributes to evidence quality:
 
-| Flag | Description |
-|------|-------------|
-| `has_tumor_specific_cbioportal` | TRUE if prevalence data exists for the specified tumor type |
-| `has_comutation_data` | TRUE if co-mutation analysis is available |
-
-These flags affect LLM behavior:
-- If `has_tumor_specific_cbioportal` is FALSE, LLM must state "pan-cancer data shown; no {tumor_type}-specific prevalence available"
-- If co-mutation data is missing, this is flagged as a knowledge gap
-
-### Helper Methods
-
-- `get_prevalence(gene, variant, tumor_type)` - Returns variant frequency in matching studies
-- `get_comutations(gene, variant, study_id)` - Returns co-mutation analysis
-- `get_study_url(study_id)` - Returns cBioPortal link for citation
-- `to_prompt_context()` - Formats cBioPortal data for LLM consumption
+| Scenario | Impact |
+|----------|--------|
+| Tumor-specific data available | Counts toward "well characterized" |
+| Co-mutation patterns found | Supports biological context section |
+| No tumor-specific data | Gap: "No {tumor_type}-specific prevalence data" |
+| No co-mutation data | Gap: "Co-mutation patterns not characterized" |
 
 ### Rate Limiting
 
-- No strict rate limits, but requests are batched
-- Concurrent requests limited to avoid overwhelming the API
+- No strict rate limits on cBioPortal public API
+- OncoMind uses 30-second timeout per request
+- Gene symbol → Entrez ID mappings are cached within session
 
 ---
 
@@ -565,14 +581,6 @@ When DepMap shows drug sensitivity data, the LLM incorporates it into the "Thera
 > **Therapeutic Landscape:** FDA-approved: Mekinist (trametinib), BRAFTOVI (encorafenib), ZELBORAF (vemurafenib); **Preclinical: trametinib (IC50=8nM), cobimetinib (IC50=15nM), encorafenib (IC50=20nM), dabrafenib (IC50=30nM), vemurafenib (IC50=50nM)**
 
 The drugs listed as "Preclinical" come directly from DepMap's PRISM drug screen data, ordered by IC50 (most sensitive first).
-
-### Helper Methods
-
-- `is_essential()` - Returns True if CERES score < -0.5
-- `has_data()` - Returns True if any DepMap data is available
-- `get_top_sensitive_drugs(n)` - Returns n drugs with lowest IC50
-- `get_model_cell_lines(with_mutation_only=True)` - Returns cell lines with the mutation
-- `to_prompt_context()` - Formats DepMap data for LLM consumption
 
 ### Evidence Gap Detection
 

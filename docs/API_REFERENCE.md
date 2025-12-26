@@ -577,40 +577,38 @@ mind insight GENE VARIANT [OPTIONS]
 
 | Mode | Flag | Speed | Output |
 |------|------|-------|--------|
-| **Default** | (none) | ~12s | Structured evidence + LLM clinical summary |
-| **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
-| **Full** | `--full` | ~25s | + Literature search + Literature panel + enhanced narrative |
+| **Annotation** | (none) | ~7s | Structured evidence from all databases |
+| **LLM** | `--llm` | ~25s | + Literature search + AI synthesis + hypothesis generation |
 
-### Output Panels by Mode
+### Output by Mode
 
-| Panel | Lite | Default | Full |
-|-------|------|---------|------|
-| Evidence Summary | ✓ | ✓ | ✓ |
-| Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
-| Clinical Evidence | ✓ | ✓ | ✓ |
-| Literature | - | - | ✓ |
-| Variant Insight | - | ✓ | ✓ |
+| Feature | Annotation | LLM |
+|---------|------------|-----|
+| Evidence Summary | ✓ | ✓ |
+| Database Annotations | ✓ | ✓ |
+| DepMap Research Context | ✓ | ✓ |
+| Literature Search | - | ✓ |
+| LLM Research Insight | - | ✓ |
+| Knowledge Gaps | - | ✓ |
+| Hypothesis Generation | - | ✓ |
 
 ### Examples
 
 ```bash
-# Default: structured evidence + LLM narrative (~12s)
+# Annotation mode: fast structured evidence (~7s)
 mind insight BRAF V600E --tumor Melanoma
 mind insight PIK3CA H1047R -t "Breast Cancer"
 
-# Lite mode: structured evidence only, no LLM (~7s)
-mind insight EGFR L858R -t NSCLC --lite
-
-# Full mode: + literature search + enhanced narrative (~25s)
-mind insight KRAS G12C -t NSCLC --full
+# LLM mode: + literature search + AI synthesis (~25s)
+mind insight KRAS G12C -t NSCLC --llm
 
 # Save to JSON
 mind insight BRAF V600E -t Melanoma --output result.json
+mind insight EGFR L858R -t NSCLC --llm --output result.json
 
 # Batch processing
 mind batch variants.json --output results.json
-mind batch variants.json --lite              # Fastest: no LLM
-mind batch variants.json --full              # Slowest: with literature
+mind batch variants.json --llm               # With literature + LLM
 
 # Help
 mind --help
@@ -622,7 +620,6 @@ mind insight --help
 | Option | Short | Description |
 |--------|-------|-------------|
 | `--tumor` | `-t` | Tumor type context |
-| `--lite` | | Lite mode: structured evidence only, no LLM |
-| `--full` | | Full mode: include literature search + enhanced narrative |
+| `--llm` | | Enable LLM mode: literature search + AI synthesis |
 | `--model` | `-m` | LLM model (default: gpt-4o-mini) |
 | `--output` | `-o` | Output file path (JSON) |
