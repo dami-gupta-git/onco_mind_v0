@@ -180,6 +180,7 @@ with tab1:
             # Collect available sources with counts (flat list structure)
             fda_approvals = result.get('fda_approvals', [])
             civic_assertions = result.get('civic_assertions', [])
+            civic_evidence = result.get('civic_evidence', [])
             vicc = result.get('vicc_evidence', [])
             cgi_biomarkers = result.get('cgi_biomarkers', [])
             clinvar_entries = result.get('clinvar_entries', [])
@@ -189,13 +190,25 @@ with tab1:
             articles = result.get('pubmed_articles', [])
             preclinical = result.get('preclinical_biomarkers', [])
             early_phase = result.get('early_phase_biomarkers', [])
+            annotations = result.get('annotations', {})
 
             # Build tab names with counts
             tab_names = []
+            # Check if we have any functional scores
+            has_functional = any([
+                annotations.get('alphamissense_score'),
+                annotations.get('alphamissense_prediction'),
+                annotations.get('cadd_score'),
+                annotations.get('polyphen2_prediction'),
+                annotations.get('gnomad_exome_af'),
+                annotations.get('snpeff_effect'),
+            ])
+            if has_functional:
+                tab_names.append("Functional")
             if fda_approvals:
                 tab_names.append(f"FDA ({len(fda_approvals)})")
-            if civic_assertions:
-                tab_names.append(f"CIViC ({len(civic_assertions)})")
+            if civic_assertions or civic_evidence:
+                tab_names.append(f"CIViC ({len(civic_assertions) + len(civic_evidence)})")
             if vicc:
                 tab_names.append(f"VICC ({len(vicc)})")
             if cgi_biomarkers:
@@ -215,57 +228,128 @@ with tab1:
                 tabs = st.tabs(tab_names)
                 tab_idx = 0
 
+                # Functional tab
+                if has_functional:
+                    with tabs[tab_idx]:
+                        rows = []
+                        if annotations.get('alphamissense_score') is not None:
+                            pred = annotations.get('alphamissense_prediction') or '-'
+                            rows.append(f"| AlphaMissense | {annotations['alphamissense_score']:.3f} | {pred} |")
+                        if annotations.get('cadd_score') is not None:
+                            rows.append(f"| CADD | {annotations['cadd_score']:.1f} | {'Deleterious' if annotations['cadd_score'] > 20 else 'Benign'} |")
+                        if annotations.get('polyphen2_prediction'):
+                            rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
+                        if annotations.get('gnomad_exome_af') is not None:
+                            af = annotations['gnomad_exome_af']
+                            freq = f"{af:.2e}" if af < 0.01 else f"{af:.4f}"
+                            rows.append(f"| gnomAD AF | {freq} | {'Rare' if af < 0.01 else 'Common'} |")
+                        if annotations.get('snpeff_effect'):
+                            rows.append(f"| SnpEff | - | {annotations['snpeff_effect']} |")
+                        if rows:
+                            st.markdown("| Score | Value | Prediction |\n|-------|-------|------------|" + "\n" + "\n".join(rows))
+                        else:
+                            st.info("No functional scores available")
+                    tab_idx += 1
+
                 # FDA tab
                 if fda_approvals:
                     with tabs[tab_idx]:
                         rows = []
                         for a in fda_approvals:
-                            drug = a.get('brand_name') or a.get('drug_name', 'Unknown')
-                            indication = (a.get('indication') or '')[:100]
-                            rows.append(f"| {drug} | {indication}... |")
-                        st.markdown("| Drug | Indication |\n|------|------------|" + "\n" + "\n".join(rows))
+                            brand = a.get('brand_name') or a.get('drug_name') or 'Unknown'
+                            generic = a.get('generic_name') or '-'
+                            indication = a.get('indication') or '-'
+                            # Clean up indication text - remove "1 INDICATIONS AND USAGE" prefix
+                            if indication.startswith('1 INDICATIONS AND USAGE'):
+                                indication = indication[23:].strip()
+                            indication = indication[:80] + '...' if len(indication) > 80 else indication
+                            rows.append(f"| {brand} | {generic} | {indication} |")
+                        st.markdown("| Brand | Generic | Indication |\n|-------|---------|------------|" + "\n" + "\n".join(rows))
                     tab_idx += 1
 
                 # CIViC tab
-                if civic_assertions:
+                if civic_assertions or civic_evidence:
                     with tabs[tab_idx]:
-                        for a in civic_assertions:
-                            therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
-                            sig = a.get('significance', 'Unknown')
-                            amp = a.get('amp_level', '')
-                            disease = a.get('disease', '')
-                            aid = a.get('id', '')
-                            link = f"[AID:{aid}](https://civicdb.org/assertions/{aid})" if aid else ""
-                            st.markdown(f"- {link} **{therapies_str}** → {sig} ({disease}) [{amp}]")
+                        # Assertions (curated AMP/ASCO/CAP) - show as table
+                        if civic_assertions:
+                            st.markdown("**Curated Assertions:**")
+                            assertion_rows = []
+                            for a in civic_assertions:
+                                therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
+                                assertion_rows.append({
+                                    "ID": a.get('id', ''),
+                                    "Therapies": therapies_str,
+                                    "Significance": a.get('significance', 'Unknown'),
+                                    "Disease": a.get('disease', '')[:40] if a.get('disease') else '',
+                                    "AMP Level": a.get('amp_level', ''),
+                                })
+                            if assertion_rows:
+                                st.dataframe(pd.DataFrame(assertion_rows), use_container_width=True, hide_index=True)
+
+                        # Evidence items - scrollable table
+                        if civic_evidence:
+                            if civic_assertions:
+                                st.markdown("---")
+                            st.markdown(f"**Evidence Items ({len(civic_evidence)}):**")
+                            evidence_rows = []
+                            for e in civic_evidence:
+                                drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
+                                evidence_rows.append({
+                                    "Drugs": drugs_str[:30] if len(drugs_str) > 30 else drugs_str,
+                                    "Significance": e.get('clinical_significance', 'Unknown'),
+                                    "Disease": (e.get('disease', '') or '')[:25],
+                                    "Level": e.get('evidence_level', ''),
+                                    "Type": e.get('evidence_type', ''),
+                                    "Rating": e.get('trust_rating') or e.get('rating') or '',
+                                })
+                            if evidence_rows:
+                                st.dataframe(
+                                    pd.DataFrame(evidence_rows),
+                                    use_container_width=True,
+                                    hide_index=True,
+                                    height=300,  # Scrollable with fixed height
+                                )
                     tab_idx += 1
 
-                # VICC tab
+                # VICC tab - scrollable table
                 if vicc:
                     with tabs[tab_idx]:
-                        sources = {}
+                        # Build rows for all VICC entries
+                        vicc_rows = []
                         for v in vicc:
-                            src = v.get('source', 'unknown')
-                            if src not in sources:
-                                sources[src] = []
-                            sources[src].append(v)
-                        for source, entries in sources.items():
-                            st.markdown(f"**{source.upper()}** ({len(entries)})")
-                            for v in entries[:3]:
-                                drugs = ", ".join(v.get('drugs', [])) or "N/A"
-                                response = v.get('response_type', 'Unknown')
-                                disease = v.get('disease', '')[:30]
-                                st.markdown(f"- {drugs} → {response} ({disease})")
+                            drugs = ", ".join(v.get('drugs', [])) or "N/A"
+                            vicc_rows.append({
+                                "Source": (v.get('source') or 'vicc').upper(),
+                                "Drugs": drugs[:30] if len(drugs) > 30 else drugs,
+                                "Response": v.get('response_type', 'Unknown'),
+                                "Disease": (v.get('disease', '') or '')[:25],
+                                "Level": v.get('evidence_level', ''),
+                            })
+                        if vicc_rows:
+                            st.dataframe(
+                                pd.DataFrame(vicc_rows),
+                                use_container_width=True,
+                                hide_index=True,
+                                height=300,  # Scrollable with fixed height
+                            )
                     tab_idx += 1
 
-                # CGI tab
+                # CGI tab - scrollable table
                 if cgi_biomarkers:
                     with tabs[tab_idx]:
+                        cgi_rows = []
                         for b in cgi_biomarkers:
-                            drug = b.get('drug', 'Unknown')
-                            assoc = b.get('association', 'Unknown')
-                            tumor = b.get('tumor_type', '')
-                            level = b.get('evidence_level', '')
-                            st.markdown(f"- **{drug}**: {assoc} in {tumor} ({level})")
+                            cgi_rows.append({
+                                "Drug": b.get('drug', 'Unknown'),
+                                "Association": b.get('association', 'Unknown'),
+                                "Tumor Type": (b.get('tumor_type', '') or '')[:25],
+                                "Level": b.get('evidence_level', ''),
+                            })
+                        if cgi_rows:
+                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            if len(cgi_rows) > 8:
+                                df_kwargs["height"] = 300
+                            st.dataframe(pd.DataFrame(cgi_rows), **df_kwargs)
                     tab_idx += 1
 
                 # ClinVar tab
