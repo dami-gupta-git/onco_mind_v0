@@ -85,12 +85,41 @@ class CBioPortalClient:
     BASE_URL = "https://www.cbioportal.org/api"
     DEFAULT_TIMEOUT = 30.0
 
-    # Common cancer genes to check for co-occurrence
+    # Key cancer genes for co-mutation analysis
+    # Curated for biologically meaningful co-occurrence patterns
     CANCER_GENES = [
-        "TP53", "KRAS", "NRAS", "BRAF", "EGFR", "PIK3CA", "PTEN", "APC",
-        "CDKN2A", "RB1", "NF1", "ARID1A", "ATM", "BRCA1", "BRCA2", "IDH1",
-        "IDH2", "FBXW7", "KEAP1", "STK11", "SMAD4", "CTNNB1", "MET", "ALK",
-        "ROS1", "RET", "ERBB2", "KIT", "PDGFRA", "FGFR1", "FGFR2", "FGFR3"
+        # Top tumor suppressors (frequently co-mutated)
+        "TP53",      # Most frequently mutated TSG, co-mutates with many genes
+        "PTEN",      # Often co-mutates with PIK3CA
+        "CDKN2A",    # Cell cycle regulator, co-mutates with TP53
+        "RB1",       # Cell cycle TSG, co-mutates with TP53
+        "SMAD4",     # Co-mutates with KRAS in pancreatic/CRC
+        "STK11",     # Co-mutates with KRAS in lung adenocarcinoma
+        "NF1",       # RAS pathway, co-mutates with TP53
+        "APC",       # Colorectal driver
+        "ARID1A",    # Chromatin remodeling, co-mutates with TP53
+        "KEAP1",     # Oxidative stress pathway (lung)
+        "ATM",       # DDR gene, co-mutates across tumor types
+        "BRCA1", "BRCA2",  # DDR genes
+        # Key oncogenes
+        "KRAS",      # RAS pathway, often mutually exclusive with BRAF/NRAS
+        "NRAS",      # RAS pathway, mutually exclusive with KRAS/BRAF
+        "BRAF",      # MAPK pathway
+        "PIK3CA",    # PI3K pathway, co-mutates with PTEN
+        "EGFR",      # Receptor tyrosine kinase
+        "ERBB2",     # HER2
+        "MET",       # Often co-mutates as resistance mechanism
+        "IDH1", "IDH2",  # Glioma/AML drivers
+        "CTNNB1",    # Wnt pathway
+        # Oxidative stress
+        "NFE2L2",    # Co-mutates with KEAP1 in lung
+        # Chromatin/epigenetic
+        "KMT2D",     # Frequently mutated in solid tumors
+        "ARID2",     # Chromatin remodeling
+        # Receptor tyrosine kinases
+        "FGFR1", "FGFR2", "FGFR3",
+        "KIT", "PDGFRA",
+        "ALK", "ROS1", "RET",
     ]
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
