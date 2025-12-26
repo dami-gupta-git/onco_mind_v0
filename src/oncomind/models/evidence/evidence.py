@@ -244,6 +244,11 @@ class Evidence(BaseModel):
         None, description="Detected evidence gaps for research prioritization"
     )
 
+    # Configuration flags (track what was searched)
+    literature_searched: bool = Field(
+        False, description="Whether literature search was enabled/performed"
+    )
+
     # === Helper methods ===
 
     def compute_evidence_gaps(self) -> EvidenceGaps:

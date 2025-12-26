@@ -569,6 +569,8 @@ class EvidenceAggregator:
             early_phase_biomarkers=early_phase_biomarkers,
             cbioportal_evidence=cbioportal_evidence,
             depmap_evidence=depmap_evidence,
+            # Track what was searched (for accurate gap detection)
+            literature_searched=self.config.enable_literature,
         )
 
         return evidence
