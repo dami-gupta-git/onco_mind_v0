@@ -428,16 +428,41 @@ mutually_exclusive = [
 
 ### Study Selection
 
-cBioPortal contains hundreds of studies. OncoMind maps tumor types to specific study IDs:
+cBioPortal contains hundreds of studies. OncoMind maps tumor types to specific study IDs (TCGA PanCancer Atlas preferred for broad coverage):
 
 | Tumor Type | Study IDs |
 |------------|-----------|
+| NSCLC/Lung | luad_tcga_pan_can_atlas_2018, lusc_tcga_pan_can_atlas_2018, nsclc_mskcc_2018 |
+| SCLC | sclc_ucologne_2015 |
 | Melanoma | skcm_tcga_pan_can_atlas_2018, mel_ucla_2016, skcm_mskcc_2014 |
-| NSCLC | luad_tcga_pan_can_atlas_2018, lusc_tcga_pan_can_atlas_2018, nsclc_tcga_broad_2016 |
 | Colorectal | coadread_tcga_pan_can_atlas_2018, crc_msk_2017 |
 | Breast | brca_tcga_pan_can_atlas_2018, breast_msk_2018 |
-| Pancreatic | paad_tcga_pan_can_atlas_2018 |
+| Pancreatic | paad_tcga_pan_can_atlas_2018, paad_qcmg_uq_2016 |
+| Glioblastoma | gbm_tcga_pan_can_atlas_2018 |
+| Low-Grade Glioma | lgg_tcga_pan_can_atlas_2018 |
+| Ovarian | ov_tcga_pan_can_atlas_2018 |
+| Prostate | prad_tcga_pan_can_atlas_2018, prad_mskcc_2017 |
+| Bladder/Urothelial | blca_tcga_pan_can_atlas_2018 |
+| Kidney (Clear Cell) | kirc_tcga_pan_can_atlas_2018 |
+| Kidney (Papillary) | kirp_tcga_pan_can_atlas_2018 |
+| Thyroid | thca_tcga_pan_can_atlas_2018 |
+| Head and Neck | hnsc_tcga_pan_can_atlas_2018 |
+| Liver/HCC | lihc_tcga_pan_can_atlas_2018 |
+| Gastric/Stomach | stad_tcga_pan_can_atlas_2018 |
+| Esophageal | esca_tcga_pan_can_atlas_2018 |
+| Endometrial/Uterine | ucec_tcga_pan_can_atlas_2018 |
+| Cervical | cesc_tcga_pan_can_atlas_2018 |
+| Cholangiocarcinoma | chol_tcga_pan_can_atlas_2018 |
+| Sarcoma | sarc_tcga_pan_can_atlas_2018 |
 | GIST | gist_mskcc |
+| Mesothelioma | meso_tcga_pan_can_atlas_2018 |
+| Adrenocortical | acc_tcga_pan_can_atlas_2018 |
+| Pheochromocytoma | pcpg_tcga_pan_can_atlas_2018 |
+| Testicular | tgct_tcga_pan_can_atlas_2018 |
+| Thymoma | thym_tcga_pan_can_atlas_2018 |
+| Uveal Melanoma | uvm_tcga_pan_can_atlas_2018 |
+| AML | laml_tcga_pan_can_atlas_2018 |
+| DLBCL | dlbc_tcga_pan_can_atlas_2018 |
 
 If no tumor-specific study is found, falls back to MSK-IMPACT pan-cancer cohort (`msk_impact_2017`).
 
@@ -447,9 +472,17 @@ OncoMind calculates co-occurrence statistics by:
 
 1. Fetching all mutations for the query gene from the selected study
 2. Building sample sets (samples with gene mutation, samples with exact variant)
-3. Fetching mutations for top 20 cancer genes (TP53, KRAS, NRAS, EGFR, PIK3CA, PTEN, etc.)
+3. Fetching mutations for ~35 curated cancer genes selected for biologically meaningful co-occurrence patterns:
+   - **Tumor suppressors**: TP53, PTEN, CDKN2A, RB1, SMAD4, STK11, NF1, APC, ARID1A, KEAP1
+   - **DDR genes**: ATM, BRCA1, BRCA2
+   - **Oncogenes**: KRAS, NRAS, BRAF, PIK3CA, EGFR, ERBB2, MET, IDH1, IDH2, CTNNB1
+   - **Oxidative stress**: NFE2L2 (co-mutates with KEAP1)
+   - **Chromatin/epigenetic**: KMT2D, ARID2
+   - **RTKs**: FGFR1/2/3, KIT, PDGFRA, ALK, ROS1, RET
 4. Calculating odds ratios: `OR = (both × neither) / (only_query × only_other)`
-5. Categorizing: OR > 1.5 with count ≥ 3 → co-occurring; OR < 0.5 with count ≤ 2 → mutually exclusive
+5. Categorizing based on odds ratio and sample count:
+   - **Co-occurring**: OR > 1.5 (appear together 50%+ more than expected) AND count ≥ 3 (minimum samples to avoid noise)
+   - **Mutually exclusive**: OR < 0.5 (appear together less than half as expected) AND count ≤ 2 (rarely seen together)
 
 ### How cBioPortal Data Flows to LLM
 

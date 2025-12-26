@@ -411,17 +411,18 @@ with tab1:
                 # cBioPortal tab - co-mutation and prevalence data
                 if cbioportal:
                     with tabs[tab_idx]:
+                        # Study header with cohort size
                         study_name = cbioportal.get('study_name', 'N/A')
                         study_id = cbioportal.get('study_id', '')
+                        total = cbioportal.get('total_samples', 0)
+
                         if study_id:
                             study_url = f"https://www.cbioportal.org/study/summary?id={study_id}"
-                            st.markdown(f"**Study:** [{study_name}]({study_url})")
+                            st.markdown(f"**Study:** [{study_name}]({study_url}) — cohort of {total:,} samples")
                         else:
-                            st.markdown(f"**Study:** {study_name}")
+                            st.markdown(f"**Study:** {study_name} — cohort of {total:,} samples")
 
                         # Prevalence stats
-                        st.markdown("**Prevalence:**")
-                        total = cbioportal.get('total_samples', 0)
                         gene_pct = cbioportal.get('gene_prevalence_pct', 0)
                         variant_pct = cbioportal.get('variant_prevalence_pct', 0)
                         gene_count = cbioportal.get('samples_with_gene_mutation', 0)
@@ -431,49 +432,53 @@ with tab1:
 
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.metric(f"Any {gene_symbol} Alteration", f"{gene_pct:.1f}%", delta=f"{gene_count}/{total} samples")
+                            st.markdown(f"**% samples with any {gene_symbol} alteration**")
+                            st.markdown(f"### {gene_pct:.1f}%")
+                            st.caption(f"{gene_count}/{total} samples")
                         with col2:
-                            st.metric(f"Exact {variant_name} Variant", f"{variant_pct:.1f}%", delta=f"{variant_count}/{total} samples")
+                            st.markdown(f"**% samples with exact {variant_name} variant**")
+                            st.markdown(f"### {variant_pct:.1f}%")
+                            st.caption(f"{variant_count}/{total} samples")
 
-                        # Co-occurring mutations
+                        # Co-occurring and Mutually exclusive mutations side by side
                         co_occurring = cbioportal.get('co_occurring', [])
-                        if co_occurring:
-                            st.markdown("---")
-                            st.markdown(f"**Co-occurring Mutations ({len(co_occurring)}):**")
-                            co_rows = []
-                            for c in co_occurring:
-                                odds = c.get('odds_ratio')
-                                odds_str = f"{odds:.2f}" if odds else "N/A"
-                                co_rows.append({
-                                    "Gene": c.get('gene', ''),
-                                    "Count": c.get('count', 0),
-                                    "Frequency": f"{c.get('pct', 0):.1f}%",
-                                    "Odds Ratio": odds_str,
-                                })
-                            df_kwargs = {"width": "stretch", "hide_index": True}
-                            if len(co_rows) > 8:
-                                df_kwargs["height"] = 250
-                            st.dataframe(pd.DataFrame(co_rows), **df_kwargs)
-
-                        # Mutually exclusive mutations
                         mutually_exclusive = cbioportal.get('mutually_exclusive', [])
-                        if mutually_exclusive:
+
+                        if co_occurring or mutually_exclusive:
                             st.markdown("---")
-                            st.markdown(f"**Mutually Exclusive ({len(mutually_exclusive)}):**")
-                            me_rows = []
-                            for m in mutually_exclusive:
-                                odds = m.get('odds_ratio')
-                                odds_str = f"{odds:.2f}" if odds else "N/A"
-                                me_rows.append({
-                                    "Gene": m.get('gene', ''),
-                                    "Count": m.get('count', 0),
-                                    "Frequency": f"{m.get('pct', 0):.1f}%",
-                                    "Odds Ratio": odds_str,
-                                })
-                            df_kwargs = {"width": "stretch", "hide_index": True}
-                            if len(me_rows) > 8:
-                                df_kwargs["height"] = 250
-                            st.dataframe(pd.DataFrame(me_rows), **df_kwargs)
+                            co_col, me_col = st.columns(2)
+
+                            with co_col:
+                                if co_occurring:
+                                    st.markdown(f"**Co-occurring ({len(co_occurring)}):**")
+                                    st.caption("_Odds > 1 — possible functional interaction_")
+                                    co_rows = []
+                                    for c in co_occurring:
+                                        odds = c.get('odds_ratio')
+                                        odds_str = f"{odds:.2f}" if odds else "N/A"
+                                        co_rows.append({
+                                            "Gene": c.get('gene', ''),
+                                            "Count": c.get('count', 0),
+                                            "Freq": f"{c.get('pct', 0):.1f}%",
+                                            "OR": odds_str,
+                                        })
+                                    st.dataframe(pd.DataFrame(co_rows), hide_index=True, use_container_width=True)
+
+                            with me_col:
+                                if mutually_exclusive:
+                                    st.markdown(f"**Mutually Exclusive ({len(mutually_exclusive)}):**")
+                                    st.caption("_Odds < 1 — likely redundant drivers_")
+                                    me_rows = []
+                                    for m in mutually_exclusive:
+                                        odds = m.get('odds_ratio')
+                                        odds_str = f"{odds:.2f}" if odds else "N/A"
+                                        me_rows.append({
+                                            "Gene": m.get('gene', ''),
+                                            "Count": m.get('count', 0),
+                                            "Freq": f"{m.get('pct', 0):.1f}%",
+                                            "OR": odds_str,
+                                        })
+                                    st.dataframe(pd.DataFrame(me_rows), hide_index=True, use_container_width=True)
                     tab_idx += 1
 
                 # DepMap tab - gene essentiality and drug sensitivity from cell lines
