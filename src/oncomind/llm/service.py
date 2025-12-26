@@ -30,7 +30,7 @@ class LLMService:
         tumor_type: str | None,
         evidence_summary: str,
         biological_context: str = "",
-        evidence_gaps: str = "",
+        evidence_assessment: dict | None = None,
         literature_summary: str = "",
         has_clinical_trials: bool = False,
     ) -> LLMInsight:
@@ -42,13 +42,25 @@ class LLMService:
             tumor_type: Tumor type context
             evidence_summary: Compact text summary of evidence
             biological_context: cBioPortal prevalence/co-mutation data
-            evidence_gaps: Summary of evidence gaps
+            evidence_assessment: Dict with keys: overall_quality, well_characterized,
+                knowledge_gaps, conflicting_evidence, critical_gaps, significant_gaps
             literature_summary: PubMed literature findings (for full mode)
             has_clinical_trials: Whether clinical trials are available
 
         Returns:
             LLMInsight with LLM-generated research-focused narrative
         """
+        # Default empty evidence assessment if not provided
+        if evidence_assessment is None:
+            evidence_assessment = {
+                "overall_quality": "unknown",
+                "well_characterized": [],
+                "knowledge_gaps": [],
+                "conflicting_evidence": [],
+                "critical_gaps": [],
+                "significant_gaps": [],
+            }
+
         # Create research-focused prompt
         messages = create_research_prompt(
             gene=gene,
@@ -56,7 +68,7 @@ class LLMService:
             tumor_type=tumor_type,
             biological_context=biological_context,
             evidence_summary=evidence_summary,
-            evidence_gaps=evidence_gaps,
+            evidence_assessment=evidence_assessment,
             literature_summary=literature_summary,
         )
 
@@ -125,7 +137,7 @@ class LLMService:
             well_characterized = evidence_assessment.get("well_characterized", [])
             conflicting_evidence = evidence_assessment.get("conflicting_evidence", [])
 
-            print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
+            #print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
 
             # Extract evidence tags for transparency
             evidence_tags = data.get("evidence_tags", [])

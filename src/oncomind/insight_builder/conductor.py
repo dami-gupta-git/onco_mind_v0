@@ -192,8 +192,9 @@ class Conductor:
         # Get literature summary (for full mode with literature enabled)
         literature_summary = evidence.get_literature_summary_for_llm()
 
-        # Evidence gaps - simple summary based on what's missing
-        evidence_gaps = self._get_evidence_gaps_summary(evidence)
+        # Compute structured evidence gaps and get assessment dict for LLM
+        evidence_gaps = evidence.compute_evidence_gaps()
+        evidence_assessment = evidence_gaps.to_dict_for_llm()
 
         # Generate LLM insight with research-focused prompt
         return await llm_service.get_llm_insight(
@@ -202,43 +203,10 @@ class Conductor:
             tumor_type=evidence.context.tumor_type,
             evidence_summary=evidence_summary,
             biological_context=biological_context,
-            evidence_gaps=evidence_gaps,
+            evidence_assessment=evidence_assessment,
             literature_summary=literature_summary,
             has_clinical_trials=bool(evidence.clinical_trials),
         )
-
-    def _get_evidence_gaps_summary(self, evidence: Evidence) -> str:
-        """Generate a simple summary of evidence gaps.
-
-        Args:
-            evidence: Evidence object
-
-        Returns:
-            String summarizing what's missing
-        """
-        gaps = []
-
-        if not evidence.fda_approvals:
-            gaps.append("No FDA-approved therapies for this variant")
-
-        if not evidence.civic_assertions:
-            gaps.append("No curated CIViC assertions")
-
-        if not evidence.cbioportal_evidence or not evidence.cbioportal_evidence.has_data():
-            gaps.append("No cBioPortal prevalence/co-mutation data")
-
-        if not evidence.clinical_trials:
-            gaps.append("No active clinical trials found")
-
-        if not evidence.pubmed_articles:
-            gaps.append("No PubMed literature found")
-
-        if not evidence.functional.alphamissense_score and not evidence.functional.cadd_score:
-            gaps.append("No computational pathogenicity predictions")
-
-        if gaps:
-            return "Evidence gaps:\n- " + "\n- ".join(gaps)
-        return "No significant evidence gaps identified"
 
 
 async def conduct(
