@@ -16,6 +16,7 @@ This document describes each external data source OncoMind fetches from, what da
 8. [Semantic Scholar](#semantic-scholar)
 9. [PubMed](#pubmed)
 10. [OncoTree](#oncotree)
+11. [DepMap (Cancer Dependency Map)](#depmap)
 
 ---
 
@@ -379,6 +380,115 @@ Primary method: `resolve_tumor_type(user_input)` - Resolves user input to standa
 
 ---
 
+## DepMap
+
+**API Endpoint:** `https://depmap.org/portal/` (via DepMap Portal API)
+
+**Purpose:** Preclinical research context from cancer cell line screens, including gene essentiality (CRISPR knockout screens) and drug sensitivity data (PRISM drug screens).
+
+### Data Retrieved
+
+#### Gene Dependency (CRISPR Screens)
+
+| Field | Description |
+|-------|-------------|
+| `gene` | Gene symbol |
+| `mean_dependency_score` | Mean CERES score across cell lines (negative = essential) |
+| `n_dependent_lines` | Number of cell lines dependent on this gene |
+| `n_total_lines` | Total cell lines screened |
+| `dependency_pct` | Percentage of cell lines showing dependency |
+
+**CERES Score Interpretation:**
+- Score < -0.5: Gene is **ESSENTIAL** (knockout kills the cell)
+- Score ≈ 0: Gene is not essential
+- Example: BRAF has CERES score of -0.80, meaning it's essential in 45% of cancer cell lines
+
+#### Drug Sensitivities (PRISM Screens)
+
+| Field | Description |
+|-------|-------------|
+| `drug_name` | Drug name |
+| `ic50_nm` | IC50 in nanomolar (lower = more sensitive) |
+| `auc` | Area under dose-response curve |
+| `n_cell_lines` | Number of cell lines tested |
+
+**IC50 Interpretation:**
+- IC50 < 100nM: Highly sensitive
+- IC50 100-1000nM: Moderately sensitive
+- IC50 > 1000nM: Resistant
+
+#### Cell Line Models
+
+| Field | Description |
+|-------|-------------|
+| `name` | Cell line name (e.g., "A375", "SK-MEL-28") |
+| `primary_disease` | Cancer type (e.g., "Melanoma") |
+| `subtype` | Disease subtype |
+| `has_mutation` | Whether cell line has the queried mutation |
+| `mutation_details` | Specific mutation (e.g., "V600E") |
+
+### How DepMap Data Flows to LLM
+
+DepMap data is sent to the LLM as part of the biological context, influencing the narrative synthesis:
+
+```
+GENE DEPENDENCY ([DepMap](https://depmap.org/)):
+  BRAF is ESSENTIAL (CERES score: -0.80)
+  Dependent in 450/1000 cell lines (45.0%)
+
+DRUG SENSITIVITIES in BRAF-mutant lines ([DepMap](https://depmap.org/)):
+  - trametinib: IC50=8.0nM (n=10)
+  - cobimetinib: IC50=15.0nM (n=10)
+  - encorafenib: IC50=20.0nM (n=10)
+  - dabrafenib: IC50=30.0nM (n=10)
+  - vemurafenib: IC50=50.0nM (n=10)
+
+AVAILABLE MODEL CELL LINES with BRAF mutation ([DepMap](https://depmap.org/)):
+  - A375 (Melanoma) [V600E]
+  - SK-MEL-28 (Melanoma) [V600E]
+  - COLO800 (Melanoma) [V600E]
+  ...
+```
+
+The LLM uses this to:
+1. **Validate functional significance**: Essential genes (CERES < -0.5) support the biological importance of the mutation
+2. **Identify preclinical drug candidates**: IC50 values inform the "Preclinical" section of the therapeutic landscape
+3. **Suggest model systems**: Cell lines with the mutation can be recommended for research
+
+### Example LLM Output
+
+When DepMap shows drug sensitivity data, the LLM incorporates it into the "Therapeutic Landscape" section:
+
+> **Therapeutic Landscape:** FDA-approved: Mekinist (trametinib), BRAFTOVI (encorafenib), ZELBORAF (vemurafenib); **Preclinical: trametinib (IC50=8nM), cobimetinib (IC50=15nM), encorafenib (IC50=20nM), dabrafenib (IC50=30nM), vemurafenib (IC50=50nM)**
+
+The drugs listed as "Preclinical" come directly from DepMap's PRISM drug screen data, ordered by IC50 (most sensitive first).
+
+### Helper Methods
+
+- `is_essential()` - Returns True if CERES score < -0.5
+- `has_data()` - Returns True if any DepMap data is available
+- `get_top_sensitive_drugs(n)` - Returns n drugs with lowest IC50
+- `get_model_cell_lines(with_mutation_only=True)` - Returns cell lines with the mutation
+- `to_prompt_context()` - Formats DepMap data for LLM consumption
+
+### Evidence Gap Detection
+
+DepMap data contributes to evidence quality assessment:
+
+| DepMap Data Present | Contribution to "Well Characterized" |
+|---------------------|--------------------------------------|
+| Gene dependency score | "gene essentiality (DepMap CRISPR)" |
+| Gene is essential (CERES < -0.5) | "{gene} is essential in cancer cells" |
+| Drug sensitivities | "preclinical drug sensitivity (DepMap)" |
+| Cell line models with mutation | "model cell lines (N with mutation)" |
+
+If DepMap data is missing for a clinically relevant variant, gaps are flagged:
+- "No cell line models identified for {gene} {variant}"
+- Suggested: "Identify cell lines with mutation", "Generate isogenic model"
+- Addressable with: DepMap, CCLE, Cellosaurus
+
+---
+
 ## Evidence Flow Summary
 
 ```
@@ -402,7 +512,9 @@ User Query (gene, variant, tumor_type)
            │
            ├──► PubMed ──► Research articles
            │
-           └──► OncoTree ──► Standardized tumor type
+           ├──► OncoTree ──► Standardized tumor type
+           │
+           └──► DepMap ──► Gene essentiality, drug sensitivity, cell line models
                    │
                    ▼
               Evidence Model ──► LLM Synthesis ──► Result

@@ -14,6 +14,7 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 - CIViC, VICC MetaKB, ClinVar, COSMIC, CGI, FDA labels
 - ClinicalTrials.gov integration
 - cBioPortal co-mutation patterns (prevalence, co-occurring, mutually exclusive)
+- DepMap/CCLE integration (gene essentiality, PRISM drug sensitivity, cell line models)
 - AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD (via MyVariant.info)
 - OncoTree tumor type normalization
 - VEP fallback for variant normalization
@@ -67,19 +68,22 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 
 **Gap detection enhancement:** Add `GapCategory.PATHWAY` - "Pathway effects not characterized"
 
-### DepMap/CCLE Integration
+### DepMap/CCLE Integration ✅ COMPLETE
 **Goal:** Add cell line dependency and drug sensitivity data
 
-**Implementation:**
-- Query DepMap API or use pre-downloaded gene effect scores
-- CRISPR dependency scores per gene across 1000+ cell lines
-- PRISM drug sensitivity for cell lines with the mutation
-- Identify cell line models harboring the variant
-- Co-essential gene patterns for synthetic lethality
+**Implementation:** ✅
+- Query DepMap API for gene effect scores
+- CRISPR dependency scores (CERES) per gene across 1000+ cell lines
+- PRISM drug sensitivity (IC50/AUC) for cell lines with the mutation
+- Identify cell line models harboring the exact variant
+- Data flows to LLM for research narrative generation
 
-**Research value:** "Cell lines with BRAF V600E show 2.3x higher sensitivity to MEK inhibitors (PRISM data, n=47 lines). A375, SK-MEL-28 are available models."
-
-**New model:** `DepMapEvidence` with dependency_score, sensitive_drugs, available_cell_lines
+**Delivered:**
+- `DepMapClient` with async API querying
+- `DepMapEvidence` model with gene_dependency, drug_sensitivities, cell_line_models
+- Helper methods: `is_essential()`, `get_top_sensitive_drugs()`, `has_data()`
+- CLI panel showing essentiality, top drugs, and model cell lines
+- Gap detection integration for preclinical evidence gaps
 
 ### GDSC/CTRP Drug Sensitivity
 **Goal:** Systematic cell line drug response data
@@ -309,12 +313,14 @@ POST /api/v1/watchlist
 
 | Metric | Current | Q1 Target | Q2 Target |
 |--------|---------|-----------|-----------|
-| Data sources integrated | 12 | 15 | 20 |
+| Data sources integrated | 14 | 17 | 22 |
 | Gap categories detected | 8 | 10 | 12 |
 | Avg gaps identified per query | ~3 | ~5 | ~6 |
 | Evidence quality "comprehensive" rate | ~20% | ~25% | ~30% |
 | Hypothesis generation rate | 100% | 100% | 100% |
 | User research questions answered | - | Track | Improve |
+
+*Note: Data sources increased from 12→14 with DepMap (gene essentiality + drug sensitivity) and cBioPortal integrations.*
 
 ---
 

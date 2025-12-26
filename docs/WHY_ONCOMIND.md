@@ -127,6 +127,78 @@ We don't say "trust the AI." We provide a verification framework:
 
 ## Who Should Use This
 
+### Primary Users
+
+#### 1. Grad Students & Postdocs in Cancer Genomics Labs
+
+**The Problem:**
+Your advisor says "look into this variant." You spend days searching PubMed, checking CIViC, cross-referencing ClinVar, digging through cBioPortal... just to understand the current state of knowledge.
+
+**OncoMind Solution:**
+- Instant evidence summary across 14+ sources
+- Explicit gap analysis: "Here's what's NOT known"
+- Research implications: "Here's what you could study"
+- Suggested experiments based on gap severity
+
+**Value:** Saves weeks of literature review. Helps scope thesis projects with clear, defensible knowledge gaps.
+
+---
+
+#### 2. PIs Writing Grant Proposals
+
+**The Problem:**
+R01 proposals need to justify "why this research question matters." That means showing the gap — not just what's known, but what's missing and why it matters.
+
+**OncoMind Solution:**
+- Evidence gap detection with severity ratings (critical/significant/minor)
+- Gap categories: functional, clinical, resistance mechanisms, preclinical data
+- Suggested studies mapped to each gap
+- Source attribution for every claim (PMIDs, database entries)
+
+**Value:** Write stronger proposals with clearly articulated gaps. "We propose to address the CRITICAL gap in resistance mechanism understanding for [variant] — no published studies characterize acquired resistance despite 3 FDA-approved therapies."
+
+---
+
+#### 3. Pharma/Biotech Researchers in Early Discovery
+
+**The Problem:**
+"Should we pursue this variant as a drug target? What do we actually know? What's the white space?"
+
+**OncoMind Solution:**
+- Gap analysis shows research opportunities
+- DepMap integration: gene essentiality (is it a good target?), drug sensitivity (what works?), model systems (can we test it?)
+- Resistance mechanism extraction from literature
+- Preclinical vs clinical evidence stratification
+
+**Value:** Prioritize research portfolio based on evidence landscape. Identify white space before competitors. Make go/no-go decisions with full context.
+
+---
+
+#### 4. Bioinformaticians Supporting Multiple PIs
+
+**The Problem:**
+Constant ad-hoc variant lookups for different projects. Each PI wants "just a quick look" at their pet variant. You become the bottleneck.
+
+**OncoMind Solution:**
+- Standardized, comprehensive reports in seconds
+- Batch processing for multiple variants
+- JSON/CSV output for downstream analysis
+- Consistent format across all queries
+
+**Value:** Don't become the bottleneck. Deliver comprehensive variant briefs quickly. Spend your time on analysis, not data wrangling.
+
+---
+
+### Secondary Users
+
+- **Clinical trial designers** — Identifying patient populations with unmet therapeutic needs. OncoMind surfaces variants where clinical evidence is lacking but biological rationale exists.
+- **Science journalists & medical writers** — Understanding what's known vs. unknown about a variant. OncoMind provides source-attributed facts, not speculation.
+- **Biotech BD teams** — Competitive intelligence on the research landscape. Which variants are over-studied? Where are the opportunities?
+
+---
+
+### Good Fit vs Not a Fit
+
 **Good fit:**
 - Researchers exploring variant evidence quickly
 - Data scientists building oncology AI applications

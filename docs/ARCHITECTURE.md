@@ -307,6 +307,8 @@ class VICCClient:
 | `SemanticScholarClient` | S2 API | Literature with citations |
 | `ClinicalTrialsClient` | ClinicalTrials.gov | Active trials |
 | `OncoTreeClient` | OncoTree API | Tumor type resolution |
+| `CBioPortalClient` | cBioPortal API | Co-mutation and prevalence |
+| `DepMapClient` | DepMap Portal | Gene essentiality, drug sensitivity, cell lines |
 
 ### Models (`models/`)
 
@@ -370,9 +372,16 @@ Result
 │   │   ├── fda_approvals: list[FDAApproval]
 │   │   ├── clinical_trials: list[ClinicalTrialEvidence]
 │   │   └── gene_role, gene_class, pathway
-│   └── LiteratureEvidence
-│       ├── pubmed_articles: list[PubMedEvidence]
-│       └── literature_knowledge: LiteratureKnowledge | None
+│   ├── LiteratureEvidence
+│   │   ├── pubmed_articles: list[PubMedEvidence]
+│   │   └── literature_knowledge: LiteratureKnowledge | None
+│   ├── cbioportal_evidence: CBioPortalEvidence | None
+│   │   ├── co_occurring, mutually_exclusive
+│   │   └── gene_prevalence_pct, variant_prevalence_pct
+│   └── depmap_evidence: DepMapEvidence | None
+│       ├── gene_dependency: GeneDependency (CERES score)
+│       ├── drug_sensitivities: list[DrugSensitivity] (IC50s)
+│       └── cell_line_models: list[CellLineModel]
 └── llm: LLMInsight | None  ← Optional, when LLM mode enabled
     ├── llm_summary: str
     ├── rationale: str
@@ -482,6 +491,8 @@ User Input: "BRAF V600E in Melanoma"
 │    │ • CIViC Assertions     │   │
 │    │ • ClinicalTrials.gov   │   │
 │    │ • Semantic Scholar     │   │
+│    │ • cBioPortal           │   │
+│    │ • DepMap               │   │
 │    └────────────────────────┘   │
 └───────────────┬─────────────────┘
                 │
@@ -644,6 +655,8 @@ class ClinicalTrialsClient:
 | Semantic Scholar | `SemanticScholarRateLimitError` | 3 | 1s → 10s | ±1s |
 | PubMed | `PubMedRateLimitError` | 3 | 0.5s → 5s | ±0.5s |
 | ClinicalTrials | `ClinicalTrialsRateLimitError` | 3 | 2s → 15s | ±1s |
+| cBioPortal | `HTTPError` | 3 | 2s → 10s | None |
+| DepMap | `HTTPError` | 3 | 2s → 10s | None |
 
 ### Variant Validation
 
@@ -722,6 +735,8 @@ Planned caching layers:
 | ClinicalTrials.gov | ~50/min | Tenacity retry (3 attempts, 2-15s backoff) |
 | FDA OpenFDA | Reasonable use | Tenacity retry (3 attempts, 2-10s backoff) |
 | OncoTree | Unlimited | Tenacity retry for transient failures |
+| cBioPortal | Unlimited | Tenacity retry for transient failures |
+| DepMap | Unlimited | Tenacity retry for transient failures |
 
 ## Testing Strategy
 
