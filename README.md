@@ -236,7 +236,7 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 - Small insertions/deletions (E746_A750del)
 - Frameshift mutations (K132fs)
 
-**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](ROADMAP.md))
+**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](docs/ROADMAP.md))
 
 ## Data Sources
 
@@ -270,7 +270,7 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 | [Reactome](https://reactome.org/) | Pathway context | Planned |
 | [DepMap/CCLE](https://depmap.org/) | Cell line dependencies | Planned |
 
-See [ROADMAP.md](ROADMAP.md) for the full development roadmap.
+See [ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
 
 ## Development
 
