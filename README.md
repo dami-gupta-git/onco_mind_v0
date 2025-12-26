@@ -1,36 +1,50 @@
 # OncoMind
 
-**Grounded context for cancer variant reasoning. What happens next, with receipts.**
+**Research intelligence for cancer variants. Find the gaps, not just the facts.**
 
-For common variants like BRAF V600E, databases have the answers. For everything else, there's a 2-hour PubMed rabbit hole. OncoMind does that search for you — and shows its work.
+For BRAF V600E, databases have the answers. For the next 10,000 variants, the interesting question isn't "what do we know?" — it's "what don't we know yet?"
 
-> **Disclaimer**: This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.
+OncoMind aggregates evidence across databases, identifies knowledge gaps, and generates research hypotheses — turning variant annotation into research intelligence.
+
+> **Note**: This tool is for research purposes only. It is not intended for clinical decision-making.
 
 ## The Problem
 
-Variant interpretation tools like CIViC, OncoKB, and CancerVar are excellent for well-characterized mutations. But for less common variants, researchers still spend hours manually searching PubMed, ClinicalTrials.gov, and Google Scholar for case reports, functional studies, and resistance mechanisms.
+Existing variant annotation tools excel at telling you what's known. But researchers need more:
 
-OncoMind automates that workflow: aggregate databases, search literature, synthesize findings, and cite sources — in seconds instead of hours.
+- **What's well-characterized vs. under-studied?**
+- **Where do databases disagree?**
+- **What co-mutation patterns suggest testable hypotheses?**
+- **Which functional studies are missing?**
+
+OncoMind synthesizes evidence from 10+ sources and explicitly surfaces what we *don't* know — the gaps that represent research opportunities.
 
 ## What Makes OncoMind Different
 
-| Feature | Legacy Tools | OncoMind |
-|---------|--------------|----------|
-| **Output format** | 50-page PDFs, 10K-row CSVs | LLM-ready context blocks |
-| **Source disagreement** | Pick one, hide the rest | Surface conflicts explicitly |
-| **Uncertainty** | Implied | Quantified (ensemble agreement) |
-| **Claims without sources** | Common | Forbidden by design |
-| **Resistance mechanisms** | What the variant *is* | What happens *next* |
+| Feature | Annotation Tools | OncoMind |
+|---------|------------------|----------|
+| **Focus** | What the variant *is* | What we *don't yet know* |
+| **Knowledge gaps** | Not addressed | Explicitly identified |
+| **Co-mutation patterns** | Data only | Hypothesis generation |
+| **Source conflicts** | Pick one, hide the rest | Surface and explain |
+| **Output** | Static annotations | Research-ready insights |
+| **Evidence quality** | Implied | Explicitly assessed |
 
 ## Features
 
-- **Multi-source aggregation**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels, ClinicalTrials.gov
-- **Functional predictions**: AlphaMissense, CADD, PolyPhen2, SIFT, gnomAD frequencies
-- **Literature search**: Semantic Scholar and PubMed with LLM relevance scoring
-- **Evidence synthesis**: Extract resistance/sensitivity signals from abstracts
-- **Conflict detection**: Flag when databases disagree
-- **Source attribution**: Every claim links to a PMID, FDA label, or database entry
-- **Strongly-typed output**: Pydantic `Result` model for programmatic use
+### Evidence Aggregation
+- **Clinical databases**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels
+- **Functional predictions**: AlphaMissense, CADD, PolyPhen2, gnomAD frequencies
+- **Co-mutation patterns**: cBioPortal prevalence and co-occurrence data
+- **Literature**: Semantic Scholar and PubMed with LLM relevance scoring
+- **Clinical trials**: ClinicalTrials.gov integration
+
+### Research Intelligence
+- **Evidence gap detection**: Explicitly identifies what's missing (no functional data, limited clinical evidence, etc.)
+- **Conflict surfacing**: Flags when databases disagree and explains why
+- **Hypothesis generation**: Suggests testable research directions based on evidence patterns
+- **Evidence quality assessment**: Rates overall evidence strength (comprehensive/moderate/limited/minimal)
+- **Source attribution**: Every claim links to a PMID, database entry, or cBioPortal study
 
 ## Installation
 
@@ -66,13 +80,16 @@ async def main():
     print(f"Clinical Trials: {len(result.clinical.clinical_trials)}")
     print(f"Summary: {result.get_summary()}")
 
-    # With LLM synthesis for clinical narrative
+    # With LLM synthesis for research narrative
     config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
     result = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
 
-    # LLM-generated narrative
+    # Research-focused insights
     if result.llm:
         print(result.llm.llm_summary)
+        print(f"Evidence quality: {result.llm.evidence_quality}")
+        print(f"Knowledge gaps: {result.llm.knowledge_gaps}")
+        print(f"Research implications: {result.llm.research_implications}")
 
 asyncio.run(main())
 ```
@@ -98,19 +115,20 @@ mind insight BRAF V600E -t Melanoma --output result.json
 
 | Mode | Flag | Speed | Output |
 |------|------|-------|--------|
-| **Default** | (none) | ~12s | Structured evidence + LLM clinical summary |
+| **Default** | (none) | ~12s | Structured evidence + LLM research synthesis |
 | **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
-| **Full** | `--full` | ~25s | + Literature search + Literature panel + enhanced narrative |
+| **Full** | `--full` | ~25s | + Literature search + enhanced hypothesis generation |
 
 **Output panels by mode:**
 
 | Panel | Lite | Default | Full |
 |-------|------|---------|------|
 | Evidence Summary | ✓ | ✓ | ✓ |
-| Recommended Therapies | ✓ (FDA) | ✓ (LLM) | ✓ (LLM) |
-| Clinical Evidence | ✓ | ✓ | ✓ |
+| Knowledge Gaps | - | ✓ | ✓ |
+| Evidence Quality | - | ✓ | ✓ |
+| Research Implications | - | ✓ | ✓ |
 | Literature | - | - | ✓ |
-| Variant Insight | - | ✓ | ✓ |
+| Hypothesis Generation | - | ✓ | ✓ (enhanced) |
 
 #### Example Output
 
@@ -218,10 +236,11 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 - Small insertions/deletions (E746_A750del)
 - Frameshift mutations (K132fs)
 
-**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](docs/ROADMAP.md))
+**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](ROADMAP.md))
 
 ## Data Sources
 
+### Clinical & Therapeutic
 | Source | Data Type | Access |
 |--------|-----------|--------|
 | [CIViC](https://civicdb.org/) | Curated variant-drug associations | Free API |
@@ -231,8 +250,27 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 | [CGI](https://www.cancergenomeinterpreter.org/) | Biomarker annotations | Local database |
 | [FDA](https://www.fda.gov/) | Drug approvals | OpenFDA API |
 | [ClinicalTrials.gov](https://clinicaltrials.gov/) | Active trials | Free API |
-| [Semantic Scholar](https://www.semanticscholar.org/) | Literature | Free API |
-| [PubMed](https://pubmed.ncbi.nlm.nih.gov/) | Literature | Free E-utilities |
+
+### Functional & Biological
+| Source | Data Type | Access |
+|--------|-----------|--------|
+| [cBioPortal](https://www.cbioportal.org/) | Co-mutation patterns, prevalence | Free API |
+| [AlphaMissense](https://alphamissense.hegelab.org/) | Pathogenicity predictions | Via MyVariant.info |
+| [gnomAD](https://gnomad.broadinstitute.org/) | Population frequencies | Via MyVariant.info |
+
+### Literature
+| Source | Data Type | Access |
+|--------|-----------|--------|
+| [Semantic Scholar](https://www.semanticscholar.org/) | AI-powered literature search | Free API |
+| [PubMed](https://pubmed.ncbi.nlm.nih.gov/) | Biomedical literature | Free E-utilities |
+
+### Coming Soon
+| Source | Data Type | Status |
+|--------|-----------|--------|
+| [Reactome](https://reactome.org/) | Pathway context | Planned |
+| [DepMap/CCLE](https://depmap.org/) | Cell line dependencies | Planned |
+
+See [ROADMAP.md](ROADMAP.md) for the full development roadmap.
 
 ## Development
 

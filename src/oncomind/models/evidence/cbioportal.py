@@ -93,32 +93,32 @@ class CBioPortalEvidence(BaseModel):
 
         # Co-occurring mutations
         if self.co_occurring:
-            lines.append("CO-OCCURRING MUTATIONS (genes frequently mutated together):")
+            lines.append("CO-OCCURRING MUTATIONS (cite source when quoting these percentages):")
             for co in self.co_occurring[:5]:
                 or_str = f", OR={co.odds_ratio:.2f}" if co.odds_ratio else ""
-                lines.append(f"  - {co.gene}: {co.pct:.1f}% of {self.gene}-mutant samples ({co.count} cases{or_str})")
+                lines.append(f"  - {co.gene}: {co.pct:.1f}% of {self.gene}-mutant samples ({co.count} cases{or_str}) - cite as: ({source_cite})")
             if len(self.co_occurring) > 5:
                 lines.append(f"  ... and {len(self.co_occurring) - 5} more")
             lines.append("")
 
         # Mutually exclusive mutations
         if self.mutually_exclusive:
-            lines.append("MUTUALLY EXCLUSIVE MUTATIONS (genes rarely mutated together):")
+            lines.append("MUTUALLY EXCLUSIVE MUTATIONS (cite source when quoting these percentages):")
             for me in self.mutually_exclusive[:5]:
                 or_str = f", OR={me.odds_ratio:.2f}" if me.odds_ratio else ""
-                lines.append(f"  - {me.gene}: {me.pct:.1f}% co-occurrence ({me.count} cases{or_str})")
+                lines.append(f"  - {me.gene}: {me.pct:.1f}% co-occurrence ({me.count} cases{or_str}) - cite as: ({source_cite})")
             if len(self.mutually_exclusive) > 5:
                 lines.append(f"  ... and {len(self.mutually_exclusive) - 5} more")
             lines.append("")
 
         # Interpretation hints for LLM
         if self.co_occurring or self.mutually_exclusive:
-            lines.append("INTERPRETATION:")
+            lines.append("INTERPRETATION (cite source for all statistics):")
             if self.co_occurring:
                 top_co = self.co_occurring[0]
-                lines.append(f"  - {self.gene} mutations frequently co-occur with {top_co.gene} ({top_co.pct:.1f}%)")
+                lines.append(f"  - {self.gene} mutations frequently co-occur with {top_co.gene} ({top_co.pct:.1f}%) - cite as: ({source_cite})")
             if self.mutually_exclusive:
                 top_me = self.mutually_exclusive[0]
-                lines.append(f"  - {self.gene} and {top_me.gene} mutations are mutually exclusive (suggests redundant pathway activation)")
+                lines.append(f"  - {self.gene} and {top_me.gene} mutations are mutually exclusive ({top_me.pct:.1f}%) - cite as: ({source_cite})")
 
         return "\n".join(lines)

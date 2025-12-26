@@ -1,6 +1,7 @@
 """LLM service for variant insight generation."""
 
 import json
+import re
 from litellm import acompletion
 from oncomind.llm.prompts import create_research_prompt
 from oncomind.models import RecommendedTherapy
