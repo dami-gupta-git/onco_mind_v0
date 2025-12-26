@@ -2,52 +2,46 @@
 
 **Research intelligence for cancer variants. Find the gaps, not just the facts.**
 
-For BRAF V600E, databases have the answers. For the next 10,000 variants, the interesting question isn't "what do we know?" — it's "what don't we know yet?"
+For BRAF V600E, databases have the answers. For the next 10,000 variants, the real question is **"what don't we know yet?"**
 
-OncoMind aggregates evidence across databases, identifies knowledge gaps, and generates research hypotheses — turning variant annotation into research intelligence.
+OncoMind aggregates evidence across 10+ sources, identifies knowledge gaps, and generates research hypotheses — turning variant annotation into **research intelligence**, not clinical advice.
 
-> **Note**: This tool is for research purposes only. It is not intended for clinical decision-making.
+> **Research only.** Not for clinical decision-making or patient care.
 
-## The Problem
+---
 
-Existing variant annotation tools excel at telling you what's known. But researchers need more:
+## Why OncoMind?
 
-- **What's well-characterized vs. under-studied?**
-- **Where do databases disagree?**
-- **What co-mutation patterns suggest testable hypotheses?**
-- **Which functional studies are missing?**
+Most tools tell you **what's known** about a variant. Researchers also need:
 
-OncoMind synthesizes evidence from 10+ sources and explicitly surfaces what we *don't* know — the gaps that represent research opportunities.
+- What's **well-characterized vs under-studied**?
+- Where do **databases disagree**?
+- Which **co-mutation patterns** suggest testable hypotheses?
+- What **functional / preclinical work** is missing?
 
-## What Makes OncoMind Different
+OncoMind has two layers:
 
-| Feature | Annotation Tools | OncoMind |
-|---------|------------------|----------|
-| **Focus** | What the variant *is* | What we *don't yet know* |
-| **Knowledge gaps** | Not addressed | Explicitly identified |
-| **Co-mutation patterns** | Data only | Hypothesis generation |
-| **Source conflicts** | Pick one, hide the rest | Surface and explain |
-| **Output** | Static annotations | Research-ready insights |
-| **Evidence quality** | Implied | Explicitly assessed |
+1. A deterministic **annotation backbone** (KBs, trials, cBioPortal, DepMap, literature).
+2. An optional **LLM research layer** that surfaces gaps and proposes hypotheses, grounded in that evidence.
 
-## Features
+---
 
-### Evidence Aggregation
-- **Clinical databases**: CIViC, ClinVar, COSMIC, VICC MetaKB, CGI, FDA labels
-- **Functional predictions**: AlphaMissense, CADD, PolyPhen2, gnomAD frequencies
-- **Co-mutation patterns**: cBioPortal prevalence and co-occurrence data
-- **Preclinical research**: DepMap gene essentiality (CRISPR screens), drug sensitivity (PRISM), cell line models
-- **Literature**: Semantic Scholar and PubMed with LLM relevance scoring
-- **Clinical trials**: ClinicalTrials.gov integration
+## What Makes It Different
 
-### Research Intelligence
-- **Evidence gap detection**: Explicitly identifies what's missing (no functional data, limited clinical evidence, etc.)
-- **Conflict surfacing**: Flags when databases disagree and explains why
-- **Hypothesis generation**: Suggests testable research directions based on evidence patterns
-- **Evidence quality assessment**: Rates overall evidence strength (comprehensive/moderate/limited/minimal)
-- **Source attribution**: Every claim links to a PMID, database entry, or cBioPortal study
+| Feature                  | Typical Tools               | OncoMind                               |
+|--------------------------|-----------------------------|----------------------------------------|
+| Focus                    | "What is this variant?"     | "What don't we know (yet)?"           |
+| Knowledge gaps           | Not explicit                | First-class citizens                   |
+| Co-mutation patterns     | Raw data                    | Used to generate hypotheses            |
+| Source conflicts         | Often hidden                | Surfaced and explained                 |
+| Output                   | Static clinical annotations | Research-ready, gap-focused insights   |
+| Evidence quality         | Implicit                    | Explicit rating per variant            |
 
-## Installation
+---
+
+## Quick Start
+
+### Install
 
 ```bash
 git clone https://github.com/yourusername/oncomind.git
@@ -64,37 +58,27 @@ pip install -e ".[dev]"
 > pip install -e . --force-reinstall
 > ```
 
-## Quick Start
-
 ### Python API
 
 ```python
 import asyncio
-from oncomind import get_insight, InsightConfig, Result
+from oncomind import get_insight, InsightConfig
 
 async def main():
-    # Default: Fast annotation mode (no LLM, ~7s)
+    # Annotation mode: fast, deterministic evidence (~7s)
     result = await get_insight("BRAF V600E", tumor_type="Melanoma")
+    print(result.get_summary())
+    print(result.evidence.get_recommended_therapies())
 
-    print(f"Gene: {result.identifiers.gene}")
-    print(f"Therapies: {result.evidence.get_recommended_therapies()}")
-    print(f"Clinical Trials: {len(result.clinical.clinical_trials)}")
-    print(f"Summary: {result.get_summary()}")
+    # LLM mode: annotation backbone + literature + research insight (~25s)
+    config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
+    result = await get_insight("MAP2K1 P124L", tumor_type="Melanoma", config=config)
 
-    # LLM mode: literature search + AI synthesis (~25s)
-    config = InsightConfig(
-        enable_llm=True,           # Enables LLM synthesis
-        enable_literature=True,    # Enables literature search (recommended with LLM)
-        llm_model="gpt-4o-mini"
-    )
-    result = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
-
-    # Research-focused insights (only available with enable_llm=True)
     if result.llm:
         print(result.llm.llm_summary)
-        print(f"Evidence quality: {result.llm.evidence_quality}")
-        print(f"Knowledge gaps: {result.llm.knowledge_gaps}")
-        print(f"Research implications: {result.llm.research_implications}")
+        print("Evidence quality:", result.llm.evidence_quality)
+        print("Knowledge gaps:", result.llm.knowledge_gaps)
+        print("Research implications:", result.llm.research_implications)
 
 asyncio.run(main())
 ```
@@ -102,144 +86,151 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Default: fast annotation mode (~7s)
+# Annotation mode (~7s)
 mind insight BRAF V600E --tumor Melanoma
-mind insight PIK3CA H1047R -t "Breast Cancer"
 
-# LLM mode: literature search + AI synthesis (~25s)
-mind insight KRAS G12C -t NSCLC --llm
+# LLM research mode (~25s)
+mind insight MAP2K1 P124L -t Melanoma --llm
 
 # Save to JSON
-mind insight BRAF V600E -t Melanoma --output result.json
 mind insight EGFR L858R -t NSCLC --llm --output result.json
 ```
 
-#### CLI Modes
+**Modes:**
 
-| Mode | Flag | Speed | Output |
-|------|------|-------|--------|
-| **Annotation** | (none) | ~7s | Fast structured evidence from all databases |
-| **LLM** | `--llm` | ~25s | + Literature search + AI synthesis + hypothesis generation |
+| Mode           | Flag   | Output                                           |
+|----------------|--------|--------------------------------------------------|
+| Annotation     | (none) | Structured evidence from all databases          |
+| LLM Research   | `--llm`| + Literature + research narrative + hypotheses  |
 
-**Output by mode:**
+---
 
-| Feature | Annotation | LLM |
-|---------|------------|-----|
-| Evidence Summary | ✓ | ✓ |
-| Database Annotations | ✓ | ✓ |
-| DepMap Research Context | ✓ | ✓ |
-| Literature Search | - | ✓ |
-| LLM Research Insight | - | ✓ |
-| Knowledge Gaps | - | ✓ |
-| Hypothesis Generation | - | ✓ |
+## What You Get
 
-#### Example Output
+### 1) Evidence Backbone (Annotation)
+
+OncoMind builds a rich, structured evidence model:
+
+- **Clinical / KB**: CIViC, VICC MetaKB, ClinVar, COSMIC, CGI, FDA labels
+- **Functional**: AlphaMissense, CADD, PolyPhen2, gnomAD
+- **Biological**: cBioPortal prevalence and co-mutation patterns
+- **Preclinical**: DepMap CRISPR essentiality, PRISM drug sensitivity
+- **Trials**: ClinicalTrials.gov
+- **Literature**: PubMed / Semantic Scholar entries in a structured `LiteratureEvidence` model
+
+Example (BRAF V600E in melanoma):
 
 ```
-$ mind insight BRAF V600E -t Melanoma
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                            BRAF V600E in Melanoma                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-╭────────────────────────────── Evidence Summary ──────────────────────────────╮
-│  COSMIC:COSM476                                                              │
-│  ClinVar:            Pathogenic                                              │
-│  Pathogenicity:      AlphaMissense: Pathogenic (0.99) | PolyPhen2: D         │
-│  Gene Role:          oncogene                                                │
-│  Evidence Sources:   CIViC, CIViC Assertions, ClinVar, COSMIC, CGI, VICC     │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────── FDA Approved Drugs ─────────────────────────────╮
-│  Mekinist, KEYTRUDA QLEX, BRAFTOVI, ZELBORAF, MEKTOVI                        │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────── Clinical Evidence ──────────────────────────────╮
-│  CIViC Assertions:                                                           │
-│    • Trametinib, Dabrafenib → SENSITIVITYRESPONSE                            │
-│    • Vemurafenib, Cobimetinib → SENSITIVITYRESPONSE                          │
-│                                                                              │
-│  CGI Biomarkers:                                                             │
-│    • PLX4720: Responsive                                                     │
-│    • Vemurafenib: Responsive                                                 │
-╰──────────────────────────────────────────────────────────────────────────────╯
+Evidence Summary
+  COSMIC: COSM476
+  ClinVar: Pathogenic
+  Pathogenicity: AlphaMissense 0.99 (Pathogenic) | PolyPhen2: D
+  Gene Role: oncogene
+FDA Approved Drugs
+  Mekinist, BRAFTOVI, ZELBORAF, MEKTOVI, KEYTRUDA QLEX
+Clinical Evidence
+  CIViC: Trametinib, Dabrafenib → SENSITIVITY/RESPONSE
+  CGI: PLX4720, Vemurafenib → Responsive
 ```
 
-### LLM-Ready Context
+This backbone is available even when LLM is disabled and can be consumed directly via Python, CLI, or JSON.
 
-OncoMind outputs context blocks designed for injection into downstream LLM systems:
+---
+
+### 2) Research Insight (LLM Mode)
+
+On top of the evidence backbone, OncoMind can generate a **research-focused card** for each variant, constrained to the evidence it sees.
+
+Example (MAP2K1 P124L in melanoma):
+
+> **Insight Ready: MAP2K1 P124L in Melanoma**
+> Functional impact: gain-of-function MAP2K1 variant activating MAPK signaling.
+> Biological context: rare (~1%) but recurrent in melanoma, with frequent TP53 co-mutations in TCGA SKCM.
+> Therapeutic landscape: limited clinical data; case reports describe trametinib response and resistance.
+> Evidence quality: **moderate**.
+> Knowledge gaps: resistance mechanisms, MAP2K1-specific preclinical models.
+> Hypothesis: *Co-occurring MAP2K1 P124L and TP53 mutations may alter MEK-inhibitor sensitivity compared to MAP2K1 alone, motivating co-mutation–stratified studies in MAPK-driven melanoma.*
+
+Structured fields on `result.llm`:
+
+- `llm_summary` – human-readable synthesis
+- `evidence_quality` – `"comprehensive" | "moderate" | "limited" | "minimal"`
+- `knowledge_gaps` / `well_characterized` – what's missing vs solid
+- `research_implications` – 2–3 sentence, testable hypothesis
+- `key_references` – PMIDs, trials, and database IDs it relied on
+
+---
+
+## LLM-Ready Context
+
+OncoMind can emit dense, grounded context strings for use in your own LLM workflows:
 
 ```python
-# Get a dense, grounded context block
 context = panel.to_knowledge_header()
-
-# Returns something like:
 # "BRAF V600E in melanoma. Oncogenic driver via constitutive MAPK activation.
 #  FDA-approved: dabrafenib + trametinib, vemurafenib + cobimetinib.
-#  Resistance typical at 6-12 months via NRAS (20%), MEK1/2 (5-10%), or BRAF amp.
-#  Sources: CIViC:assertion:12, FDA label, PMID:22735384"
+#  Resistance via NRAS, MEK1/2, BRAF amplification. Sources: CIViC, FDA, PMID:22735384."
 ```
+
+---
 
 ## Configuration
 
 Create a `.env` file:
 
 ```bash
-# Required for LLM features
+# Required for LLM research mode
 OPENAI_API_KEY=your-openai-key
 
-# Optional: enhanced literature search (recommended)
+# Optional: better literature context (used in LLM mode)
 SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 
-# Optional: other LLM providers
+# Optional: alternative LLM providers
 ANTHROPIC_API_KEY=your-anthropic-key
 ```
 
+---
+
 ## Result Model
 
-The `Result` is the core output model containing:
+The top-level `Result` object contains:
 
-| Field | Contents |
-|-------|----------|
-| `evidence` | `Evidence` model with all structured data |
-| `llm` | `LLMInsight` with LLM narrative (optional, only when LLM enabled) |
-
-The `Evidence` model contains:
-
-| Section | Contents |
-|---------|----------|
-| `identifiers` | Gene, variant, HGVS notation, COSMIC/dbSNP IDs |
-| `kb` | CIViC assertions, VICC MetaKB, CGI biomarkers |
-| `functional` | AlphaMissense, CADD, PolyPhen2, gnomAD frequencies |
-| `clinical` | FDA approvals, clinical trials, gene role, ClinVar significance |
-| `literature` | PubMed articles, literature knowledge |
+- `evidence`: all structured data (identifiers, KBs, functional, clinical, literature)
+- `llm`: optional `LLMInsight` with research narrative and gaps (only when `enable_llm=True`)
 
 ```python
 result = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
-# Access via shortcut properties on Result
-result.identifiers.gene                # "BRAF"
-result.kb.civic_assertions             # Curated drug-variant associations
-result.functional.alphamissense_score  # 0.98 (pathogenicity)
-result.clinical.fda_approvals          # FDA-approved therapies
+result.identifiers.gene                 # "BRAF"
+result.kb.civic_assertions              # CIViC drug–variant assertions
+result.clinical.fda_approvals           # FDA therapies
+result.evidence.get_recommended_therapies()
 
-# Helper methods
-result.get_summary()                   # One-line summary
-result.has_evidence()                  # True if any evidence found
-result.evidence.get_recommended_therapies()  # FDA + CGI therapies
+if result.llm:
+    result.llm.llm_summary
+    result.llm.evidence_quality
+    result.llm.knowledge_gaps
+    result.llm.research_implications
 ```
 
 See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentation.
 
+---
+
 ## Supported Variant Types
 
-**Input formats:**
-Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic coordinates, use HGVS notation or let MyVariant.info handle the lookup.
+Currently supports:
 
-**Currently supported:**
-- Missense mutations (V600E, L858R)
-- Nonsense mutations (R248*)
-- Small insertions/deletions (E746_A750del)
-- Frameshift mutations (K132fs)
+- Missense (e.g., `V600E`, `L858R`)
+- Nonsense (e.g., `R248*`)
+- Small indels (e.g., `E746_A750del`)
+- Frameshift (e.g., `K132fs`)
 
-**Coming soon:** Fusions, amplifications, copy number variants (see [ROADMAP.md](docs/ROADMAP.md))
+Variants can be provided as simple protein changes (`V600E`, `p.V600E`) or in HGVS; MyVariant.info is used to normalize where needed.
+
+Planned: fusions, amplifications, copy-number variants (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+
+---
 
 ## Data Sources
 
@@ -277,39 +268,35 @@ Accepts protein-level variants (V600E, Val600Glu, p.V600E). For cDNA or genomic 
 |--------|-----------|--------|
 | [Reactome](https://reactome.org/) | Pathway context | Planned |
 
-See [ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
+
+---
 
 ## Development
 
 ```bash
-# Run tests
 pytest tests/unit/ -v
-
-# Run with coverage
 pytest tests/unit/ --cov=src/oncomind --cov-report=html
 
-# Type checking
 mypy src/oncomind
 
-# Linting
 ruff check src/oncomind
 ruff format src/oncomind
 ```
 
-## Streamlit App
+Run the Streamlit app:
 
 ```bash
 cd streamlit
 streamlit run app.py
 ```
 
+---
+
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License – see [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- [CIViC](https://civicdb.org/) - Clinical Interpretation of Variants in Cancer
-- [VICC](https://cancervariants.org/) - Variant Interpretation for Cancer Consortium
-- [MyVariant.info](https://myvariant.info/) - Variant annotation aggregator
-- [Semantic Scholar](https://www.semanticscholar.org/) - AI-powered research tool
+CIViC, VICC, MyVariant.info, DepMap, Semantic Scholar, and all the open-data projects that make this kind of research tooling possible.
