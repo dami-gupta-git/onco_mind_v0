@@ -187,56 +187,6 @@ def insight(
                 padding=(1, 2),
             ))
 
-        # Recommended Therapies (from LLM or derived from evidence)
-        therapies = result.llm.recommended_therapies if result.llm else result.evidence.get_recommended_therapies()
-        therapy_lines = []
-        for t in therapies:
-            level = f"Level {t.evidence_level}" if t.evidence_level else ""
-            status = t.approval_status or ""
-            parts = [p for p in [level, status] if p]
-            suffix = f" ({', '.join(parts)})" if parts else ""
-            therapy_lines.append(f"  • {t.drug_name}{suffix}")
-
-        if therapy_lines:
-            # Title depends on whether LLM was used
-            title = "[bold]LLM Recommended Therapies[/bold]" if result.llm else "[bold]Recommended Therapies[/bold]"
-            console.print(Panel(
-                "\n".join(therapy_lines),
-                title=title,
-                border_style="cyan",
-                padding=(0, 2),
-            ))
-
-        # Literature section (only in full mode)
-        if full and result.literature.pubmed_articles:
-            lit_lines = []
-            lit_lines.append(f"[bold]PubMed Articles ({len(result.literature.pubmed_articles)}):[/bold]")
-            for article in result.literature.pubmed_articles[:3]:
-                title = article.title[:55] + "..." if len(article.title) > 55 else article.title
-                lit_lines.append(f"  • PMID:{article.pmid} {title}")
-            if len(result.literature.pubmed_articles) > 3:
-                lit_lines.append("  ...")
-
-            if result.literature.literature_knowledge:
-                lk = result.literature.literature_knowledge
-                if lk.resistance_mechanisms:
-                    lit_lines.append("")
-                    lit_lines.append("[bold]Resistance Mechanisms:[/bold]")
-                    for r in lk.resistance_mechanisms[:2]:
-                        lit_lines.append(f"  • {r.drug}: {r.mechanism}")
-                if lk.sensitivity_markers:
-                    lit_lines.append("")
-                    lit_lines.append("[bold]Sensitivity Markers:[/bold]")
-                    for s in lk.sensitivity_markers[:2]:
-                        lit_lines.append(f"  • {s.drug}: {s.marker}")
-
-            console.print(Panel(
-                "\n".join(lit_lines),
-                title="[bold]Literature[/bold]",
-                border_style="yellow",
-                padding=(0, 2),
-            ))
-
         # Save JSON if requested
         if output:
             # The result object now contains everything, including llm if present
