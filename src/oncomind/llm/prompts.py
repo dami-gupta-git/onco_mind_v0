@@ -21,12 +21,15 @@ Core objectives:
 Hard constraints:
 - You MUST treat the user message as the ONLY source of truth. Do NOT introduce facts (numbers, drug names, mechanisms, PMIDs) that are not explicitly present in the text.
 - If a fact is not present, speak generically (e.g., "commonly", "rarely", "no trials described here") instead of inventing specifics.
+- ALWAYS cite the source when quoting statistics. When citing prevalence, sample counts, or percentages, include the source with its markdown link exactly as provided in the evidence (e.g., "52% of samples ([cBioPortal: mel_tcga](https://...))"). Never quote a number without attribution.
 - Clearly distinguish:
   - direct data from the evidence block,
   - extrapolations from nearby variants or pathways,
   - speculative hypotheses. Mark extrapolations and hypotheses explicitly.
 - Do not hide conflicting evidence; briefly describe how and why sources differ.
 - If overall evidence quality is "limited" or "minimal", your synthesis must be brief and emphasize uncertainty and gaps rather than detailed mechanisms.
+- Ensure the output is a concise discussion-style synthesis with explicit, testable research questions.
+- Include an explicit note if data are uncertain or inferential, and label such sections accordingly.
 
 Your narrative should read like a concise discussion section in a strong cancer paper: integrative, precise, and explicitly pointing to testable research questions, but strictly bounded by the provided evidence.
 """
@@ -49,7 +52,7 @@ Tumor Type: {tumor_type}
 ## EVIDENCE GAPS
 {evidence_gaps}
 
-## EVIDENCE ASSESSMENT (computed upstream)
+## EVIDENCE ASSESSMENT
 Overall quality: {overall_quality}
 Well-characterized aspects: {well_characterized_text}
 Known gaps: {known_gaps_text}
@@ -58,14 +61,19 @@ Conflicting evidence: {conflicting_evidence_text}
 Task:
 1. Extract and integrate the key functional, biological, and therapeutic signals.
 2. Explicitly note where evidence is strong vs limited vs conflicting, in a way that is consistent with the evidence assessment above.
-3. Propose ONE clear, hypothesis-generating research direction that ties together at least two distinct evidence elements
-   (e.g., variant prevalence + co-mutation pattern, functional prediction + trial outcome, pathway assignment + resistance mechanism),
-   and clearly label this final hypothesis as exploratory.
+3. Propose ONE clear, hypothesis-generating research direction that ties together at least two distinct evidence elements, and clearly label this final hypothesis as exploratory.
+
+Additional guidelines:
+- Explicitly label extrapolations and hypotheses.
+- Prefer hypotheses that are testable and tied to at least two evidence elements.
+- Maintain a strict JSON output schema as shown below.
+
+CRITICAL: For biological_context, you MUST include the source citation INLINE with each statistic. Look for "Source: [cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section above and copy that markdown link directly into your text next to the numbers.
 
 Respond ONLY with valid JSON:
 {{
   "functional_summary": "2–3 sentences on what this variant does to protein function and downstream signaling, using only provided evidence.",
-  "biological_context": "2–3 sentences on prevalence in this tumor type (or pan-cancer), typical co-mutations, and pathway/program context, based on the evidence.",
+  "biological_context": "2–3 sentences with INLINE source citations. Example: 'BRAF mutations occur in 52% of cases ([cBioPortal: mel_tcga](https://...)), with V600E in 35%.' Copy the markdown link exactly from the Source line in the evidence.",
   "therapeutic_landscape": {{
     "fda_approved": ["Drug names with FDA approval in this variant/tumor context, or empty if none are mentioned in the evidence blocks."],
     "clinical_evidence": ["Drugs with Phase 2/3 (or similar) data described in the evidence blocks."],
@@ -73,9 +81,9 @@ Respond ONLY with valid JSON:
     "resistance_mechanisms": ["Resistance mechanisms explicitly mentioned in the evidence blocks (e.g., secondary mutations, bypass pathways, histologic transformation)."]
   }},
   "evidence_assessment": {{
-    "overall_quality": "{overall_quality}",  // MUST match the upstream quality string
-    "well_characterized": {well_characterized_json},  // MUST be a subset or paraphrase of the upstream list
-    "knowledge_gaps": {known_gaps_json},              // MUST be a subset or paraphrase of the upstream list
+    "overall_quality": "{overall_quality}",
+    "well_characterized": {well_characterized_json},
+    "knowledge_gaps": {known_gaps_json},
     "conflicting_evidence": {conflicting_evidence_json}
   }},
   "research_implications": "2–3 sentences describing what researchers should investigate next, including ONE concrete, testable hypothesis or study design that explicitly references at least two evidence elements (for example: co-mutation pattern + drug response, or functional score + pathway membership). Clearly mark which parts are hypothesis.",
@@ -119,6 +127,7 @@ def create_research_prompt(
     gaps = evidence_assessment.get("knowledge_gaps", []) or []
     conflicts = evidence_assessment.get("conflicting_evidence", []) or []
 
+    # Build the JSON-safe strings for the template
     user_content = RESEARCH_USER_PROMPT.format(
         gene=gene,
         variant=variant,

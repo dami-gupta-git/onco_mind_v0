@@ -269,17 +269,164 @@ result.literature.get_sensitivity_articles()   # Articles mentioning sensitivity
 
 ### `result.llm`
 
-LLM-generated clinical narrative (when `enable_llm=True`).
+LLM-generated research-focused narrative (when `enable_llm=True`).
 
 ```python
 # LLM insight is None when LLM is disabled
 if result.llm:
-    result.llm.llm_summary              # Clinical summary narrative
-    result.llm.rationale                # Reasoning behind recommendations
-    result.llm.recommended_therapies    # list[RecommendedTherapy]
+    # Core summary
+    result.llm.llm_summary              # Research-focused narrative summary
+    result.llm.rationale                # Research implications and reasoning
+
+    # Therapeutic evidence
+    result.llm.therapeutic_evidence     # list[TherapeuticEvidence]
+    result.llm.recommended_therapies    # Alias for therapeutic_evidence
     result.llm.clinical_trials_available # True if trials exist
+
+    # Evidence assessment (from structured gap detection)
+    result.llm.evidence_quality         # "comprehensive" | "moderate" | "limited" | "minimal"
+    result.llm.well_characterized       # list[str] - aspects with strong evidence
+    result.llm.knowledge_gaps           # list[str] - identified gaps
+    result.llm.conflicting_evidence     # list[str] - areas where sources disagree
+
+    # Research context
+    result.llm.research_implications    # Future research directions
+    result.llm.evidence_tags            # list[str] - e.g., "direct clinical data", "preclinical only"
     result.llm.references               # list[str] - cited sources
 ```
+
+---
+
+## Evidence Gaps Detection
+
+OncoMind provides structured evidence gap detection to identify what's missing or understudied about a variant.
+
+### `EvidenceGaps`
+
+The `EvidenceGaps` model aggregates detected gaps with severity ratings and research recommendations.
+
+```python
+from oncomind.models.evidence import EvidenceGaps, GapCategory, GapSeverity
+
+# Access via Evidence model
+evidence = result.evidence
+gaps = evidence.compute_evidence_gaps()
+
+# Overall assessment
+gaps.overall_evidence_quality    # "comprehensive" | "moderate" | "limited" | "minimal"
+gaps.research_priority           # "high" | "medium" | "low"
+gaps.well_characterized          # ["clinical actionability", "published literature"]
+gaps.poorly_characterized        # ["resistance mechanisms", "tumor-specific data"]
+
+# Individual gaps
+for gap in gaps.gaps:
+    gap.category                 # GapCategory enum
+    gap.severity                 # GapSeverity enum
+    gap.description              # Human-readable description
+    gap.suggested_studies        # ["Case series", "Retrospective cohort", ...]
+    gap.addressable_with         # ["CIViC", "Literature search", ...]
+
+# Helper methods
+gaps.has_critical_gaps()         # True if any critical gaps
+gaps.get_gaps_by_category(GapCategory.CLINICAL)
+gaps.get_gaps_by_severity(GapSeverity.CRITICAL)
+gaps.to_summary()                # Human-readable text summary
+gaps.to_dict_for_llm()           # Dict optimized for LLM prompts
+```
+
+### `GapCategory`
+
+Categories of evidence gaps:
+
+| Category | Description |
+|----------|-------------|
+| `FUNCTIONAL` | Mechanism of variant unknown |
+| `CLINICAL` | No clinical trials/outcomes data |
+| `TUMOR_TYPE` | Not studied in this specific tumor type |
+| `DRUG_RESPONSE` | No drug sensitivity/resistance data |
+| `RESISTANCE` | Resistance mechanisms unknown |
+| `PRECLINICAL` | No cell line/model data |
+| `PREVALENCE` | Frequency in population unknown |
+| `PROGNOSTIC` | Survival impact unknown |
+
+### `GapSeverity`
+
+Severity levels for gaps:
+
+| Severity | Description |
+|----------|-------------|
+| `CRITICAL` | No data at all in key area |
+| `SIGNIFICANT` | Limited data, needs more research |
+| `MINOR` | Some data exists but could be deeper |
+
+### Gap Detection Logic
+
+The `detect_evidence_gaps()` function analyzes evidence across multiple dimensions:
+
+```python
+from oncomind.insight_builder.gap_detector import detect_evidence_gaps
+
+# Checks performed:
+# 1. Functional characterization (AlphaMissense, CADD, PolyPhen2)
+# 2. Mechanism/functional studies (gene role, pathway)
+# 3. Clinical evidence (CIViC assertions, FDA approvals)
+# 4. Tumor-type-specific evidence
+# 5. Drug response data (CGI, VICC, preclinical)
+# 6. Resistance mechanisms
+# 7. Prevalence/epidemiology (cBioPortal)
+# 8. Clinical trials
+# 9. Literature depth (publication count)
+
+gaps = detect_evidence_gaps(evidence)
+```
+
+### Evidence Quality Computation
+
+Overall evidence quality is computed from gap severity:
+
+| Quality | Criteria |
+|---------|----------|
+| `minimal` | 2+ critical gaps |
+| `limited` | 1 critical gap OR 2+ significant gaps |
+| `moderate` | 1 significant gap OR only minor gaps |
+| `comprehensive` | No gaps detected |
+
+### Research Priority
+
+Priority is computed based on gene importance and gaps:
+
+```python
+# High priority: clinically important gene with critical gaps
+# Medium priority: critical gaps OR important gene with significant gaps
+# Low priority: only minor gaps
+```
+
+### LLM Integration
+
+Evidence gaps are passed to the LLM as a structured assessment dict:
+
+```python
+assessment = gaps.to_dict_for_llm()
+# Returns:
+# {
+#     "overall_quality": "moderate",
+#     "research_priority": "high",
+#     "well_characterized": ["clinical actionability", ...],
+#     "knowledge_gaps": ["resistance mechanisms", ...],
+#     "conflicting_evidence": [],
+#     "critical_gaps": [
+#         {"description": "...", "suggested_studies": [...]}
+#     ],
+#     "significant_gaps": [
+#         {"description": "...", "suggested_studies": [...]}
+#     ]
+# }
+```
+
+The LLM uses this to:
+- Calibrate response verbosity (brief for minimal evidence)
+- Echo well-characterized vs gap areas accurately
+- Generate research implications based on suggested studies
 
 ---
 
