@@ -281,6 +281,19 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for b in evidence.early_phase_biomarkers
         ],
+        "cbioportal_evidence": {
+            "gene": evidence.cbioportal_evidence.gene,
+            "variant": evidence.cbioportal_evidence.variant,
+            "tumor_type": evidence.cbioportal_evidence.tumor_type,
+            "study_id": evidence.cbioportal_evidence.study_id,
+            "total_samples": evidence.cbioportal_evidence.total_samples,
+            "samples_with_gene_mutation": evidence.cbioportal_evidence.samples_with_gene_mutation,
+            "samples_with_exact_variant": evidence.cbioportal_evidence.samples_with_exact_variant,
+            "gene_prevalence_pct": evidence.cbioportal_evidence.gene_prevalence_pct,
+            "variant_prevalence_pct": evidence.cbioportal_evidence.variant_prevalence_pct,
+            "co_occurring": [c.model_dump() for c in evidence.cbioportal_evidence.co_occurring],
+            "mutually_exclusive": [m.model_dump() for m in evidence.cbioportal_evidence.mutually_exclusive],
+        } if evidence.cbioportal_evidence else None,
         "recommended_therapies": [
             {
                 "drug_name": t.drug_name,
