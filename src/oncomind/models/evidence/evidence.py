@@ -42,6 +42,7 @@ from oncomind.models.evidence.vicc import VICCEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
+from oncomind.models.evidence.evidence_gaps import EvidenceGaps
 from oncomind.models.therapeutic_evidence import TherapeuticEvidence
 
 # Backwards compatibility alias
@@ -232,7 +233,18 @@ class Evidence(BaseModel):
         None, description="cBioPortal co-mutation and prevalence data"
     )
 
+    # Evidence gaps (computed, not fetched)
+    evidence_gaps: EvidenceGaps | None = Field(
+        None, description="Detected evidence gaps for research prioritization"
+    )
+
     # === Helper methods ===
+
+    def compute_evidence_gaps(self) -> EvidenceGaps:
+        """Compute and cache evidence gaps."""
+        from oncomind.insight_builder.gap_detector import detect_evidence_gaps
+        self.evidence_gaps = detect_evidence_gaps(self)
+        return self.evidence_gaps
 
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""

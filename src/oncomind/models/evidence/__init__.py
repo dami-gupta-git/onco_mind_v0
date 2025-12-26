@@ -11,6 +11,12 @@ from oncomind.models.evidence.evidence import (
     FunctionalScores,
     VariantContext,
 )
+from oncomind.models.evidence.evidence_gaps import (
+    EvidenceGap,
+    EvidenceGaps,
+    GapCategory,
+    GapSeverity,
+)
 from oncomind.models.evidence.fda import FDAApproval
 from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
@@ -23,6 +29,11 @@ __all__ = [
     "VariantIdentifiers",
     "FunctionalScores",
     "VariantContext",
+    # Evidence gaps
+    "EvidenceGap",
+    "EvidenceGaps",
+    "GapCategory",
+    "GapSeverity",
     # Individual evidence types (used in Evidence lists)
     "CBioPortalEvidence",
     "CoMutationEntry",
