@@ -2,7 +2,7 @@
 
 import json
 from litellm import acompletion
-from oncomind.llm.prompts import create_annotation_prompt
+from oncomind.llm.prompts import create_research_prompt
 from oncomind.models import RecommendedTherapy
 from oncomind.models.llm_insight import LLMInsight
 from oncomind.models.gene_context import get_oncogene_mutation_class
@@ -29,6 +29,9 @@ class LLMService:
         variant: str,
         tumor_type: str | None,
         evidence_summary: str,
+        biological_context: str = "",
+        evidence_gaps: str = "",
+        literature_summary: str = "",
         has_clinical_trials: bool = False,
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
@@ -37,49 +40,24 @@ class LLMService:
             gene: Gene symbol (e.g., BRAF)
             variant: Variant notation (e.g., V600E)
             tumor_type: Tumor type context
-            evidence_summary: Compact text summary of evidence (from Insight.get_evidence_summary_for_llm())
+            evidence_summary: Compact text summary of evidence
+            biological_context: cBioPortal prevalence/co-mutation data
+            evidence_gaps: Summary of evidence gaps
+            literature_summary: PubMed literature findings (for full mode)
             has_clinical_trials: Whether clinical trials are available
 
         Returns:
-            LLMInsight with LLM-generated narrative summary
+            LLMInsight with LLM-generated research-focused narrative
         """
-
-        # Check for oncogene mutation class therapy notes
-        therapy_note = None
-        mutation_class = get_oncogene_mutation_class(gene, variant)
-        if mutation_class:
-            # Check for tumor-specific therapy note first (most relevant)
-            tumor_specific = mutation_class.get("tumor_specific", {})
-            tumor_note = None
-            if tumor_type:
-                tumor_lower = tumor_type.lower()
-                for tumor_key, note in tumor_specific.items():
-                    if tumor_key in tumor_lower or tumor_lower in tumor_key:
-                        tumor_note = note
-                        break
-
-            # Build therapy note from mutation class info
-            notes = []
-            if tumor_note:
-                notes.append(tumor_note)
-            else:
-                if mutation_class.get("note"):
-                    notes.append(mutation_class["note"])
-                if mutation_class.get("mechanism"):
-                    notes.append(f"Mechanism: {mutation_class['mechanism']}")
-                if mutation_class.get("drugs"):
-                    drugs_str = ", ".join(mutation_class["drugs"][:3])
-                    notes.append(f"Therapeutic options: {drugs_str}")
-            if notes:
-                therapy_note = " | ".join(notes)
-
-        # Create prompt for LLM
-        messages = create_annotation_prompt(
+        # Create research-focused prompt
+        messages = create_research_prompt(
             gene=gene,
             variant=variant,
             tumor_type=tumor_type,
+            biological_context=biological_context,
             evidence_summary=evidence_summary,
-            therapy_note=therapy_note,
+            evidence_gaps=evidence_gaps,
+            literature_summary=literature_summary,
         )
 
         # Call LLM for narrative generation
@@ -108,23 +86,63 @@ class LLMService:
 
             data = json.loads(content)
 
-            # Extract recommended therapies from LLM response
-            therapies = []
-            for therapy_data in data.get("recommended_therapies", []):
-                therapies.append(RecommendedTherapy(
-                    drug_name=therapy_data.get("drug_name", ""),
-                    evidence_level=therapy_data.get("evidence_level"),
-                    approval_status=therapy_data.get("approval_status"),
-                    clinical_context=therapy_data.get("clinical_context"),
-                ))
+            # Build research-focused LLM summary from response components
+            functional_summary = data.get("functional_summary", "")
+            biological_context_text = data.get("biological_context", "")
+            research_implications = data.get("research_implications", "")
 
-            # Build insight with LLM narrative
+            # Combine into a comprehensive summary
+            summary_parts = []
+            if functional_summary:
+                summary_parts.append(f"**Functional Impact:** {functional_summary}")
+            if biological_context_text:
+                summary_parts.append(f"**Biological Context:** {biological_context_text}")
+
+            # Add therapeutic landscape
+            therapeutic = data.get("therapeutic_landscape", {})
+            if therapeutic:
+                therapy_parts = []
+                if therapeutic.get("fda_approved"):
+                    therapy_parts.append(f"FDA-approved: {', '.join(therapeutic['fda_approved'])}")
+                if therapeutic.get("clinical_evidence"):
+                    therapy_parts.append(f"Clinical evidence: {', '.join(therapeutic['clinical_evidence'])}")
+                if therapeutic.get("preclinical"):
+                    therapy_parts.append(f"Preclinical: {', '.join(therapeutic['preclinical'])}")
+                if therapeutic.get("resistance_mechanisms"):
+                    therapy_parts.append(f"Resistance: {', '.join(therapeutic['resistance_mechanisms'])}")
+                if therapy_parts:
+                    summary_parts.append(f"**Therapeutic Landscape:** {'; '.join(therapy_parts)}")
+
+            if research_implications:
+                summary_parts.append(f"**Research Implications:** {research_implications}")
+
+            llm_summary = "\n\n".join(summary_parts) if summary_parts else "No summary available"
+
+            # Extract evidence assessment
+            evidence_assessment = data.get("evidence_assessment", {})
+            evidence_quality = evidence_assessment.get("overall_quality")
+            knowledge_gaps = evidence_assessment.get("knowledge_gaps", [])
+            well_characterized = evidence_assessment.get("well_characterized", [])
+            conflicting_evidence = evidence_assessment.get("conflicting_evidence", [])
+
+            print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
+
+            # Extract evidence tags for transparency
+            evidence_tags = data.get("evidence_tags", [])
+
+            # Build insight with research-focused narrative
             return LLMInsight(
-                llm_summary=data.get("summary", "No summary available"),
-                rationale=data.get("rationale", ""),
+                llm_summary=llm_summary,
+                rationale=research_implications,
                 clinical_trials_available=has_clinical_trials,
-                recommended_therapies=therapies,
-                references=data.get("references", []),
+                therapeutic_evidence=[],  # Therapeutic evidence comes from Evidence.get_therapeutic_evidence()
+                references=data.get("key_references", []),
+                evidence_quality=evidence_quality,
+                knowledge_gaps=knowledge_gaps,
+                well_characterized=well_characterized,
+                conflicting_evidence=conflicting_evidence,
+                research_implications=research_implications,
+                evidence_tags=evidence_tags,
             )
 
         except Exception as e:
@@ -133,7 +151,7 @@ class LLMService:
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
                 rationale=f"LLM narrative generation failed: {str(e)}",
                 clinical_trials_available=has_clinical_trials,
-                recommended_therapies=[],
+                therapeutic_evidence=[],
                 references=[],
             )
 

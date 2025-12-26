@@ -1,7 +1,7 @@
 """Data models for OncoMind."""
 
 from oncomind.models.llm_insight import LLMInsight
-from oncomind.models.recommended_therapies import RecommendedTherapy
+from oncomind.models.therapeutic_evidence import TherapeuticEvidence, RecommendedTherapy
 from oncomind.models.result import Result
 from oncomind.models.evidence import Evidence
 from oncomind.models.evidence.civic import CIViCEvidence
@@ -16,6 +16,7 @@ __all__ = [
     "CIViCEvidence",
     "ClinVarEvidence",
     "COSMICEvidence",
-    "RecommendedTherapy",
+    "TherapeuticEvidence",
+    "RecommendedTherapy",  # Backwards compatibility alias
     "LLMInsight",
 ]
