@@ -20,6 +20,7 @@ class CBioPortalEvidence(BaseModel):
     variant: str | None = None
     tumor_type: str | None = None
     study_id: str | None = None
+    study_name: str | None = None
 
     # Prevalence in tumor type
     total_samples: int = 0
@@ -45,6 +46,7 @@ class CBioPortalEvidence(BaseModel):
             "variant": self.variant,
             "tumor_type": self.tumor_type,
             "study_id": self.study_id,
+            "study_name": self.study_name,
             "total_samples": self.total_samples,
             "samples_with_gene_mutation": self.samples_with_gene_mutation,
             "samples_with_exact_variant": self.samples_with_exact_variant,
@@ -74,11 +76,15 @@ class CBioPortalEvidence(BaseModel):
         # Build source citation that must be used inline with statistics
         tumor_str = self.tumor_type or "pan-cancer"
         study_url = self.get_study_url()
+        study_display = self.study_name or self.study_id
         if study_url:
-            source_cite = f"[cBioPortal: {self.study_id}]({study_url})"
+            source_cite = f"[cBioPortal: {study_display}]({study_url})"
         else:
-            source_cite = f"cBioPortal ({self.study_id})"
+            source_cite = f"cBioPortal ({study_display})"
 
+        # Show study name in cohort description
+        study_desc = f" ({self.study_name})" if self.study_name else ""
+        lines.append(f"Study: {self.study_id}{study_desc}")
         lines.append(f"Cohort: {self.total_samples} {tumor_str} samples")
         lines.append("")
 

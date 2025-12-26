@@ -18,29 +18,16 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
-from oncomind.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.constants import (
+    TUMOR_TYPE_MAPPINGS,
+    CBIOPORTAL_STUDY_MAPPINGS,
+    CBIOPORTAL_DEFAULT_STUDY,
+)
 
 
 class CBioPortalError(Exception):
     """Exception raised for cBioPortal API errors."""
     pass
-
-
-# Map tumor types to cBioPortal study IDs
-TUMOR_STUDY_MAPPINGS: dict[str, list[str]] = {
-    "melanoma": ["skcm_tcga_pan_can_atlas_2018", "mel_ucla_2016", "skcm_mskcc_2014"],
-    "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018", "nsclc_tcga_broad_2016"],
-    "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
-    "colorectal": ["coadread_tcga_pan_can_atlas_2018", "crc_msk_2017"],
-    "breast": ["brca_tcga_pan_can_atlas_2018", "breast_msk_2018"],
-    "pancreatic": ["paad_tcga_pan_can_atlas_2018"],
-    "glioblastoma": ["gbm_tcga_pan_can_atlas_2018"],
-    "ovarian": ["ov_tcga_pan_can_atlas_2018"],
-    "prostate": ["prad_tcga_pan_can_atlas_2018"],
-    "bladder": ["blca_tcga_pan_can_atlas_2018"],
-    "thyroid": ["thca_tcga_pan_can_atlas_2018"],
-    "gist": ["gist_mskcc"],
-}
 
 
 @dataclass
@@ -65,6 +52,9 @@ class CoMutationData:
     # Mutually exclusive mutations (genes rarely mutated together)
     mutually_exclusive: list[dict[str, Any]]  # [{gene, count, pct, odds_ratio}]
 
+    # Study metadata (optional, fetched separately)
+    study_name: str | None = None
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -72,6 +62,7 @@ class CoMutationData:
             "variant": self.variant,
             "tumor_type": self.tumor_type,
             "study_id": self.study_id,
+            "study_name": self.study_name,
             "total_samples": self.total_samples,
             "samples_with_gene_mutation": self.samples_with_gene_mutation,
             "samples_with_exact_variant": self.samples_with_exact_variant,
@@ -129,22 +120,22 @@ class CBioPortalClient:
         """Get study IDs for a tumor type."""
         if not tumor_type:
             # Default to pan-cancer studies
-            return ["msk_impact_2017"]
+            return [CBIOPORTAL_DEFAULT_STUDY]
 
         tumor_lower = tumor_type.lower()
 
-        # Direct match
-        if tumor_lower in TUMOR_STUDY_MAPPINGS:
-            return TUMOR_STUDY_MAPPINGS[tumor_lower]
+        # Direct match in cBioPortal study mappings
+        if tumor_lower in CBIOPORTAL_STUDY_MAPPINGS:
+            return CBIOPORTAL_STUDY_MAPPINGS[tumor_lower]
 
-        # Check mappings
+        # Check tumor type aliases (e.g., "nsclc" -> "lung")
         for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
             if tumor_lower == abbrev or any(tumor_lower in name for name in full_names):
-                if abbrev in TUMOR_STUDY_MAPPINGS:
-                    return TUMOR_STUDY_MAPPINGS[abbrev]
+                if abbrev in CBIOPORTAL_STUDY_MAPPINGS:
+                    return CBIOPORTAL_STUDY_MAPPINGS[abbrev]
 
         # Fallback to MSK-IMPACT pan-cancer
-        return ["msk_impact_2017"]
+        return [CBIOPORTAL_DEFAULT_STUDY]
 
     async def _get_entrez_id(self, gene: str) -> int | None:
         """Get Entrez gene ID from gene symbol."""
@@ -199,6 +190,19 @@ class CBioPortalClient:
         except Exception:
             return 0
 
+    async def _get_study_name(self, study_id: str) -> str | None:
+        """Get the full study name from study ID."""
+        client = self._get_client()
+
+        try:
+            response = await client.get(f"{self.BASE_URL}/studies/{study_id}")
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("name")
+        except Exception:
+            pass
+        return None
+
     async def fetch_co_mutation_data(
         self,
         gene: str,
@@ -245,10 +249,11 @@ class CBioPortalClient:
         if not query_mutations:
             return None
 
-        # Get total sample count
+        # Get study metadata (sample count and name)
         total_samples = await self._get_sample_count(study_id)
         if total_samples == 0:
             total_samples = 500  # Fallback estimate
+        study_name = await self._get_study_name(study_id)
 
         # Build sample sets
         samples_with_gene = set()
@@ -342,6 +347,7 @@ class CBioPortalClient:
             variant_prevalence_pct=round(100 * len(samples_with_variant) / total_samples, 1) if variant else 0,
             co_occurring=co_occurring[:10],  # Top 10
             mutually_exclusive=mutually_exclusive[:10],  # Top 10
+            study_name=study_name,
         )
 
     async def close(self) -> None:
