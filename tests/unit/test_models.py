@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from oncomind.models.llm_insight import LLMInsight
-from oncomind.models import RecommendedTherapy
+from oncomind.models import TherapeuticEvidence, RecommendedTherapy
 from oncomind.models.evidence import CIViCEvidence, VICCEvidence
 from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
 from oncomind.models.variant import VariantInput
@@ -149,10 +149,12 @@ class TestLLMInsight:
         insight = LLMInsight(
             llm_summary="Test summary",
             rationale="Test rationale",
-            recommended_therapies=[therapy],
+            therapeutic_evidence=[therapy],
         )
+        assert len(insight.therapeutic_evidence) == 1
+        assert insight.therapeutic_evidence[0].drug_name == "Vemurafenib"
+        # Backwards compatibility alias
         assert len(insight.recommended_therapies) == 1
-        assert insight.recommended_therapies[0].drug_name == "Vemurafenib"
 
     def test_insight_defaults(self):
         """Test LLMInsight default values."""

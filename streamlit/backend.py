@@ -126,6 +126,10 @@ def _build_response(result) -> Dict[str, Any]:
     llm = result.llm  # May be None if LLM was not enabled
     evidence = result.evidence  # Evidence object with flat list structure
 
+    # Get therapeutic evidence - always use evidence.get_therapeutic_evidence() as primary source
+    # LLM therapeutic_evidence is typically empty since the LLM doesn't populate it
+    therapeutic_list = evidence.get_therapeutic_evidence()
+
     return {
         "variant": {
             "gene": result.identifiers.gene,
@@ -136,6 +140,14 @@ def _build_response(result) -> Dict[str, Any]:
             "summary": result.get_summary(),  # Always 1-line summary
             "llm_narrative": llm.llm_summary if llm else None,  # LLM insight when available
             "rationale": llm.rationale if llm else None,
+            # Research-focused fields
+            "evidence_quality": llm.evidence_quality if llm else None,
+            "knowledge_gaps": llm.knowledge_gaps if llm else [],
+            "well_characterized": llm.well_characterized if llm else [],
+            "conflicting_evidence": llm.conflicting_evidence if llm else [],
+            "research_implications": llm.research_implications if llm else None,
+            "references": llm.references if llm else [],
+            "evidence_tags": llm.evidence_tags if llm else [],
         },
         "identifiers": {
             "cosmic_id": result.identifiers.cosmic_id,
@@ -300,8 +312,14 @@ def _build_response(result) -> Dict[str, Any]:
                 "evidence_level": t.evidence_level,
                 "approval_status": t.approval_status,
                 "clinical_context": t.clinical_context,
+                # New research-focused fields
+                "response_type": t.response_type,
+                "mechanism": t.mechanism,
+                "tumor_types_tested": t.tumor_types_tested,
+                "source": t.source,
+                "confidence": t.confidence,
             }
-            for t in (llm.recommended_therapies if llm else evidence.get_recommended_therapies())
+            for t in therapeutic_list
         ],
         "result_data": result.model_dump(mode="json"),
     }

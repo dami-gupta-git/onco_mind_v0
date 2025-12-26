@@ -206,8 +206,7 @@ with tab1:
             ])
             if has_functional:
                 tab_names.append("Functional")
-            if fda_approvals:
-                tab_names.append(f"FDA ({len(fda_approvals)})")
+            # FDA tab removed - now shown in Therapeutic Evidence section below
             if civic_assertions or civic_evidence:
                 tab_names.append(f"CIViC ({len(civic_assertions) + len(civic_evidence)})")
             if vicc:
@@ -226,6 +225,11 @@ with tab1:
                 tab_names.append(f"Research ({len(preclinical) + len(early_phase)})")
             if cbioportal:
                 tab_names.append("cBioPortal")
+
+            # Therapeutic Evidence tab - consolidated drug/therapy evidence
+            therapies = result.get('recommended_therapies', [])
+            if therapies:
+                tab_names.append(f"Therapeutic Evidence ({len(therapies)})")
 
             if tab_names:
                 tabs = st.tabs(tab_names)
@@ -252,22 +256,6 @@ with tab1:
                             st.markdown("| Score | Value | Prediction |\n|-------|-------|------------|" + "\n" + "\n".join(rows))
                         else:
                             st.info("No functional scores available")
-                    tab_idx += 1
-
-                # FDA tab
-                if fda_approvals:
-                    with tabs[tab_idx]:
-                        rows = []
-                        for a in fda_approvals:
-                            brand = a.get('brand_name') or a.get('drug_name') or 'Unknown'
-                            generic = a.get('generic_name') or '-'
-                            indication = a.get('indication') or '-'
-                            # Clean up indication text - remove "1 INDICATIONS AND USAGE" prefix
-                            if indication.startswith('1 INDICATIONS AND USAGE'):
-                                indication = indication[23:].strip()
-                            indication = indication[:80] + '...' if len(indication) > 80 else indication
-                            rows.append(f"| {brand} | {generic} | {indication} |")
-                        st.markdown("| Brand | Generic | Indication |\n|-------|---------|------------|" + "\n" + "\n".join(rows))
                     tab_idx += 1
 
                 # CIViC tab
@@ -479,34 +467,139 @@ with tab1:
                             if len(me_rows) > 8:
                                 df_kwargs["height"] = 250
                             st.dataframe(pd.DataFrame(me_rows), **df_kwargs)
+                    tab_idx += 1
+
+                # Therapeutics tab - consolidated drug/therapy evidence
+                if therapies:
+                    with tabs[tab_idx]:
+                        # Group therapies by evidence tier
+                        fda_approved = [t for t in therapies if t.get('evidence_level', '').lower() == 'fda-approved']
+                        clinical = [t for t in therapies if t.get('evidence_level', '').lower() in ('phase 3', 'phase 2', 'phase 1', 'case report')]
+                        preclinical_therapies = [t for t in therapies if t.get('evidence_level', '').lower() in ('preclinical', 'in vitro')]
+
+                        # FDA-Approved therapies
+                        if fda_approved:
+                            st.markdown("**✅ FDA-Approved:**")
+                            fda_rows = []
+                            for t in fda_approved:
+                                drug = t.get('drug_name', 'Unknown')
+                                response = t.get('response_type', '')
+                                source = t.get('source', '')
+                                context = t.get('clinical_context', '') or ''
+                                context = context[:40] + '...' if len(context) > 40 else context
+                                fda_rows.append({
+                                    "Drug": drug,
+                                    "Response": response or "Sensitivity",
+                                    "Context": context,
+                                    "Source": source,
+                                })
+                            st.dataframe(pd.DataFrame(fda_rows), use_container_width=True, hide_index=True)
+
+                        # Clinical trial evidence
+                        if clinical:
+                            if fda_approved:
+                                st.markdown("---")
+                            st.markdown("**🔬 Clinical Evidence:**")
+                            clinical_rows = []
+                            for t in clinical:
+                                drug = t.get('drug_name', 'Unknown')
+                                level = t.get('evidence_level', '')
+                                response = t.get('response_type', '')
+                                source = t.get('source', '')
+                                clinical_rows.append({
+                                    "Drug": drug,
+                                    "Level": level,
+                                    "Response": response or "-",
+                                    "Source": source,
+                                })
+                            st.dataframe(pd.DataFrame(clinical_rows), use_container_width=True, hide_index=True)
+
+                        # Preclinical evidence
+                        if preclinical_therapies:
+                            if fda_approved or clinical:
+                                st.markdown("---")
+                            st.markdown("**🧪 Preclinical:**")
+                            st.warning("⚠️ Preclinical data - not validated in humans")
+                            preclin_rows = []
+                            for t in preclinical_therapies:
+                                drug = t.get('drug_name', 'Unknown')
+                                response = t.get('response_type', '')
+                                source = t.get('source', '')
+                                preclin_rows.append({
+                                    "Drug": drug,
+                                    "Response": response or "-",
+                                    "Source": source,
+                                })
+                            st.dataframe(pd.DataFrame(preclin_rows), use_container_width=True, hide_index=True)
+                    tab_idx += 1
             else:
                 st.info("No evidence found from any source")
 
             # ==============================================
-            # LLM CARDS - After evidence cards
+            # LLM RESEARCH INSIGHT - After evidence tabs
             # ==============================================
             llm_narrative = result['insight'].get('llm_narrative')
-            therapies = result.get('recommended_therapies', [])
-
-            if llm_narrative or therapies:
+            if llm_narrative:
                 st.markdown("---")
-                st.markdown("### 🤖 LLM Analysis")
+                st.markdown("### 🤖 LLM Research Synthesis")
 
-                # LLM Insight card
-                if llm_narrative:
-                    with st.expander("🤖 LLM Insight", expanded=True):
-                        st.markdown(llm_narrative)
+                # Main narrative
+                st.markdown(llm_narrative)
 
-                # Recommended Therapies card
-                if therapies:
-                    with st.expander(f"💊 Recommended Therapies ({len(therapies)})", expanded=True):
-                        table_rows = []
-                        for t in therapies:
-                            drug = t.get('drug_name', 'Unknown')
-                            drug_link = f"[{drug}](https://www.drugs.com/search.php?searchterm={drug.replace(' ', '+')})"
-                            table_rows.append(f"| {drug_link} | {t.get('evidence_level', 'N/A')} | {t.get('approval_status', '')} |")
-                        table_header = "| Drug | Level | Status |\n|------|-------|--------|"
-                        st.markdown(table_header + "\n" + "\n".join(table_rows))
+                # Evidence assessment section
+                st.markdown("#### Evidence Assessment")
+
+                # Evidence quality badge
+                evidence_quality = result['insight'].get('evidence_quality')
+                if evidence_quality:
+                    quality_colors = {
+                        "comprehensive": "🟢",
+                        "moderate": "🟡",
+                        "limited": "🟠",
+                        "minimal": "🔴",
+                    }
+                    badge = quality_colors.get(evidence_quality.lower(), "⚪")
+                    st.markdown(f"**Overall Quality:** {badge} {evidence_quality.capitalize()}")
+
+                # Well-characterized aspects
+                well_characterized = result['insight'].get('well_characterized', [])
+                if well_characterized:
+                    st.markdown("**✅ Well Characterized:**")
+                    for item in well_characterized:
+                        st.markdown(f"- {item}")
+
+                # Knowledge gaps
+                knowledge_gaps = result['insight'].get('knowledge_gaps', [])
+                if knowledge_gaps:
+                    st.markdown("**❓ Knowledge Gaps:**")
+                    for gap in knowledge_gaps:
+                        st.markdown(f"- {gap}")
+
+                # Conflicting evidence
+                conflicting_evidence = result['insight'].get('conflicting_evidence', [])
+                if conflicting_evidence:
+                    st.markdown("**⚠️ Conflicting Evidence:**")
+                    for conflict in conflicting_evidence:
+                        st.markdown(f"- {conflict}")
+
+                # Evidence tags (transparency labels)
+                evidence_tags = result['insight'].get('evidence_tags', [])
+                if evidence_tags:
+                    st.markdown("**🏷️ Evidence Types:**")
+                    tags_str = " · ".join(evidence_tags)
+                    st.caption(tags_str)
+
+                # Research implications
+                research_implications = result['insight'].get('research_implications')
+                if research_implications and research_implications != result['insight'].get('rationale'):
+                    st.markdown(f"**🔬 Research Implications:** {research_implications}")
+
+                # References
+                references = result['insight'].get('references', [])
+                if references:
+                    st.markdown("**📚 Key References:**")
+                    refs_str = ", ".join(references[:5])
+                    st.markdown(f"{refs_str}")
 
             # Download and Clear buttons
             st.markdown("---")
