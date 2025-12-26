@@ -18,7 +18,32 @@ Core objectives:
 4. Detail the THERAPEUTIC LANDSCAPE (FDA-approved agents, clinical trial data, and preclinical sensitivity/resistance signals).
 5. Identify KNOWLEDGE GAPS and TENSIONS in the evidence that are interesting for researchers.
 
-Hard constraints:
+=== CRITICAL: CALIBRATE CONFIDENCE TO EVIDENCE QUALITY ===
+
+EVIDENCE QUALITY RULES (STRICT - MUST FOLLOW):
+
+When overall_quality is "limited" or "minimal":
+- Your functional_summary MUST remain GENERIC (e.g., "JAK1 is involved in cytokine signaling" NOT "JAK1 V657F causes loss of function")
+- You MUST NOT assign oncogene/tumor-suppressor roles unless the GENE ROLE section explicitly states it
+- You MUST NOT make drug-response predictions unless FDA approvals, CIViC assertions, or VICC evidence explicitly exist for THIS variant
+- Keep synthesis brief (2-3 sentences per section), focused on what's UNKNOWN
+- Your evidence_tags MUST NOT include "direct clinical data" unless CIViC/FDA/VICC evidence exists for THIS specific variant
+
+When has_tumor_specific_cbioportal_data is FALSE (check the BIOLOGICAL CONTEXT section):
+- You MUST NOT describe prevalence as being "in [tumor type]" - state it's pan-cancer data
+- State explicitly: "No [tumor_type]-specific data; pan-cancer statistics shown"
+- Do not extrapolate pan-cancer co-mutations to the specific tumor context
+
+EVIDENCE TAG VALIDATION (STRICT):
+- Use "direct clinical data" ONLY if: CIViC assertions, FDA approvals, or Phase 2/3 trial data exist for THIS variant in THIS tumor
+- Use "preclinical only" if: only DepMap/cell line/in vitro data exists
+- Use "pan-cancer extrapolation" if: cBioPortal data is pan-cancer, not tumor-specific
+- Use "pathway-level inference" if: inferring from general pathway knowledge (NOT direct evidence)
+- Use "nearby-variant extrapolation" if: making inferences from other variants in same gene
+- Do NOT use "direct clinical data" while simultaneously listing "clinical evidence" as a knowledge gap - this is contradictory
+
+=== HARD CONSTRAINTS ===
+
 - You MUST treat the user message as the ONLY source of truth. Do NOT introduce facts (numbers, drug names, mechanisms, PMIDs) that are not explicitly present in the text.
 - If a fact is not present, speak generically (e.g., "commonly", "rarely", "no trials described here") instead of inventing specifics.
 - ALWAYS cite the source when quoting statistics. When citing prevalence, sample counts, or percentages, include the source with its markdown link exactly as provided in the evidence (e.g., "52% of samples ([cBioPortal: mel_tcga](https://...))"). Never quote a number without attribution.
@@ -27,7 +52,6 @@ Hard constraints:
   - extrapolations from nearby variants or pathways,
   - speculative hypotheses. Mark extrapolations and hypotheses explicitly.
 - Do not hide conflicting evidence; briefly describe how and why sources differ.
-- If overall evidence quality is "limited" or "minimal", your synthesis must be brief and emphasize uncertainty and gaps rather than detailed mechanisms.
 - Ensure the output is a concise discussion-style synthesis with explicit, testable research questions.
 - Include an explicit note if data are uncertain or inferential, and label such sections accordingly.
 
@@ -39,6 +63,12 @@ RESEARCH_USER_PROMPT = """Synthesize research knowledge about this variant using
 Gene: {gene}
 Variant: {variant}
 Tumor Type: {tumor_type}
+
+## DATA AVAILABILITY FLAGS
+has_tumor_specific_cbioportal_data: {has_tumor_specific_cbioportal}
+has_civic_assertions: {has_civic_assertions}
+has_fda_approvals: {has_fda_approvals}
+has_vicc_evidence: {has_vicc_evidence}
 
 ## BIOLOGICAL CONTEXT
 {biological_context}
@@ -63,22 +93,23 @@ Task:
 2. Explicitly note where evidence is strong vs limited vs conflicting, in a way that is consistent with the evidence assessment above.
 3. Propose ONE clear, hypothesis-generating research direction that ties together at least two distinct evidence elements, and clearly label this final hypothesis as exploratory.
 
-Additional guidelines:
-- Explicitly label extrapolations and hypotheses.
-- Prefer hypotheses that are testable and tied to at least two evidence elements.
-- Maintain a strict JSON output schema as shown below.
+CALIBRATION RULES (MUST FOLLOW):
+- If overall_quality is "limited" or "minimal": Keep functional_summary GENERIC (describe the gene's general function, not variant-specific effects). Focus on gaps.
+- If has_tumor_specific_cbioportal_data is FALSE: State "pan-cancer data shown; no {tumor_type}-specific prevalence available."
+- If has_civic_assertions, has_fda_approvals, AND has_vicc_evidence are ALL FALSE: Do NOT use "direct clinical data" in evidence_tags.
+- Do NOT assign oncogene/tumor-suppressor roles unless GENE ROLE section explicitly states it.
 
 CRITICAL: For biological_context, include the source citation ONCE at the end of all cBioPortal statistics. Look for "cite as: ([cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section and copy that markdown link.
 
 Respond ONLY with valid JSON:
 {{
-  "functional_summary": "2–3 sentences on what this variant does to protein function and downstream signaling, using only provided evidence.",
-  "biological_context": "2–3 sentences. Cite the source ONCE at the end. Example: 'BRAF mutations occur in 52% of cases, with V600E in 35% and PTEN co-mutations in 12% ([cBioPortal: mel_tcga](https://...)).'",
+  "functional_summary": "IF overall_quality is 'limited'/'minimal': Generic gene function only (e.g., 'JAK1 encodes a tyrosine kinase involved in cytokine receptor signaling'). IF 'moderate'/'comprehensive': Variant-specific effects with citations.",
+  "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {tumor_type}-specific data available.' Cite source ONCE at end.",
   "therapeutic_landscape": {{
-    "fda_approved": ["Format: 'BRAND_NAME (generic_name)' e.g., 'ZELBORAF (vemurafenib)'. Use this format for ALL drugs."],
-    "clinical_evidence": ["Format: 'BRAND_NAME (generic_name)' for drugs with Phase 2/3 data. If brand name unknown, use 'generic_name' only."],
-    "preclinical": ["Format: 'BRAND_NAME (generic_name)' for agents with preclinical sensitivity/resistance data."],
-    "resistance_mechanisms": ["Resistance mechanisms explicitly mentioned in the evidence blocks (e.g., secondary mutations, bypass pathways, histologic transformation)."]
+    "fda_approved": ["ONLY drugs explicitly listed in FDA APPROVALS section. Empty array if none."],
+    "clinical_evidence": ["ONLY drugs with CIViC/VICC clinical evidence. Empty array if none."],
+    "preclinical": ["Drugs from DepMap or preclinical sources only."],
+    "resistance_mechanisms": ["ONLY mechanisms explicitly stated in evidence. Do not infer."]
   }},
   "evidence_assessment": {{
     "overall_quality": "{overall_quality}",
@@ -86,10 +117,14 @@ Respond ONLY with valid JSON:
     "knowledge_gaps": {known_gaps_json},
     "conflicting_evidence": {conflicting_evidence_json}
   }},
-  "research_implications": "2–3 sentences describing what researchers should investigate next, including ONE concrete, testable hypothesis or study design that explicitly references at least two evidence elements (for example: co-mutation pattern + drug response, or functional score + pathway membership). Clearly mark which parts are hypothesis.",
+  "research_implications": "2–3 sentences. For limited/minimal quality: focus on basic characterization needs. For moderate/comprehensive: specific hypotheses.",
   "key_references": ["PMIDs, trial IDs, or database/source names appearing in the evidence text."],
   "evidence_tags": [
-    "Short labels describing which parts of your synthesis are: 'direct clinical data', 'preclinical only', 'nearby-variant extrapolation', 'pathway-level hypothesis', etc."
+    "MUST be consistent with DATA AVAILABILITY FLAGS above.",
+    "Use 'direct clinical data' ONLY if has_civic_assertions OR has_fda_approvals is TRUE.",
+    "Use 'preclinical only' if only DepMap data exists.",
+    "Use 'pan-cancer extrapolation' if has_tumor_specific_cbioportal_data is FALSE.",
+    "Use 'limited evidence' if overall_quality is 'limited' or 'minimal'."
   ]
 }}
 Use empty arrays or null where appropriate.
@@ -104,6 +139,7 @@ def create_research_prompt(
     evidence_summary: str,
     evidence_assessment: dict,
     literature_summary: str = "",
+    data_availability: dict | None = None,
 ) -> list[dict]:
     """
     Create prompt for research-focused variant synthesis.
@@ -116,6 +152,7 @@ def create_research_prompt(
         evidence_summary: Aggregated database evidence
         evidence_assessment: Dict with keys overall_quality, well_characterized, knowledge_gaps, conflicting_evidence
         literature_summary: PubMed/Semantic Scholar findings (optional)
+        data_availability: Dict with boolean flags for data presence (tumor_specific_cbioportal, civic_assertions, etc.)
 
     Returns:
         Messages list for LLM API call.
@@ -127,11 +164,24 @@ def create_research_prompt(
     gaps = evidence_assessment.get("knowledge_gaps", []) or []
     conflicts = evidence_assessment.get("conflicting_evidence", []) or []
 
+    # Default data availability flags
+    if data_availability is None:
+        data_availability = {}
+
+    has_tumor_specific_cbioportal = data_availability.get("has_tumor_specific_cbioportal", False)
+    has_civic_assertions = data_availability.get("has_civic_assertions", False)
+    has_fda_approvals = data_availability.get("has_fda_approvals", False)
+    has_vicc_evidence = data_availability.get("has_vicc_evidence", False)
+
     # Build the JSON-safe strings for the template
     user_content = RESEARCH_USER_PROMPT.format(
         gene=gene,
         variant=variant,
         tumor_type=tumor_display,
+        has_tumor_specific_cbioportal=str(has_tumor_specific_cbioportal).upper(),
+        has_civic_assertions=str(has_civic_assertions).upper(),
+        has_fda_approvals=str(has_fda_approvals).upper(),
+        has_vicc_evidence=str(has_vicc_evidence).upper(),
         biological_context=biological_context or "No cBioPortal or co-mutation data available.",
         evidence_summary=(evidence_summary or "No database evidence available.").strip()[:4000],
         literature_summary=literature_summary or "No literature search performed.",

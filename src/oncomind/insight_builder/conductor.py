@@ -199,6 +199,17 @@ class Conductor:
         evidence_gaps = evidence.compute_evidence_gaps()
         evidence_assessment = evidence_gaps.to_dict_for_llm()
 
+        # Compute data availability flags for grounding LLM output
+        tumor_type = evidence.context.tumor_type
+        data_availability = {
+            # Check if cBioPortal data is tumor-specific (not pan-cancer)
+            "has_tumor_specific_cbioportal": _check_tumor_specific_cbioportal(evidence, tumor_type),
+            # Check if we have curated clinical evidence
+            "has_civic_assertions": bool(evidence.civic_assertions),
+            "has_fda_approvals": bool(evidence.fda_approvals),
+            "has_vicc_evidence": bool(evidence.vicc_evidence),
+        }
+
         # Generate LLM insight with research-focused prompt
         return await llm_service.get_llm_insight(
             gene=evidence.identifiers.gene,
@@ -209,7 +220,66 @@ class Conductor:
             evidence_assessment=evidence_assessment,
             literature_summary=literature_summary,
             has_clinical_trials=bool(evidence.clinical_trials),
+            data_availability=data_availability,
         )
+
+
+def _check_tumor_specific_cbioportal(evidence, tumor_type: str | None) -> bool:
+    """Check if cBioPortal data is tumor-specific (not pan-cancer).
+
+    Returns True if:
+    - tumor_type was requested AND
+    - cBioPortal data exists AND
+    - The study appears to be tumor-specific (not pan-cancer)
+    """
+    if not tumor_type:
+        return False
+
+    if not evidence.cbioportal_evidence or not evidence.cbioportal_evidence.has_data():
+        return False
+
+    # Check if the study_id suggests tumor-specific data
+    study_id = evidence.cbioportal_evidence.study_id or ""
+    study_lower = study_id.lower()
+
+    # Pan-cancer indicators
+    pan_cancer_indicators = [
+        "pan_cancer", "pancancer", "all_tcga", "msk_impact",
+        "mixed", "combined", "multi"
+    ]
+
+    # If study name suggests pan-cancer, return False
+    if any(indicator in study_lower for indicator in pan_cancer_indicators):
+        return False
+
+    # Check if tumor_type appears in the study_id
+    tumor_lower = tumor_type.lower().replace(" ", "_")
+    tumor_words = tumor_type.lower().split()
+
+    # Common tumor type abbreviations mapping
+    tumor_abbreviations = {
+        "melanoma": ["mel", "skcm"],
+        "lung": ["luad", "lusc", "nsclc"],
+        "breast": ["brca"],
+        "colorectal": ["crc", "coad", "read"],
+        "pancreatic": ["paad", "pdac"],
+        "ovarian": ["ov"],
+        "glioblastoma": ["gbm"],
+        "leukemia": ["laml", "aml"],
+        "myeloproliferative": ["mpn"],
+    }
+
+    # Check if any tumor word or abbreviation appears in study_id
+    for word in tumor_words:
+        if word in study_lower:
+            return True
+
+    for tumor_key, abbrevs in tumor_abbreviations.items():
+        if tumor_key in tumor_lower:
+            if any(abbrev in study_lower for abbrev in abbrevs):
+                return True
+
+    return False
 
 
 async def conduct(
