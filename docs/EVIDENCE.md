@@ -6,18 +6,174 @@ This document describes each external data source OncoMind fetches from, what da
 
 ## Table of Contents
 
-1. [MyVariant.info](#myvariantinfo)
-2. [CIViC (Clinical Interpretation of Variants in Cancer)](#civic)
-3. [VICC MetaKB](#vicc-metakb)
-4. [CGI (Cancer Genome Interpreter)](#cgi)
-5. [FDA OpenFDA](#fda-openfda)
-6. [ClinicalTrials.gov](#clinicaltrialsgov)
-7. [Ensembl VEP](#ensembl-vep)
-8. [Semantic Scholar](#semantic-scholar)
-9. [PubMed](#pubmed)
-10. [OncoTree](#oncotree)
-11. [cBioPortal](#cbioportal)
-12. [DepMap (Cancer Dependency Map)](#depmap)
+1. [Functional Annotations](#functional-annotations) ← **Computational pathogenicity predictions**
+2. [MyVariant.info](#myvariantinfo)
+3. [CIViC (Clinical Interpretation of Variants in Cancer)](#civic)
+4. [VICC MetaKB](#vicc-metakb)
+5. [CGI (Cancer Genome Interpreter)](#cgi)
+6. [FDA OpenFDA](#fda-openfda)
+7. [ClinicalTrials.gov](#clinicaltrialsgov)
+8. [Ensembl VEP](#ensembl-vep)
+9. [Semantic Scholar](#semantic-scholar)
+10. [PubMed](#pubmed)
+11. [OncoTree](#oncotree)
+12. [cBioPortal](#cbioportal)
+13. [DepMap (Cancer Dependency Map)](#depmap)
+
+---
+
+## Functional Annotations
+
+**Purpose:** Computational pathogenicity predictions and population frequency data displayed in the UI "Functional" tab.
+
+### Data Source
+
+All functional annotations are fetched from **MyVariant.info** API, which aggregates data from:
+- **dbNSFP** (AlphaMissense, PolyPhen2, SIFT, CADD)
+- **gnomAD** (population allele frequencies)
+- **SnpEff** (variant effect predictions)
+
+Fallback: When MyVariant.info returns no data, **Ensembl VEP** provides AlphaMissense, PolyPhen2, and SIFT predictions.
+
+### Fields Retrieved
+
+| Field | Source | MyVariant.info Path | Description |
+|-------|--------|---------------------|-------------|
+| AlphaMissense Score | dbNSFP | `dbnsfp.alphamissense.score` | Pathogenicity score (0-1), higher = more pathogenic |
+| AlphaMissense Prediction | dbNSFP | `dbnsfp.alphamissense.pred` | P = Pathogenic, B = Benign, A = Ambiguous |
+| PolyPhen2 Prediction | dbNSFP | `dbnsfp.polyphen2.hdiv.pred` | D = Damaging, P = Possibly damaging, B = Benign |
+| PolyPhen2 Score | dbNSFP | `dbnsfp.polyphen2.hdiv.score` | Score (0-1), higher = more damaging |
+| SIFT Prediction | dbNSFP | `dbnsfp.sift.pred` | D = Deleterious, T = Tolerated |
+| SIFT Score | dbNSFP | `dbnsfp.sift.score` | Score (0-1), lower = more deleterious |
+| CADD PHRED | dbNSFP | `dbnsfp.cadd.phred` | PHRED-scaled score (>20 = top 1% deleterious) |
+| gnomAD Exome AF | gnomAD | `gnomad_exome.af.af` | Population allele frequency in gnomAD exomes |
+| gnomAD Genome AF | gnomAD | `gnomad_genome.af.af` | Population allele frequency in gnomAD genomes |
+| SnpEff Effect | SnpEff | `snpeff.ann[].effect` | Predicted variant effect (e.g., missense_variant) |
+| SnpEff Impact | SnpEff | `snpeff.ann[].impact` | Impact level: HIGH, MODERATE, LOW, MODIFIER |
+
+### Interpretation Guide
+
+#### AlphaMissense
+- **P (Pathogenic)**: Score ≥ 0.564 — likely pathogenic
+- **A (Ambiguous)**: Score 0.340–0.564 — uncertain significance
+- **B (Benign)**: Score < 0.340 — likely benign
+
+#### PolyPhen2 (HumDiv)
+- **D (Probably Damaging)**: Score ≥ 0.909
+- **P (Possibly Damaging)**: Score 0.447–0.909
+- **B (Benign)**: Score < 0.447
+
+#### SIFT
+- **D (Deleterious)**: Score ≤ 0.05
+- **T (Tolerated)**: Score > 0.05
+
+#### CADD PHRED Score
+- **≥ 30**: Top 0.1% most deleterious
+- **≥ 20**: Top 1% most deleterious
+- **≥ 10**: Top 10% most deleterious
+
+#### gnomAD Allele Frequency
+- **< 0.01%**: Rare (potential somatic or germline pathogenic)
+- **0.01-1%**: Low frequency
+- **> 1%**: Common (likely benign polymorphism)
+
+### UI Display
+
+The "Functional" tab displays these fields in a condensed format:
+
+| UI Label | Field | Example Display |
+|----------|-------|-----------------|
+| AlphaMissense | score, prediction | `0.985, P` |
+| PolyPhen2 | score, prediction | `0.99, D` |
+| gnomAD AF | gnomad_exome_af | `3.98e-06, Rare` |
+| SnpEff | effect | `missense_variant` |
+
+### How Functional Data is Used
+
+#### 1. Evidence Gap Detection
+
+Functional scores are used to detect evidence gaps in `gap_detector.py`:
+
+```python
+has_functional = (
+    evidence.functional.alphamissense_score is not None or
+    evidence.functional.cadd_score is not None or
+    evidence.functional.polyphen2_prediction is not None
+)
+
+if has_functional:
+    well_characterized.append("computational pathogenicity")
+else:
+    gaps.append(EvidenceGap(
+        category=GapCategory.FUNCTIONAL,
+        severity=GapSeverity.SIGNIFICANT,
+        description=f"No computational pathogenicity predictions for {gene} {variant}",
+        suggested_studies=["Run AlphaMissense, CADD, PolyPhen2"],
+        addressable_with=["MyVariant.info", "VEP"]
+    ))
+```
+
+#### 2. LLM Context
+
+Functional data informs the LLM's `functional_summary` output. The LLM uses these scores to:
+
+- **Calibrate confidence**: Strong pathogenicity predictions (AlphaMissense P, PolyPhen2 D) support functional impact claims
+- **Flag discordance**: When predictions disagree (e.g., AlphaMissense P but SIFT Tolerated), the LLM notes this as a conflict
+- **Support rarity**: Rare gnomAD AF (< 0.01%) supports the variant being a somatic driver
+
+The `FunctionalScores.get_pathogenicity_summary()` method generates a compact summary:
+
+```
+AlphaMissense: Pathogenic (0.99) | CADD: 32.5 | PolyPhen2: probably_damaging | SIFT: deleterious
+```
+
+#### 3. Evidence Quality Assessment
+
+Functional predictions contribute to the overall evidence quality score:
+
+| Has Functional Data | Contribution |
+|---------------------|--------------|
+| Yes | "computational pathogenicity" added to `well_characterized` |
+| No | SIGNIFICANT gap flagged, lowers evidence quality |
+
+### Data Model
+
+Functional scores are stored in the `FunctionalScores` model ([evidence.py:78](src/oncomind/models/evidence/evidence.py#L78)):
+
+```python
+class FunctionalScores(BaseModel):
+    # AlphaMissense
+    alphamissense_score: float | None
+    alphamissense_prediction: str | None  # P/B/A
+
+    # CADD
+    cadd_score: float | None  # PHRED score
+    cadd_raw: float | None
+
+    # PolyPhen2
+    polyphen2_prediction: str | None
+    polyphen2_score: float | None
+
+    # SIFT
+    sift_prediction: str | None
+    sift_score: float | None
+
+    # SnpEff
+    snpeff_effect: str | None
+    snpeff_impact: str | None  # HIGH/MODERATE/LOW/MODIFIER
+
+    # Population frequencies
+    gnomad_exome_af: float | None
+    gnomad_genome_af: float | None
+```
+
+### Code References
+
+- **Extraction from MyVariant**: [myvariant.py:420-482](src/oncomind/api/myvariant.py#L420-L482)
+- **VEP fallback**: [myvariant.py:784-815](src/oncomind/api/myvariant.py#L784-L815)
+- **FunctionalScores model**: [evidence.py:78-128](src/oncomind/models/evidence/evidence.py#L78-L128)
+- **Gap detection**: [gap_detector.py:33-50](src/oncomind/insight_builder/gap_detector.py#L33-L50)
+- **Evidence aggregation**: [evidence_aggregator.py:492-505](src/oncomind/insight_builder/evidence_aggregator.py#L492-L505)
 
 ---
 
