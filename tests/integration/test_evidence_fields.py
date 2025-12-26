@@ -19,6 +19,19 @@ from oncomind.models.evidence import (
     FDAApproval,
     CIViCAssertionEvidence,
 )
+from oncomind.models.evidence.cbioportal import CBioPortalEvidence, CoMutationEntry
+from oncomind.models.evidence.depmap import (
+    DepMapEvidence,
+    GeneDependency,
+    DrugSensitivity,
+    CellLineModel,
+)
+from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+from oncomind.models.evidence.clinvar import ClinVarEvidence
+from oncomind.models.evidence.cosmic import COSMICEvidence
+from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
+from oncomind.models.evidence.pubmed import PubMedEvidence
+from oncomind.api.cgi import CGIBiomarker
 from backend import get_variant_insight
 
 
@@ -351,7 +364,7 @@ class TestBackendEvidenceStructure:
 
         assert "error" not in result
 
-        # All evidence types should be present (even if empty lists)
+        # All evidence types should be present (even if empty lists/None)
         expected_keys = [
             "fda_approvals",
             "civic_assertions",
@@ -364,6 +377,8 @@ class TestBackendEvidenceStructure:
             "pubmed_articles",
             "preclinical_biomarkers",
             "early_phase_biomarkers",
+            "cbioportal_evidence",
+            "depmap_evidence",
         ]
 
         for key in expected_keys:
@@ -402,3 +417,543 @@ class TestBackendEvidenceStructure:
 
         # BRAF V600E is well-characterized in VICC
         assert len(vicc_evidence) >= 1, "BRAF V600E should have VICC evidence"
+
+
+class TestCBioPortalEvidenceFields:
+    """Tests for cBioPortal evidence model fields."""
+
+    def test_cbioportal_evidence_creation(self):
+        """Test creating CBioPortalEvidence model."""
+        evidence = CBioPortalEvidence(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            study_id="skcm_tcga_pan_can_atlas_2018",
+            study_name="Skin Cutaneous Melanoma (TCGA, PanCancer Atlas)",
+            total_samples=449,
+            samples_with_gene_mutation=230,
+            samples_with_exact_variant=217,
+            gene_prevalence_pct=51.2,
+            variant_prevalence_pct=48.3,
+            co_occurring=[CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)],
+            mutually_exclusive=[CoMutationEntry(gene="NRAS", count=2, pct=0.9, odds_ratio=0.08)],
+        )
+
+        assert evidence.gene == "BRAF"
+        assert evidence.variant == "V600E"
+        assert evidence.total_samples == 449
+        assert evidence.gene_prevalence_pct == 51.2
+        assert len(evidence.co_occurring) == 1
+        assert len(evidence.mutually_exclusive) == 1
+
+    def test_cbioportal_evidence_has_data(self):
+        """Test has_data method."""
+        evidence_with_data = CBioPortalEvidence(gene="BRAF", total_samples=449)
+        evidence_no_data = CBioPortalEvidence(gene="BRAF", total_samples=0)
+
+        assert evidence_with_data.has_data() is True
+        assert evidence_no_data.has_data() is False
+
+    def test_cbioportal_evidence_get_study_url(self):
+        """Test study URL generation."""
+        evidence = CBioPortalEvidence(
+            gene="BRAF",
+            study_id="skcm_tcga_pan_can_atlas_2018",
+        )
+
+        url = evidence.get_study_url()
+        assert url == "https://www.cbioportal.org/study/summary?id=skcm_tcga_pan_can_atlas_2018"
+
+    def test_cbioportal_evidence_study_url_none(self):
+        """Test study URL is None when no study_id."""
+        evidence = CBioPortalEvidence(gene="BRAF")
+        assert evidence.get_study_url() is None
+
+    def test_co_mutation_entry_creation(self):
+        """Test creating CoMutationEntry."""
+        entry = CoMutationEntry(
+            gene="TP53",
+            count=28,
+            pct=12.9,
+            odds_ratio=1.56,
+        )
+
+        assert entry.gene == "TP53"
+        assert entry.count == 28
+        assert entry.pct == 12.9
+        assert entry.odds_ratio == 1.56
+
+    def test_co_mutation_entry_defaults(self):
+        """Test CoMutationEntry default values."""
+        entry = CoMutationEntry(gene="TP53")
+
+        assert entry.count == 0
+        assert entry.pct == 0.0
+        assert entry.odds_ratio is None
+
+    def test_cbioportal_evidence_to_dict(self):
+        """Test converting to dictionary."""
+        evidence = CBioPortalEvidence(
+            gene="BRAF",
+            variant="V600E",
+            study_id="skcm_tcga",
+            total_samples=449,
+        )
+
+        result = evidence.to_dict()
+
+        assert result["gene"] == "BRAF"
+        assert result["variant"] == "V600E"
+        assert result["study_id"] == "skcm_tcga"
+        assert result["total_samples"] == 449
+
+    def test_cbioportal_evidence_to_prompt_context(self):
+        """Test generating LLM prompt context."""
+        evidence = CBioPortalEvidence(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            study_id="skcm_tcga",
+            study_name="TCGA Melanoma",
+            total_samples=449,
+            samples_with_gene_mutation=230,
+            gene_prevalence_pct=51.2,
+            co_occurring=[CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)],
+        )
+
+        context = evidence.to_prompt_context()
+
+        assert "BRAF" in context
+        assert "51.2%" in context
+        assert "CDKN2A" in context
+        assert "cBioPortal" in context
+
+    def test_cbioportal_evidence_no_data_prompt(self):
+        """Test prompt context when no data available."""
+        evidence = CBioPortalEvidence(gene="BRAF", total_samples=0)
+
+        context = evidence.to_prompt_context()
+
+        assert "No cBioPortal data available" in context
+
+
+class TestCBioPortalBackendIntegration:
+    """Integration tests for cBioPortal evidence from backend."""
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_returns_cbioportal_evidence(self):
+        """Backend should return cbioportal_evidence in response."""
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        assert "cbioportal_evidence" in result
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_cbioportal_evidence_structure(self):
+        """Backend cbioportal_evidence should have expected structure."""
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        cbio_evidence = result.get("cbioportal_evidence")
+
+        # May be None if no data available
+        if cbio_evidence is not None:
+            # Verify expected fields exist
+            assert "gene" in cbio_evidence
+            assert "total_samples" in cbio_evidence
+            assert "gene_prevalence_pct" in cbio_evidence
+            assert "co_occurring" in cbio_evidence
+            assert "mutually_exclusive" in cbio_evidence
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_cbioportal_braf_melanoma_has_data(self):
+        """BRAF V600E in Melanoma should have cBioPortal data."""
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        cbio_evidence = result.get("cbioportal_evidence")
+
+        # BRAF is very common in melanoma - should have data
+        if cbio_evidence is not None:
+            assert cbio_evidence["gene"] == "BRAF"
+            assert cbio_evidence["total_samples"] > 0
+            # BRAF prevalence in melanoma is typically >40%
+            assert cbio_evidence["gene_prevalence_pct"] > 30
+
+
+class TestDepMapEvidenceFields:
+    """Tests for DepMap evidence model fields."""
+
+    def test_depmap_evidence_creation(self):
+        """Test creating DepMapEvidence model."""
+        evidence = DepMapEvidence(
+            gene="BRAF",
+            variant="V600E",
+            gene_dependency=GeneDependency(
+                gene="BRAF",
+                mean_dependency_score=-0.75,
+                n_dependent_lines=150,
+                n_total_lines=500,
+                dependency_pct=30.0,
+            ),
+        )
+
+        assert evidence.gene == "BRAF"
+        assert evidence.variant == "V600E"
+        assert evidence.gene_dependency is not None
+        assert evidence.gene_dependency.mean_dependency_score == -0.75
+
+    def test_depmap_evidence_has_data(self):
+        """Test has_data method."""
+        evidence_with_data = DepMapEvidence(
+            gene="BRAF",
+            gene_dependency=GeneDependency(gene="BRAF", mean_dependency_score=-0.5),
+        )
+        evidence_no_data = DepMapEvidence(gene="BRAF")
+
+        assert evidence_with_data.has_data() is True
+        assert evidence_no_data.has_data() is False
+
+    def test_depmap_evidence_is_essential(self):
+        """Test is_essential method."""
+        essential = DepMapEvidence(
+            gene="BRAF",
+            gene_dependency=GeneDependency(gene="BRAF", mean_dependency_score=-0.75),
+        )
+        not_essential = DepMapEvidence(
+            gene="BRAF",
+            gene_dependency=GeneDependency(gene="BRAF", mean_dependency_score=-0.2),
+        )
+
+        assert essential.is_essential() is True
+        assert not_essential.is_essential() is False
+
+    def test_gene_dependency_creation(self):
+        """Test creating GeneDependency model."""
+        dependency = GeneDependency(
+            gene="BRAF",
+            mean_dependency_score=-0.65,
+            n_dependent_lines=120,
+            n_total_lines=450,
+            dependency_pct=26.7,
+            top_dependent_lines=["A375", "SK-MEL-28"],
+        )
+
+        assert dependency.gene == "BRAF"
+        assert dependency.mean_dependency_score == -0.65
+        assert len(dependency.top_dependent_lines) == 2
+
+    def test_drug_sensitivity_creation(self):
+        """Test creating DrugSensitivity model."""
+        sensitivity = DrugSensitivity(
+            drug_name="Vemurafenib",
+            ic50_nm=50.5,
+            auc=0.35,
+            z_score=-2.1,
+            n_cell_lines=25,
+            sensitive_lines=["A375", "SK-MEL-28"],
+        )
+
+        assert sensitivity.drug_name == "Vemurafenib"
+        assert sensitivity.ic50_nm == 50.5
+        assert sensitivity.auc == 0.35
+
+    def test_cell_line_model_creation(self):
+        """Test creating CellLineModel."""
+        cell_line = CellLineModel(
+            name="A375",
+            ccle_name="A375_SKIN",
+            primary_disease="Melanoma",
+            subtype="Cutaneous",
+            has_mutation=True,
+            mutation_details="BRAF V600E",
+        )
+
+        assert cell_line.name == "A375"
+        assert cell_line.has_mutation is True
+        assert cell_line.mutation_details == "BRAF V600E"
+
+    def test_depmap_evidence_to_dict(self):
+        """Test converting DepMapEvidence to dictionary."""
+        evidence = DepMapEvidence(
+            gene="BRAF",
+            variant="V600E",
+            gene_dependency=GeneDependency(
+                gene="BRAF",
+                mean_dependency_score=-0.65,
+            ),
+        )
+
+        result = evidence.to_dict()
+
+        assert result["gene"] == "BRAF"
+        assert result["variant"] == "V600E"
+        assert result["gene_dependency"] is not None
+
+    def test_depmap_evidence_to_prompt_context(self):
+        """Test generating LLM prompt context."""
+        evidence = DepMapEvidence(
+            gene="BRAF",
+            gene_dependency=GeneDependency(
+                gene="BRAF",
+                mean_dependency_score=-0.75,
+                n_dependent_lines=150,
+                n_total_lines=500,
+                dependency_pct=30.0,
+            ),
+            drug_sensitivities=[
+                DrugSensitivity(drug_name="Vemurafenib", ic50_nm=50.0, n_cell_lines=20),
+            ],
+        )
+
+        context = evidence.to_prompt_context()
+
+        assert "BRAF" in context
+        assert "ESSENTIAL" in context or "-0.75" in context
+        assert "DepMap" in context
+
+    def test_depmap_evidence_no_data_prompt(self):
+        """Test prompt context when no data available."""
+        evidence = DepMapEvidence(gene="BRAF")
+
+        context = evidence.to_prompt_context()
+
+        assert "No DepMap" in context
+
+
+class TestDepMapBackendIntegration:
+    """Integration tests for DepMap evidence from backend."""
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_returns_depmap_evidence(self):
+        """Backend should return depmap_evidence in response."""
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600E",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        assert "depmap_evidence" in result
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_depmap_evidence_structure(self):
+        """Backend depmap_evidence should have expected structure when present."""
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600E",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        depmap_evidence = result.get("depmap_evidence")
+
+        # May be None if no data available
+        if depmap_evidence is not None:
+            # Verify expected fields exist
+            assert "gene" in depmap_evidence
+            assert "gene_dependency" in depmap_evidence
+            assert "drug_sensitivities" in depmap_evidence
+            assert "cell_line_models" in depmap_evidence
+            assert "is_essential" in depmap_evidence
+
+
+class TestCGIBiomarkerFields:
+    """Tests for CGI biomarker model fields."""
+
+    def test_cgi_biomarker_creation(self):
+        """Test creating CGIBiomarker model."""
+        biomarker = CGIBiomarker(
+            gene="EGFR",
+            alteration="EGFR:G719S",
+            drug="Afatinib",
+            drug_status="Approved",
+            association="Responsive",
+            evidence_level="FDA guidelines",
+            source="FDA",
+            tumor_type="NSCLC",
+            tumor_type_full="Non-small cell lung cancer",
+        )
+
+        assert biomarker.gene == "EGFR"
+        assert biomarker.drug == "Afatinib"
+        assert biomarker.drug_status == "Approved"
+
+    def test_cgi_biomarker_is_fda_approved(self):
+        """Test is_fda_approved method."""
+        approved = CGIBiomarker(
+            gene="EGFR",
+            alteration="EGFR:G719S",
+            drug="Afatinib",
+            drug_status="Approved",
+            association="Responsive",
+            evidence_level="FDA guidelines",
+            source="FDA",
+            tumor_type="NSCLC",
+            tumor_type_full="Non-small cell lung cancer",
+        )
+
+        assert approved.is_fda_approved() is True
+
+
+class TestClinVarEvidenceFields:
+    """Tests for ClinVar evidence model fields."""
+
+    def test_clinvar_evidence_creation(self):
+        """Test creating ClinVarEvidence model."""
+        evidence = ClinVarEvidence(
+            clinical_significance="Pathogenic",
+            conditions=["Melanoma"],
+            review_status="criteria provided, multiple submitters, no conflicts",
+            variation_id="12345",
+        )
+
+        assert evidence.clinical_significance == "Pathogenic"
+        assert "Melanoma" in evidence.conditions
+
+    def test_clinvar_evidence_defaults(self):
+        """Test ClinVarEvidence default values."""
+        evidence = ClinVarEvidence()
+
+        assert evidence.clinical_significance is None
+        assert evidence.conditions == []
+
+
+class TestCOSMICEvidenceFields:
+    """Tests for COSMIC evidence model fields."""
+
+    def test_cosmic_evidence_creation(self):
+        """Test creating COSMICEvidence model."""
+        evidence = COSMICEvidence(
+            mutation_id="COSM476",
+            primary_site="skin",
+            sample_count=1500,
+        )
+
+        assert evidence.mutation_id == "COSM476"
+        assert evidence.sample_count == 1500
+
+    def test_cosmic_evidence_defaults(self):
+        """Test COSMICEvidence default values."""
+        evidence = COSMICEvidence()
+
+        assert evidence.mutation_id is None
+        assert evidence.sample_count is None
+
+
+class TestClinicalTrialEvidenceFields:
+    """Tests for ClinicalTrialEvidence model fields."""
+
+    def test_clinical_trial_evidence_creation(self):
+        """Test creating ClinicalTrialEvidence model."""
+        trial = ClinicalTrialEvidence(
+            nct_id="NCT12345678",
+            title="BRAF V600E Melanoma Trial",
+            phase="Phase 3",
+            status="Recruiting",
+            interventions=["Vemurafenib"],
+            conditions=["Melanoma"],
+            url="https://clinicaltrials.gov/ct2/show/NCT12345678",
+        )
+
+        assert trial.nct_id == "NCT12345678"
+        assert trial.phase == "Phase 3"
+
+    def test_clinical_trial_is_phase2_or_later(self):
+        """Test is_phase2_or_later method."""
+        phase3 = ClinicalTrialEvidence(
+            nct_id="NCT123",
+            title="Test",
+            status="Recruiting",
+            phase="PHASE3",
+            url="https://example.com",
+        )
+        phase1 = ClinicalTrialEvidence(
+            nct_id="NCT456",
+            title="Test",
+            status="Recruiting",
+            phase="PHASE1",
+            url="https://example.com",
+        )
+
+        assert phase3.is_phase2_or_later() is True
+        assert phase1.is_phase2_or_later() is False
+
+
+class TestPubMedEvidenceFields:
+    """Tests for PubMed evidence model fields."""
+
+    def test_pubmed_evidence_creation(self):
+        """Test creating PubMedEvidence model."""
+        article = PubMedEvidence(
+            pmid="22735384",
+            title="BRAF V600E in Melanoma",
+            year="2012",
+            journal="NEJM",
+            url="https://pubmed.ncbi.nlm.nih.gov/22735384/",
+        )
+
+        assert article.pmid == "22735384"
+        assert article.year == "2012"
+
+    def test_pubmed_evidence_signal_type(self):
+        """Test signal type methods."""
+        resistance = PubMedEvidence(
+            pmid="123",
+            title="Test",
+            url="https://example.com",
+            signal_type="resistance",
+        )
+        sensitivity = PubMedEvidence(
+            pmid="456",
+            title="Test",
+            url="https://example.com",
+            signal_type="sensitivity",
+        )
+
+        assert resistance.is_resistance_evidence() is True
+        assert resistance.is_sensitivity_evidence() is False
+        assert sensitivity.is_sensitivity_evidence() is True
+        assert sensitivity.is_resistance_evidence() is False
+
+    def test_pubmed_evidence_citation_format(self):
+        """Test format_citation method."""
+        article = PubMedEvidence(
+            pmid="22735384",
+            title="BRAF V600E in Melanoma",
+            authors=["Chapman PB", "Hauschild A"],
+            year="2012",
+            journal="NEJM",
+            url="https://pubmed.ncbi.nlm.nih.gov/22735384/",
+        )
+
+        citation = article.format_citation()
+
+        assert "Chapman PB et al." in citation
+        assert "(2012)" in citation
+        assert "PMID: 22735384" in citation
