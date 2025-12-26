@@ -12,6 +12,10 @@ class FDAApproval(BaseModel):
     gene: str | None = None
     variant_in_indications: bool = False
     variant_in_clinical_studies: bool = False
+    # Additional fields for clinical context
+    companion_diagnostic: str | None = None
+    black_box_warning: str | None = None
+    dosing_for_variant: str | None = None
 
     def parse_indication_for_tumor(self, tumor_type: str) -> dict:
         """Parse FDA indication text to extract line-of-therapy and approval type for a specific tumor."""

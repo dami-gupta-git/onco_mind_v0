@@ -16,3 +16,6 @@ class VICCEvidence(BaseModel):
     is_sensitivity: bool = False
     is_resistance: bool = False
     oncokb_level: str | None = None
+    # Additional fields for molecular profile context
+    molecular_profile: str | None = None
+    molecular_profile_score: float | None = None

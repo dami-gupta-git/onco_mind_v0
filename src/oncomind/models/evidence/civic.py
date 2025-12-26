@@ -12,6 +12,10 @@ class CIViCEvidence(BaseModel):
     description: str | None = None
     source: str | None = None
     rating: int | None = None
+    # Additional fields for provenance
+    pmid: str | None = None
+    source_url: str | None = None
+    trust_rating: int | None = None  # 1-5 star rating
 
 
 

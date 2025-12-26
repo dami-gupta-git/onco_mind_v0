@@ -171,6 +171,9 @@ def _build_response(result) -> Dict[str, Any]:
                 "generic_name": a.generic_name,
                 "indication": a.indication,
                 "approval_date": a.approval_date,
+                "companion_diagnostic": a.companion_diagnostic,
+                "black_box_warning": a.black_box_warning,
+                "dosing_for_variant": a.dosing_for_variant,
             }
             for a in evidence.fda_approvals
         ],
@@ -194,6 +197,9 @@ def _build_response(result) -> Dict[str, Any]:
                 "disease": e.disease,
                 "drugs": e.drugs,
                 "description": e.description,
+                "pmid": e.pmid,
+                "source_url": e.source_url,
+                "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
             }
             for e in evidence.civic_evidence
         ],
@@ -204,6 +210,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "disease": v.disease,
                 "response_type": v.response_type,
                 "evidence_level": v.evidence_level,
+                "molecular_profile": v.molecular_profile,
+                "molecular_profile_score": v.molecular_profile_score,
             }
             for v in evidence.vicc_evidence
         ],

@@ -43,7 +43,7 @@ class ConductorConfig:
     llm_temperature: float = 0.1
 
     # Result limits
-    max_vicc_results: int = 15
+    max_vicc_results: int = 50
     max_civic_assertions: int = 20
     max_clinical_trials: int = 10
     max_literature_results: int = 6
