@@ -172,56 +172,40 @@ def insight(
                 padding=(0, 2),
             ))
 
-        # DepMap Panel - Research context from cell line data
-        depmap = result.evidence.depmap_evidence
-        if depmap and depmap.has_data():
-            depmap_lines = []
-
-            # Gene essentiality
-            if depmap.gene_dependency:
-                gd = depmap.gene_dependency
-                score = gd.mean_dependency_score
-                if score is not None:
-                    essential_emoji = "🔴" if score < -0.5 else "⚪"
-                    essential_text = "ESSENTIAL" if score < -0.5 else "not essential"
-                    depmap_lines.append(
-                        f"{essential_emoji} [bold]{gene}[/bold] is [bold]{essential_text}[/bold] "
-                        f"[dim](CERES: {score:.2f}, {gd.dependency_pct:.0f}% of cell lines)[/dim]"
-                    )
-
-            # Top drug sensitivities
-            if depmap.drug_sensitivities:
-                depmap_lines.append("")
-                depmap_lines.append("[dim]Drug Sensitivities:[/dim]")
-                for ds in depmap.get_top_sensitive_drugs(3):
-                    ic50_str = f"IC50={ds.ic50_nm:.0f}nM" if ds.ic50_nm else ""
-                    depmap_lines.append(f"  • {ds.drug_name} {ic50_str}")
-
-            # Cell line models
-            if depmap.cell_line_models:
-                mutant_lines = [cl for cl in depmap.cell_line_models if cl.has_mutation]
-                if mutant_lines:
-                    depmap_lines.append("")
-                    depmap_lines.append(f"[dim]Model Cell Lines with {variant}:[/dim]")
-                    for cl in mutant_lines[:4]:
-                        disease = f" ({cl.primary_disease})" if cl.primary_disease else ""
-                        depmap_lines.append(f"  • {cl.name}{disease}")
-                    if len(mutant_lines) > 4:
-                        depmap_lines.append(f"  [dim]... and {len(mutant_lines) - 4} more[/dim]")
-
-            if depmap_lines:
-                console.print(Panel(
-                    "\n".join(depmap_lines),
-                    title="[bold]🧬 DepMap Research Context[/bold]",
-                    border_style="green",
-                    padding=(0, 2),
-                ))
 
         # LLM Insight (when LLM mode is enabled)
         if result.llm:
-            wrapped_llm = textwrap.fill(result.llm.llm_summary, width=74)
+            # Build formatted LLM insight from raw components
+            llm_parts = []
+            if result.llm.functional_summary:
+                wrapped = textwrap.fill(result.llm.functional_summary, width=70)
+                llm_parts.append(f"[bold]Functional Impact:[/bold] {wrapped}")
+            if result.llm.biological_context:
+                wrapped = textwrap.fill(result.llm.biological_context, width=70)
+                llm_parts.append(f"[bold]Biological Context:[/bold] {wrapped}")
+            if result.llm.therapeutic_landscape:
+                tl = result.llm.therapeutic_landscape
+                therapy_parts = []
+                if tl.get("fda_approved"):
+                    therapy_parts.append(f"FDA-approved: {', '.join(tl['fda_approved'])}")
+                if tl.get("clinical_evidence"):
+                    therapy_parts.append(f"Clinical evidence: {', '.join(tl['clinical_evidence'])}")
+                if tl.get("preclinical"):
+                    therapy_parts.append(f"Preclinical: {', '.join(tl['preclinical'])}")
+                if tl.get("resistance_mechanisms"):
+                    therapy_parts.append(f"Resistance: {', '.join(tl['resistance_mechanisms'])}")
+                if therapy_parts:
+                    wrapped = textwrap.fill("; ".join(therapy_parts), width=70)
+                    llm_parts.append(f"[bold]Therapeutic Landscape:[/bold] {wrapped}")
+            if result.llm.research_implications:
+                wrapped = textwrap.fill(result.llm.research_implications, width=70)
+                llm_parts.append(f"[bold]Research Implications:[/bold] {wrapped}")
+
+            # Fall back to plain summary if no structured components
+            llm_content = "\n\n".join(llm_parts) if llm_parts else textwrap.fill(result.llm.llm_summary, width=74)
+
             console.print(Panel(
-                wrapped_llm,
+                llm_content,
                 title="[bold]LLM Insight[/bold]",
                 border_style="magenta",
                 padding=(1, 2),
