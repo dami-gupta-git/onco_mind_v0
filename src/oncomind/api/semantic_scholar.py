@@ -607,8 +607,8 @@ class SemanticScholarClient:
     ) -> list:
         """Search for literature and convert to PubMedEvidence model.
 
-        This method searches both resistance and variant literature,
-        merges the results, and converts them to PubMedEvidence.
+        This method searches for general variant literature first, then
+        supplements with resistance-focused papers to ensure diverse coverage.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
@@ -621,26 +621,33 @@ class SemanticScholarClient:
         """
         from oncomind.models.evidence.pubmed import PubMedEvidence
 
-        # Search both resistance AND general variant literature
-        resistance_papers, variant_papers = await asyncio.gather(
-            self.search_resistance_literature(
-                gene=gene,
-                variant=variant,
-                tumor_type=tumor_type,
-                max_results=max_results // 2,
-            ),
+        # Search general variant literature first (primary source)
+        # Then supplement with resistance-specific search
+        variant_papers, resistance_papers = await asyncio.gather(
             self.search_variant_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
-                max_results=max_results // 2,
+                max_results=max_results,  # Get full count for general search
+            ),
+            self.search_resistance_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results // 2,  # Supplement with resistance papers
             ),
         )
 
-        # Merge and deduplicate by paper_id
+        # Merge: prioritize variant papers, then add unique resistance papers
         seen_ids = set()
         merged_papers = []
-        for paper in resistance_papers + variant_papers:
+        # Add variant papers first
+        for paper in variant_papers:
+            if paper.paper_id not in seen_ids:
+                seen_ids.add(paper.paper_id)
+                merged_papers.append(paper)
+        # Add unique resistance papers
+        for paper in resistance_papers:
             if paper.paper_id not in seen_ids:
                 seen_ids.add(paper.paper_id)
                 merged_papers.append(paper)

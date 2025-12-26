@@ -137,7 +137,7 @@ class LLMService:
             well_characterized = evidence_assessment.get("well_characterized", [])
             conflicting_evidence = evidence_assessment.get("conflicting_evidence", [])
 
-            #print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
+            print(f"{evidence_assessment=},{evidence_quality=}, {knowledge_gaps=},{well_characterized=},{conflicting_evidence=}")
 
             # Extract evidence tags for transparency
             evidence_tags = data.get("evidence_tags", [])

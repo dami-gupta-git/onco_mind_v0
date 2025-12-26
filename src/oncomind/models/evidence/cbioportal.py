@@ -54,6 +54,12 @@ class CBioPortalEvidence(BaseModel):
             "mutually_exclusive": [m.model_dump() for m in self.mutually_exclusive],
         }
 
+    def get_study_url(self) -> str | None:
+        """Get the cBioPortal study URL."""
+        if self.study_id:
+            return f"https://www.cbioportal.org/study/summary?id={self.study_id}"
+        return None
+
     def to_prompt_context(self) -> str:
         """Format cBioPortal evidence for LLM prompt.
 
@@ -65,17 +71,22 @@ class CBioPortalEvidence(BaseModel):
 
         lines = []
 
-        # Header with study info
+        # Build source citation that must be used inline with statistics
         tumor_str = self.tumor_type or "pan-cancer"
-        lines.append(f"Source: cBioPortal ({self.study_id})")
+        study_url = self.get_study_url()
+        if study_url:
+            source_cite = f"[cBioPortal: {self.study_id}]({study_url})"
+        else:
+            source_cite = f"cBioPortal ({self.study_id})"
+
         lines.append(f"Cohort: {self.total_samples} {tumor_str} samples")
         lines.append("")
 
-        # Prevalence
-        lines.append("PREVALENCE:")
-        lines.append(f"  {self.gene} mutations: {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples})")
+        # Prevalence - embed source citation directly with each statistic
+        lines.append("PREVALENCE (copy the source citation when quoting these numbers):")
+        lines.append(f"  {self.gene} mutations: {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples}) - cite as: ({source_cite})")
         if self.variant and self.samples_with_exact_variant > 0:
-            lines.append(f"  {self.gene} {self.variant} specifically: {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples})")
+            lines.append(f"  {self.gene} {self.variant} specifically: {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples}) - cite as: ({source_cite})")
         elif self.variant:
             lines.append(f"  {self.gene} {self.variant} specifically: Not observed in this cohort")
         lines.append("")
