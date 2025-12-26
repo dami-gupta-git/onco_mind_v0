@@ -71,7 +71,7 @@ with tab1:
             model_name = list(MODELS.keys())[0]
             temperature = 0.1
 
-        insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
+        insight_btn = st.button("🔍 Get Insight", type="primary", width="stretch")
 
     with col2:
         # Run analysis if button clicked
@@ -278,7 +278,7 @@ with tab1:
                                     "AMP Level": a.get('amp_level', ''),
                                 })
                             if assertion_rows:
-                                st.dataframe(pd.DataFrame(assertion_rows), use_container_width=True, hide_index=True)
+                                st.dataframe(pd.DataFrame(assertion_rows), width="stretch", hide_index=True)
 
                         # Evidence items - scrollable table
                         if civic_evidence:
@@ -299,7 +299,7 @@ with tab1:
                             if evidence_rows:
                                 st.dataframe(
                                     pd.DataFrame(evidence_rows),
-                                    use_container_width=True,
+                                    width="stretch",
                                     hide_index=True,
                                     height=300,  # Scrollable with fixed height
                                 )
@@ -322,7 +322,7 @@ with tab1:
                         if vicc_rows:
                             st.dataframe(
                                 pd.DataFrame(vicc_rows),
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True,
                                 height=300,  # Scrollable with fixed height
                             )
@@ -340,7 +340,7 @@ with tab1:
                                 "Level": b.get('evidence_level', ''),
                             })
                         if cgi_rows:
-                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            df_kwargs = {"width": "stretch", "hide_index": True}
                             if len(cgi_rows) > 8:
                                 df_kwargs["height"] = 300
                             st.dataframe(pd.DataFrame(cgi_rows), **df_kwargs)
@@ -446,7 +446,7 @@ with tab1:
                                     "Frequency": f"{c.get('pct', 0):.1f}%",
                                     "Odds Ratio": odds_str,
                                 })
-                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            df_kwargs = {"width": "stretch", "hide_index": True}
                             if len(co_rows) > 8:
                                 df_kwargs["height"] = 250
                             st.dataframe(pd.DataFrame(co_rows), **df_kwargs)
@@ -466,7 +466,7 @@ with tab1:
                                     "Frequency": f"{m.get('pct', 0):.1f}%",
                                     "Odds Ratio": odds_str,
                                 })
-                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            df_kwargs = {"width": "stretch", "hide_index": True}
                             if len(me_rows) > 8:
                                 df_kwargs["height"] = 250
                             st.dataframe(pd.DataFrame(me_rows), **df_kwargs)
@@ -519,7 +519,7 @@ with tab1:
                                     "IC50": ic50_str,
                                     "Cell Lines Tested": ds.get('n_cell_lines', 0),
                                 })
-                            st.dataframe(pd.DataFrame(drug_rows), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(drug_rows), width="stretch", hide_index=True)
 
                         # Cell Line Models
                         if cell_lines:
@@ -536,7 +536,7 @@ with tab1:
                                         "Subtype": cl.get('subtype', ''),
                                         "Mutation": cl.get('mutation_details', variant_display),
                                     })
-                                st.dataframe(pd.DataFrame(cl_rows), use_container_width=True, hide_index=True)
+                                st.dataframe(pd.DataFrame(cl_rows), width="stretch", hide_index=True)
                             else:
                                 st.info(f"{len(cell_lines)} cell lines available (mutation status unknown)")
 
@@ -569,7 +569,7 @@ with tab1:
                                     "Context": context,
                                     "Source": source,
                                 })
-                            st.dataframe(pd.DataFrame(fda_rows), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(fda_rows), width="stretch", hide_index=True)
 
                         # Clinical trial evidence
                         if clinical:
@@ -588,7 +588,7 @@ with tab1:
                                     "Response": response or "-",
                                     "Source": source,
                                 })
-                            st.dataframe(pd.DataFrame(clinical_rows), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(clinical_rows), width="stretch", hide_index=True)
 
                         # Preclinical evidence
                         if preclinical_therapies:
@@ -606,7 +606,7 @@ with tab1:
                                     "Response": response or "-",
                                     "Source": source,
                                 })
-                            st.dataframe(pd.DataFrame(preclin_rows), use_container_width=True, hide_index=True)
+                            st.dataframe(pd.DataFrame(preclin_rows), width="stretch", hide_index=True)
                     tab_idx += 1
             else:
                 st.info("No evidence found from any source")
@@ -738,7 +738,7 @@ with tab2:
     uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        st.dataframe(df.head(), use_container_width=True)
+        st.dataframe(df.head(), width="stretch")
         if st.button("🚀 Get Batch Insights", type="primary"):
             if 'gene' not in df.columns or 'variant' not in df.columns:
                 st.error("CSV must contain 'gene' and 'variant' columns")
@@ -765,7 +765,7 @@ with tab2:
 
     # Display batch results from session state
     if st.session_state.batch_results is not None:
-        st.dataframe(st.session_state.batch_df, use_container_width=True)
+        st.dataframe(st.session_state.batch_df, width="stretch")
         col1, col2, col3 = st.columns(3)
         with col1:
             st.download_button(
