@@ -34,6 +34,7 @@ from oncomind.api.cgi import CGIClient
 from oncomind.api.oncotree import OncoTreeClient
 from oncomind.api.vicc import VICCClient
 from oncomind.api.civic import CIViCClient
+from oncomind.api.cbioportal import CBioPortalClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
@@ -43,6 +44,8 @@ from oncomind.models.evidence import (
     VariantIdentifiers,
     FunctionalScores,
     VariantContext,
+    CBioPortalEvidence,
+    CoMutationEntry,
     CGIBiomarkerEvidence,
     CIViCAssertionEvidence,
     ClinicalTrialEvidence,
@@ -112,6 +115,7 @@ class EvidenceAggregator:
         # Optional clients based on config
         self.vicc_client = VICCClient() if self.config.enable_vicc else None
         self.civic_client = CIViCClient() if self.config.enable_civic_assertions else None
+        self.cbioportal_client = CBioPortalClient()  # Always enabled - fast API
         self.clinical_trials_client = (
             ClinicalTrialsClient() if self.config.enable_clinical_trials else None
         )
@@ -139,6 +143,8 @@ class EvidenceAggregator:
             await self.vicc_client.__aenter__()
         if self.civic_client:
             await self.civic_client.__aenter__()
+        if self.cbioportal_client:
+            await self.cbioportal_client.__aenter__()
         if self.clinical_trials_client:
             await self.clinical_trials_client.__aenter__()
         if self.semantic_scholar_client:
@@ -158,6 +164,8 @@ class EvidenceAggregator:
             await self.vicc_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.civic_client:
             await self.civic_client.__aexit__(exc_type, exc_val, exc_tb)
+        if self.cbioportal_client:
+            await self.cbioportal_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.clinical_trials_client:
             await self.clinical_trials_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.semantic_scholar_client:
@@ -344,6 +352,16 @@ class EvidenceAggregator:
                 return await self._fetch_literature(gene, normalized_variant, resolved_tumor)
             return []
 
+        async def fetch_cbioportal():
+            if self.cbioportal_client:
+                sources_queried.append("cBioPortal")
+                return await self.cbioportal_client.fetch_co_mutation_data(
+                    gene=gene,
+                    variant=normalized_variant,
+                    tumor_type=resolved_tumor,
+                )
+            return None
+
         # Parallel fetch from all sources (using *_evidence methods where available)
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(gene=gene, variant=normalized_variant),
@@ -358,6 +376,7 @@ class EvidenceAggregator:
             fetch_civic_assertions(),
             fetch_clinical_trials(),
             fetch_literature(),
+            fetch_cbioportal(),
             return_exceptions=True,
         )
 
@@ -370,6 +389,7 @@ class EvidenceAggregator:
             civic_result,
             trials_result,
             literature_result,
+            cbioportal_result,
         ) = results
 
         # Handle results using helper method
@@ -400,6 +420,30 @@ class EvidenceAggregator:
         pubmed_articles: list[PubMedEvidence] = self._handle_result(
             literature_result, "Literature", sources_with_data, sources_failed
         )
+
+        # Handle cBioPortal result - convert CoMutationData to CBioPortalEvidence
+        cbioportal_evidence: CBioPortalEvidence | None = None
+        if cbioportal_result and not isinstance(cbioportal_result, Exception):
+            try:
+                cbioportal_evidence = CBioPortalEvidence(
+                    gene=cbioportal_result.gene,
+                    variant=cbioportal_result.variant,
+                    tumor_type=cbioportal_result.tumor_type,
+                    study_id=cbioportal_result.study_id,
+                    total_samples=cbioportal_result.total_samples,
+                    samples_with_gene_mutation=cbioportal_result.samples_with_gene_mutation,
+                    samples_with_exact_variant=cbioportal_result.samples_with_exact_variant,
+                    gene_prevalence_pct=cbioportal_result.gene_prevalence_pct,
+                    variant_prevalence_pct=cbioportal_result.variant_prevalence_pct,
+                    co_occurring=[CoMutationEntry(**c) for c in cbioportal_result.co_occurring],
+                    mutually_exclusive=[CoMutationEntry(**m) for m in cbioportal_result.mutually_exclusive],
+                )
+                if cbioportal_evidence.has_data():
+                    sources_with_data.append("cBioPortal")
+            except Exception:
+                sources_failed.append("cBioPortal")
+        elif isinstance(cbioportal_result, Exception):
+            sources_failed.append("cBioPortal")
 
         # Extract data from MyVariant evidence
         functional_scores = FunctionalScores()
@@ -497,6 +541,7 @@ class EvidenceAggregator:
             literature_knowledge=None,  # Set by LLM layer later
             preclinical_biomarkers=preclinical_biomarkers,
             early_phase_biomarkers=early_phase_biomarkers,
+            cbioportal_evidence=cbioportal_evidence,
         )
 
         return evidence

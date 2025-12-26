@@ -191,6 +191,7 @@ with tab1:
             preclinical = result.get('preclinical_biomarkers', [])
             early_phase = result.get('early_phase_biomarkers', [])
             annotations = result.get('annotations', {})
+            cbioportal = result.get('cbioportal_evidence')
 
             # Build tab names with counts
             tab_names = []
@@ -223,6 +224,8 @@ with tab1:
                 tab_names.append(f"Literature ({len(articles)})")
             if preclinical or early_phase:
                 tab_names.append(f"Research ({len(preclinical) + len(early_phase)})")
+            if cbioportal:
+                tab_names.append("cBioPortal")
 
             if tab_names:
                 tabs = st.tabs(tab_names)
@@ -416,6 +419,66 @@ with tab1:
                                 drug = b.get('drug', 'Unknown')
                                 assoc = b.get('association', 'Unknown')
                                 st.markdown(f"- {drug}: {assoc}")
+                    tab_idx += 1
+
+                # cBioPortal tab - co-mutation and prevalence data
+                if cbioportal:
+                    with tabs[tab_idx]:
+                        # Prevalence stats
+                        st.markdown("**Prevalence:**")
+                        total = cbioportal.get('total_samples', 0)
+                        gene_pct = cbioportal.get('gene_prevalence_pct', 0)
+                        variant_pct = cbioportal.get('variant_prevalence_pct', 0)
+                        gene_count = cbioportal.get('samples_with_gene_mutation', 0)
+                        variant_count = cbioportal.get('samples_with_exact_variant', 0)
+                        study = cbioportal.get('study_id', 'N/A')
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Gene Mutation", f"{gene_pct:.1f}%", delta=f"{gene_count}/{total} samples")
+                        with col2:
+                            st.metric("Exact Variant", f"{variant_pct:.1f}%", delta=f"{variant_count}/{total} samples")
+                        st.caption(f"Study: {study}")
+
+                        # Co-occurring mutations
+                        co_occurring = cbioportal.get('co_occurring', [])
+                        if co_occurring:
+                            st.markdown("---")
+                            st.markdown(f"**Co-occurring Mutations ({len(co_occurring)}):**")
+                            co_rows = []
+                            for c in co_occurring:
+                                odds = c.get('odds_ratio')
+                                odds_str = f"{odds:.2f}" if odds else "N/A"
+                                co_rows.append({
+                                    "Gene": c.get('gene', ''),
+                                    "Count": c.get('count', 0),
+                                    "Frequency": f"{c.get('pct', 0):.1f}%",
+                                    "Odds Ratio": odds_str,
+                                })
+                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            if len(co_rows) > 8:
+                                df_kwargs["height"] = 250
+                            st.dataframe(pd.DataFrame(co_rows), **df_kwargs)
+
+                        # Mutually exclusive mutations
+                        mutually_exclusive = cbioportal.get('mutually_exclusive', [])
+                        if mutually_exclusive:
+                            st.markdown("---")
+                            st.markdown(f"**Mutually Exclusive ({len(mutually_exclusive)}):**")
+                            me_rows = []
+                            for m in mutually_exclusive:
+                                odds = m.get('odds_ratio')
+                                odds_str = f"{odds:.2f}" if odds else "N/A"
+                                me_rows.append({
+                                    "Gene": m.get('gene', ''),
+                                    "Count": m.get('count', 0),
+                                    "Frequency": f"{m.get('pct', 0):.1f}%",
+                                    "Odds Ratio": odds_str,
+                                })
+                            df_kwargs = {"use_container_width": True, "hide_index": True}
+                            if len(me_rows) > 8:
+                                df_kwargs["height"] = 250
+                            st.dataframe(pd.DataFrame(me_rows), **df_kwargs)
             else:
                 st.info("No evidence found from any source")
 

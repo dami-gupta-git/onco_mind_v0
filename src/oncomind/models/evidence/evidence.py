@@ -32,6 +32,7 @@ from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, Field
 
+from oncomind.models.evidence.cbioportal import CBioPortalEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
@@ -223,6 +224,11 @@ class Evidence(BaseModel):
         default_factory=list, description="CGI early phase biomarkers"
     )
 
+    # cBioPortal (co-mutation and prevalence)
+    cbioportal_evidence: CBioPortalEvidence | None = Field(
+        None, description="cBioPortal co-mutation and prevalence data"
+    )
+
     # === Helper methods ===
 
     def has_evidence(self) -> bool:
@@ -239,7 +245,8 @@ class Evidence(BaseModel):
             self.clinical_trials or
             self.pubmed_articles or
             self.preclinical_biomarkers or
-            self.early_phase_biomarkers
+            self.early_phase_biomarkers or
+            (self.cbioportal_evidence and self.cbioportal_evidence.has_data())
         )
 
     def get_evidence_sources(self) -> list[str]:
@@ -263,6 +270,8 @@ class Evidence(BaseModel):
             sources.append("Literature")
         if self.preclinical_biomarkers or self.early_phase_biomarkers:
             sources.append("Research")
+        if self.cbioportal_evidence and self.cbioportal_evidence.has_data():
+            sources.append("cBioPortal")
         return sources
 
     def get_approved_drugs(self) -> list[str]:

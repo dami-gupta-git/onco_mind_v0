@@ -1,3 +1,4 @@
+from oncomind.models.evidence.cbioportal import CBioPortalEvidence, CoMutationEntry
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
@@ -23,6 +24,8 @@ __all__ = [
     "FunctionalScores",
     "VariantContext",
     # Individual evidence types (used in Evidence lists)
+    "CBioPortalEvidence",
+    "CoMutationEntry",
     "CGIBiomarkerEvidence",
     "CIViCEvidence",
     "CIViCAssertionEvidence",
