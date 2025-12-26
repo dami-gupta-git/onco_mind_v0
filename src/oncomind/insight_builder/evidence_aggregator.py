@@ -35,6 +35,7 @@ from oncomind.api.oncotree import OncoTreeClient
 from oncomind.api.vicc import VICCClient
 from oncomind.api.civic import CIViCClient
 from oncomind.api.cbioportal import CBioPortalClient
+from oncomind.api.depmap import DepMapClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
@@ -116,6 +117,7 @@ class EvidenceAggregator:
         self.vicc_client = VICCClient() if self.config.enable_vicc else None
         self.civic_client = CIViCClient() if self.config.enable_civic_assertions else None
         self.cbioportal_client = CBioPortalClient()  # Always enabled - fast API
+        self.depmap_client = DepMapClient()  # Always enabled - provides preclinical context
         self.clinical_trials_client = (
             ClinicalTrialsClient() if self.config.enable_clinical_trials else None
         )
@@ -145,6 +147,8 @@ class EvidenceAggregator:
             await self.civic_client.__aenter__()
         if self.cbioportal_client:
             await self.cbioportal_client.__aenter__()
+        if self.depmap_client:
+            await self.depmap_client.__aenter__()
         if self.clinical_trials_client:
             await self.clinical_trials_client.__aenter__()
         if self.semantic_scholar_client:
@@ -166,6 +170,8 @@ class EvidenceAggregator:
             await self.civic_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.cbioportal_client:
             await self.cbioportal_client.__aexit__(exc_type, exc_val, exc_tb)
+        if self.depmap_client:
+            await self.depmap_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.clinical_trials_client:
             await self.clinical_trials_client.__aexit__(exc_type, exc_val, exc_tb)
         if self.semantic_scholar_client:
@@ -362,6 +368,15 @@ class EvidenceAggregator:
                 )
             return None
 
+        async def fetch_depmap():
+            if self.depmap_client:
+                sources_queried.append("DepMap")
+                return await self.depmap_client.fetch_depmap_evidence(
+                    gene=gene,
+                    variant=normalized_variant,
+                )
+            return None
+
         # Parallel fetch from all sources (using *_evidence methods where available)
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(gene=gene, variant=normalized_variant),
@@ -377,6 +392,7 @@ class EvidenceAggregator:
             fetch_clinical_trials(),
             fetch_literature(),
             fetch_cbioportal(),
+            fetch_depmap(),
             return_exceptions=True,
         )
 
@@ -390,6 +406,7 @@ class EvidenceAggregator:
             trials_result,
             literature_result,
             cbioportal_result,
+            depmap_result,
         ) = results
 
         # Handle results using helper method
@@ -444,6 +461,15 @@ class EvidenceAggregator:
                 sources_failed.append("cBioPortal")
         elif isinstance(cbioportal_result, Exception):
             sources_failed.append("cBioPortal")
+
+        # Handle DepMap result - already returns DepMapEvidence or None
+        depmap_evidence = None
+        if depmap_result and not isinstance(depmap_result, Exception):
+            depmap_evidence = depmap_result
+            if depmap_evidence and depmap_evidence.has_data():
+                sources_with_data.append("DepMap")
+        elif isinstance(depmap_result, Exception):
+            sources_failed.append("DepMap")
 
         # Extract data from MyVariant evidence
         functional_scores = FunctionalScores()
@@ -542,6 +568,7 @@ class EvidenceAggregator:
             preclinical_biomarkers=preclinical_biomarkers,
             early_phase_biomarkers=early_phase_biomarkers,
             cbioportal_evidence=cbioportal_evidence,
+            depmap_evidence=depmap_evidence,
         )
 
         return evidence
