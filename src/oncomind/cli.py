@@ -177,6 +177,51 @@ def insight(
                 padding=(0, 2),
             ))
 
+        # DepMap Panel - Research context from cell line data
+        depmap = result.evidence.depmap_evidence
+        if depmap and depmap.has_data():
+            depmap_lines = []
+
+            # Gene essentiality
+            if depmap.gene_dependency:
+                gd = depmap.gene_dependency
+                score = gd.mean_dependency_score
+                if score is not None:
+                    essential_emoji = "🔴" if score < -0.5 else "⚪"
+                    essential_text = "ESSENTIAL" if score < -0.5 else "not essential"
+                    depmap_lines.append(
+                        f"{essential_emoji} [bold]{gene}[/bold] is [bold]{essential_text}[/bold] "
+                        f"[dim](CERES: {score:.2f}, {gd.dependency_pct:.0f}% of cell lines)[/dim]"
+                    )
+
+            # Top drug sensitivities
+            if depmap.drug_sensitivities:
+                depmap_lines.append("")
+                depmap_lines.append("[dim]Drug Sensitivities:[/dim]")
+                for ds in depmap.get_top_sensitive_drugs(3):
+                    ic50_str = f"IC50={ds.ic50_nm:.0f}nM" if ds.ic50_nm else ""
+                    depmap_lines.append(f"  • {ds.drug_name} {ic50_str}")
+
+            # Cell line models
+            if depmap.cell_line_models:
+                mutant_lines = [cl for cl in depmap.cell_line_models if cl.has_mutation]
+                if mutant_lines:
+                    depmap_lines.append("")
+                    depmap_lines.append(f"[dim]Model Cell Lines with {variant}:[/dim]")
+                    for cl in mutant_lines[:4]:
+                        disease = f" ({cl.primary_disease})" if cl.primary_disease else ""
+                        depmap_lines.append(f"  • {cl.name}{disease}")
+                    if len(mutant_lines) > 4:
+                        depmap_lines.append(f"  [dim]... and {len(mutant_lines) - 4} more[/dim]")
+
+            if depmap_lines:
+                console.print(Panel(
+                    "\n".join(depmap_lines),
+                    title="[bold]🧬 DepMap Research Context[/bold]",
+                    border_style="green",
+                    padding=(0, 2),
+                ))
+
         # LLM Insight (when LLM mode is enabled)
         if result.llm:
             wrapped_llm = textwrap.fill(result.llm.llm_summary, width=74)

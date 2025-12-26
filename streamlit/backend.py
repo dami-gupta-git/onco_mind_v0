@@ -306,6 +306,38 @@ def _build_response(result) -> Dict[str, Any]:
             "co_occurring": [c.model_dump() for c in evidence.cbioportal_evidence.co_occurring],
             "mutually_exclusive": [m.model_dump() for m in evidence.cbioportal_evidence.mutually_exclusive],
         } if evidence.cbioportal_evidence else None,
+        "depmap_evidence": {
+            "gene": evidence.depmap_evidence.gene,
+            "variant": evidence.depmap_evidence.variant,
+            "gene_dependency": {
+                "gene": evidence.depmap_evidence.gene_dependency.gene,
+                "mean_dependency_score": evidence.depmap_evidence.gene_dependency.mean_dependency_score,
+                "n_dependent_lines": evidence.depmap_evidence.gene_dependency.n_dependent_lines,
+                "n_total_lines": evidence.depmap_evidence.gene_dependency.n_total_lines,
+                "dependency_pct": evidence.depmap_evidence.gene_dependency.dependency_pct,
+            } if evidence.depmap_evidence.gene_dependency else None,
+            "drug_sensitivities": [
+                {
+                    "drug_name": ds.drug_name,
+                    "ic50_nm": ds.ic50_nm,
+                    "auc": ds.auc,
+                    "n_cell_lines": ds.n_cell_lines,
+                }
+                for ds in evidence.depmap_evidence.drug_sensitivities
+            ],
+            "cell_line_models": [
+                {
+                    "name": cl.name,
+                    "primary_disease": cl.primary_disease,
+                    "subtype": cl.subtype,
+                    "has_mutation": cl.has_mutation,
+                    "mutation_details": cl.mutation_details,
+                }
+                for cl in evidence.depmap_evidence.cell_line_models
+            ],
+            "is_essential": evidence.depmap_evidence.is_essential(),
+            "n_cell_lines_screened": evidence.depmap_evidence.n_cell_lines_screened,
+        } if evidence.depmap_evidence and evidence.depmap_evidence.has_data() else None,
         "recommended_therapies": [
             {
                 "drug_name": t.drug_name,

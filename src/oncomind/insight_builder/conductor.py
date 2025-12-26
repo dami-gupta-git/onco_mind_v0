@@ -122,7 +122,10 @@ class Conductor:
         # Step 1: Aggregate evidence
         evidence = await self._aggregator.build_evidence(parsed, parsed.tumor_type)
 
-        # Step 2: Generate LLM narrative if enabled
+        # Step 2: Compute evidence gaps (always, for research context)
+        evidence.compute_evidence_gaps()
+
+        # Step 3: Generate LLM narrative if enabled
         llm_insight = None
         if self.config.enable_llm:
             llm_insight = await self._generate_llm_insight(evidence)

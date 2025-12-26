@@ -192,6 +192,7 @@ with tab1:
             early_phase = result.get('early_phase_biomarkers', [])
             annotations = result.get('annotations', {})
             cbioportal = result.get('cbioportal_evidence')
+            depmap = result.get('depmap_evidence')
 
             # Build tab names with counts
             tab_names = []
@@ -225,6 +226,8 @@ with tab1:
                 tab_names.append(f"Research ({len(preclinical) + len(early_phase)})")
             if cbioportal:
                 tab_names.append("cBioPortal")
+            if depmap:
+                tab_names.append("🧬 DepMap")
 
             # Therapeutic Evidence tab - consolidated drug/therapy evidence
             therapies = result.get('recommended_therapies', [])
@@ -467,6 +470,79 @@ with tab1:
                             if len(me_rows) > 8:
                                 df_kwargs["height"] = 250
                             st.dataframe(pd.DataFrame(me_rows), **df_kwargs)
+                    tab_idx += 1
+
+                # DepMap tab - gene essentiality and drug sensitivity from cell lines
+                if depmap:
+                    with tabs[tab_idx]:
+                        gene_dep = depmap.get('gene_dependency')
+                        drug_sens = depmap.get('drug_sensitivities', [])
+                        cell_lines = depmap.get('cell_line_models', [])
+                        is_essential = depmap.get('is_essential', False)
+
+                        # Gene Essentiality - the key insight
+                        if gene_dep:
+                            st.markdown("### Gene Essentiality")
+                            score = gene_dep.get('mean_dependency_score')
+                            dep_pct = gene_dep.get('dependency_pct', 0)
+                            n_dep = gene_dep.get('n_dependent_lines', 0)
+                            n_total = gene_dep.get('n_total_lines', 0)
+
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if is_essential:
+                                    st.error(f"🔴 **{gene_display} is ESSENTIAL**")
+                                else:
+                                    st.info(f"⚪ {gene_display} is not essential")
+                            with col2:
+                                st.metric(
+                                    "CERES Score",
+                                    f"{score:.2f}" if score else "N/A",
+                                    delta=f"{dep_pct:.0f}% of cell lines depend on {gene_display}",
+                                    delta_color="off"
+                                )
+
+                            st.caption(f"Based on CRISPR screens in {n_total} cancer cell lines. CERES < -0.5 indicates essentiality.")
+
+                        # Drug Sensitivities
+                        if drug_sens:
+                            st.markdown("---")
+                            st.markdown("### Drug Sensitivities")
+                            st.caption("IC50 values from PRISM drug screens in cell lines")
+
+                            drug_rows = []
+                            for ds in drug_sens:
+                                ic50 = ds.get('ic50_nm')
+                                ic50_str = f"{ic50:.0f} nM" if ic50 else "N/A"
+                                drug_rows.append({
+                                    "Drug": ds.get('drug_name', ''),
+                                    "IC50": ic50_str,
+                                    "Cell Lines Tested": ds.get('n_cell_lines', 0),
+                                })
+                            st.dataframe(pd.DataFrame(drug_rows), use_container_width=True, hide_index=True)
+
+                        # Cell Line Models
+                        if cell_lines:
+                            st.markdown("---")
+                            st.markdown("### Model Cell Lines")
+                            mutant_lines = [cl for cl in cell_lines if cl.get('has_mutation')]
+                            if mutant_lines:
+                                st.success(f"✅ {len(mutant_lines)} cell lines with {variant_display} mutation available for research")
+                                cl_rows = []
+                                for cl in mutant_lines:
+                                    cl_rows.append({
+                                        "Cell Line": cl.get('name', ''),
+                                        "Disease": cl.get('primary_disease', ''),
+                                        "Subtype": cl.get('subtype', ''),
+                                        "Mutation": cl.get('mutation_details', variant_display),
+                                    })
+                                st.dataframe(pd.DataFrame(cl_rows), use_container_width=True, hide_index=True)
+                            else:
+                                st.info(f"{len(cell_lines)} cell lines available (mutation status unknown)")
+
+                        # Link to DepMap
+                        st.markdown("---")
+                        st.markdown(f"[🔗 Explore {gene_display} on DepMap Portal](https://depmap.org/portal/gene/{gene_display})")
                     tab_idx += 1
 
                 # Therapeutics tab - consolidated drug/therapy evidence

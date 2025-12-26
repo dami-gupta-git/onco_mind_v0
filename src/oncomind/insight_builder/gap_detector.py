@@ -52,15 +52,27 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     # === Check mechanism/functional studies ===
     has_mechanism = bool(evidence.context.gene_role) or bool(evidence.context.pathway)
 
+    # Check DepMap gene essentiality - key functional evidence
+    has_depmap_essentiality = (
+        evidence.depmap_evidence is not None and
+        evidence.depmap_evidence.gene_dependency is not None
+    )
+
     if has_mechanism:
         well_characterized.append("gene function")
-    else:
+    if has_depmap_essentiality:
+        well_characterized.append("gene essentiality (DepMap CRISPR)")
+        # If gene is essential, this adds confidence to functional impact
+        if evidence.depmap_evidence.is_essential():
+            well_characterized.append(f"{gene} is essential in cancer cells")
+
+    if not has_mechanism and not has_depmap_essentiality:
         gaps.append(EvidenceGap(
             category=GapCategory.FUNCTIONAL,
             severity=GapSeverity.SIGNIFICANT,
             description=f"Functional impact of {variant} on {gene} protein is unknown",
             suggested_studies=["Functional assay", "Structural modeling", "Cell-based reporter"],
-            addressable_with=["UniProt", "Literature search"]
+            addressable_with=["UniProt", "Literature search", "DepMap"]
         ))
         poorly_characterized.append("functional mechanism")
 
@@ -100,14 +112,22 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
             poorly_characterized.append(f"{tumor_type}-specific data")
 
     # === Check drug response data ===
+    # Include DepMap drug sensitivities in drug response check
+    has_depmap_drug_data = (
+        evidence.depmap_evidence is not None and
+        bool(evidence.depmap_evidence.drug_sensitivities)
+    )
     has_drug_data = (
         bool(evidence.cgi_biomarkers) or
         bool(evidence.vicc_evidence) or
-        bool(evidence.preclinical_biomarkers)
+        bool(evidence.preclinical_biomarkers) or
+        has_depmap_drug_data
     )
 
     if has_drug_data:
         well_characterized.append("drug response")
+        if has_depmap_drug_data:
+            well_characterized.append("preclinical drug sensitivity (DepMap)")
     else:
         gaps.append(EvidenceGap(
             category=GapCategory.DRUG_RESPONSE,
@@ -169,6 +189,31 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
             suggested_studies=["Clinical trial design", "Basket trial proposal"],
             addressable_with=["ClinicalTrials.gov"]
         ))
+
+    # === Check preclinical model systems (cell lines) ===
+    has_cell_line_models = (
+        evidence.depmap_evidence is not None and
+        bool(evidence.depmap_evidence.cell_line_models)
+    )
+
+    if has_cell_line_models:
+        n_models = len(evidence.depmap_evidence.cell_line_models)
+        mutant_models = evidence.depmap_evidence.get_model_cell_lines(with_mutation_only=True)
+        if mutant_models:
+            well_characterized.append(f"model cell lines ({len(mutant_models)} with mutation)")
+        else:
+            well_characterized.append(f"model cell lines ({n_models} available)")
+    else:
+        # Only flag as gap if gene is likely to be studied
+        if has_drug_data or has_clinical or evidence.context.gene_role:
+            gaps.append(EvidenceGap(
+                category=GapCategory.PRECLINICAL,
+                severity=GapSeverity.MINOR,
+                description=f"No cell line models identified for {gene} {variant}",
+                suggested_studies=["Identify cell lines with mutation", "Generate isogenic model"],
+                addressable_with=["DepMap", "CCLE", "Cellosaurus"]
+            ))
+            poorly_characterized.append("preclinical model systems")
 
     # === Check literature depth ===
     pub_count = len(evidence.pubmed_articles)

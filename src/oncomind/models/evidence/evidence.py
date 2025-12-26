@@ -36,6 +36,7 @@ from oncomind.models.evidence.cbioportal import CBioPortalEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
+from oncomind.models.evidence.depmap import DepMapEvidence
 from oncomind.models.evidence.fda import FDAApproval
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -233,6 +234,11 @@ class Evidence(BaseModel):
         None, description="cBioPortal co-mutation and prevalence data"
     )
 
+    # DepMap/CCLE (gene dependencies and drug sensitivities)
+    depmap_evidence: DepMapEvidence | None = Field(
+        None, description="DepMap gene dependency and drug sensitivity data"
+    )
+
     # Evidence gaps (computed, not fetched)
     evidence_gaps: EvidenceGaps | None = Field(
         None, description="Detected evidence gaps for research prioritization"
@@ -261,7 +267,8 @@ class Evidence(BaseModel):
             self.pubmed_articles or
             self.preclinical_biomarkers or
             self.early_phase_biomarkers or
-            (self.cbioportal_evidence and self.cbioportal_evidence.has_data())
+            (self.cbioportal_evidence and self.cbioportal_evidence.has_data()) or
+            (self.depmap_evidence and self.depmap_evidence.has_data())
         )
 
     def get_evidence_sources(self) -> list[str]:
@@ -287,6 +294,8 @@ class Evidence(BaseModel):
             sources.append("Research")
         if self.cbioportal_evidence and self.cbioportal_evidence.has_data():
             sources.append("cBioPortal")
+        if self.depmap_evidence and self.depmap_evidence.has_data():
+            sources.append("DepMap")
         return sources
 
     def get_approved_drugs(self) -> list[str]:
@@ -664,10 +673,10 @@ class Evidence(BaseModel):
     def get_biological_context_for_llm(self) -> str:
         """Get biological context formatted for LLM prompt.
 
-        Combines cBioPortal data with gene context for research-focused synthesis.
+        Combines cBioPortal and DepMap data with gene context for research-focused synthesis.
 
         Returns:
-            Formatted string with gene role, pathway, and cBioPortal data
+            Formatted string with gene role, pathway, cBioPortal, and DepMap data
         """
         lines = []
 
@@ -693,6 +702,10 @@ class Evidence(BaseModel):
         else:
             lines.append("PREVALENCE: No cBioPortal data available")
             lines.append("")
+
+        # DepMap data (gene dependencies and drug sensitivities)
+        if self.depmap_evidence and self.depmap_evidence.has_data():
+            lines.append(self.depmap_evidence.to_prompt_context())
 
         # Mutation class (for oncogenes like BRAF)
         if self.context.mutation_class:

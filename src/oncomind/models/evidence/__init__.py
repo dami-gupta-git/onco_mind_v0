@@ -4,6 +4,12 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
+from oncomind.models.evidence.depmap import (
+    DepMapEvidence,
+    GeneDependency,
+    DrugSensitivity,
+    CellLineModel,
+)
 from oncomind.models.evidence.evidence import (
     # Core model
     Evidence,
@@ -43,6 +49,10 @@ __all__ = [
     "ClinicalTrialEvidence",
     "ClinVarEvidence",
     "COSMICEvidence",
+    "DepMapEvidence",
+    "GeneDependency",
+    "DrugSensitivity",
+    "CellLineModel",
     "FDAApproval",
     "LiteratureKnowledge",
     "PubMedEvidence",
