@@ -42,25 +42,20 @@ with tab1:
         tumor = st.text_input("Tumor Type (optional)", value="Melanoma", placeholder="e.g., Melanoma, NSCLC", key="tumor_input")
 
         st.subheader("Mode")
-        mode = st.radio(
-            "Analysis Mode",
-            options=["Default", "Lite", "Full"],
-            index=0,
-            horizontal=True,
-            help="Lite: ~7s, no LLM | Default: ~12s, with LLM | Full: ~25s, with literature"
+        enable_llm = st.toggle(
+            "🤖 Enable LLM Mode",
+            value=False,
+            help="LLM mode includes literature search and AI-powered synthesis (~25s). Without LLM, you get fast annotation (~7s)."
         )
 
-        # Mode descriptions
-        mode_info = {
-            "Lite": "⚡ **Lite** (~7s): Structured evidence only, no LLM narrative",
-            "Default": "🎯 **Default** (~12s): Structured evidence + LLM clinical summary",
-            "Full": "📚 **Full** (~25s): + Literature search + enhanced narrative"
-        }
-        st.caption(mode_info[mode])
+        # Mode description
+        if enable_llm:
+            st.caption("📚 **LLM Mode** (~25s): Literature search + AI synthesis")
+        else:
+            st.caption("⚡ **Annotation Mode** (~7s): Fast structured evidence only")
 
-        # Derive settings from mode
-        enable_llm = mode in ["Default", "Full"]
-        enable_literature = mode == "Full"
+        # LLM mode also enables literature
+        enable_literature = enable_llm
 
         # Only show LLM options if LLM is enabled
         if enable_llm:
@@ -96,7 +91,8 @@ with tab1:
                         f"Your variant '{variant}' is classified as '{variant_type}'."
                     )
                 else:
-                    with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode} mode)..."):
+                    mode_label = "LLM" if enable_llm else "Annotation"
+                    with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode_label} mode)..."):
                         # Use fast annotation API or legacy insight engine
                         result = asyncio.run(get_variant_insight(
                             gene, variant, tumor or None,
@@ -718,17 +714,14 @@ with tab2:
 
     col1, col2 = st.columns([2, 1])
     with col1:
-        mode_batch = st.radio(
-            "Analysis Mode",
-            options=["Default", "Lite", "Full"],
-            index=0,
-            horizontal=True,
-            help="Lite: ~7s/variant | Default: ~12s/variant | Full: ~25s/variant",
-            key="batch_mode"
+        enable_llm_batch = st.toggle(
+            "🤖 Enable LLM Mode",
+            value=False,
+            help="LLM mode includes literature search + AI synthesis (~25s/variant). Without LLM: fast annotation (~7s/variant).",
+            key="batch_llm"
         )
-        # Derive settings from mode
-        enable_llm_batch = mode_batch in ["Default", "Full"]
-        enable_literature_batch = mode_batch == "Full"
+        # LLM mode also enables literature
+        enable_literature_batch = enable_llm_batch
     with col2:
         if enable_llm_batch:
             model_name_batch = st.selectbox("Model", list(MODELS.keys()), key="batch_model")

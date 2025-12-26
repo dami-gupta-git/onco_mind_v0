@@ -54,6 +54,7 @@ class SemanticPaperInfo:
 
     paper_id: str
     pmid: str | None
+    doi: str | None
     title: str
     abstract: str | None
     citation_count: int
@@ -66,6 +67,29 @@ class SemanticPaperInfo:
     tldr: str | None
     fields_of_study: list[str] = field(default_factory=list)
     publication_types: list[str] = field(default_factory=list)
+
+    def get_display_id(self) -> str:
+        """Get the best available ID for display purposes.
+
+        Priority: PMID > DOI > S2 paper ID (shortened)
+        """
+        if self.pmid:
+            return self.pmid
+        if self.doi:
+            return f"DOI:{self.doi}"
+        # Shorten S2 paper ID to first 8 chars
+        return f"S2:{self.paper_id[:8]}"
+
+    def get_url(self) -> str:
+        """Get the best URL for this paper.
+
+        Priority: PubMed > DOI > Semantic Scholar
+        """
+        if self.pmid:
+            return f"https://pubmed.ncbi.nlm.nih.gov/{self.pmid}/"
+        if self.doi:
+            return f"https://doi.org/{self.doi}"
+        return f"https://www.semanticscholar.org/paper/{self.paper_id}"
 
     def get_impact_score(self) -> float:
         """Calculate a simple impact score based on citations.
@@ -310,7 +334,7 @@ class SemanticScholarClient:
             response.raise_for_status()
             data = response.json()
 
-            return self._parse_paper(data, pmid)
+            return self._parse_paper(data, pmid=pmid)
 
         except httpx.HTTPStatusError:
             return None
@@ -364,7 +388,7 @@ class SemanticScholarClient:
             for i, paper_data in enumerate(data):
                 if paper_data is not None:
                     pmid = pmids[i]
-                    paper_info = self._parse_paper(paper_data, pmid)
+                    paper_info = self._parse_paper(paper_data, pmid=pmid)
                     if paper_info:
                         results[pmid] = paper_info
 
@@ -383,7 +407,7 @@ class SemanticScholarClient:
                 results[pmid] = paper_info
         return results
 
-    def _parse_paper(self, data: dict[str, Any], pmid: str) -> SemanticPaperInfo | None:
+    def _parse_paper(self, data: dict[str, Any], pmid: str | None = None, doi: str | None = None) -> SemanticPaperInfo | None:
         """Parse API response into SemanticPaperInfo."""
         try:
             # Extract TLDR if available
@@ -406,9 +430,16 @@ class SemanticScholarClient:
                     if isinstance(f, dict) and f.get("category"):
                         fields_of_study.append(f["category"])
 
+            # Extract DOI from externalIds if not provided
+            if not doi:
+                external_ids = data.get("externalIds", {})
+                if external_ids:
+                    doi = external_ids.get("DOI")
+
             return SemanticPaperInfo(
                 paper_id=data.get("paperId", ""),
-                pmid=pmid,
+                pmid=pmid if pmid else None,
+                doi=doi,
                 title=data.get("title", ""),
                 abstract=data.get("abstract"),
                 citation_count=data.get("citationCount", 0) or 0,
@@ -484,13 +515,15 @@ class SemanticScholarClient:
 
             papers = []
             for paper_data in data.get("data", []):
-                # Extract PMID from externalIds if available
+                # Extract PMID and DOI from externalIds if available
                 pmid = None
+                doi = None
                 external_ids = paper_data.get("externalIds", {})
                 if external_ids:
                     pmid = external_ids.get("PubMed")
+                    doi = external_ids.get("DOI")
 
-                paper_info = self._parse_paper(paper_data, pmid or "")
+                paper_info = self._parse_paper(paper_data, pmid=pmid, doi=doi)
                 if paper_info:
                     papers.append(paper_info)
 
@@ -656,19 +689,18 @@ class SemanticScholarClient:
         evidence_list = []
 
         for paper in papers:
-            url = (
-                f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}/"
-                if paper.pmid
-                else f"https://www.semanticscholar.org/paper/{paper.paper_id}"
-            )
+            # Use display ID (PMID > DOI > S2 short ID) for user-friendly display
+            display_id = paper.get_display_id()
+            url = paper.get_url()
+
             evidence_list.append(PubMedEvidence(
-                pmid=paper.pmid or paper.paper_id,
+                pmid=display_id,  # Using display_id for consistent UI display
                 title=paper.title,
                 abstract=paper.abstract or "",
                 authors=[],
                 journal=paper.venue or "",
                 year=str(paper.year) if paper.year else None,
-                doi=None,
+                doi=paper.doi,
                 url=url,
                 signal_type=None,  # Set by LLM layer later
                 drugs_mentioned=[],

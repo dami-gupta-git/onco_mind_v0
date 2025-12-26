@@ -73,7 +73,7 @@ import asyncio
 from oncomind import get_insight, InsightConfig, Result
 
 async def main():
-    # Fast annotation (no LLM)
+    # Default: Fast annotation mode (no LLM, ~7s)
     result = await get_insight("BRAF V600E", tumor_type="Melanoma")
 
     print(f"Gene: {result.identifiers.gene}")
@@ -81,11 +81,15 @@ async def main():
     print(f"Clinical Trials: {len(result.clinical.clinical_trials)}")
     print(f"Summary: {result.get_summary()}")
 
-    # With LLM synthesis for research narrative
-    config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
+    # LLM mode: literature search + AI synthesis (~25s)
+    config = InsightConfig(
+        enable_llm=True,           # Enables LLM synthesis
+        enable_literature=True,    # Enables literature search (recommended with LLM)
+        llm_model="gpt-4o-mini"
+    )
     result = await get_insight("EGFR S768I", tumor_type="NSCLC", config=config)
 
-    # Research-focused insights
+    # Research-focused insights (only available with enable_llm=True)
     if result.llm:
         print(result.llm.llm_summary)
         print(f"Evidence quality: {result.llm.evidence_quality}")
@@ -98,43 +102,41 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Default: structured evidence + LLM narrative (~12s)
+# Default: fast annotation mode (~7s)
 mind insight BRAF V600E --tumor Melanoma
 mind insight PIK3CA H1047R -t "Breast Cancer"
 
-# Lite mode: structured evidence only, no LLM (~7s)
-mind insight EGFR L858R -t NSCLC --lite
-
-# Full mode: + literature search + enhanced narrative (~25s)
-mind insight KRAS G12C -t NSCLC --full
+# LLM mode: literature search + AI synthesis (~25s)
+mind insight KRAS G12C -t NSCLC --llm
 
 # Save to JSON
 mind insight BRAF V600E -t Melanoma --output result.json
+mind insight EGFR L858R -t NSCLC --llm --output result.json
 ```
 
 #### CLI Modes
 
 | Mode | Flag | Speed | Output |
 |------|------|-------|--------|
-| **Default** | (none) | ~12s | Structured evidence + LLM research synthesis |
-| **Lite** | `--lite` | ~7s | Structured evidence only (no LLM) |
-| **Full** | `--full` | ~25s | + Literature search + enhanced hypothesis generation |
+| **Annotation** | (none) | ~7s | Fast structured evidence from all databases |
+| **LLM** | `--llm` | ~25s | + Literature search + AI synthesis + hypothesis generation |
 
-**Output panels by mode:**
+**Output by mode:**
 
-| Panel | Lite | Default | Full |
-|-------|------|---------|------|
-| Evidence Summary | ✓ | ✓ | ✓ |
-| Knowledge Gaps | - | ✓ | ✓ |
-| Evidence Quality | - | ✓ | ✓ |
-| Research Implications | - | ✓ | ✓ |
-| Literature | - | - | ✓ |
-| Hypothesis Generation | - | ✓ | ✓ (enhanced) |
+| Feature | Annotation | LLM |
+|---------|------------|-----|
+| Evidence Summary | ✓ | ✓ |
+| Database Annotations | ✓ | ✓ |
+| DepMap Research Context | ✓ | ✓ |
+| Literature Search | - | ✓ |
+| LLM Research Insight | - | ✓ |
+| Knowledge Gaps | - | ✓ |
+| Hypothesis Generation | - | ✓ |
 
 #### Example Output
 
 ```
-$ mind insight BRAF V600E -t Melanoma --lite
+$ mind insight BRAF V600E -t Melanoma
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                            BRAF V600E in Melanoma                            ║

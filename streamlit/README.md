@@ -24,17 +24,29 @@ http://localhost:8502
 ## Features
 
 ### 🔬 Single Variant Insight
-- Input gene, variant, and tumor type (The tumor type should exactly match values from the OncoTree ontology or CIViC database)
-- Select LLM model (OpenAI, Anthropic, Google, Groq)
-- Get comprehensive insight with:
-  - Evidence summary with pathogenicity scores
-  - Recommended therapies (FDA-approved, clinical, preclinical)
-  - Database identifiers (COSMIC, ClinVar, dbSNP)
-  - HGVS notations
-  - Functional annotations (AlphaMissense, CADD, PolyPhen2)
-  - cBioPortal co-mutation patterns
-  - 🧬 DepMap preclinical data (gene essentiality, drug sensitivity, cell line models)
-  - Evidence gap analysis and research implications
+
+Two modes available:
+
+| Mode | Speed | Features |
+|------|-------|----------|
+| **Annotation** (default) | ~7s | Fast structured evidence from all databases |
+| **LLM** (toggle on) | ~25s | + Literature search + AI synthesis + hypothesis generation |
+
+**Annotation Mode** provides:
+- Evidence summary with pathogenicity scores
+- Recommended therapies (FDA-approved, clinical, preclinical)
+- Database identifiers (COSMIC, ClinVar, dbSNP)
+- HGVS notations
+- Functional annotations (AlphaMissense, CADD, PolyPhen2)
+- cBioPortal co-mutation patterns
+- 🧬 DepMap preclinical data (gene essentiality, drug sensitivity, cell line models)
+
+**LLM Mode** adds:
+- Literature search via Semantic Scholar
+- AI-powered research synthesis
+- Evidence gap analysis
+- Knowledge gaps identification
+- Research implications and hypothesis generation
 
 ### 📊 Batch Upload
 - Upload CSV with variant data
