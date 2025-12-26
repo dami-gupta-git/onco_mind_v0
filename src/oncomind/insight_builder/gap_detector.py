@@ -216,20 +216,23 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
             poorly_characterized.append("preclinical model systems")
 
     # === Check literature depth ===
+    # Only flag literature gaps if literature search was actually performed
     pub_count = len(evidence.pubmed_articles)
-    if pub_count == 0:
-        gaps.append(EvidenceGap(
-            category=GapCategory.FUNCTIONAL,
-            severity=GapSeverity.CRITICAL,
-            description=f"No published literature found for {gene} {variant}",
-            suggested_studies=["Case report", "Functional characterization study"],
-            addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"]
-        ))
-        poorly_characterized.append("published literature")
-    elif pub_count < 5:
-        poorly_characterized.append("literature depth (limited publications)")
-    else:
-        well_characterized.append("published literature")
+    if evidence.literature_searched:
+        if pub_count == 0:
+            gaps.append(EvidenceGap(
+                category=GapCategory.FUNCTIONAL,
+                severity=GapSeverity.CRITICAL,
+                description=f"No published literature found for {gene} {variant}",
+                suggested_studies=["Case report", "Functional characterization study"],
+                addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"]
+            ))
+            poorly_characterized.append("published literature")
+        elif pub_count < 5:
+            poorly_characterized.append("literature depth (limited publications)")
+        else:
+            well_characterized.append("published literature")
+    # If literature wasn't searched, don't report it as a gap (user chose not to search)
 
     # === Determine overall evidence quality ===
     overall_quality = _compute_overall_quality(gaps)
