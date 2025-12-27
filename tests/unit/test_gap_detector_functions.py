@@ -773,6 +773,57 @@ class TestCheckPreclinicalModels:
         assert len(preclinical_gaps) >= 1
         assert preclinical_gaps[0].severity == GapSeverity.MINOR
 
+    def test_tumor_type_matching_with_alias(self, mock_evidence):
+        """Test that tumor type matching uses aliases (e.g., Melanoma matches SKIN)."""
+        model = MagicMock()
+        model.has_mutation = True
+        model.primary_disease = "SKIN"  # cBioPortal returns tissue as "SKIN"
+        mock_evidence.depmap_evidence = MagicMock()
+        mock_evidence.depmap_evidence.cell_line_models = [model]
+
+        ctx = GapDetectionContext(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",  # User specifies "Melanoma"
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_preclinical_models(mock_evidence, ctx)
+
+        # Should match because Melanoma and SKIN are related via TUMOR_TYPE_MAPPINGS
+        assert any("melanoma" in w.lower() for w in ctx.well_characterized)
+        # Should NOT have a gap for wrong tumor type
+        preclinical_gaps = [g for g in ctx.gaps if g.category == GapCategory.PRECLINICAL]
+        assert len(preclinical_gaps) == 0
+
+    def test_tumor_type_matching_nsclc_lung(self, mock_evidence):
+        """Test that NSCLC matches LUNG tissue."""
+        model = MagicMock()
+        model.has_mutation = True
+        model.primary_disease = "LUNG"
+        mock_evidence.depmap_evidence = MagicMock()
+        mock_evidence.depmap_evidence.cell_line_models = [model]
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="L858R",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_preclinical_models(mock_evidence, ctx)
+
+        # Should match because NSCLC and LUNG are related
+        assert any("nsclc" in w.lower() for w in ctx.well_characterized)
+        preclinical_gaps = [g for g in ctx.gaps if g.category == GapCategory.PRECLINICAL]
+        assert len(preclinical_gaps) == 0
+
 
 # =============================================================================
 # TEST _check_literature_depth
