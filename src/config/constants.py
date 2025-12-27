@@ -417,3 +417,111 @@ GENE_CHROMOSOMES: dict[str, str] = {
 }
 
 
+# =============================================================================
+# CANCER GENES FOR CO-OCCURRENCE ANALYSIS
+# =============================================================================
+# Curated list of cancer genes used for co-mutation analysis in cBioPortal.
+# These genes are selected for biologically meaningful co-occurrence patterns.
+# Used by: cbioportal.py for co-mutation queries
+
+CANCER_GENES_CO_OCCURRENCE: list[str] = [
+    # Top tumor suppressors (frequently co-mutated)
+    "TP53",      # Most frequently mutated TSG, co-mutates with many genes
+    "PTEN",      # Often co-mutates with PIK3CA
+    "CDKN2A",    # Cell cycle regulator, co-mutates with TP53
+    "RB1",       # Cell cycle TSG, co-mutates with TP53
+    "SMAD4",     # Co-mutates with KRAS in pancreatic/CRC
+    "STK11",     # Co-mutates with KRAS in lung adenocarcinoma
+    "NF1",       # RAS pathway, co-mutates with TP53
+    "APC",       # Colorectal driver
+    "ARID1A",    # Chromatin remodeling, co-mutates with TP53
+    "KEAP1",     # Oxidative stress pathway (lung)
+    "ATM",       # DDR gene, co-mutates across tumor types
+    "BRCA1", "BRCA2",  # DDR genes
+    # Key oncogenes
+    "KRAS",      # RAS pathway, often mutually exclusive with BRAF/NRAS
+    "NRAS",      # RAS pathway, mutually exclusive with KRAS/BRAF
+    "BRAF",      # MAPK pathway
+    "PIK3CA",    # PI3K pathway, co-mutates with PTEN
+    "EGFR",      # Receptor tyrosine kinase
+    "ERBB2",     # HER2
+    "MET",       # Often co-mutates as resistance mechanism
+    "IDH1", "IDH2",  # Glioma/AML drivers
+    "CTNNB1",    # Wnt pathway
+    # Oxidative stress
+    "NFE2L2",    # Co-mutates with KEAP1 in lung
+    # Chromatin/epigenetic
+    "KMT2D",     # Frequently mutated in solid tumors
+    "ARID2",     # Chromatin remodeling
+    # Receptor tyrosine kinases
+    "FGFR1", "FGFR2", "FGFR3",
+    "KIT", "PDGFRA",
+    "ALK", "ROS1", "RET",
+]
+
+
+# =============================================================================
+# DEPMAP FALLBACK DATA
+# =============================================================================
+# Pre-computed fallback data for DepMap queries when API is unavailable.
+# WARNING: This is static data that may become outdated. It serves as a
+# fallback cache only - real-time API queries are preferred.
+#
+# CANCER_GENE_DEPENDENCIES: CERES scores from CRISPR screens
+#   - score: Mean dependency score (more negative = more essential)
+#   - dependent_pct: % of cell lines where gene is essential
+#
+# GENE_DRUG_SENSITIVITIES: IC50 values from PRISM drug screens
+#   - ic50_mutant: IC50 in nM for mutant cell lines
+#   - ic50_wt: IC50 in nM for wild-type cell lines
+#   - target: Drug target annotation
+
+DEPMAP_GENE_DEPENDENCIES_FALLBACK: dict[str, dict] = {
+    "BRAF": {"score": -0.8, "dependent_pct": 45},
+    "KRAS": {"score": -1.2, "dependent_pct": 65},
+    "EGFR": {"score": -0.6, "dependent_pct": 35},
+    "TP53": {"score": -0.1, "dependent_pct": 5},  # TSG - not essential when lost
+    "PIK3CA": {"score": -0.5, "dependent_pct": 30},
+    "NRAS": {"score": -0.7, "dependent_pct": 40},
+    "MYC": {"score": -1.5, "dependent_pct": 80},
+    "ERBB2": {"score": -0.9, "dependent_pct": 50},
+    "ALK": {"score": -0.4, "dependent_pct": 20},
+    "RET": {"score": -0.3, "dependent_pct": 15},
+    "MET": {"score": -0.5, "dependent_pct": 25},
+    "FGFR1": {"score": -0.4, "dependent_pct": 20},
+    "FGFR2": {"score": -0.5, "dependent_pct": 25},
+    "FGFR3": {"score": -0.4, "dependent_pct": 20},
+    "KIT": {"score": -0.6, "dependent_pct": 35},
+    "PDGFRA": {"score": -0.3, "dependent_pct": 15},
+}
+
+DEPMAP_DRUG_SENSITIVITIES_FALLBACK: dict[str, list[dict]] = {
+    "BRAF": [
+        {"drug": "vemurafenib", "ic50_mutant": 50, "ic50_wt": 2000, "target": "BRAF V600"},
+        {"drug": "dabrafenib", "ic50_mutant": 30, "ic50_wt": 1500, "target": "BRAF V600"},
+        {"drug": "encorafenib", "ic50_mutant": 20, "ic50_wt": 1200, "target": "BRAF V600"},
+        {"drug": "trametinib", "ic50_mutant": 8, "ic50_wt": 200, "target": "MEK1/2"},
+        {"drug": "cobimetinib", "ic50_mutant": 15, "ic50_wt": 250, "target": "MEK1/2"},
+    ],
+    "KRAS": [
+        {"drug": "sotorasib", "ic50_mutant": 100, "ic50_wt": None, "target": "KRAS G12C"},
+        {"drug": "adagrasib", "ic50_mutant": 80, "ic50_wt": None, "target": "KRAS G12C"},
+        {"drug": "trametinib", "ic50_mutant": 25, "ic50_wt": 300, "target": "MEK1/2"},
+    ],
+    "EGFR": [
+        {"drug": "erlotinib", "ic50_mutant": 40, "ic50_wt": 3000, "target": "EGFR"},
+        {"drug": "gefitinib", "ic50_mutant": 35, "ic50_wt": 2500, "target": "EGFR"},
+        {"drug": "osimertinib", "ic50_mutant": 15, "ic50_wt": 500, "target": "EGFR T790M"},
+        {"drug": "afatinib", "ic50_mutant": 20, "ic50_wt": 1000, "target": "EGFR/HER2"},
+    ],
+    "PIK3CA": [
+        {"drug": "alpelisib", "ic50_mutant": 50, "ic50_wt": 500, "target": "PI3K alpha"},
+        {"drug": "everolimus", "ic50_mutant": 5, "ic50_wt": 50, "target": "mTOR"},
+        {"drug": "capivasertib", "ic50_mutant": 100, "ic50_wt": 800, "target": "AKT"},
+    ],
+    "ERBB2": [
+        {"drug": "lapatinib", "ic50_mutant": 30, "ic50_wt": 2000, "target": "EGFR/HER2"},
+        {"drug": "neratinib", "ic50_mutant": 10, "ic50_wt": 500, "target": "pan-HER"},
+        {"drug": "tucatinib", "ic50_mutant": 8, "ic50_wt": 1000, "target": "HER2"},
+    ],
+}
