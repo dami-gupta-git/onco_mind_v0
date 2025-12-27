@@ -29,6 +29,13 @@ class GapCategory(str, Enum):
     VALIDATION = "validation"           # Strong oncogenic signal but lacks therapeutic validation
 
 
+class CharacterizedAspect(BaseModel):
+    """A well-characterized aspect of the variant with its basis."""
+
+    aspect: str = Field(..., description="What is well characterized (e.g., 'clinical actionability')")
+    basis: str = Field(..., description="Why we think so (e.g., 'FDA-approved therapies exist')")
+
+
 class EvidenceGap(BaseModel):
     """A specific gap in the evidence for a variant."""
 
@@ -63,7 +70,13 @@ class EvidenceGaps(BaseModel):
     # What's well-characterized vs not
     well_characterized: list[str] = Field(
         default_factory=list,
-        description="Aspects with strong evidence"
+        description="Aspects with strong evidence (legacy: simple strings)"
+    )
+
+    # Structured version with basis/reasoning
+    well_characterized_detailed: list[CharacterizedAspect] = Field(
+        default_factory=list,
+        description="Aspects with strong evidence, including basis for each"
     )
 
     poorly_characterized: list[str] = Field(

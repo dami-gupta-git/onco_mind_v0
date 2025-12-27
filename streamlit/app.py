@@ -462,7 +462,7 @@ with tab1:
                                             "Freq": f"{c.get('pct', 0):.1f}%",
                                             "OR": odds_str,
                                         })
-                                    st.dataframe(pd.DataFrame(co_rows), hide_index=True, use_container_width=True)
+                                    st.dataframe(pd.DataFrame(co_rows), hide_index=True, width="stretch")
 
                             with me_col:
                                 if mutually_exclusive:
@@ -478,7 +478,7 @@ with tab1:
                                             "Freq": f"{m.get('pct', 0):.1f}%",
                                             "OR": odds_str,
                                         })
-                                    st.dataframe(pd.DataFrame(me_rows), hide_index=True, use_container_width=True)
+                                    st.dataframe(pd.DataFrame(me_rows), hide_index=True, width="stretch")
                     tab_idx += 1
 
                 # DepMap tab - gene essentiality and drug sensitivity from cell lines
@@ -655,12 +655,22 @@ with tab1:
                 display_priority = research_priority.replace("_", " ").title()
                 st.markdown(f"**Research Priority:** {priority_badge} {display_priority}")
 
-            # Well-characterized aspects as table
-            well_characterized = evidence_gaps.get('well_characterized', [])
-            if well_characterized:
+            # Well-characterized aspects as table (with basis/reasoning)
+            well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
+            if well_characterized_detailed:
                 st.markdown("**✅ Well Characterized:**")
-                wc_df = pd.DataFrame({"Aspect": well_characterized})
-                st.dataframe(wc_df, use_container_width=True, hide_index=True)
+                wc_df = pd.DataFrame([
+                    {"Aspect": item.get('aspect', ''), "Basis": item.get('basis', '')}
+                    for item in well_characterized_detailed
+                ])
+                st.dataframe(wc_df, width="stretch", hide_index=True)
+            else:
+                # Fallback to legacy format if detailed not available
+                well_characterized = evidence_gaps.get('well_characterized', [])
+                if well_characterized:
+                    st.markdown("**✅ Well Characterized:**")
+                    wc_df = pd.DataFrame({"Aspect": well_characterized})
+                    st.dataframe(wc_df, width="stretch", hide_index=True)
 
             # Evidence gaps table
             gaps = evidence_gaps.get('gaps', [])
@@ -688,7 +698,7 @@ with tab1:
 
                 if gaps_data:
                     gaps_df = pd.DataFrame(gaps_data)
-                    st.dataframe(gaps_df, use_container_width=True, hide_index=True)
+                    st.dataframe(gaps_df, width="stretch", hide_index=True)
 
                 # Suggested studies (collapsible)
                 all_suggested = []

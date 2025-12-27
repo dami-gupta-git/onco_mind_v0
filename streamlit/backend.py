@@ -379,6 +379,10 @@ def _build_evidence_gaps(evidence) -> dict:
         "overall_quality": gaps.overall_evidence_quality,
         "research_priority": gaps.research_priority,
         "well_characterized": gaps.well_characterized,
+        "well_characterized_detailed": [
+            {"aspect": wc.aspect, "basis": wc.basis}
+            for wc in gaps.well_characterized_detailed
+        ],
         "poorly_characterized": gaps.poorly_characterized,
         "gaps": [
             {
