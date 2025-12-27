@@ -7,7 +7,17 @@ import re
 from backend import get_variant_insight, batch_get_variant_insights
 
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
-st.title("🧬 OncoMind: Variant Insight")
+
+# Reduce top padding
+st.markdown("""
+<style>
+    .block-container {
+        padding-top: 1rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Variant Insight</h1>", unsafe_allow_html=True)
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
@@ -52,7 +62,7 @@ with tab1:
         )
         enable_literature = enable_llm
     with input_cols[4]:
-        insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
+        insight_btn = st.button("🔍 Get Insight", type="primary", width="stretch")
 
     # LLM settings expander (only if LLM enabled)
     if enable_llm:
@@ -307,9 +317,9 @@ with tab1:
                         # Make ID clickable via column config
                         st.dataframe(
                             evidence_df.drop(columns=['_url']),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True,
-                            height=min(400, 35 * (len(evidence_rows) + 1))  # ~10 rows visible
+                            height=min(300, 35 * (len(evidence_rows) + 1))  # ~8 rows visible
                         )
                 tab_idx += 1
 
@@ -338,9 +348,9 @@ with tab1:
                         })
                     st.dataframe(
                         pd.DataFrame(vicc_rows),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
-                        height=min(400, 35 * (len(vicc_rows) + 1))
+                        height=min(300, 35 * (len(vicc_rows) + 1))
                     )
                 tab_idx += 1
 
@@ -358,9 +368,9 @@ with tab1:
                     if cgi_rows:
                         st.dataframe(
                             pd.DataFrame(cgi_rows),
-                            use_container_width=True,
+                            width="stretch",
                             hide_index=True,
-                            height=min(400, 35 * (len(cgi_rows) + 1))
+                            height=min(300, 35 * (len(cgi_rows) + 1))
                         )
                 tab_idx += 1
 
@@ -397,9 +407,9 @@ with tab1:
                         })
                     st.dataframe(
                         pd.DataFrame(trial_rows),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
-                        height=min(400, 35 * (len(trial_rows) + 1))
+                        height=min(300, 35 * (len(trial_rows) + 1))
                     )
                 tab_idx += 1
 
@@ -416,9 +426,9 @@ with tab1:
                         })
                     st.dataframe(
                         pd.DataFrame(article_rows),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
-                        height=min(400, 35 * (len(article_rows) + 1))
+                        height=min(300, 35 * (len(article_rows) + 1))
                     )
                 tab_idx += 1
 
@@ -487,7 +497,7 @@ with tab1:
                                         "Freq": f"{c.get('pct', 0):.1f}%",
                                         "OR": odds_str,
                                     })
-                                st.dataframe(pd.DataFrame(co_rows), hide_index=True, use_container_width=True, height=min(400, 35 * (len(co_rows) + 1)))
+                                st.dataframe(pd.DataFrame(co_rows), hide_index=True, width="stretch", height=min(300, 35 * (len(co_rows) + 1)))
 
                         with me_col:
                             if mutually_exclusive:
@@ -503,7 +513,7 @@ with tab1:
                                         "Freq": f"{m.get('pct', 0):.1f}%",
                                         "OR": odds_str,
                                     })
-                                st.dataframe(pd.DataFrame(me_rows), hide_index=True, use_container_width=True, height=min(400, 35 * (len(me_rows) + 1)))
+                                st.dataframe(pd.DataFrame(me_rows), hide_index=True, width="stretch", height=min(300, 35 * (len(me_rows) + 1)))
                 tab_idx += 1
 
             # DepMap tab
@@ -543,7 +553,7 @@ with tab1:
                                 "IC50": ic50_str,
                                 "Cell Lines": ds.get('n_cell_lines', 0),
                             })
-                        st.dataframe(pd.DataFrame(drug_rows), use_container_width=True, hide_index=True, height=min(400, 35 * (len(drug_rows) + 1)))
+                        st.dataframe(pd.DataFrame(drug_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(drug_rows) + 1)))
 
                     if cell_lines:
                         st.markdown("---")
@@ -559,7 +569,7 @@ with tab1:
                                     "Subtype": cl.get('subtype', ''),
                                     "Mutation": cl.get('mutation_details', variant_display),
                                 })
-                            st.dataframe(pd.DataFrame(cl_rows), use_container_width=True, hide_index=True, height=min(400, 35 * (len(cl_rows) + 1)))
+                            st.dataframe(pd.DataFrame(cl_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(cl_rows) + 1)))
                         else:
                             st.info(f"{len(cell_lines)} cell lines available (mutation status unknown)")
 
@@ -588,7 +598,7 @@ with tab1:
                                 "Context": context,
                                 "Source": source,
                             })
-                        st.dataframe(pd.DataFrame(fda_rows), use_container_width=True, hide_index=True, height=min(400, 35 * (len(fda_rows) + 1)))
+                        st.dataframe(pd.DataFrame(fda_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(fda_rows) + 1)))
 
                     if clinical:
                         if fda_approved:
@@ -602,7 +612,7 @@ with tab1:
                                 "Response": t.get('response_type', '') or "-",
                                 "Source": t.get('source', ''),
                             })
-                        st.dataframe(pd.DataFrame(clinical_rows), use_container_width=True, hide_index=True, height=min(400, 35 * (len(clinical_rows) + 1)))
+                        st.dataframe(pd.DataFrame(clinical_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(clinical_rows) + 1)))
 
                     if preclinical_therapies:
                         if fda_approved or clinical:
@@ -616,7 +626,7 @@ with tab1:
                                 "Response": t.get('response_type', '') or "-",
                                 "Source": t.get('source', ''),
                             })
-                        st.dataframe(pd.DataFrame(preclin_rows), use_container_width=True, hide_index=True, height=min(400, 35 * (len(preclin_rows) + 1)))
+                        st.dataframe(pd.DataFrame(preclin_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(preclin_rows) + 1)))
                 tab_idx += 1
         else:
             st.info("No evidence found from any source")
@@ -671,13 +681,13 @@ with tab1:
                         }
                         for item in well_characterized_detailed
                     ])
-                    st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(400, 35 * (len(well_characterized_detailed) + 1)))
+                    st.dataframe(wc_df, width="stretch", hide_index=True, height=min(300, 35 * (len(well_characterized_detailed) + 1)))
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
                         st.markdown("**✅ Well Characterized:**")
                         wc_df = pd.DataFrame({"Aspect": well_characterized})
-                        st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(400, 35 * (len(well_characterized) + 1)))
+                        st.dataframe(wc_df, width="stretch", hide_index=True, height=min(300, 35 * (len(well_characterized) + 1)))
 
             # Evidence gaps table (full width)
             gaps = evidence_gaps.get('gaps', [])
@@ -697,7 +707,7 @@ with tab1:
                         "Description": desc,
                     })
                 if gaps_data:
-                    st.dataframe(pd.DataFrame(gaps_data), use_container_width=True, hide_index=True, height=min(400, 35 * (len(gaps_data) + 1)))
+                    st.dataframe(pd.DataFrame(gaps_data), width="stretch", hide_index=True, height=min(300, 35 * (len(gaps_data) + 1)))
 
                 # Suggested studies (collapsible)
                 all_suggested = []
@@ -826,7 +836,7 @@ with tab2:
     uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
-        st.dataframe(df.head(), use_container_width=True)
+        st.dataframe(df.head(), width="stretch")
         if st.button("🚀 Get Batch Insights", type="primary"):
             if 'gene' not in df.columns or 'variant' not in df.columns:
                 st.error("CSV must contain 'gene' and 'variant' columns")
@@ -851,7 +861,7 @@ with tab2:
                 st.session_state.batch_df = results_df
 
     if st.session_state.batch_results is not None:
-        st.dataframe(st.session_state.batch_df, use_container_width=True)
+        st.dataframe(st.session_state.batch_df, width="stretch")
         batch_footer_cols = st.columns(3)
         with batch_footer_cols[0]:
             st.download_button(
