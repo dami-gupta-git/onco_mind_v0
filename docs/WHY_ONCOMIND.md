@@ -6,7 +6,7 @@ The honest case for what this tool does and doesn't do.
 
 ## The Problem We're Solving
 
-Variant interpretation tools exist. CIViC, OncoKB, CancerVar, PCGR, OpenCRAVAT — they're excellent at annotating well-characterized mutations.
+Variant interpretation tools exist. CIViC, OncoKB, CancerVar, PCGR, OpenCRAVAT — they're excellent at annotating well-characterized mutations. 
 
 But for less common variants, researchers still spend hours:
 - Searching PubMed for case reports and functional studies
@@ -15,6 +15,9 @@ But for less common variants, researchers still spend hours:
 - Synthesizing what it all means for a specific tumor type
 
 **OncoMind automates that workflow.** Aggregate, search, synthesize, cite — in seconds instead of hours.
+
+OncoMind is the only open-source tool that tells you not just what’s known about a cancer variant, but what’s missing — 
+with transparent reasoning and concrete, testable research ideas.
 
 ---
 
@@ -34,10 +37,20 @@ Let's be clear about what OncoMind isn't:
 
 ## What Makes OncoMind Different
 
-### 1. We Tell You What We Don't Know
+### 1. We Tell You What We Don't Know — And Why We Know What We Know
 
-Every tool tells you what evidence exists. None tell you what's missing.
+Every tool tells you what evidence exists. None tell you what's missing. And none explain *why* they think something is well-characterized.
 
+**Evidence Assessment with Basis:**
+| Aspect | Basis |
+|--------|-------|
+| known cancer hotspot | Codon 600 is in cancerhotspots.org |
+| clinical actionability | 5 FDA approvals + 2 CIViC assertions |
+| computational pathogenicity | AlphaMissense=0.99 \| CADD=28.5 \| PolyPhen2=D |
+| prevalence | 11.9% in Breast Invasive Carcinoma (TCGA) |
+| gene essentiality | CERES=-0.50 |
+
+**Evidence Gaps:**
 ```
 Evidence Gaps for KRAS G12D in Pancreatic Cancer:
 - No FDA-approved targeted therapies (G12C inhibitors don't work here)
@@ -46,11 +59,11 @@ Evidence Gaps for KRAS G12D in Pancreatic Cancer:
 - Conflicting prognostic data across studies
 ```
 
-**Why it matters:** Transparency about uncertainty builds trust. Knowing where to focus manual effort is actionable.
+**Why it matters:** Transparency about both certainty *and* uncertainty builds trust. You can click through to verify our reasoning.
 
 ### 2. We Surface Conflicts, Not Hide Them
 
-When CIViC says "sensitive" and a 2024 paper says "resistance emerging," most tools pick one. We show both.
+When CIViC says "sensitive" and a 2024 paper says "resistance emerging," most tools pick one. We show both — and we're careful about what counts as a true conflict.
 
 ```
 Conflict Detected:
@@ -61,7 +74,36 @@ Conflict Detected:
 
 **Why it matters:** Oncologists are trained to be skeptical. A tool that hides disagreement loses trust.
 
-### 3. We Output Context, Not Data Dumps
+### 3. We Generate Testable Research Hypotheses with Evidence Basis Tags
+
+When we identify evidence gaps, we don't just say "more research needed." We generate specific, testable hypotheses — each tagged with the type of evidence it builds on:
+
+```
+Emerging Research Hypotheses:
+
+[Preclinical Data] Given the lack of functional data for JAK1 V657F despite
+its recurrence in T-ALL, isogenic knock-in models could determine whether
+this variant causes gain- or loss-of-function signaling.
+
+[Pan-Cancer Extrapolation] While EGFR L858R shows sensitivity to osimertinib
+in NSCLC, testing this response in breast cancer models would determine
+cross-histology applicability.
+
+[Nearby-Variant Inference] The absence of preclinical drug sensitivity data
+for this variant, combined with its structural similarity to JAK2 V617F,
+suggests testing JAK inhibitor panels in cell lines harboring this mutation.
+```
+
+**Evidence Basis Tags:**
+- `[Direct Clinical Data]` — builds on FDA approvals, CIViC assertions, Phase 2/3 trials
+- `[Preclinical Data]` — builds on DepMap, cell line, or in vitro data
+- `[Pan-Cancer Extrapolation]` — extrapolates from other tumor types
+- `[Nearby-Variant Inference]` — extrapolates from other variants in same gene/domain
+- `[Pathway-Level Inference]` — infers from general pathway biology
+
+**Why it matters:** You know exactly how speculative each hypothesis is. Direct clinical data is more reliable than pathway-level inference.
+
+### 4. We Output Context, Not Data Dumps
 
 Legacy tools produce 50-page PDFs or 10,000-row CSVs. An LLM chokes on that. A human skims it.
 
@@ -78,7 +120,7 @@ EGFR T790M in NSCLC:
 
 **Why it matters:** This is the "fuel" for downstream AI systems. We're not building the car; we're providing high-octane context.
 
-### 4. No Source, No Claim
+### 5. No Source, No Claim
 
 Every assertion links to a PMID, FDA label, or database entry. If we can't cite it, we don't say it.
 
@@ -92,7 +134,20 @@ class AttributedClaim(BaseModel):
 
 **Why it matters:** "Click through to verify" beats "trust the AI."
 
-### 5. We Focus on What Happens Next
+### 6. We Detect Cancer Hotspots and Near-Hotspot Variants
+
+Known cancer hotspots (BRAF V600, KRAS G12, etc.) are well-characterized. But what about a rare variant 3 codons away from a hotspot?
+
+```
+BRAF V598E (near hotspot codon 600):
+- Within 5 codons of known hotspot — structural similarity likely
+- Research opportunity: Compare to nearby hotspot BRAF codon 600
+- Functional characterization needed despite structural similarity to V600E
+```
+
+**Why it matters:** Near-hotspot variants are high-value research targets. They may share functional properties with the hotspot but lack clinical validation.
+
+### 7. We Focus on What Happens Next
 
 Most annotators tell you what the variant *is*. We tell you what happens *next*.
 
@@ -120,7 +175,8 @@ We don't say "trust the AI." We provide a verification framework:
 | **Source Attribution** | Every claim has a receipt |
 | **Conflict Detection** | We're not hiding disagreement |
 | **Evidence Gaps** | We're honest about what we don't know |
-| **Ensemble Agreement** | Multiple models, surface disagreement |
+| **Well-Characterized Basis** | We explain *why* we think something is known |
+| **Hypothesis Evidence Tags** | You know how speculative each claim is |
 | **Benchmarks** | Quantitative accuracy on gold standard |
 
 ---
@@ -138,6 +194,7 @@ Your advisor says "look into this variant." You spend days searching PubMed, che
 - Instant evidence summary across 14+ sources
 - Explicit gap analysis: "Here's what's NOT known"
 - Research implications: "Here's what you could study"
+- Evidence basis tags: Know how speculative each hypothesis is
 - Suggested experiments based on gap severity
 
 **Value:** Saves weeks of literature review. Helps scope thesis projects with clear, defensible knowledge gaps.
@@ -152,6 +209,7 @@ R01 proposals need to justify "why this research question matters." That means s
 **OncoMind Solution:**
 - Evidence gap detection with severity ratings (critical/significant/minor)
 - Gap categories: functional, clinical, resistance mechanisms, preclinical data
+- Well-characterized aspects with basis explanations
 - Suggested studies mapped to each gap
 - Source attribution for every claim (PMIDs, database entries)
 
@@ -169,6 +227,7 @@ R01 proposals need to justify "why this research question matters." That means s
 - DepMap integration: gene essentiality (is it a good target?), drug sensitivity (what works?), model systems (can we test it?)
 - Resistance mechanism extraction from literature
 - Preclinical vs clinical evidence stratification
+- Near-hotspot detection: find understudied variants with potential
 
 **Value:** Prioritize research portfolio based on evidence landscape. Identify white space before competitors. Make go/no-go decisions with full context.
 
@@ -225,8 +284,9 @@ Constant ad-hoc variant lookups for different projects. Each PI wants "just a qu
 
 **We don't compete on annotation.** The databases do that well. We compete on:
 - Intelligence (synthesis, not just aggregation)
-- Trust (gaps, conflicts, attribution)
+- Trust (gaps, conflicts, attribution, basis explanations)
 - Format (LLM-native context, not reports)
+- Research focus (testable hypotheses with evidence basis tags)
 
 ---
 
@@ -259,15 +319,18 @@ from oncomind import get_insight
 result = await get_insight("EGFR T790M", tumor_type="NSCLC")
 
 # What do the databases say?
-print(result.kb.civic_assertions)
-print(result.clinical.fda_approvals)
+print(result.evidence.civic_assertions)
+print(result.evidence.fda_approvals)
 
-# What does the literature say?
-print(result.literature.literature_knowledge)
+# Evidence assessment with basis
+gaps = result.evidence.evidence_gaps
+for wc in gaps.well_characterized_detailed:
+    print(f"{wc.aspect}: {wc.basis}")
 
-# LLM-generated clinical narrative (when enabled)
+# LLM-generated research narrative (when enabled)
 if result.llm:
     print(result.llm.llm_summary)
+    print(result.llm.research_hypotheses)  # Tagged with evidence basis
 ```
 
 See [README.md](../README.md) for installation and full API documentation.
