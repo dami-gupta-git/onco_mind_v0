@@ -379,6 +379,101 @@ class CBioPortalClient:
             study_name=study_name,
         )
 
+    async def fetch_cell_lines_with_mutation(
+        self,
+        gene: str,
+        variant: str | None = None,
+        tissue_filter: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch cell lines with a specific mutation from CCLE.
+
+        Uses the CCLE (Cancer Cell Line Encyclopedia) study in cBioPortal
+        to find cell lines harboring a specific mutation.
+
+        Args:
+            gene: Gene symbol (e.g., "TP53", "BRAF")
+            variant: Optional protein change (e.g., "V600E", "G245S")
+            tissue_filter: Optional tissue type filter (e.g., "BREAST", "LUNG")
+
+        Returns:
+            List of cell line dictionaries with keys:
+            - name: Cell line name (e.g., "MDA-MB-468")
+            - tissue: Tissue type (e.g., "BREAST")
+            - protein_change: Mutation protein change
+            - mutation_type: Type of mutation
+        """
+        # CCLE study ID and molecular profile
+        ccle_study = "ccle_broad_2019"
+        molecular_profile = f"{ccle_study}_mutations"
+
+        # Get Entrez ID for the gene
+        entrez_id = await self._get_entrez_id(gene.upper())
+        if not entrez_id:
+            return []
+
+        client = self._get_client()
+
+        try:
+            # Fetch all mutations for this gene in CCLE
+            response = await client.get(
+                f"{self.BASE_URL}/molecular-profiles/{molecular_profile}/mutations",
+                params={
+                    "sampleListId": f"{ccle_study}_all",
+                    "entrezGeneId": entrez_id,
+                },
+            )
+            response.raise_for_status()
+            mutations = response.json()
+        except Exception as e:
+            raise CBioPortalError(f"Failed to fetch CCLE mutations: {e}")
+
+        # Filter and format results
+        cell_lines = []
+        seen_samples = set()
+
+        # Normalize variant for comparison
+        clean_variant = variant.upper() if variant else None
+        if clean_variant and clean_variant.startswith("P."):
+            clean_variant = clean_variant[2:]
+
+        for mut in mutations:
+            sample_id = mut.get("sampleId", "")
+            protein_change = mut.get("proteinChange", "")
+
+            # Skip if we've already seen this sample (avoid duplicates)
+            if sample_id in seen_samples:
+                continue
+
+            # If variant specified, only include matching mutations
+            if clean_variant and protein_change.upper() != clean_variant:
+                continue
+
+            # Parse sample ID format: CELLLINE_TISSUE (e.g., MDAMB468_BREAST)
+            parts = sample_id.rsplit("_", 1)
+            if len(parts) == 2:
+                cell_name, tissue = parts
+            else:
+                cell_name = sample_id
+                tissue = "UNKNOWN"
+
+            # Apply tissue filter if specified
+            if tissue_filter and tissue_filter.upper() not in tissue.upper():
+                continue
+
+            seen_samples.add(sample_id)
+            cell_lines.append({
+                "name": cell_name.replace("_", "-"),  # Convert back to standard naming
+                "tissue": tissue,
+                "protein_change": protein_change,
+                "mutation_type": mut.get("mutationType", ""),
+                "sample_id": sample_id,
+            })
+
+        # Sort by tissue, then name
+        cell_lines.sort(key=lambda x: (x["tissue"], x["name"]))
+
+        return cell_lines
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._client:

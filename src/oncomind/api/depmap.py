@@ -89,48 +89,6 @@ class DepMapClient:
         "PDGFRA": {"score": -0.3, "dependent_pct": 15},
     }
 
-    # Known cell lines by mutation
-    MUTATION_CELL_LINES = {
-        "BRAF:V600E": [
-            {"name": "A375", "disease": "Melanoma", "subtype": "Cutaneous"},
-            {"name": "SK-MEL-28", "disease": "Melanoma", "subtype": "Cutaneous"},
-            {"name": "COLO800", "disease": "Melanoma", "subtype": "Cutaneous"},
-            {"name": "WM266-4", "disease": "Melanoma", "subtype": "Cutaneous"},
-            {"name": "HT-29", "disease": "Colorectal", "subtype": "Adenocarcinoma"},
-            {"name": "COLO205", "disease": "Colorectal", "subtype": "Adenocarcinoma"},
-        ],
-        "KRAS:G12C": [
-            {"name": "H358", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-            {"name": "H23", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-            {"name": "MIA PaCa-2", "disease": "Pancreatic", "subtype": "Adenocarcinoma"},
-            {"name": "SW1573", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-        ],
-        "KRAS:G12D": [
-            {"name": "PANC-1", "disease": "Pancreatic", "subtype": "Adenocarcinoma"},
-            {"name": "AsPC-1", "disease": "Pancreatic", "subtype": "Adenocarcinoma"},
-            {"name": "LS180", "disease": "Colorectal", "subtype": "Adenocarcinoma"},
-            {"name": "A549", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-        ],
-        "EGFR:L858R": [
-            {"name": "HCC827", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-            {"name": "PC-9", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-            {"name": "H3255", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-        ],
-        "EGFR:T790M": [
-            {"name": "H1975", "disease": "NSCLC", "subtype": "Adenocarcinoma"},
-        ],
-        "PIK3CA:H1047R": [
-            {"name": "MCF7", "disease": "Breast", "subtype": "ER+"},
-            {"name": "T47D", "disease": "Breast", "subtype": "ER+"},
-            {"name": "BT-474", "disease": "Breast", "subtype": "HER2+"},
-        ],
-        "ERBB2:amp": [
-            {"name": "SK-BR-3", "disease": "Breast", "subtype": "HER2+"},
-            {"name": "BT-474", "disease": "Breast", "subtype": "HER2+"},
-            {"name": "NCI-N87", "disease": "Gastric", "subtype": "Adenocarcinoma"},
-        ],
-    }
-
     # Known drug sensitivities by gene
     GENE_DRUG_SENSITIVITIES = {
         "BRAF": [
@@ -226,6 +184,9 @@ class DepMapClient:
 
         This provides commonly-queried cancer gene data when the API
         is unavailable or for faster responses.
+
+        Note: For cell line data by mutation, use CBioPortalClient.fetch_cell_lines_with_mutation()
+        which queries the CCLE study for comprehensive, up-to-date data.
         """
         gene_upper = gene.upper()
 
@@ -234,20 +195,6 @@ class DepMapClient:
             return None
 
         dep_data = self.CANCER_GENE_DEPENDENCIES[gene_upper]
-
-        # Get cell lines for this mutation
-        mutation_key = f"{gene_upper}:{variant}" if variant else None
-        cell_lines = []
-
-        if mutation_key and mutation_key in self.MUTATION_CELL_LINES:
-            for cl in self.MUTATION_CELL_LINES[mutation_key]:
-                cell_lines.append({
-                    "name": cl["name"],
-                    "disease": cl["disease"],
-                    "subtype": cl.get("subtype"),
-                    "has_mutation": True,
-                    "mutation": variant,
-                })
 
         # Get drug sensitivities for this gene
         drug_data = []
@@ -273,7 +220,7 @@ class DepMapClient:
             top_dependent_lines=[],  # Would need real data
             co_dependencies=[],  # Would need real data
             drug_sensitivities=drug_data,
-            cell_lines=cell_lines,
+            cell_lines=[],  # Use cBioPortal for cell line data
             data_version="fallback_cache",
         )
 
@@ -284,6 +231,9 @@ class DepMapClient:
     ) -> DepMapEvidence | None:
         """Fetch DepMap evidence for a gene/variant.
 
+        Returns gene dependency and drug sensitivity data.
+        For cell line data by mutation, use CBioPortalClient.fetch_cell_lines_with_mutation().
+
         Args:
             gene: Gene symbol (e.g., "BRAF")
             variant: Optional variant (e.g., "V600E")
@@ -293,7 +243,7 @@ class DepMapClient:
         """
         gene_upper = gene.upper()
 
-        # Try API first, fall back to cache
+        # Try DepMap API first (usually fails - endpoint doesn't exist)
         api_data = await self._try_api_query(gene_upper)
 
         if api_data:
