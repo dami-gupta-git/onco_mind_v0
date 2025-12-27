@@ -153,8 +153,8 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     _check_validation_gap(evidence, ctx)
 
     # Compute overall assessments
-    overall_quality = _compute_overall_quality(ctx.gaps)
-    research_priority = _compute_research_priority(evidence, ctx.gaps)
+    overall_quality = _compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
+    research_priority = _compute_research_priority(evidence, ctx.gaps, overall_quality)
 
     return EvidenceGaps(
         gaps=ctx.gaps,
@@ -829,32 +829,62 @@ SEVERITY_MULTIPLIERS: dict[GapSeverity, float] = {
 }
 
 
-def _compute_overall_quality(gaps: list[EvidenceGap]) -> str:
-    """Compute overall evidence quality from gaps using weighted scoring."""
-    if not gaps:
-        return "comprehensive"
+def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: int) -> str:
+    """Compute overall evidence quality using net scoring (gaps vs well-characterized).
 
-    total_score = 0.0
+    A variant with many well-characterized aspects and few gaps scores better than
+    one with few well-characterized aspects and the same gaps.
+
+    Args:
+        gaps: List of evidence gaps found
+        well_characterized_count: Number of well-characterized aspects
+
+    Returns:
+        Quality rating: "comprehensive" | "moderate" | "limited" | "minimal"
+    """
+    # Calculate gap penalty score
+    gap_score = 0.0
     for gap in gaps:
         category_weight = GAP_CATEGORY_WEIGHTS.get(gap.category, 1.0)
         severity_mult = SEVERITY_MULTIPLIERS.get(gap.severity, 1.0)
-        total_score += category_weight * severity_mult
+        gap_score += category_weight * severity_mult
 
-    if total_score >= 15.0:
+    # Give credit for well-characterized aspects (each worth 1.5 points of offset)
+    positive_credit = well_characterized_count * 1.5
+
+    # Net score: higher gap_score is worse, positive_credit offsets it
+    net_score = gap_score - positive_credit
+
+    # Apply thresholds to net score
+    if net_score >= 12.0:
         return "minimal"
-    elif total_score >= 10.0:
+    elif net_score >= 6.0:
         return "limited"
-    elif total_score >= 5.0:
+    elif net_score >= 0.0:
         return "moderate"
     else:
         return "comprehensive"
 
 
-def _compute_research_priority(evidence: "Evidence", gaps: list[EvidenceGap]) -> str:
+def _compute_research_priority(
+    evidence: "Evidence",
+    gaps: list[EvidenceGap],
+    overall_quality: str,
+) -> str:
     """Compute research priority based on gene importance and gap profile.
+
+    Args:
+        evidence: The aggregated evidence
+        gaps: List of identified gaps
+        overall_quality: The computed overall quality ("comprehensive", "moderate", etc.)
 
     Returns: "very_high" | "high" | "medium" | "low"
     """
+    # If evidence is already comprehensive, research priority should be low
+    # (nothing urgent to research)
+    if overall_quality == "comprehensive":
+        return "low"
+
     gene = evidence.identifiers.gene
     variant = evidence.identifiers.variant
 
