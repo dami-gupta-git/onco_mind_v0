@@ -11,7 +11,6 @@ Key Design:
 - Structured parsing to typed FDAEvidence models
 - Context manager for session cleanup
 """
-import json
 from typing import Any
 
 import httpx
@@ -22,7 +21,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from oncomind.constants import GENE_ALIASES
+from config.constants import GENE_ALIASES
 
 
 class FDAAPIError(Exception):

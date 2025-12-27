@@ -9,15 +9,15 @@ This tool normalizes variant notations across different formats:
 - Indels (del, ins, dup, fs)
 
 Usage:
-    python -m oncomind.tools.normalize_variant BRAF V600E
-    python -m oncomind.tools.normalize_variant BRAF Val600Glu
-    python -m oncomind.tools.normalize_variant BRAF p.V600E
-    python -m oncomind.tools.normalize_variant ALK fusion
-    python -m oncomind.tools.normalize_variant --batch variants.txt
-    echo "BRAF,V600E" | python -m oncomind.tools.normalize_variant --stdin
+    python -m oncomind.tools.normalize_variant_cli BRAF V600E
+    python -m oncomind.tools.normalize_variant_cli BRAF Val600Glu
+    python -m oncomind.tools.normalize_variant_cli BRAF p.V600E
+    python -m oncomind.tools.normalize_variant_cli ALK fusion
+    python -m oncomind.tools.normalize_variant_cli --batch variants.txt
+    echo "BRAF,V600E" | python -m oncomind.tools.normalize_variant_cli --stdin
 
     # With genomic lookup (requires network)
-    python -m oncomind.tools.normalize_variant BRAF V600E --lookup
+    python -m oncomind.tools.normalize_variant_cli BRAF V600E --lookup
 
 Output formats:
     --format json    JSON output (default)
@@ -28,140 +28,14 @@ Output formats:
 import argparse
 import asyncio
 import json
-import re
 import sys
-from typing import Any, TextIO
+from typing import TextIO
 
-import httpx
-
-from oncomind.constants import GENE_CHROMOSOMES
+# Core normalization logic is in utils - CLI just provides interface
 from oncomind.utils.variant_normalization import (
-    VariantNormalizer,
-    normalize_variant,
-    to_hgvs_protein,
-    get_protein_position,
-    is_snp_or_small_indel,
+    normalize_variant_extended,
+    normalize_variant_with_lookup,
 )
-
-
-async def lookup_genomic_info(gene: str, variant: str) -> dict[str, Any]:
-    """Look up genomic information from MyVariant.info API.
-
-    Returns chromosome, genomic notation (g.), transcript info, and gene details.
-    """
-    result = {
-        "chromosome": None,
-        "hgvs_genomic": None,
-        "gene_id": None,
-        "gene_name": None,
-        "transcript_id": None,
-        "exon": None,
-        "ref_allele": None,
-        "alt_allele": None,
-        "genomic_position": None,
-    }
-
-    # Add chromosome from local mapping first
-    gene_upper = gene.upper()
-    if gene_upper in GENE_CHROMOSOMES:
-        result["chromosome"] = GENE_CHROMOSOMES[gene_upper]
-
-    # Query MyVariant.info API
-    protein_notation = f"p.{variant}" if not variant.lower().startswith("p.") else variant
-    query = f"{gene} {protein_notation}"
-
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                "https://myvariant.info/v1/query",
-                params={"q": query, "size": 1}
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            if data.get("hits"):
-                hit = data["hits"][0]
-
-                # Extract genomic notation from _id (e.g., "chr7:g.140453136A>T")
-                variant_id = hit.get("_id", "")
-                if variant_id:
-                    result["hgvs_genomic"] = variant_id
-
-                    # Parse chromosome and position from _id
-                    match = re.match(r"chr(\w+):g\.(\d+)([ACGT])>([ACGT])", variant_id)
-                    if match:
-                        result["chromosome"] = match.group(1)
-                        result["genomic_position"] = int(match.group(2))
-                        result["ref_allele"] = match.group(3)
-                        result["alt_allele"] = match.group(4)
-
-                # Extract CADD gene info
-                cadd = hit.get("cadd", {})
-                if cadd:
-                    gene_info = cadd.get("gene", {})
-                    if gene_info:
-                        result["gene_name"] = gene_info.get("genename")
-                        result["gene_id"] = gene_info.get("gene_id")
-                        result["transcript_id"] = gene_info.get("feature_id")
-                    result["exon"] = cadd.get("exon")
-
-                    # Fallback for chromosome
-                    if not result["chromosome"]:
-                        result["chromosome"] = str(cadd.get("chrom", ""))
-
-                # Try dbSNP for gene info
-                dbsnp = hit.get("dbsnp", {})
-                if dbsnp and not result["gene_id"]:
-                    dbsnp_gene = dbsnp.get("gene", {})
-                    if dbsnp_gene:
-                        result["gene_id"] = str(dbsnp_gene.get("geneid", ""))
-
-    except Exception:
-        # Silently fail - we'll return partial results from local mapping
-        pass
-
-    return result
-
-
-def normalize_single(gene: str, variant: str, genomic_info: dict | None = None) -> dict:
-    """Normalize a single variant and return comprehensive results."""
-    result = normalize_variant(gene, variant)
-
-    # Add additional useful fields
-    result['hgvs_protein'] = to_hgvs_protein(variant)
-    result['position'] = get_protein_position(variant)
-    result['is_allowed_type'] = is_snp_or_small_indel(gene, variant)
-
-    # Add chromosome from local mapping
-    gene_upper = gene.upper()
-    result['chromosome'] = GENE_CHROMOSOMES.get(gene_upper)
-
-    # Add genomic info if provided (from API lookup)
-    if genomic_info:
-        result['chromosome'] = genomic_info.get('chromosome') or result.get('chromosome')
-        result['hgvs_genomic'] = genomic_info.get('hgvs_genomic')
-        result['gene_name'] = genomic_info.get('gene_name')
-        result['gene_id'] = genomic_info.get('gene_id')
-        result['transcript_id'] = genomic_info.get('transcript_id')
-        result['exon'] = genomic_info.get('exon')
-        result['genomic_position'] = genomic_info.get('genomic_position')
-        result['ref_allele'] = genomic_info.get('ref_allele')
-        result['alt_allele'] = genomic_info.get('alt_allele')
-
-    # Add query formats for common APIs
-    result['query_formats'] = {
-        'myvariant': f"{result['gene']} p.{result['variant_normalized']}" if result['protein_change'] else f"{result['gene']} {result['variant_normalized']}",
-        'vicc': f"{result['gene']} {result['variant_normalized']}",
-        'civic': f"{result['gene']} {result['variant_normalized']}",
-    }
-
-    return result
-
-
-async def normalize_single_with_lookup(gene: str, variant: str) -> dict:
-    """Normalize a variant with genomic lookup from MyVariant.info."""
-    genomic_info = await lookup_genomic_info(gene, variant)
-    return normalize_single(gene, variant, genomic_info)
 
 
 def format_json(results: list[dict], pretty: bool = True) -> str:
@@ -295,9 +169,9 @@ def process_batch(input_file: TextIO, lookup: bool = False) -> list[dict]:
             gene, variant = parsed
             try:
                 if lookup:
-                    result = asyncio.run(normalize_single_with_lookup(gene, variant))
+                    result = asyncio.run(normalize_variant_with_lookup(gene, variant))
                 else:
-                    result = normalize_single(gene, variant)
+                    result = normalize_variant_extended(gene, variant)
                 result['line_number'] = line_num
                 results.append(result)
             except Exception as e:
@@ -384,9 +258,9 @@ Batch file format (one variant per line):
         results = process_batch(sys.stdin, lookup=args.lookup)
     elif args.gene and args.variant:
         if args.lookup:
-            results = [asyncio.run(normalize_single_with_lookup(args.gene, args.variant))]
+            results = [asyncio.run(normalize_variant_with_lookup(args.gene, args.variant))]
         else:
-            results = [normalize_single(args.gene, args.variant)]
+            results = [normalize_variant_extended(args.gene, args.variant)]
     else:
         parser.print_help()
         sys.exit(1)

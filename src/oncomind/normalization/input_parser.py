@@ -21,7 +21,7 @@ from typing import Any
 from dataclasses import dataclass, field
 
 from oncomind.utils.variant_normalization import normalize_variant, classify_variant_type
-from oncomind.constants import GENE_ALIASES
+from config.constants import GENE_ALIASES
 
 
 @dataclass

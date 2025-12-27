@@ -1,14 +1,11 @@
 """LLM service for variant insight generation."""
 
 import json
-import re
 from litellm import acompletion
 from oncomind.llm.prompts import create_research_prompt
-from oncomind.models import RecommendedTherapy
 from oncomind.models.llm_insight import LLMInsight
-from oncomind.models.gene_context import get_oncogene_mutation_class
 
-from oncomind.utils.logging_config import get_logger
+from oncomind.config.logging_config import get_logger
 
 
 class LLMService:

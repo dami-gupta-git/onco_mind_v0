@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from oncomind.constants import TUMOR_TYPE_MAPPINGS
+from config.constants import TUMOR_TYPE_MAPPINGS
 
 
 class CGIError(Exception):
