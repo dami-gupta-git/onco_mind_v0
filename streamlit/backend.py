@@ -197,6 +197,8 @@ def _build_response(result) -> Dict[str, Any]:
         "civic_assertions": [
             {
                 "id": a.assertion_id,
+                "aid": a.aid,  # Formatted ID (e.g., "AID20")
+                "civic_url": a.civic_url,  # Direct link to CIViC
                 "therapies": a.therapies,
                 "disease": a.disease,
                 "significance": a.significance,
@@ -208,6 +210,9 @@ def _build_response(result) -> Dict[str, Any]:
         ],
         "civic_evidence": [
             {
+                "evidence_id": e.evidence_id,
+                "eid": e.eid,  # Formatted ID (e.g., "EID5586")
+                "civic_url": e.civic_url,  # Direct link to CIViC
                 "evidence_type": e.evidence_type,
                 "evidence_level": e.evidence_level,
                 "clinical_significance": e.clinical_significance,
@@ -229,6 +234,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "evidence_level": v.evidence_level,
                 "molecular_profile": v.molecular_profile,
                 "molecular_profile_score": v.molecular_profile_score,
+                "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
             }
             for v in evidence.vicc_evidence
         ],
@@ -380,7 +386,11 @@ def _build_evidence_gaps(evidence) -> dict:
         "research_priority": gaps.research_priority,
         "well_characterized": gaps.well_characterized,
         "well_characterized_detailed": [
-            {"aspect": wc.aspect, "basis": wc.basis}
+            {
+                "category": wc.category.value if wc.category else None,
+                "aspect": wc.aspect,
+                "basis": wc.basis,
+            }
             for wc in gaps.well_characterized_detailed
         ],
         "poorly_characterized": gaps.poorly_characterized,
