@@ -139,6 +139,9 @@ class LLMService:
             # Extract evidence tags for transparency
             evidence_tags = data.get("evidence_tags", [])
 
+            # Extract research hypotheses
+            research_hypotheses = data.get("research_hypotheses", [])
+
             # Build insight with research-focused narrative and raw component data
             return LLMInsight(
                 llm_summary=llm_summary,
@@ -157,6 +160,7 @@ class LLMService:
                 conflicting_evidence=conflicting_evidence,
                 research_implications=research_implications,
                 evidence_tags=evidence_tags,
+                research_hypotheses=research_hypotheses,
             )
 
         except Exception as e:

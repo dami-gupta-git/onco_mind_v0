@@ -152,6 +152,7 @@ def _build_response(result) -> Dict[str, Any]:
             "research_implications": llm.research_implications if llm else None,
             "references": llm.references if llm else [],
             "evidence_tags": llm.evidence_tags if llm else [],
+            "research_hypotheses": llm.research_hypotheses if llm else [],
         },
         "identifiers": {
             "cosmic_id": result.identifiers.cosmic_id,
@@ -358,5 +359,36 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for t in therapeutic_list
         ],
+        # Structured evidence gaps (from gap_detector, not LLM)
+        "evidence_gaps": _build_evidence_gaps(evidence),
         "result_data": result.model_dump(mode="json"),
+    }
+
+
+def _build_evidence_gaps(evidence) -> dict:
+    """Build structured evidence gaps dict from Evidence model.
+
+    This is the deterministic gap analysis, not LLM-generated.
+    """
+    # Compute gaps if not already computed
+    gaps = evidence.evidence_gaps
+    if gaps is None:
+        gaps = evidence.compute_evidence_gaps()
+
+    return {
+        "overall_quality": gaps.overall_evidence_quality,
+        "research_priority": gaps.research_priority,
+        "well_characterized": gaps.well_characterized,
+        "poorly_characterized": gaps.poorly_characterized,
+        "gaps": [
+            {
+                "category": g.category.value,
+                "severity": g.severity.value,
+                "description": g.description,
+                "suggested_studies": g.suggested_studies,
+                "addressable_with": g.addressable_with,
+            }
+            for g in gaps.gaps
+        ],
+        "has_critical_gaps": gaps.has_critical_gaps(),
     }

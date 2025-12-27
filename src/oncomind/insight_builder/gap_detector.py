@@ -6,6 +6,7 @@ Analyzes what's missing from the evidence to guide research priorities.
 from oncomind.models.evidence.evidence_gaps import (
     EvidenceGaps, EvidenceGap, GapCategory, GapSeverity
 )
+from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
@@ -29,6 +30,40 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     gene = evidence.identifiers.gene
     variant = evidence.identifiers.variant
     tumor_type = evidence.context.tumor_type
+
+    # Determine if this is a known cancer gene (affects severity calculations)
+    is_cancer_gene = evidence.context.gene_role in (
+        "oncogene", "TSG", "tumor_suppressor", "ddr", "tsg_pathway_actionable"
+    )
+
+    # Check if variant has pathogenic signal (not a benign polymorphism)
+    # Used to avoid overcalling gaps on clearly benign variants
+    has_pathogenic_signal = _has_pathogenic_signal(evidence)
+
+    # === Check hotspot context ===
+    # Hotspot variants are well-characterized; hotspot-adjacent variants are research gold
+    is_hotspot = is_hotspot_variant(gene, variant)
+    is_adjacent, nearest_hotspot = is_hotspot_adjacent(gene, variant, window=5)
+
+    if is_hotspot:
+        well_characterized.append("known cancer hotspot")
+    elif is_adjacent and nearest_hotspot:
+        # Rare variant near a hotspot - high research value
+        well_characterized.append(f"near hotspot codon {nearest_hotspot} — structural hypothesis likely")
+        # This is a research opportunity - rare variant near known activating hotspot
+        # Structural similarity to hotspot suggests similar functional impact
+        gaps.append(EvidenceGap(
+            category=GapCategory.FUNCTIONAL,
+            severity=GapSeverity.SIGNIFICANT,
+            description=f"Rare variant near known hotspot (codon {nearest_hotspot}) — functional characterization needed",
+            suggested_studies=[
+                f"Compare to nearby hotspot {gene} codon {nearest_hotspot}",
+                "Structural modeling to assess activation mechanism",
+                "Functional assay (transformation, signaling)"
+            ],
+            addressable_with=["AlphaFold", "Literature on nearby hotspot", "Isogenic models"]
+        ))
+        poorly_characterized.append("rare-near-hotspot variant function")
 
     # === Check functional characterization ===
     has_functional = (
@@ -63,7 +98,7 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     if has_depmap_essentiality:
         well_characterized.append("gene essentiality (DepMap CRISPR)")
         # If gene is essential, this adds confidence to functional impact
-        if evidence.depmap_evidence.is_essential():
+        if evidence.depmap_evidence is not None and evidence.depmap_evidence.is_essential():
             well_characterized.append(f"{gene} is essential in cancer cells")
 
     if not has_mechanism and not has_depmap_essentiality:
@@ -82,9 +117,10 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     if has_clinical:
         well_characterized.append("clinical actionability")
     else:
+        # Clinical gap is CRITICAL - no curated clinical evidence is a major gap
         gaps.append(EvidenceGap(
             category=GapCategory.CLINICAL,
-            severity=GapSeverity.SIGNIFICANT,
+            severity=GapSeverity.CRITICAL,
             description=f"No curated clinical evidence for {gene} {variant}",
             suggested_studies=["Case series", "Retrospective cohort", "Basket trial inclusion"],
             addressable_with=["CIViC submission", "Literature curation"]
@@ -98,9 +134,19 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
         if tumor_specific_evidence:
             well_characterized.append(f"evidence in {tumor_type}")
         else:
+            # Tumor-type gap severity depends on gene importance and pathogenic signal
+            # CRITICAL: cancer gene + no clinical evidence + pathogenic signal
+            # SIGNIFICANT: cancer gene OR pathogenic signal
+            # MINOR: benign/unknown variants in non-cancer genes
+            if is_cancer_gene and not has_clinical and has_pathogenic_signal:
+                tumor_severity = GapSeverity.CRITICAL
+            elif is_cancer_gene or has_pathogenic_signal:
+                tumor_severity = GapSeverity.SIGNIFICANT
+            else:
+                tumor_severity = GapSeverity.MINOR
             gaps.append(EvidenceGap(
                 category=GapCategory.TUMOR_TYPE,
-                severity=GapSeverity.CRITICAL,
+                severity=tumor_severity,
                 description=f"No evidence specific to {tumor_type} for {gene} {variant}",
                 suggested_studies=[
                     f"Case series in {tumor_type}",
@@ -149,14 +195,28 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
         well_characterized.append("resistance mechanisms")
     elif has_clinical or has_drug_data:
         # Only flag as gap if this is likely a clinically relevant variant
+        # Resistance is significant because it affects treatment decisions
         gaps.append(EvidenceGap(
             category=GapCategory.RESISTANCE,
-            severity=GapSeverity.MINOR,
+            severity=GapSeverity.SIGNIFICANT,
             description=f"Resistance mechanisms for {gene} {variant} not well characterized",
             suggested_studies=["Serial biopsy study", "ctDNA monitoring", "Resistance screen"],
             addressable_with=["Literature search", "CIViC"]
         ))
         poorly_characterized.append("resistance mechanisms")
+
+    # === Check for discordant/conflicting evidence ===
+    discordant_findings = _detect_discordant_evidence(evidence)
+    if discordant_findings:
+        for finding in discordant_findings:
+            gaps.append(EvidenceGap(
+                category=GapCategory.DISCORDANT,
+                severity=GapSeverity.SIGNIFICANT,
+                description=finding,
+                suggested_studies=["Meta-analysis", "Prospective validation study"],
+                addressable_with=["Literature review", "Expert consensus"]
+            ))
+            poorly_characterized.append("conflicting evidence")
 
     # === Check prevalence/epidemiology ===
     has_prevalence = (
@@ -167,9 +227,11 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     if has_prevalence:
         well_characterized.append("prevalence")
     else:
+        # Prevalence gap is SIGNIFICANT for cancer genes with clinical relevance, MINOR otherwise
+        prevalence_severity = GapSeverity.SIGNIFICANT if (is_cancer_gene and has_clinical) else GapSeverity.MINOR
         gaps.append(EvidenceGap(
             category=GapCategory.PREVALENCE,
-            severity=GapSeverity.MINOR,
+            severity=prevalence_severity,
             description=f"Prevalence of {gene} {variant} in {tumor_type or 'cancer'} unknown",
             suggested_studies=["Epidemiological study", "Registry analysis"],
             addressable_with=["cBioPortal", "COSMIC", "TCGA"]
@@ -191,6 +253,7 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
         ))
 
     # === Check preclinical model systems (cell lines) ===
+    # Enhanced logic: check for tumor-type-specific models and flag cross-histology opportunities
     has_cell_line_models = (
         evidence.depmap_evidence is not None and
         bool(evidence.depmap_evidence.cell_line_models)
@@ -198,9 +261,38 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
 
     if has_cell_line_models:
         n_models = len(evidence.depmap_evidence.cell_line_models)
-        mutant_models = evidence.depmap_evidence.get_model_cell_lines(with_mutation_only=True)
+        # Get CellLineModel objects (not just names) to access tumor type info
+        mutant_models = [
+            cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation
+        ]
+
         if mutant_models:
             well_characterized.append(f"model cell lines ({len(mutant_models)} with mutation)")
+
+            # Check if models exist but none match the queried tumor type
+            if tumor_type:
+                tumor_lower = tumor_type.lower()
+                tumor_models = [
+                    m for m in mutant_models
+                    if m.primary_disease and tumor_lower in m.primary_disease.lower()
+                ]
+                if not tumor_models:
+                    # Models exist with mutation but not in queried tumor type
+                    # This is a research opportunity for cross-histology hypothesis
+                    gaps.append(EvidenceGap(
+                        category=GapCategory.PRECLINICAL,
+                        severity=GapSeverity.SIGNIFICANT,
+                        description=f"Models with {variant} exist but none in {tumor_type} — cross-histology testing possible",
+                        suggested_studies=[
+                            f"Test in {tumor_type}-derived organoids",
+                            "Compare drug response vs other histologies",
+                            "Generate isogenic model in {tumor_type} background"
+                        ],
+                        addressable_with=["DepMap", "Patient-derived organoids", "CRISPR knock-in"]
+                    ))
+                    poorly_characterized.append(f"{tumor_type}-specific preclinical models")
+                else:
+                    well_characterized.append(f"{tumor_type} cell line models ({len(tumor_models)} available)")
         else:
             well_characterized.append(f"model cell lines ({n_models} available)")
     else:
@@ -220,9 +312,11 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     pub_count = len(evidence.pubmed_articles)
     if evidence.literature_searched:
         if pub_count == 0:
+            # Literature gap is CRITICAL for cancer genes, SIGNIFICANT otherwise
+            lit_severity = GapSeverity.CRITICAL if is_cancer_gene else GapSeverity.SIGNIFICANT
             gaps.append(EvidenceGap(
                 category=GapCategory.FUNCTIONAL,
-                severity=GapSeverity.CRITICAL,
+                severity=lit_severity,
                 description=f"No published literature found for {gene} {variant}",
                 suggested_studies=["Case report", "Functional characterization study"],
                 addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"]
@@ -233,6 +327,38 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
         else:
             well_characterized.append("published literature")
     # If literature wasn't searched, don't report it as a gap (user chose not to search)
+
+    # === Check for strong oncogenic signal with limited validation ===
+    # This identifies high-potential research targets: variants with biological
+    # driver signal but lacking therapeutic/clinical validation
+    has_strong_oncogenic_signal = (
+        has_pathogenic_signal and
+        (evidence.depmap_evidence is not None and evidence.depmap_evidence.is_essential())
+    )
+
+    has_therapeutic_validation = (
+        bool(evidence.civic_assertions) or
+        bool(evidence.fda_approvals) or
+        bool(evidence.vicc_evidence)
+    )
+
+    if has_strong_oncogenic_signal:
+        well_characterized.append("biological driver potential")
+
+        if not has_therapeutic_validation:
+            gaps.append(EvidenceGap(
+                category=GapCategory.VALIDATION,
+                severity=GapSeverity.CRITICAL if is_cancer_gene else GapSeverity.SIGNIFICANT,
+                description=f"Strong oncogenic signal but limited therapeutic validation",
+                suggested_studies=[
+                    "Functional validation in isogenic models",
+                    "Drug sensitivity screening (PRISM/GDSC)",
+                    "Patient-derived organoid testing",
+                    "Structural modeling of activation mechanism"
+                ],
+                addressable_with=["AlphaFold", "DepMap", "CRISPR screens", "Literature"]
+            ))
+            poorly_characterized.append("therapeutic validation")
 
     # === Determine overall evidence quality ===
     overall_quality = _compute_overall_quality(gaps)
@@ -278,38 +404,296 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> boo
     return False
 
 
-def _compute_overall_quality(gaps: list[EvidenceGap]) -> str:
-    """Compute overall evidence quality from gaps."""
-    critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
-    significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
+# Research-oriented gap weights: biological unknowns weighted higher than clinical gaps
+GAP_CATEGORY_WEIGHTS: dict[GapCategory, float] = {
+    GapCategory.VALIDATION: 3.5,      # Strong signal + no validation = high research value
+    GapCategory.FUNCTIONAL: 3.0,      # Mechanism unknown
+    GapCategory.PRECLINICAL: 2.5,     # No models to test hypotheses
+    GapCategory.RESISTANCE: 2.0,      # Resistance mechanisms unknown
+    GapCategory.DISCORDANT: 2.0,      # Conflicting evidence needs resolution
+    GapCategory.DRUG_RESPONSE: 1.5,   # Drug sensitivity unknown
+    GapCategory.TUMOR_TYPE: 1.5,      # Not studied in this tumor
+    GapCategory.PREVALENCE: 1.0,      # Epidemiology unknown
+    GapCategory.CLINICAL: 1.0,        # Lower weight for research context
+    GapCategory.PROGNOSTIC: 1.0,      # Prognostic impact unknown
+}
 
-    if critical_count >= 2:
-        return "minimal"
-    elif critical_count == 1:
-        return "limited"
-    elif significant_count >= 2:
-        return "limited"
-    elif significant_count == 1:
-        return "moderate"
-    elif len(gaps) == 0:
+# Severity multipliers
+SEVERITY_MULTIPLIERS: dict[GapSeverity, float] = {
+    GapSeverity.CRITICAL: 3.0,
+    GapSeverity.SIGNIFICANT: 2.0,
+    GapSeverity.MINOR: 1.0,
+}
+
+
+def _compute_overall_quality(gaps: list[EvidenceGap]) -> str:
+    """Compute overall evidence quality from gaps using weighted scoring.
+
+    Research-oriented: weights biological gaps higher than clinical gaps.
+    """
+    if not gaps:
         return "comprehensive"
-    else:
+
+    # Compute weighted gap score
+    total_score = 0.0
+    for gap in gaps:
+        category_weight = GAP_CATEGORY_WEIGHTS.get(gap.category, 1.0)
+        severity_mult = SEVERITY_MULTIPLIERS.get(gap.severity, 1.0)
+        total_score += category_weight * severity_mult
+
+    # Thresholds for quality levels
+    if total_score >= 15.0:
+        return "minimal"
+    elif total_score >= 10.0:
+        return "limited"
+    elif total_score >= 5.0:
         return "moderate"
+    else:
+        return "comprehensive"
 
 
 def _compute_research_priority(evidence: "Evidence", gaps: list[EvidenceGap]) -> str:
-    """Compute research priority based on gene importance and gaps."""
-    critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
-    significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
+    """Compute research priority based on gene importance and gap profile.
 
-    # High priority: clinically important gene with critical gaps
+    Research-oriented: prioritizes biologically promising but under-explored variants.
+    Returns: "very_high" | "high" | "medium" | "low"
+    """
+    gene = evidence.identifiers.gene
+    variant = evidence.identifiers.variant
+
     is_cancer_gene = evidence.context.gene_role in (
         "oncogene", "TSG", "tumor_suppressor", "ddr", "tsg_pathway_actionable"
     )
 
+    # Check for strong oncogenic signal (pathogenic + essential)
+    has_strong_oncogenic_signal = (
+        _has_pathogenic_signal(evidence) and
+        evidence.depmap_evidence is not None and
+        evidence.depmap_evidence.is_essential()
+    )
+
+    # Check for biological/preclinical gaps (high research value)
+    has_biological_gaps = any(
+        g.category in (GapCategory.VALIDATION, GapCategory.FUNCTIONAL, GapCategory.PRECLINICAL)
+        for g in gaps
+    )
+
+    # Check hotspot context
+    is_hotspot = is_hotspot_variant(gene, variant)
+    is_adjacent, _ = is_hotspot_adjacent(gene, variant, window=5)
+
+    critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
+    significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
+
+    # Very high: strong oncogenic signal + biological gaps = prime research target
+    if has_strong_oncogenic_signal and has_biological_gaps:
+        return "very_high"
+
+    # Very high: hotspot-adjacent variant with pathogenic signal = rare near hotspot
+    if is_adjacent and _has_pathogenic_signal(evidence) and has_biological_gaps:
+        return "very_high"
+
+    # High: cancer gene with critical gaps
     if is_cancer_gene and critical_count > 0:
         return "high"
-    elif critical_count > 0 or (is_cancer_gene and significant_count > 0):
+
+    # High: hotspot-adjacent variant in cancer gene (research opportunity)
+    if is_adjacent and is_cancer_gene:
+        return "high"
+
+    # Medium: any critical gaps OR cancer gene with significant gaps
+    if critical_count > 0 or (is_cancer_gene and significant_count > 0):
         return "medium"
-    else:
-        return "low"
+
+    return "low"
+
+
+def _has_pathogenic_signal(evidence: "Evidence") -> bool:
+    """Check if variant has any signal suggesting pathogenicity.
+
+    Used to avoid overcalling gaps on clearly benign variants (common polymorphisms).
+
+    Returns True if any of:
+    - AlphaMissense predicts pathogenic (P or likely_pathogenic)
+    - CADD score >= 20 (predicted deleterious)
+    - PolyPhen2 predicts damaging (D or probably_damaging)
+    - Rare in population (gnomAD AF < 0.01 or absent)
+    - Has any clinical assertions or FDA approvals
+    - Has any ClinVar pathogenic/likely pathogenic entries
+    """
+    func = evidence.functional
+
+    # AlphaMissense pathogenic prediction
+    if func.alphamissense_prediction and func.alphamissense_prediction.lower() in (
+        "p", "pathogenic", "likely_pathogenic", "lp"
+    ):
+        return True
+
+    # CADD score >= 20 suggests deleteriousness
+    if func.cadd_score is not None and func.cadd_score >= 20:
+        return True
+
+    # PolyPhen2 damaging prediction
+    if func.polyphen2_prediction and func.polyphen2_prediction.lower() in (
+        "d", "damaging", "probably_damaging", "possibly_damaging"
+    ):
+        return True
+
+    # Rare variant (gnomAD AF < 1% or absent suggests not a common polymorphism)
+    if func.gnomad_exome_af is None or func.gnomad_exome_af < 0.01:
+        # Absence or rarity is suggestive but not definitive
+        # Only count as pathogenic signal if combined with other evidence
+        pass
+
+    # Has clinical evidence (strongest signal)
+    if evidence.civic_assertions or evidence.fda_approvals:
+        return True
+
+    # ClinVar pathogenic entries
+    for entry in evidence.clinvar_entries:
+        if entry.clinical_significance and "pathogenic" in entry.clinical_significance.lower():
+            return True
+
+    # Check if overall ClinVar significance is pathogenic
+    if evidence.clinvar_significance and "pathogenic" in evidence.clinvar_significance.lower():
+        return True
+
+    # Truncating variants (nonsense, frameshift) are generally pathogenic
+    if func.snpeff_effect:
+        effect_lower = func.snpeff_effect.lower()
+        if any(term in effect_lower for term in [
+            "stop_gained", "frameshift", "splice_donor", "splice_acceptor",
+            "start_lost", "nonsense"
+        ]):
+            return True
+
+    return False
+
+
+def _normalize_source(source: str) -> str:
+    """Normalize source names to detect duplicates.
+
+    VICC/civic is essentially the same as CIViC, VICC/oncokb is OncoKB, etc.
+    """
+    source_lower = source.lower()
+    if source_lower in ("civic", "vicc/civic"):
+        return "CIViC"
+    if source_lower in ("oncokb", "vicc/oncokb"):
+        return "OncoKB"
+    if source_lower in ("cgi", "vicc/cgi"):
+        return "CGI"
+    if source_lower in ("molecularmatch", "vicc/molecularmatch"):
+        return "MolecularMatch"
+    if source_lower.startswith("vicc/"):
+        return source[5:].title()  # Strip "vicc/" prefix
+    return source
+
+
+def _detect_discordant_evidence(evidence: "Evidence") -> list[str]:
+    """Detect conflicting evidence between different sources.
+
+    Only flags TRUE cross-source conflicts (e.g., CGI says sensitive, CIViC says resistant).
+    Intra-source conflicts (multiple CIViC entries disagreeing) are not flagged as they
+    often represent context-dependent responses (different tumor types, combinations, etc.)
+    rather than genuine discordance.
+
+    Key filtering:
+    - Combination therapies are tracked separately from monotherapy
+    - VICC/civic is treated as the same source as CIViC
+    - Only flags conflicts between truly independent sources
+
+    Returns list of human-readable conflict descriptions.
+    """
+    conflicts: list[str] = []
+
+    # Collect drug response signals from different sources
+    # Use sets to de-duplicate sources (avoid "CIViC, CIViC, CIViC...")
+    # Key: drug name (monotherapy only), Value: set of normalized source names
+    sensitive_drugs: dict[str, set[str]] = {}
+    resistant_drugs: dict[str, set[str]] = {}
+
+    # Check CGI biomarkers
+    for cgi in evidence.cgi_biomarkers:
+        if not cgi.drug:
+            continue
+        drug = cgi.drug.lower()
+        if cgi.association:
+            assoc_upper = cgi.association.upper()
+            if "RESIST" in assoc_upper:
+                resistant_drugs.setdefault(drug, set()).add("CGI")
+            elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
+                sensitive_drugs.setdefault(drug, set()).add("CGI")
+
+    # Check VICC evidence
+    for vicc in evidence.vicc_evidence:
+        if not vicc.drugs:
+            continue
+        # Skip combination therapies (only look at single-drug entries)
+        if len(vicc.drugs) > 1:
+            continue
+        drug_lower = vicc.drugs[0].lower()
+        if vicc.response_type:
+            resp_upper = vicc.response_type.upper()
+            source_name = _normalize_source(f"VICC/{vicc.source}" if vicc.source else "VICC")
+            if "RESIST" in resp_upper:
+                resistant_drugs.setdefault(drug_lower, set()).add(source_name)
+            elif "SENS" in resp_upper or "RESPON" in resp_upper:
+                sensitive_drugs.setdefault(drug_lower, set()).add(source_name)
+
+    # Check CIViC evidence
+    for civic in evidence.civic_evidence:
+        if not civic.drugs:
+            continue
+        # Skip combination therapies (only look at single-drug entries)
+        if len(civic.drugs) > 1:
+            continue
+        drug_lower = civic.drugs[0].lower()
+        if civic.clinical_significance:
+            sig_upper = civic.clinical_significance.upper()
+            if "RESIST" in sig_upper:
+                resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
+            elif "SENS" in sig_upper or "RESPON" in sig_upper:
+                sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
+
+    # Find drugs with TRUE CROSS-SOURCE conflicts only
+    # Intra-source conflicts (CIViC vs CIViC) are not flagged - they often represent
+    # context-dependent responses rather than genuine discordance
+    for drug in set(sensitive_drugs.keys()) & set(resistant_drugs.keys()):
+        sens_sources = sensitive_drugs[drug]
+        resist_sources = resistant_drugs[drug]
+
+        # Only flag if the sources are truly different (cross-source conflict)
+        # If both sets contain only CIViC (or CIViC-derived data), skip it
+        if sens_sources == resist_sources:
+            continue
+
+        # Check for actual cross-source disagreement
+        sens_only = sens_sources - resist_sources
+        resist_only = resist_sources - sens_sources
+
+        if sens_only and resist_only:
+            # True cross-source conflict: different sources on each side
+            conflicts.append(
+                f"Conflicting drug response for {drug}: "
+                f"sensitive ({', '.join(sorted(sens_sources))}) vs "
+                f"resistant ({', '.join(sorted(resist_sources))})"
+            )
+
+    # Check ClinVar significance conflicts
+    clinvar_sigs = set()
+    for entry in evidence.clinvar_entries:
+        if entry.clinical_significance:
+            sig = entry.clinical_significance.lower()
+            if "pathogenic" in sig and "benign" not in sig:
+                clinvar_sigs.add("pathogenic")
+            elif "benign" in sig and "pathogenic" not in sig:
+                clinvar_sigs.add("benign")
+            elif "uncertain" in sig or "vus" in sig:
+                clinvar_sigs.add("uncertain")
+
+    if "pathogenic" in clinvar_sigs and "benign" in clinvar_sigs:
+        conflicts.append(
+            f"ClinVar has conflicting interpretations: both pathogenic and benign submissions"
+        )
+
+    return conflicts

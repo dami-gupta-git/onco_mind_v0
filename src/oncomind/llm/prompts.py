@@ -17,6 +17,7 @@ Core objectives:
 3. Summarize the EVIDENCE LANDSCAPE (what is well established, what is emerging, where data are sparse or conflicting).
 4. Detail the THERAPEUTIC LANDSCAPE (FDA-approved agents, clinical trial data, and preclinical sensitivity/resistance signals).
 5. Identify KNOWLEDGE GAPS and TENSIONS in the evidence that are interesting for researchers.
+6. Generate TESTABLE RESEARCH HYPOTHESES based on evidence gaps (see hypothesis generation rules below).
 
 === CRITICAL: CALIBRATE CONFIDENCE TO EVIDENCE QUALITY ===
 
@@ -56,6 +57,26 @@ EVIDENCE TAG VALIDATION (STRICT):
 - Include an explicit note if data are uncertain or inferential, and label such sections accordingly.
 
 Your narrative should read like a concise discussion section in a strong cancer paper: integrative, precise, and explicitly pointing to testable research questions, but strictly bounded by the provided evidence.
+
+=== RESEARCH HYPOTHESIS GENERATION RULES ===
+
+Generate 2-3 testable research hypotheses based on the evidence gaps. Focus on:
+- BIOLOGICAL MECHANISM: What functional experiments could clarify the variant's effect?
+- PRECLINICAL TESTING: What cell line models or drug sensitivity assays are warranted?
+- CO-MUTATION EFFECTS: How might co-occurring alterations modify the phenotype?
+- CROSS-HISTOLOGY: Could findings from other tumor types apply here?
+
+HYPOTHESIS FORMAT:
+- Each hypothesis must be specific and testable (not vague directions)
+- Emphasize novelty and tractability
+- Connect at least two evidence elements (e.g., gap + existing data point)
+- Avoid clinical treatment recommendations - focus on research questions
+
+EXAMPLES:
+- Good: "Given the lack of functional data for JAK1 V657F despite its recurrence in T-ALL, isogenic knock-in models could determine whether this variant causes gain- or loss-of-function signaling."
+- Good: "The absence of preclinical drug sensitivity data for this variant, combined with its structural similarity to JAK2 V617F, suggests testing JAK inhibitor panels in cell lines harboring this mutation."
+- Bad: "Patients with this variant should be treated with JAK inhibitors" (clinical recommendation, not hypothesis)
+- Bad: "More research is needed" (vague, not testable)
 """
 
 RESEARCH_USER_PROMPT = """Synthesize research knowledge about this variant using ONLY the evidence below.
@@ -91,7 +112,11 @@ Conflicting evidence: {conflicting_evidence_text}
 Task:
 1. Extract and integrate the key functional, biological, and therapeutic signals.
 2. Explicitly note where evidence is strong vs limited vs conflicting, in a way that is consistent with the evidence assessment above.
-3. Propose ONE clear, hypothesis-generating research direction that ties together at least two distinct evidence elements, and clearly label this final hypothesis as exploratory.
+3. Generate 2-3 specific, TESTABLE research hypotheses based on the evidence gaps. Each hypothesis should:
+   - Be concrete and experimentally addressable
+   - Connect multiple evidence elements (gap + existing data point)
+   - Focus on biological mechanism, preclinical testing, or co-mutation effects
+   - Avoid clinical recommendations
 
 CALIBRATION RULES (MUST FOLLOW):
 - If overall_quality is "limited" or "minimal": Keep functional_summary GENERIC (describe the gene's general function, not variant-specific effects). Focus on gaps.
@@ -118,6 +143,11 @@ Respond ONLY with valid JSON:
     "conflicting_evidence": {conflicting_evidence_json}
   }},
   "research_implications": "2–3 sentences. For limited/minimal quality: focus on basic characterization needs. For moderate/comprehensive: specific hypotheses.",
+  "research_hypotheses": [
+    "REQUIRED: 2-3 specific, testable hypotheses based on evidence gaps.",
+    "Each should connect a gap to existing data and suggest a concrete experiment.",
+    "Example: 'Given X gap and Y existing data, testing Z in model system would clarify...'"
+  ],
   "key_references": ["PMIDs, trial IDs, or database/source names appearing in the evidence text."],
   "evidence_tags": [
     "MUST be consistent with DATA AVAILABILITY FLAGS above.",

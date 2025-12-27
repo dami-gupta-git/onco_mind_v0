@@ -60,6 +60,10 @@ class LLMInsight(BaseModel):
         default_factory=list,
         description="Labels indicating evidence types (e.g., 'direct clinical data', 'preclinical only')"
     )
+    research_hypotheses: list[str] = Field(
+        default_factory=list,
+        description="Testable research hypotheses generated from evidence gaps"
+    )
 
     # Backwards compatibility
     @property

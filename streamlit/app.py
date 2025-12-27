@@ -621,7 +621,86 @@ with tab1:
                 st.info("No evidence found from any source")
 
             # ==============================================
-            # LLM RESEARCH INSIGHT - After evidence tabs
+            # EVIDENCE ASSESSMENT - Always shown (deterministic gap detection)
+            # ==============================================
+            st.markdown("---")
+            st.markdown("### 📊 Evidence Assessment")
+
+            # Get structured evidence gaps (deterministic analysis)
+            evidence_gaps = result.get('evidence_gaps', {})
+
+            # Evidence quality and research priority badges
+            col_quality, col_priority = st.columns(2)
+            with col_quality:
+                evidence_quality = evidence_gaps.get('overall_quality', 'unknown')
+                quality_colors = {
+                    "comprehensive": "🟢",
+                    "moderate": "🟡",
+                    "limited": "🟠",
+                    "minimal": "🔴",
+                }
+                badge = quality_colors.get(evidence_quality.lower(), "⚪")
+                st.markdown(f"**Evidence Quality:** {badge} {evidence_quality.capitalize()}")
+
+            with col_priority:
+                research_priority = evidence_gaps.get('research_priority', 'unknown')
+                priority_colors = {
+                    "very_high": "🔥",  # Prime research target
+                    "high": "🔴",
+                    "medium": "🟡",
+                    "low": "🟢",
+                }
+                priority_badge = priority_colors.get(research_priority.lower(), "⚪")
+                # Format "very_high" nicely
+                display_priority = research_priority.replace("_", " ").title()
+                st.markdown(f"**Research Priority:** {priority_badge} {display_priority}")
+
+            # Well-characterized aspects as table
+            well_characterized = evidence_gaps.get('well_characterized', [])
+            if well_characterized:
+                st.markdown("**✅ Well Characterized:**")
+                wc_df = pd.DataFrame({"Aspect": well_characterized})
+                st.dataframe(wc_df, use_container_width=True, hide_index=True)
+
+            # Evidence gaps table
+            gaps = evidence_gaps.get('gaps', [])
+            if gaps:
+                st.markdown("**❓ Evidence Gaps:**")
+
+                # Build gaps table
+                gaps_data = []
+                for gap in gaps:
+                    severity = gap.get('severity', 'unknown')
+                    severity_icon = {"critical": "🔴", "significant": "🟠", "minor": "🟡"}.get(severity, "⚪")
+                    # Strip variant name from description (user already knows)
+                    desc = gap.get('description', '')
+                    # Remove "for GENE VARIANT" or "for GENE VARIANT" pattern at end
+                    import re
+                    desc = re.sub(r'\s+for\s+\w+\s+\S+$', '', desc)
+                    # Also handle "of GENE VARIANT" pattern
+                    desc = re.sub(r'\s+of\s+\w+\s+\S+\s+in\s+\S+$', '', desc)
+                    desc = re.sub(r'\s+of\s+\w+\s+\S+$', '', desc)
+                    gaps_data.append({
+                        "Severity": f"{severity_icon} {severity.capitalize()}",
+                        "Category": gap.get('category', '').replace('_', ' ').title(),
+                        "Description": desc,
+                    })
+
+                if gaps_data:
+                    gaps_df = pd.DataFrame(gaps_data)
+                    st.dataframe(gaps_df, use_container_width=True, hide_index=True)
+
+                # Suggested studies (collapsible)
+                all_suggested = []
+                for gap in gaps:
+                    all_suggested.extend(gap.get('suggested_studies', []))
+                if all_suggested:
+                    with st.expander("📋 Suggested Studies"):
+                        for study in list(set(all_suggested)):  # Deduplicate
+                            st.markdown(f"  - {study}")
+
+            # ==============================================
+            # LLM RESEARCH INSIGHT - After evidence assessment
             # ==============================================
             llm_narrative = result['insight'].get('llm_narrative')
             if llm_narrative:
@@ -655,32 +734,7 @@ with tab1:
                 if not any([functional_summary, biological_context, therapeutic_landscape]):
                     st.markdown(llm_narrative)
 
-                # Evidence assessment section
-                st.markdown("#### Evidence Assessment")
-
-                # Evidence quality badge
-                evidence_quality = result['insight'].get('evidence_quality')
-                if evidence_quality:
-                    quality_colors = {
-                        "comprehensive": "🟢",
-                        "moderate": "🟡",
-                        "limited": "🟠",
-                        "minimal": "🔴",
-                    }
-                    badge = quality_colors.get(evidence_quality.lower(), "⚪")
-                    st.markdown(f"**Overall Quality:** {badge} {evidence_quality.capitalize()}")
-
-                # Well-characterized aspects (single line)
-                well_characterized = [well.title() for well in result['insight'].get('well_characterized', [])]
-                if well_characterized:
-                    st.markdown(f"**✅ Well Characterized:** {' · '.join(well_characterized)}")
-
-                # Knowledge gaps (single line)
-                knowledge_gaps = [gap.title() for gap in result['insight'].get('knowledge_gaps', [])]
-                if knowledge_gaps:
-                    st.markdown(f"**❓ Knowledge Gaps:** {' · '.join(knowledge_gaps)}")
-
-                # Conflicting evidence (single line)
+                # LLM-specific: Conflicting evidence, evidence tags, research hypotheses, references
                 conflicting_evidence = result['insight'].get('conflicting_evidence', [])
                 if conflicting_evidence:
                     st.markdown(f"**⚠️ Conflicting Evidence:** {' · '.join(conflicting_evidence)}")
@@ -694,6 +748,13 @@ with tab1:
                 research_implications = result['insight'].get('research_implications')
                 if research_implications and research_implications != result['insight'].get('rationale'):
                     st.markdown(f"**🔬 Research Implications:** {research_implications}")
+
+                # Research hypotheses (LLM-generated testable hypotheses)
+                research_hypotheses = result['insight'].get('research_hypotheses', [])
+                if research_hypotheses:
+                    st.markdown("**💡 Emerging Research Hypotheses:**")
+                    for i, hypothesis in enumerate(research_hypotheses[:3], 1):
+                        st.markdown(f"  {i}. {hypothesis}")
 
                 # References (make clickable)
                 references = result['insight'].get('references', [])
