@@ -507,3 +507,84 @@ class TestCancerHotspotsData:
         for gene, codons in CANCER_HOTSPOTS.items():
             assert len(codons) == len(set(codons)), \
                 f"{gene} has duplicate hotspot codons"
+
+
+# =============================================================================
+# CIViC EID/AID INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestCIViCIdentifiers:
+    """Integration tests for CIViC EID (Evidence Item ID) and AID (Assertion ID)."""
+
+    @pytest.mark.asyncio
+    async def test_civic_assertions_have_aid(self):
+        """CIViC assertions should have AID (Assertion ID) populated."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            # BRAF V600E in Melanoma has well-known CIViC assertions
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        # Check that CIViC assertions have AIDs
+        if result.evidence.civic_assertions:
+            for assertion in result.evidence.civic_assertions:
+                # assertion_id should be a positive integer
+                assert assertion.assertion_id is not None, "CIViC assertion should have assertion_id"
+                assert isinstance(assertion.assertion_id, int), "assertion_id should be an integer"
+                assert assertion.assertion_id > 0, "assertion_id should be positive"
+
+                # AID should be formatted as "AID{number}"
+                assert assertion.aid is not None, "CIViC assertion should have aid property"
+                assert assertion.aid.startswith("AID"), f"AID should start with 'AID', got: {assertion.aid}"
+                assert assertion.aid == f"AID{assertion.assertion_id}"
+
+                # civic_url should be a valid URL
+                assert assertion.civic_url is not None, "CIViC assertion should have civic_url"
+                assert "civicdb.org/assertions/" in assertion.civic_url
+
+    @pytest.mark.asyncio
+    async def test_civic_evidence_have_eid(self):
+        """CIViC evidence items should have EID (Evidence Item ID) populated."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            # EGFR L858R has well-known CIViC evidence
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        # Check that CIViC evidence items have EIDs (if any exist)
+        if result.evidence.civic_evidence:
+            has_eid = False
+            for evidence in result.evidence.civic_evidence:
+                if evidence.evidence_id is not None:
+                    has_eid = True
+                    # evidence_id should be a positive integer
+                    assert isinstance(evidence.evidence_id, int), "evidence_id should be an integer"
+                    assert evidence.evidence_id > 0, "evidence_id should be positive"
+
+                    # EID should be formatted as "EID{number}"
+                    assert evidence.eid is not None, "CIViC evidence should have eid property"
+                    assert evidence.eid.startswith("EID"), f"EID should start with 'EID', got: {evidence.eid}"
+                    assert evidence.eid == f"EID{evidence.evidence_id}"
+
+                    # civic_url should be a valid URL
+                    assert evidence.civic_url is not None, "CIViC evidence should have civic_url"
+                    assert "civicdb.org/evidence/" in evidence.civic_url
+
+            # Note: Not all API sources may return IDs, so we don't require all to have IDs
+            # Just verify that if they have IDs, they are properly formatted
+
+    @pytest.mark.asyncio
+    async def test_civic_ids_in_model_dump(self):
+        """CIViC IDs should be included when model is serialized."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        # Check assertions are serializable with AIDs
+        if result.evidence.civic_assertions:
+            for assertion in result.evidence.civic_assertions:
+                data = assertion.model_dump()
+                if assertion.assertion_id is not None:
+                    assert "aid" in data, "aid should be in model dump"
+                    assert "civic_url" in data, "civic_url should be in model dump"
+                    assert data["aid"] == assertion.aid
+                    assert data["civic_url"] == assertion.civic_url

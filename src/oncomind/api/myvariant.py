@@ -204,6 +204,7 @@ class MyVariantClient:
 
                         evidence_list.append(
                             CIViCEvidence(
+                                evidence_id=ev_item.get("id"),  # CIViC evidence item ID
                                 evidence_type=ev_item.get("evidenceType"),  # camelCase in new API
                                 evidence_level=ev_item.get("evidenceLevel"),  # camelCase in new API
                                 evidence_direction=ev_item.get("evidenceDirection"),
@@ -222,6 +223,7 @@ class MyVariantClient:
                 for ev_item in item.get("evidence_items", []):
                     evidence_list.append(
                         CIViCEvidence(
+                            evidence_id=ev_item.get("id"),  # CIViC evidence item ID
                             evidence_type=ev_item.get("evidence_type"),
                             evidence_level=ev_item.get("evidence_level"),
                             evidence_direction=ev_item.get("evidence_direction"),
@@ -245,6 +247,7 @@ class MyVariantClient:
                 # Direct evidence object (legacy format)
                 evidence_list.append(
                     CIViCEvidence(
+                        evidence_id=item.get("id"),  # CIViC evidence item ID
                         evidence_type=item.get("evidence_type"),
                         evidence_level=item.get("evidence_level"),
                         evidence_direction=item.get("evidence_direction"),
@@ -711,6 +714,7 @@ class MyVariantClient:
                         # Map GraphQL field names to Evidence model fields
                         all_civic_evidence.append(
                             CIViCEvidence(
+                                evidence_id=item.get("id"),  # CIViC evidence item ID
                                 evidence_type=item.get("evidenceType"),  # camelCase in GraphQL
                                 evidence_level=item.get("evidenceLevel"),
                                 evidence_direction=item.get("evidenceDirection"),

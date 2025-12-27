@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from oncomind.models.llm_insight import LLMInsight
 from oncomind.models import TherapeuticEvidence, RecommendedTherapy
-from oncomind.models.evidence import CIViCEvidence, VICCEvidence
+from oncomind.models.evidence import CIViCEvidence, CIViCAssertionEvidence, VICCEvidence
 from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
 from oncomind.models.variant import VariantInput
 
@@ -86,6 +86,111 @@ class TestCIViCEvidence:
         )
         assert civic.evidence_type == "Predictive"
         assert "Vemurafenib" in civic.drugs
+
+    def test_civic_evidence_eid(self):
+        """Test EID (Evidence Item ID) formatting."""
+        civic = CIViCEvidence(
+            evidence_id=5586,
+            evidence_type="Predictive",
+        )
+        assert civic.eid == "EID5586"
+        assert civic.evidence_id == 5586
+
+    def test_civic_evidence_eid_none(self):
+        """Test EID is None when evidence_id is not set."""
+        civic = CIViCEvidence(
+            evidence_type="Predictive",
+        )
+        assert civic.eid is None
+        assert civic.evidence_id is None
+
+    def test_civic_evidence_url(self):
+        """Test CIViC URL generation."""
+        civic = CIViCEvidence(evidence_id=5586)
+        assert civic.civic_url == "https://civicdb.org/evidence/5586/summary"
+
+    def test_civic_evidence_url_none(self):
+        """Test CIViC URL is None when evidence_id is not set."""
+        civic = CIViCEvidence()
+        assert civic.civic_url is None
+
+    def test_civic_evidence_eid_in_dict(self):
+        """Test EID is included in model dict (Pydantic computed_field)."""
+        civic = CIViCEvidence(evidence_id=5586)
+        data = civic.model_dump()
+        assert data["eid"] == "EID5586"
+        assert data["civic_url"] == "https://civicdb.org/evidence/5586/summary"
+
+
+class TestCIViCAssertionEvidence:
+    """Tests for CIViC Assertion Evidence model."""
+
+    def test_civic_assertion_creation(self):
+        """Test creating CIViC assertion evidence."""
+        assertion = CIViCAssertionEvidence(
+            assertion_id=20,
+            name="Test Assertion",
+            amp_tier="Tier I",
+            amp_level_letter="A",
+            assertion_type="PREDICTIVE",
+            significance="SENSITIVITYRESPONSE",
+            disease="Melanoma",
+            therapies=["Vemurafenib"],
+        )
+        assert assertion.assertion_id == 20
+        assert assertion.amp_tier == "Tier I"
+
+    def test_civic_assertion_aid(self):
+        """Test AID (Assertion ID) formatting."""
+        assertion = CIViCAssertionEvidence(
+            assertion_id=20,
+            name="BRAF V600E Melanoma",
+        )
+        assert assertion.aid == "AID20"
+        assert assertion.assertion_id == 20
+
+    def test_civic_assertion_aid_none(self):
+        """Test AID is None when assertion_id is not set."""
+        assertion = CIViCAssertionEvidence(
+            name="Test Assertion",
+        )
+        assert assertion.aid is None
+        assert assertion.assertion_id is None
+
+    def test_civic_assertion_url(self):
+        """Test CIViC URL generation for assertions."""
+        assertion = CIViCAssertionEvidence(assertion_id=20)
+        assert assertion.civic_url == "https://civicdb.org/assertions/20/summary"
+
+    def test_civic_assertion_url_none(self):
+        """Test CIViC URL is None when assertion_id is not set."""
+        assertion = CIViCAssertionEvidence()
+        assert assertion.civic_url is None
+
+    def test_civic_assertion_aid_in_dict(self):
+        """Test AID is included in model dict (Pydantic computed_field)."""
+        assertion = CIViCAssertionEvidence(assertion_id=20)
+        data = assertion.model_dump()
+        assert data["aid"] == "AID20"
+        assert data["civic_url"] == "https://civicdb.org/assertions/20/summary"
+
+    def test_civic_assertion_sensitivity_resistance_flags(self):
+        """Test sensitivity and resistance flags."""
+        sens = CIViCAssertionEvidence(
+            assertion_id=1,
+            is_sensitivity=True,
+            is_resistance=False,
+        )
+        assert sens.is_sensitivity is True
+        assert sens.is_resistance is False
+
+        resist = CIViCAssertionEvidence(
+            assertion_id=2,
+            is_sensitivity=False,
+            is_resistance=True,
+        )
+        assert resist.is_sensitivity is False
+        assert resist.is_resistance is True
 
 
 class TestMyVariantEvidence:
