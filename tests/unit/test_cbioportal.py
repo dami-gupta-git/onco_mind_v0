@@ -231,31 +231,31 @@ class TestCBioPortalClient:
 
         assert study_ids_lower == study_ids_upper == study_ids_mixed
 
-    def test_cancer_genes_list(self):
-        """Test that CANCER_GENES contains expected genes."""
-        client = CBioPortalClient()
+    def test_cancer_genes_co_occurrence_list(self):
+        """Test that CANCER_GENES_CO_OCCURRENCE contains expected genes."""
+        from oncomind.config.constants import CANCER_GENES_CO_OCCURRENCE
 
         # Check key tumor suppressors
-        assert "TP53" in client.CANCER_GENES
-        assert "PTEN" in client.CANCER_GENES
-        assert "CDKN2A" in client.CANCER_GENES
+        assert "TP53" in CANCER_GENES_CO_OCCURRENCE
+        assert "PTEN" in CANCER_GENES_CO_OCCURRENCE
+        assert "CDKN2A" in CANCER_GENES_CO_OCCURRENCE
 
         # Check key oncogenes
-        assert "KRAS" in client.CANCER_GENES
-        assert "BRAF" in client.CANCER_GENES
-        assert "PIK3CA" in client.CANCER_GENES
+        assert "KRAS" in CANCER_GENES_CO_OCCURRENCE
+        assert "BRAF" in CANCER_GENES_CO_OCCURRENCE
+        assert "PIK3CA" in CANCER_GENES_CO_OCCURRENCE
 
         # Check DDR genes
-        assert "ATM" in client.CANCER_GENES
-        assert "BRCA1" in client.CANCER_GENES
-        assert "BRCA2" in client.CANCER_GENES
+        assert "ATM" in CANCER_GENES_CO_OCCURRENCE
+        assert "BRCA1" in CANCER_GENES_CO_OCCURRENCE
+        assert "BRCA2" in CANCER_GENES_CO_OCCURRENCE
 
-    def test_cancer_genes_count(self):
-        """Test CANCER_GENES has reasonable count (~35 genes)."""
-        client = CBioPortalClient()
+    def test_cancer_genes_co_occurrence_count(self):
+        """Test CANCER_GENES_CO_OCCURRENCE has reasonable count (~35 genes)."""
+        from oncomind.config.constants import CANCER_GENES_CO_OCCURRENCE
 
         # Should have between 30-40 genes
-        assert 30 <= len(client.CANCER_GENES) <= 40
+        assert 30 <= len(CANCER_GENES_CO_OCCURRENCE) <= 40
 
     @pytest.mark.asyncio
     async def test_get_entrez_id_cached(self):

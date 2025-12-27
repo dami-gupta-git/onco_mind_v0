@@ -8,11 +8,55 @@ from oncomind.models.evidence.evidence_gaps import (
     EvidenceGaps, EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
 )
 from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent, _extract_codon_position
+from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from oncomind.models.evidence import Evidence
+
+
+def _tumor_type_matches(tumor_type: str, tissue: str) -> bool:
+    """Check if a tissue/disease matches the expected tumor type.
+
+    Uses TUMOR_TYPE_MAPPINGS to handle aliases like:
+    - "Melanoma" matching "SKIN"
+    - "NSCLC" matching "LUNG"
+
+    Args:
+        tumor_type: The tumor type we're looking for (e.g., "Melanoma")
+        tissue: The tissue/disease from the cell line (e.g., "SKIN")
+
+    Returns:
+        True if there's a match
+    """
+    if not tumor_type or not tissue:
+        return False
+
+    tumor_lower = tumor_type.lower()
+    tissue_lower = tissue.lower()
+
+    # Direct match
+    if tumor_lower in tissue_lower or tissue_lower in tumor_lower:
+        return True
+
+    # Check via tumor type mappings
+    for abbrev, aliases in TUMOR_TYPE_MAPPINGS.items():
+        # Check if tumor_type matches any alias
+        tumor_matches = (
+            tumor_lower == abbrev or
+            any(tumor_lower in alias or alias in tumor_lower for alias in aliases)
+        )
+        # Check if tissue matches any alias
+        tissue_matches = (
+            tissue_lower == abbrev or
+            any(tissue_lower in alias or alias in tissue_lower for alias in aliases)
+        )
+        # If both match the same category, they're related
+        if tumor_matches and tissue_matches:
+            return True
+
+    return False
 
 
 # =============================================================================
@@ -456,19 +500,24 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
         ]
 
         if mutant_models:
-            ctx.add_well_characterized(
-                f"model cell lines ({len(mutant_models)} with mutation)",
-                "DepMap CCLE cell lines"
-            )
-
-            # Check for tumor-type-specific models
+            # Check for tumor-type-specific models if tumor type is specified
             if ctx.tumor_type:
-                tumor_lower = ctx.tumor_type.lower()
                 tumor_models = [
                     m for m in mutant_models
-                    if m.primary_disease and tumor_lower in m.primary_disease.lower()
+                    if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
                 ]
-                if not tumor_models:
+                if tumor_models:
+                    # Only add tumor-specific entry (not the general one)
+                    ctx.add_well_characterized(
+                        f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
+                        "cBioPortal CCLE"
+                    )
+                else:
+                    # No tumor-specific models found - add general entry + gap
+                    ctx.add_well_characterized(
+                        f"model cell lines ({len(mutant_models)} with mutation)",
+                        "cBioPortal CCLE"
+                    )
                     ctx.add_gap(
                         category=GapCategory.PRECLINICAL,
                         severity=GapSeverity.SIGNIFICANT,
@@ -478,16 +527,17 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                             "Compare drug response vs other histologies",
                             f"Generate isogenic model in {ctx.tumor_type} background"
                         ],
-                        addressable_with=["DepMap", "Patient-derived organoids", "CRISPR knock-in"]
+                        addressable_with=["cBioPortal CCLE", "Patient-derived organoids", "CRISPR knock-in"]
                     )
                     ctx.add_poorly_characterized(f"{ctx.tumor_type}-specific preclinical models")
-                else:
-                    ctx.add_well_characterized(
-                        f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
-                        "Tumor-specific DepMap models"
-                    )
+            else:
+                # No tumor type specified - add general entry
+                ctx.add_well_characterized(
+                    f"model cell lines ({len(mutant_models)} with mutation)",
+                    "cBioPortal CCLE"
+                )
         else:
-            ctx.add_well_characterized(f"model cell lines ({n_models} available)", "DepMap CCLE cell lines")
+            ctx.add_well_characterized(f"model cell lines ({n_models} available)", "cBioPortal CCLE")
     else:
         if ctx.has_drug_data or ctx.has_clinical or evidence.context.gene_role:
             ctx.add_gap(
@@ -495,7 +545,7 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                 severity=GapSeverity.MINOR,
                 description=f"No cell line models identified for {ctx.gene} {ctx.variant}",
                 suggested_studies=["Identify cell lines with mutation", "Generate isogenic model"],
-                addressable_with=["DepMap", "CCLE", "Cellosaurus"]
+                addressable_with=["cBioPortal CCLE", "Cellosaurus"]
             )
             ctx.add_poorly_characterized("preclinical model systems")
 

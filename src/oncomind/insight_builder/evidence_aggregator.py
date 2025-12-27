@@ -54,6 +54,7 @@ from oncomind.models.evidence import (
     PubMedEvidence,
     VICCEvidence,
 )
+from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 
 from oncomind.normalization import ParsedVariant
 from oncomind.utils import normalize_variant
@@ -368,6 +369,18 @@ class EvidenceAggregator:
                 )
             return None
 
+        async def fetch_cbioportal_cell_lines():
+            """Fetch cell lines from cBioPortal CCLE (primary source for cell lines)."""
+            if self.cbioportal_client:
+                try:
+                    return await self.cbioportal_client.fetch_cell_lines_with_mutation(
+                        gene=gene,
+                        variant=normalized_variant,
+                    )
+                except Exception:
+                    return []
+            return []
+
         async def fetch_depmap():
             if self.depmap_client:
                 sources_queried.append("DepMap")
@@ -392,6 +405,7 @@ class EvidenceAggregator:
             fetch_clinical_trials(),
             fetch_literature(),
             fetch_cbioportal(),
+            fetch_cbioportal_cell_lines(),  # Primary source for cell lines
             fetch_depmap(),
             return_exceptions=True,
         )
@@ -406,6 +420,7 @@ class EvidenceAggregator:
             trials_result,
             literature_result,
             cbioportal_result,
+            cbioportal_cell_lines_result,  # Cell lines from cBioPortal CCLE
             depmap_result,
         ) = results
 
@@ -463,14 +478,50 @@ class EvidenceAggregator:
         elif isinstance(cbioportal_result, Exception):
             sources_failed.append("cBioPortal")
 
+        # Handle cell lines - cBioPortal CCLE is primary source, DepMap is fallback
+        cell_line_models: list[CellLineModel] = []
+        if cbioportal_cell_lines_result and not isinstance(cbioportal_cell_lines_result, Exception):
+            # Convert cBioPortal cell line dicts to CellLineModel
+            for cl in cbioportal_cell_lines_result:
+                cell_line_models.append(CellLineModel(
+                    name=cl.get("name", ""),
+                    ccle_name=cl.get("sample_id"),
+                    primary_disease=cl.get("tissue"),
+                    has_mutation=True,
+                    mutation_details=cl.get("protein_change"),
+                ))
+            if cell_line_models:
+                sources_with_data.append("CCLE")
+
         # Handle DepMap result - already returns DepMapEvidence or None
         depmap_evidence = None
         if depmap_result and not isinstance(depmap_result, Exception):
             depmap_evidence = depmap_result
+            # If we got cell lines from cBioPortal, use those (primary source)
+            # Otherwise fall back to DepMap's cell line data
+            if cell_line_models:
+                # Replace DepMap cell lines with cBioPortal data
+                depmap_evidence = DepMapEvidence(
+                    gene=depmap_evidence.gene,
+                    variant=depmap_evidence.variant,
+                    gene_dependency=depmap_evidence.gene_dependency,
+                    co_dependencies=depmap_evidence.co_dependencies,
+                    drug_sensitivities=depmap_evidence.drug_sensitivities,
+                    cell_line_models=cell_line_models,  # Use cBioPortal data
+                    data_version=depmap_evidence.data_version,
+                    n_cell_lines_screened=depmap_evidence.n_cell_lines_screened,
+                )
             if depmap_evidence and depmap_evidence.has_data():
                 sources_with_data.append("DepMap")
         elif isinstance(depmap_result, Exception):
             sources_failed.append("DepMap")
+            # Even if DepMap failed, we might have cell lines from cBioPortal
+            if cell_line_models:
+                depmap_evidence = DepMapEvidence(
+                    gene=gene,
+                    variant=normalized_variant,
+                    cell_line_models=cell_line_models,
+                )
 
         # Extract data from MyVariant evidence
         functional_scores = FunctionalScores()

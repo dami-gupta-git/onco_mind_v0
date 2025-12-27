@@ -25,59 +25,41 @@ class TestDepMapClient:
         client = DepMapClient(timeout=60.0)
         assert client.timeout == 60.0
 
-    def test_cancer_gene_dependencies_exists(self):
-        """Test that pre-computed cancer gene data exists."""
-        client = DepMapClient()
+    def test_fallback_constants_exist(self):
+        """Test that fallback constants exist in config."""
+        from oncomind.config.constants import (
+            DEPMAP_GENE_DEPENDENCIES_FALLBACK,
+            DEPMAP_DRUG_SENSITIVITIES_FALLBACK,
+        )
 
         # Should have common cancer genes
-        assert "BRAF" in client.CANCER_GENE_DEPENDENCIES
-        assert "KRAS" in client.CANCER_GENE_DEPENDENCIES
-        assert "EGFR" in client.CANCER_GENE_DEPENDENCIES
-        assert "TP53" in client.CANCER_GENE_DEPENDENCIES
+        assert "BRAF" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
+        assert "KRAS" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
+        assert "EGFR" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
 
-    def test_cancer_gene_dependencies_structure(self):
-        """Test the structure of pre-computed dependency data."""
-        client = DepMapClient()
+    def test_fallback_constants_structure(self):
+        """Test the structure of fallback dependency data."""
+        from oncomind.config.constants import DEPMAP_GENE_DEPENDENCIES_FALLBACK
 
-        for gene, data in client.CANCER_GENE_DEPENDENCIES.items():
+        for gene, data in DEPMAP_GENE_DEPENDENCIES_FALLBACK.items():
             assert "score" in data
             assert "dependent_pct" in data
             assert isinstance(data["score"], (int, float))
             assert isinstance(data["dependent_pct"], (int, float))
 
-    def test_mutation_cell_lines_exists(self):
-        """Test that mutation-specific cell line data exists."""
-        client = DepMapClient()
-
-        # Should have common mutation-cell line mappings
-        assert "BRAF:V600E" in client.MUTATION_CELL_LINES
-        assert "KRAS:G12C" in client.MUTATION_CELL_LINES
-        assert "EGFR:L858R" in client.MUTATION_CELL_LINES
-
-    def test_mutation_cell_lines_structure(self):
-        """Test the structure of mutation cell line data."""
-        client = DepMapClient()
-
-        for mutation, cell_lines in client.MUTATION_CELL_LINES.items():
-            assert isinstance(cell_lines, list)
-            for cl in cell_lines:
-                assert "name" in cl
-                assert "disease" in cl
-
-    def test_gene_drug_sensitivities_exists(self):
-        """Test that gene-drug sensitivity data exists."""
-        client = DepMapClient()
+    def test_drug_sensitivities_fallback_exists(self):
+        """Test that drug sensitivity fallback data exists."""
+        from oncomind.config.constants import DEPMAP_DRUG_SENSITIVITIES_FALLBACK
 
         # Should have drug data for key genes
-        assert "BRAF" in client.GENE_DRUG_SENSITIVITIES
-        assert "KRAS" in client.GENE_DRUG_SENSITIVITIES
-        assert "EGFR" in client.GENE_DRUG_SENSITIVITIES
+        assert "BRAF" in DEPMAP_DRUG_SENSITIVITIES_FALLBACK
+        assert "KRAS" in DEPMAP_DRUG_SENSITIVITIES_FALLBACK
 
-    def test_gene_drug_sensitivities_structure(self):
-        """Test the structure of drug sensitivity data."""
-        client = DepMapClient()
+    def test_drug_sensitivities_fallback_structure(self):
+        """Test the structure of drug sensitivity fallback data."""
+        from oncomind.config.constants import DEPMAP_DRUG_SENSITIVITIES_FALLBACK
 
-        for gene, drugs in client.GENE_DRUG_SENSITIVITIES.items():
+        for gene, drugs in DEPMAP_DRUG_SENSITIVITIES_FALLBACK.items():
             assert isinstance(drugs, list)
             for drug in drugs:
                 assert "drug" in drug
@@ -119,18 +101,15 @@ class TestDepMapClientFallback:
         assert result_lower is not None
         assert result_upper.gene == result_lower.gene
 
-    def test_get_fallback_data_includes_cell_lines(self):
-        """Test fallback data includes cell lines for known mutations."""
+    def test_get_fallback_data_cell_lines_empty(self):
+        """Test fallback data has empty cell lines (cell lines come from cBioPortal now)."""
         client = DepMapClient()
 
         result = client._get_fallback_data("BRAF", "V600E")
 
         assert result is not None
-        assert len(result.cell_lines) > 0
-
-        # Should include A375
-        cell_line_names = [cl["name"] for cl in result.cell_lines]
-        assert "A375" in cell_line_names
+        # Cell lines are now fetched from cBioPortal CCLE, not DepMap fallback
+        assert result.cell_lines == []
 
     def test_get_fallback_data_includes_drugs(self):
         """Test fallback data includes drug sensitivities."""
