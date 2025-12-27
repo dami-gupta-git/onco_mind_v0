@@ -71,12 +71,20 @@ HYPOTHESIS FORMAT:
 - Emphasize novelty and tractability
 - Connect at least two evidence elements (e.g., gap + existing data point)
 - Avoid clinical treatment recommendations - focus on research questions
+- CRITICAL: Each hypothesis MUST explicitly state its EVIDENCE BASIS using one of these tags:
+  * [Direct Clinical Data] - hypothesis builds on FDA approvals, CIViC assertions, or Phase 2/3 trials for THIS variant in THIS tumor
+  * [Preclinical Data] - hypothesis builds on DepMap, cell line, or in vitro data
+  * [Pan-Cancer Extrapolation] - hypothesis extrapolates from data in other tumor types
+  * [Nearby-Variant Inference] - hypothesis extrapolates from other variants in the same gene/domain
+  * [Pathway-Level Inference] - hypothesis infers from general pathway biology, not direct evidence
 
 EXAMPLES:
-- Good: "Given the lack of functional data for JAK1 V657F despite its recurrence in T-ALL, isogenic knock-in models could determine whether this variant causes gain- or loss-of-function signaling."
-- Good: "The absence of preclinical drug sensitivity data for this variant, combined with its structural similarity to JAK2 V617F, suggests testing JAK inhibitor panels in cell lines harboring this mutation."
+- Good: "[Preclinical Data] Given the lack of functional data for JAK1 V657F despite its recurrence in T-ALL, isogenic knock-in models could determine whether this variant causes gain- or loss-of-function signaling."
+- Good: "[Nearby-Variant Inference] The absence of preclinical drug sensitivity data for this variant, combined with its structural similarity to JAK2 V617F, suggests testing JAK inhibitor panels in cell lines harboring this mutation."
+- Good: "[Pan-Cancer Extrapolation] While EGFR L858R shows sensitivity to osimertinib in NSCLC, testing this response in breast cancer models would determine cross-histology applicability."
 - Bad: "Patients with this variant should be treated with JAK inhibitors" (clinical recommendation, not hypothesis)
 - Bad: "More research is needed" (vague, not testable)
+- Bad: "JAK inhibitors should be tested" (missing evidence basis tag)
 """
 
 RESEARCH_USER_PROMPT = """Synthesize research knowledge about this variant using ONLY the evidence below.
@@ -117,6 +125,7 @@ Task:
    - Connect multiple evidence elements (gap + existing data point)
    - Focus on biological mechanism, preclinical testing, or co-mutation effects
    - Avoid clinical recommendations
+   - MUST include an evidence basis tag at the start: [Direct Clinical Data], [Preclinical Data], [Pan-Cancer Extrapolation], [Nearby-Variant Inference], or [Pathway-Level Inference]
 
 CALIBRATION RULES (MUST FOLLOW):
 - If overall_quality is "limited" or "minimal": Keep functional_summary GENERIC (describe the gene's general function, not variant-specific effects). Focus on gaps.
@@ -144,9 +153,9 @@ Respond ONLY with valid JSON:
   }},
   "research_implications": "2–3 sentences. For limited/minimal quality: focus on basic characterization needs. For moderate/comprehensive: specific hypotheses.",
   "research_hypotheses": [
-    "REQUIRED: 2-3 specific, testable hypotheses based on evidence gaps.",
-    "Each should connect a gap to existing data and suggest a concrete experiment.",
-    "Example: 'Given X gap and Y existing data, testing Z in model system would clarify...'"
+    "[Evidence Basis Tag] REQUIRED: 2-3 specific, testable hypotheses based on evidence gaps.",
+    "Each MUST start with one of: [Direct Clinical Data], [Preclinical Data], [Pan-Cancer Extrapolation], [Nearby-Variant Inference], or [Pathway-Level Inference]",
+    "Example: '[Pan-Cancer Extrapolation] Given KRAS G12C sensitivity to sotorasib in NSCLC, testing this response in breast cancer models would determine cross-histology applicability.'"
   ],
   "key_references": ["PMIDs, trial IDs, or database/source names appearing in the evidence text."],
   "evidence_tags": [
