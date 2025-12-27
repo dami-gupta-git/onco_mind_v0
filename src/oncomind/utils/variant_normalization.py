@@ -12,7 +12,7 @@ This module provides tools to normalize variant notations across different forma
 import re
 from typing import Any, Dict, Optional
 
-from config.constants import (
+from oncomind.config.constants import (
     ALLOWED_VARIANT_TYPES,
     AMINO_ACID_3TO1,
     AMINO_ACID_1TO3,

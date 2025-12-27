@@ -1,5 +1,13 @@
 """FDA Drug Label API client for querying by brand name.
 
+@deprecated: This module is not currently used in the main pipeline.
+    The primary FDA integration uses fda.py which queries by gene/variant.
+    This module queries by drug brand name and could be useful for:
+    - Drug-first lookups (e.g., "What does Tagrisso's label say?")
+    - Enriching FDA approval data with detailed biomarker context
+    - Cross-validation of drug approvals from other sources
+    Keep for potential future integration.
+
 ARCHITECTURE:
     Drug Brand Name → openFDA Label API → Indication text with biomarker context
 

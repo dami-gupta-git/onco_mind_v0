@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 import httpx
 
-from config.constants import (
+from oncomind.config.constants import (
     TUMOR_TYPE_MAPPINGS,
     CBIOPORTAL_STUDY_MAPPINGS,
     CBIOPORTAL_DEFAULT_STUDY,
