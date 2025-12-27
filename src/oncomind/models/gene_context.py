@@ -23,27 +23,27 @@ from typing import Any
 # This replaces gene_classes.yaml - all gene class data is now inline
 
 GENE_CLASS_CONFIG: dict[str, Any] = {
-    # DNA Damage Repair (DDR) genes
-    # Loss-of-function in these genes creates synthetic lethality with PARP inhibitors
-    # and increases sensitivity to platinum-based chemotherapy
+    # DNA Damage Repair (DDR) genes – expanded for broader HRD relevance
     "ddr": {
-        "description": "DNA Damage Repair genes with therapeutic implications via synthetic lethality",
+        "description": "DNA Damage Response / Homologous Recombination genes with synthetic lethality implications",
         "genes": [
             "ATM", "BRCA1", "BRCA2", "PALB2", "CHEK2", "RAD51C", "RAD51D",
             "BRIP1", "FANCA", "RAD51B", "BARD1", "CDK12", "NBN", "RAD50", "MRE11",
-            # Additional DDR genes from curated list
             "RAD51", "FANCC", "FANCD2", "FANCE", "FANCF", "FANCG", "FANCI",
             "FANCL", "FANCM", "ATR", "CHEK1", "BLM", "WRN", "RECQL4",
+            # Emerging broader HRD genes with growing evidence
+            "WEE1", "PTEN", "ARID1A", "PPP2R2A",
         ],
         "therapeutic_implications": {
             "drugs": [
                 "PARP inhibitors (olaparib, rucaparib, niraparib, talazoparib)",
+                "ATR/CHEK1/WEE1 inhibitors (investigational, e.g., berzosertib, adavosertib)",
                 "Platinum agents (cisplatin, carboplatin)",
             ],
             "mechanism": (
-                "Loss-of-function mutations in DDR genes impair homologous recombination "
-                "repair, creating synthetic lethality with PARP inhibition. These tumors "
-                "are also typically platinum-sensitive."
+                "Loss-of-function impairs homologous recombination, creating synthetic lethality "
+                "with PARP inhibition and often platinum sensitivity. Emerging evidence extends "
+                "beyond core BRCA pathway genes."
             ),
         },
         "tier_rules": {
@@ -52,8 +52,8 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "II-D",
         },
     },
+
     # Mismatch Repair (MMR) genes
-    # Loss leads to MSI-H phenotype which predicts immunotherapy response
     "mmr": {
         "description": "Mismatch Repair genes - loss leads to MSI-H and immunotherapy sensitivity",
         "genes": ["MLH1", "MSH2", "MSH6", "PMS2", "EPCAM"],
@@ -73,8 +73,8 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "II-D",
         },
     },
+
     # Splicing Factor genes
-    # Recurrent mutations in MDS/AML with emerging therapeutic implications
     "splicing": {
         "description": "Splicing factor genes with diagnostic/prognostic significance in MDS/AML",
         "genes": ["SF3B1", "SRSF2", "U2AF1", "ZRSR2"],
@@ -94,7 +94,155 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "III-C",
         },
     },
+
+    # Oncogenic gene fusions – high-priority addition for research
+    "fusion_drivers": {
+        "description": "Genes frequently involved in oncogenic fusions (kinase or transcription factor)",
+        "genes": [
+            "ALK", "ROS1", "RET", "NTRK1", "NTRK2", "NTRK3",
+            "FGFR1", "FGFR2", "FGFR3", "BRAF", "RAF1",
+            "ETV6", "TMPRSS2", "EML4",
+        ],
+        "therapeutic_implications": {
+            "drugs": [
+                "TRK inhibitors (larotrectinib, entrectinib)",
+                "ALK/ROS1 inhibitors (crizotinib, entrectinib, repotrectinib)",
+                "RET inhibitors (selpercatinib, pralsetinib)",
+                "FGFR inhibitors (pemigatinib, erdafitinib)",
+            ],
+            "mechanism": (
+                "Oncogenic gene fusions create constitutively active kinases or transcription factors, "
+                "driving proliferation independently of ligand. Highly actionable across histologies."
+            ),
+        },
+        "tier_rules": {
+            "confirmed_fusion": "I-A",
+            "preclinical_fusion": "II-D",
+            "partner_unknown": "III",
+        },
+    },
+
+    # PI3K/AKT/mTOR pathway – frequent alterations with emerging targeting
+    "pi3k_mtor": {
+        "description": "PI3K/AKT/mTOR pathway - frequently altered in solid tumors",
+        "genes": [
+            "PIK3CA", "PTEN", "AKT1", "AKT2", "MTOR",
+            "TSC1", "TSC2", "STK11", "RICTOR", "DEPDC5",
+        ],
+        "therapeutic_implications": {
+            "drugs": [
+                "Everolimus/temsirolimus (mTORC1 inhibitors)",
+                "Alpelisib (PIK3CA-specific)",
+                "Capivasertib/ipatasertib (AKT inhibitors, emerging)",
+            ],
+            "mechanism": (
+                "Hyperactivation drives proliferation, metabolism, and survival; "
+                "common resistance mechanism to other targeted therapies."
+            ),
+        },
+        "tier_rules": {
+            "hotspot_mutation": "II-B",
+            "preclinical_only": "II-D",
+        },
+    },
+
+    # Epigenetic modifiers – emerging synthetic lethality and immunotherapy links
+    "epigenetic_modifiers": {
+        "description": "Chromatin remodelers and epigenetic writers with emerging therapeutic targeting",
+        "genes": [
+            "ARID1A", "ARID1B", "SMARCA4", "SMARCB1", "PBRM1",  # SWI/SNF complex
+            "KMT2C", "KMT2D", "EZH2", "KDM6A",                  # Histone modifiers
+        ],
+        "therapeutic_implications": {
+            "drugs": [
+                "EZH2 inhibitors (tazemetostat)",
+                "Synthetic lethal approaches (e.g., ARID1A + EZH2i, investigational)",
+            ],
+            "mechanism": (
+                "Alter chromatin accessibility; frequent in immunotherapy-sensitive tumors "
+                "(e.g., PBRM1 in RCC) and emerging synthetic lethal opportunities."
+            ),
+        },
+        "tier_rules": {
+            "confirmed_synthetic_lethal": "II-C",
+            "preclinical_only": "III",
+        },
+    },
 }
+
+# GENE_CLASS_CONFIG: dict[str, Any] = {
+#     # DNA Damage Repair (DDR) genes
+#     # Loss-of-function in these genes creates synthetic lethality with PARP inhibitors
+#     # and increases sensitivity to platinum-based chemotherapy
+#     "ddr": {
+#         "description": "DNA Damage Repair genes with therapeutic implications via synthetic lethality",
+#         "genes": [
+#             "ATM", "BRCA1", "BRCA2", "PALB2", "CHEK2", "RAD51C", "RAD51D",
+#             "BRIP1", "FANCA", "RAD51B", "BARD1", "CDK12", "NBN", "RAD50", "MRE11",
+#             # Additional DDR genes from curated list
+#             "RAD51", "FANCC", "FANCD2", "FANCE", "FANCF", "FANCG", "FANCI",
+#             "FANCL", "FANCM", "ATR", "CHEK1", "BLM", "WRN", "RECQL4",
+#         ],
+#         "therapeutic_implications": {
+#             "drugs": [
+#                 "PARP inhibitors (olaparib, rucaparib, niraparib, talazoparib)",
+#                 "Platinum agents (cisplatin, carboplatin)",
+#             ],
+#             "mechanism": (
+#                 "Loss-of-function mutations in DDR genes impair homologous recombination "
+#                 "repair, creating synthetic lethality with PARP inhibition. These tumors "
+#                 "are also typically platinum-sensitive."
+#             ),
+#         },
+#         "tier_rules": {
+#             "conflicting_evidence": "II-C",
+#             "sensitivity_only": "II-D",
+#             "preclinical_only": "II-D",
+#         },
+#     },
+#     # Mismatch Repair (MMR) genes
+#     # Loss leads to MSI-H phenotype which predicts immunotherapy response
+#     "mmr": {
+#         "description": "Mismatch Repair genes - loss leads to MSI-H and immunotherapy sensitivity",
+#         "genes": ["MLH1", "MSH2", "MSH6", "PMS2", "EPCAM"],
+#         "therapeutic_implications": {
+#             "drugs": [
+#                 "Immune checkpoint inhibitors (pembrolizumab, nivolumab, ipilimumab)",
+#             ],
+#             "mechanism": (
+#                 "Loss of MMR function leads to microsatellite instability (MSI-H), "
+#                 "increased tumor mutational burden, and neoantigen formation. "
+#                 "MSI-H tumors have FDA-approved tumor-agnostic indication for pembrolizumab."
+#             ),
+#         },
+#         "tier_rules": {
+#             "conflicting_evidence": "II-C",
+#             "sensitivity_only": "II-B",
+#             "preclinical_only": "II-D",
+#         },
+#     },
+#     # Splicing Factor genes
+#     # Recurrent mutations in MDS/AML with emerging therapeutic implications
+#     "splicing": {
+#         "description": "Splicing factor genes with diagnostic/prognostic significance in MDS/AML",
+#         "genes": ["SF3B1", "SRSF2", "U2AF1", "ZRSR2"],
+#         "therapeutic_implications": {
+#             "drugs": [
+#                 "Luspatercept (SF3B1-mutant MDS)",
+#                 "Splicing modulators (investigational)",
+#             ],
+#             "mechanism": (
+#                 "Splicing factor mutations are defining features of MDS subtypes. "
+#                 "SF3B1 mutations predict response to luspatercept and favorable prognosis."
+#             ),
+#         },
+#         "tier_rules": {
+#             "conflicting_evidence": "II-C",
+#             "sensitivity_only": "II-C",
+#             "preclinical_only": "III-C",
+#         },
+#     },
+# }
 
 
 class GeneClassConfig:
@@ -760,3 +908,132 @@ def get_lof_assessment(
         return True, "low", rationale
     else:
         return False, "low", rationale
+
+
+# =============================================================================
+# CANCER HOTSPOTS
+# =============================================================================
+# Known cancer hotspot codons from cancerhotspots.org, COSMIC, and OncoKB.
+# These are positions where recurrent oncogenic mutations cluster.
+
+CANCER_HOTSPOTS: dict[str, list[int]] = {
+    # Major oncogenes with well-characterized hotspots
+    "BRAF": [600, 469, 601, 594, 597],
+    "KRAS": [12, 13, 61, 117, 146],
+    "NRAS": [12, 13, 61],
+    "HRAS": [12, 13, 61],
+    "EGFR": [719, 746, 790, 858, 861],
+    "PIK3CA": [545, 542, 1047, 1049, 420],
+    "TP53": [175, 245, 248, 249, 273, 282],
+    "IDH1": [132],
+    "IDH2": [140, 172],
+    "KIT": [816, 560, 576],
+    "PDGFRA": [842, 560],
+    "FLT3": [835, 842],
+    "JAK2": [617],
+    "MPL": [515],
+    "CALR": [367],  # Frameshift hotspot region
+    "NPM1": [288],  # Insertion hotspot
+    "DNMT3A": [882],
+    "SF3B1": [700, 666, 622, 625],
+    "U2AF1": [34, 157],
+    "SRSF2": [95],
+    "MYD88": [265],
+    "CXCR4": [338, 343],
+    "EZH2": [646, 682],
+    "CTNNB1": [33, 34, 37, 41, 45],
+    "AKT1": [17],
+    "ERBB2": [776, 842, 869],
+    "MET": [1010, 1094, 1253],
+    "RET": [634, 918],
+    "ALK": [1174, 1196, 1202, 1269],  # Resistance hotspots
+    "FGFR2": [252, 253, 310, 549],
+    "FGFR3": [249, 373, 380, 746],
+    "GNA11": [209],
+    "GNAQ": [209, 183],
+    "MAP2K1": [56, 57, 124],
+    "SMAD4": [361],
+    "ARID1A": [1847],  # Truncation hotspot
+    "FBXW7": [465, 479, 505],
+    "NOTCH1": [1575, 1601],  # PEST domain hotspots
+}
+
+
+def _extract_codon_position(variant: str) -> int | None:
+    """Extract codon position from variant notation.
+
+    Args:
+        variant: Variant string (e.g., "V600E", "p.V600E", "G12D")
+
+    Returns:
+        Codon number as integer, or None if cannot be extracted
+    """
+    import re
+
+    # Strip common prefixes
+    v = variant.upper()
+    if v.startswith("P."):
+        v = v[2:]
+
+    # Match patterns like V600E, G12D, R248W
+    # Pattern: optional letter, digits, optional letter(s)
+    match = re.match(r"[A-Z]?(\d+)[A-Z*]?", v)
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
+def is_hotspot_variant(gene: str, variant: str) -> bool:
+    """Check if a variant is at a known cancer hotspot.
+
+    Args:
+        gene: Gene symbol (case-insensitive)
+        variant: Variant notation (e.g., V600E, G12D)
+
+    Returns:
+        True if variant is at a known hotspot codon
+    """
+    gene_upper = gene.upper()
+    hotspots = CANCER_HOTSPOTS.get(gene_upper)
+    if not hotspots:
+        return False
+
+    codon = _extract_codon_position(variant)
+    if codon is None:
+        return False
+
+    return codon in hotspots
+
+
+def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool, int | None]:
+    """Check if a variant is near (but not at) a known cancer hotspot.
+
+    Args:
+        gene: Gene symbol (case-insensitive)
+        variant: Variant notation (e.g., V598E)
+        window: Number of codons to consider as "adjacent" (default 5)
+
+    Returns:
+        Tuple of (is_adjacent, nearest_hotspot_codon)
+        If variant is AT a hotspot, returns (False, None) - use is_hotspot_variant for that
+    """
+    gene_upper = gene.upper()
+    hotspots = CANCER_HOTSPOTS.get(gene_upper)
+    if not hotspots:
+        return False, None
+
+    codon = _extract_codon_position(variant)
+    if codon is None:
+        return False, None
+
+    # If it's AT a hotspot, it's not "adjacent"
+    if codon in hotspots:
+        return False, None
+
+    # Check proximity to each hotspot
+    for hotspot in hotspots:
+        if abs(codon - hotspot) <= window:
+            return True, hotspot
+
+    return False, None

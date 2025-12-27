@@ -36,6 +36,45 @@ class MyVariantAPIError(Exception):
     pass
 
 
+# Amino acid single-letter to three-letter code mapping
+AA_1_TO_3 = {
+    'A': 'Ala', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe',
+    'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu',
+    'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg',
+    'S': 'Ser', 'T': 'Thr', 'V': 'Val', 'W': 'Trp', 'Y': 'Tyr',
+    '*': 'Ter',  # Stop codon
+}
+
+
+def _convert_to_hgvs_p_three_letter(variant: str) -> str | None:
+    """Convert single-letter amino acid variant to three-letter HGVS protein notation.
+
+    Args:
+        variant: Variant notation like "G12D", "V600E", "R248*"
+
+    Returns:
+        Three-letter HGVS notation like "p.Gly12Asp", or None if cannot convert
+    """
+    # Strip p. prefix if present
+    v = variant.upper()
+    if v.startswith("P."):
+        v = v[2:]
+
+    # Match pattern: RefAA + Position + AltAA (e.g., G12D, V600E, R248*)
+    match = re.match(r'^([A-Z])(\d+)([A-Z*])$', v)
+    if not match:
+        return None
+
+    ref_aa, pos, alt_aa = match.groups()
+    ref_three = AA_1_TO_3.get(ref_aa)
+    alt_three = AA_1_TO_3.get(alt_aa)
+
+    if not ref_three or not alt_three:
+        return None
+
+    return f"p.{ref_three}{pos}{alt_three}"
+
+
 class MyVariantClient:
     """Client for MyVariant.info API with CIViC fallback.
 
@@ -745,7 +784,16 @@ class MyVariantClient:
                 query = f"{gene} {variant}"
                 result = await self._query(query, fields=fields)
 
-            # Strategy 4: Use VEP to get genomic coordinates, then re-query MyVariant
+            # Strategy 4: Use dbnsfp/snpeff field query with three-letter amino acid codes
+            # This is more reliable for hotspot variants like KRAS G12D
+            # Query format: dbnsfp.genename:KRAS AND snpeff.ann.hgvs_p:p.Gly12Asp
+            if result.get("total", 0) == 0:
+                hgvs_p_three = _convert_to_hgvs_p_three_letter(variant)
+                if hgvs_p_three:
+                    query = f"dbnsfp.genename:{gene} AND snpeff.ann.hgvs_p:{hgvs_p_three}"
+                    result = await self._query(query, fields=fields)
+
+            # Strategy 5: Use VEP to get genomic coordinates, then re-query MyVariant
             # VEP converts protein notation to HGVS genomic, which MyVariant indexes better
             vep_annotation = None
             if result.get("total", 0) == 0:

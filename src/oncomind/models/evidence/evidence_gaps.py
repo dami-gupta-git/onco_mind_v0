@@ -25,6 +25,8 @@ class GapCategory(str, Enum):
     PRECLINICAL = "preclinical"         # No cell line/model data
     PREVALENCE = "prevalence"           # Frequency unknown
     PROGNOSTIC = "prognostic"           # Survival impact unknown
+    DISCORDANT = "discordant"           # Conflicting evidence between sources
+    VALIDATION = "validation"           # Strong oncogenic signal but lacks therapeutic validation
 
 
 class EvidenceGap(BaseModel):
@@ -122,7 +124,9 @@ class EvidenceGaps(BaseModel):
             "research_priority": self.research_priority,
             "well_characterized": self.well_characterized,
             "knowledge_gaps": self.poorly_characterized,  # Alias for prompt compatibility
-            "conflicting_evidence": [],  # Populated separately if needed
+            "conflicting_evidence": [
+                g.description for g in self.get_gaps_by_category(GapCategory.DISCORDANT)
+            ],
             "critical_gaps": [
                 {"description": g.description, "suggested_studies": g.suggested_studies}
                 for g in self.get_gaps_by_severity(GapSeverity.CRITICAL)
@@ -132,3 +136,27 @@ class EvidenceGaps(BaseModel):
                 for g in self.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
             ],
         }
+
+    def top_gaps(self, n: int = 3) -> list[EvidenceGap]:
+        """Get the top N most important gaps, sorted by severity.
+
+        Args:
+            n: Maximum number of gaps to return (default 3)
+
+        Returns:
+            List of up to N gaps, prioritized by severity (CRITICAL > SIGNIFICANT > MINOR)
+        """
+        # Define severity order
+        severity_order = {
+            GapSeverity.CRITICAL: 0,
+            GapSeverity.SIGNIFICANT: 1,
+            GapSeverity.MINOR: 2,
+        }
+
+        # Sort by severity (critical first)
+        sorted_gaps = sorted(
+            self.gaps,
+            key=lambda g: severity_order.get(g.severity, 99)
+        )
+
+        return sorted_gaps[:n]
