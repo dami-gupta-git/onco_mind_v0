@@ -14,7 +14,7 @@ import asyncio
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.insight_builder.gap_detector import (
     detect_evidence_gaps,
-    _detect_discordant_evidence,
+    _detect_discordant_evidence_internal,
     _has_pathogenic_signal,
     _normalize_source,
 )
@@ -451,7 +451,7 @@ class TestDiscordantEvidenceDetection:
             ]
         )
 
-        conflicts = _detect_discordant_evidence(evidence)
+        conflicts = _detect_discordant_evidence_internal(evidence)
 
         # Should NOT flag intra-source conflict
         assert len(conflicts) == 0, f"Intra-source conflict should not be flagged: {conflicts}"
@@ -476,7 +476,7 @@ class TestDiscordantEvidenceDetection:
             ]
         )
 
-        conflicts = _detect_discordant_evidence(evidence)
+        conflicts = _detect_discordant_evidence_internal(evidence)
 
         # Should NOT flag conflict - different contexts (mono vs combo)
         assert len(conflicts) == 0, f"Combo therapy should not create conflict: {conflicts}"

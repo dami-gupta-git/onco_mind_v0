@@ -324,19 +324,56 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
 
 
 def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for resistance mechanism data."""
+    """Check for resistance mechanism data.
+
+    Checks multiple sources for resistance signals:
+    - PubMed articles flagged as resistance evidence
+    - CGI biomarkers with resistance association
+    - CIViC assertions with is_resistance=True
+    - VICC evidence with resistance response types
+    - LLM-extracted literature knowledge mentioning resistance
+    """
+    # Collect resistance signals from all sources
+    resistance_sources: list[str] = []
+
+    # 1. PubMed articles with resistance evidence
     resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
-    resistance_articles_civiv= [b for b in evidence.civic_assertions]
-    has_resistance_data = (
-        bool(resistance_articles) or
-        any(b.association and "RESIST" in b.association.upper() for b in evidence.cgi_biomarkers)
-    )
+    if resistance_articles:
+        resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
+
+    # 2. CGI biomarkers with resistance association
+    cgi_resistance = [
+        b for b in evidence.cgi_biomarkers
+        if b.association and "RESIST" in b.association.upper()
+    ]
+    if cgi_resistance:
+        resistance_sources.append(f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}")
+
+    # 3. CIViC assertions with is_resistance=True
+    civic_resistance = [a for a in evidence.civic_assertions if a.is_resistance]
+    if civic_resistance:
+        resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
+
+    # 4. VICC evidence with resistance response types
+    vicc_resistance = [
+        v for v in evidence.vicc_evidence
+        if v.response_type and ("RESIST" in v.response_type.upper() or "REDUCED SENSITIVITY" in v.response_type.upper())
+    ]
+    if vicc_resistance:
+        resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
+
+    # 5. LLM-extracted literature knowledge with resistance signals
+    if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
+        drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)
+        if drugs:
+            resistance_sources.append(f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})")
+
+    has_resistance_data = bool(resistance_sources)
 
     if has_resistance_data:
-        n_resist_articles = len(resistance_articles)
         ctx.add_well_characterized(
             "resistance mechanisms",
-            f"{n_resist_articles} resistance article{'s' if n_resist_articles != 1 else ''} + CGI data"
+            " + ".join(resistance_sources)
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
