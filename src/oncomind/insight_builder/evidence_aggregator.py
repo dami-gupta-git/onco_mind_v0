@@ -57,9 +57,12 @@ from oncomind.models.evidence import (
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 
 from oncomind.normalization import ParsedVariant
-from oncomind.utils import normalize_variant
-from oncomind.models.gene_context import get_gene_context, GeneRole
+from oncomind.models.gene_context import get_gene_context
 
+
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
 @dataclass
 class EvidenceAggregatorConfig:
@@ -81,15 +84,44 @@ class EvidenceAggregatorConfig:
     max_literature_results: int = 6
 
     # Concurrency control for rate-limited APIs
-    # Semantic Scholar: 1 RPS without key, ~10 RPS with key
-    # PubMed: 3 RPS without key, 10 RPS with key
-    literature_concurrency: int = 1  # Limit concurrent literature requests
+    literature_concurrency: int = 1
 
     # API keys (from environment by default)
     semantic_scholar_api_key: str | None = field(
         default_factory=lambda: os.environ.get("SEMANTIC_SCHOLAR_API_KEY")
     )
 
+
+# =============================================================================
+# RESULT TRACKING
+# =============================================================================
+
+@dataclass
+class FetchResults:
+    """Container for tracking fetch results and source status."""
+    sources_queried: list[str] = field(default_factory=list)
+    sources_with_data: list[str] = field(default_factory=list)
+    sources_failed: list[str] = field(default_factory=list)
+
+    def handle_result(self, result: Any, source_name: str) -> Any:
+        """Handle an API result with error tracking.
+
+        Returns:
+            The result if successful, empty list/None if failed
+        """
+        if isinstance(result, Exception):
+            print(f"  Warning: {source_name} failed: {str(result)}")
+            self.sources_failed.append(source_name)
+            return [] if source_name not in ("cBioPortal", "DepMap", "MyVariant") else None
+        elif result:
+            self.sources_with_data.append(source_name)
+            return result
+        return [] if source_name not in ("cBioPortal", "DepMap", "MyVariant") else None
+
+
+# =============================================================================
+# EVIDENCE AGGREGATOR
+# =============================================================================
 
 class EvidenceAggregator:
     """Builder for aggregating variant evidence from multiple sources.
@@ -98,32 +130,31 @@ class EvidenceAggregator:
 
         async with EvidenceAggregator() as aggregator:
             evidence = await aggregator.build_evidence(parsed_variant, tumor_type)
-
-    Or for batch processing:
-
-        async with EvidenceAggregator() as aggregator:
-            evidences = await aggregator.build_evidences(variants, tumor_type)
     """
 
     def __init__(self, config: EvidenceAggregatorConfig | None = None):
         self.config = config or EvidenceAggregatorConfig()
+        self._init_clients()
+        self._literature_semaphore = asyncio.Semaphore(self.config.literature_concurrency)
 
-        # Initialize API clients
+    def _init_clients(self) -> None:
+        """Initialize all API clients based on configuration."""
+        # Core clients (always enabled)
         self.myvariant_client = MyVariantClient()
         self.fda_client = FDAClient()
         self.cgi_client = CGIClient()
         self.oncotree_client = OncoTreeClient()
+        self.cbioportal_client = CBioPortalClient()
+        self.depmap_client = DepMapClient()
 
         # Optional clients based on config
         self.vicc_client = VICCClient() if self.config.enable_vicc else None
         self.civic_client = CIViCClient() if self.config.enable_civic_assertions else None
-        self.cbioportal_client = CBioPortalClient()  # Always enabled - fast API
-        self.depmap_client = DepMapClient()  # Always enabled - provides preclinical context
         self.clinical_trials_client = (
             ClinicalTrialsClient() if self.config.enable_clinical_trials else None
         )
 
-        # Literature clients with fallback
+        # Literature clients
         if self.config.enable_literature:
             self.semantic_scholar_client = SemanticScholarClient(
                 api_key=self.config.semantic_scholar_api_key
@@ -133,52 +164,38 @@ class EvidenceAggregator:
             self.semantic_scholar_client = None
             self.pubmed_client = None
 
-        # Semaphore to limit concurrent literature API requests
-        self._literature_semaphore = asyncio.Semaphore(self.config.literature_concurrency)
+    def _get_all_clients(self) -> list[Any]:
+        """Get list of all active clients for context management."""
+        clients = [
+            self.myvariant_client,
+            self.fda_client,
+            self.oncotree_client,
+            self.cbioportal_client,
+            self.depmap_client,
+        ]
+        optional = [
+            self.vicc_client,
+            self.civic_client,
+            self.clinical_trials_client,
+            self.semantic_scholar_client,
+            self.pubmed_client,
+        ]
+        return clients + [c for c in optional if c is not None]
 
     async def __aenter__(self):
         """Initialize HTTP client sessions."""
-        await self.myvariant_client.__aenter__()
-        await self.fda_client.__aenter__()
-        await self.oncotree_client.__aenter__()
-
-        if self.vicc_client:
-            await self.vicc_client.__aenter__()
-        if self.civic_client:
-            await self.civic_client.__aenter__()
-        if self.cbioportal_client:
-            await self.cbioportal_client.__aenter__()
-        if self.depmap_client:
-            await self.depmap_client.__aenter__()
-        if self.clinical_trials_client:
-            await self.clinical_trials_client.__aenter__()
-        if self.semantic_scholar_client:
-            await self.semantic_scholar_client.__aenter__()
-        if self.pubmed_client:
-            await self.pubmed_client.__aenter__()
-
+        for client in self._get_all_clients():
+            await client.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Close HTTP client sessions."""
-        await self.myvariant_client.__aexit__(exc_type, exc_val, exc_tb)
-        await self.fda_client.__aexit__(exc_type, exc_val, exc_tb)
-        await self.oncotree_client.__aexit__(exc_type, exc_val, exc_tb)
+        for client in self._get_all_clients():
+            await client.__aexit__(exc_type, exc_val, exc_tb)
 
-        if self.vicc_client:
-            await self.vicc_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.civic_client:
-            await self.civic_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.cbioportal_client:
-            await self.cbioportal_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.depmap_client:
-            await self.depmap_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.clinical_trials_client:
-            await self.clinical_trials_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.semantic_scholar_client:
-            await self.semantic_scholar_client.__aexit__(exc_type, exc_val, exc_tb)
-        if self.pubmed_client:
-            await self.pubmed_client.__aexit__(exc_type, exc_val, exc_tb)
+    # -------------------------------------------------------------------------
+    # Tumor Type Resolution
+    # -------------------------------------------------------------------------
 
     async def _resolve_tumor_type(self, tumor_type: str | None) -> str | None:
         """Resolve tumor type using OncoTree."""
@@ -194,32 +211,9 @@ class EvidenceAggregator:
             print(f"  Warning: OncoTree resolution failed: {str(e)}")
             return tumor_type
 
-    def _handle_result(
-        self,
-        result: Any,
-        source_name: str,
-        sources_with_data: list[str],
-        sources_failed: list[str],
-    ) -> Any:
-        """Handle an API result with error logging.
-
-        Args:
-            result: The result from asyncio.gather (could be Exception)
-            source_name: Name of the source for logging
-            sources_with_data: List to append to if data found
-            sources_failed: List to append to if failed
-
-        Returns:
-            The result if successful, empty list if failed
-        """
-        if isinstance(result, Exception):
-            print(f"  Warning: {source_name} failed: {str(result)}")
-            sources_failed.append(source_name)
-            return []
-        elif result:
-            sources_with_data.append(source_name)
-            return result
-        return []
+    # -------------------------------------------------------------------------
+    # Literature Fetching
+    # -------------------------------------------------------------------------
 
     async def _fetch_literature(
         self,
@@ -227,43 +221,28 @@ class EvidenceAggregator:
         variant: str,
         tumor_type: str | None,
     ) -> list[PubMedEvidence]:
-        """Fetch literature from Semantic Scholar with PubMed fallback.
-
-        Uses semaphore to limit concurrent requests and avoid rate limits.
-        Returns PubMedEvidence directly using the new *_evidence() methods.
-
-        Returns:
-            List of PubMedEvidence objects
-        """
+        """Fetch literature from Semantic Scholar with PubMed fallback."""
         if not self.semantic_scholar_client:
             return []
 
-        # Use semaphore to limit concurrent literature API requests
         async with self._literature_semaphore:
             try:
-                # Use new search_pubmed_evidence method
                 return await self.semantic_scholar_client.search_pubmed_evidence(
                     gene=gene,
                     variant=variant,
                     tumor_type=tumor_type,
                     max_results=self.config.max_literature_results,
                 )
-
             except SemanticScholarRateLimitError:
-                # Fall back to PubMed (still within semaphore)
-                return await self._fetch_pubmed_literature(gene, variant, tumor_type)
+                return await self._fetch_pubmed_fallback(gene, variant, tumor_type)
 
-    async def _fetch_pubmed_literature(
+    async def _fetch_pubmed_fallback(
         self,
         gene: str,
         variant: str,
         tumor_type: str | None,
     ) -> list[PubMedEvidence]:
-        """Fetch literature from PubMed (fallback from Semantic Scholar).
-
-        Returns PubMedEvidence directly using the new *_evidence() method.
-        Retry is handled by tenacity in PubMedClient.
-        """
+        """Fetch literature from PubMed (fallback)."""
         if not self.pubmed_client:
             return []
 
@@ -274,10 +253,184 @@ class EvidenceAggregator:
                 tumor_type=tumor_type,
                 max_results=self.config.max_literature_results,
             )
-
         except PubMedRateLimitError:
-            # After tenacity retries exhausted, return empty
             return []
+
+    # -------------------------------------------------------------------------
+    # Result Processing Helpers
+    # -------------------------------------------------------------------------
+
+    def _process_cgi_biomarkers(
+        self, all_biomarkers: list[CGIBiomarkerEvidence]
+    ) -> tuple[list[CGIBiomarkerEvidence], list[CGIBiomarkerEvidence], list[CGIBiomarkerEvidence]]:
+        """Split CGI biomarkers into FDA-approved, preclinical, and early-phase."""
+        fda_approved = [b for b in all_biomarkers if b.fda_approved]
+        preclinical = [
+            b for b in all_biomarkers
+            if not b.fda_approved and b.evidence_level in ("Pre-clinical", "Cell line")
+        ]
+        early_phase = [
+            b for b in all_biomarkers
+            if not b.fda_approved and b.evidence_level not in ("Pre-clinical", "Cell line", None)
+        ]
+        return fda_approved, preclinical, early_phase
+
+    def _process_cbioportal_result(
+        self, result: Any, tracker: FetchResults
+    ) -> CBioPortalEvidence | None:
+        """Convert cBioPortal result to CBioPortalEvidence."""
+        if isinstance(result, Exception):
+            tracker.sources_failed.append("cBioPortal")
+            return None
+
+        if not result:
+            return None
+
+        try:
+            evidence = CBioPortalEvidence(
+                gene=result.gene,
+                variant=result.variant,
+                tumor_type=result.tumor_type,
+                study_id=result.study_id,
+                study_name=result.study_name,
+                total_samples=result.total_samples,
+                samples_with_gene_mutation=result.samples_with_gene_mutation,
+                samples_with_exact_variant=result.samples_with_exact_variant,
+                gene_prevalence_pct=result.gene_prevalence_pct,
+                variant_prevalence_pct=result.variant_prevalence_pct,
+                co_occurring=[CoMutationEntry(**c) for c in result.co_occurring],
+                mutually_exclusive=[CoMutationEntry(**m) for m in result.mutually_exclusive],
+            )
+            if evidence.has_data():
+                tracker.sources_with_data.append("cBioPortal")
+            return evidence
+        except Exception:
+            tracker.sources_failed.append("cBioPortal")
+            return None
+
+    def _process_cell_lines(
+        self, result: Any, tracker: FetchResults
+    ) -> list[CellLineModel]:
+        """Convert cBioPortal cell line result to CellLineModel list."""
+        if isinstance(result, Exception) or not result:
+            return []
+
+        models = []
+        for cl in result:
+            models.append(CellLineModel(
+                name=cl.get("name", ""),
+                ccle_name=cl.get("sample_id"),
+                primary_disease=cl.get("tissue"),
+                has_mutation=True,
+                mutation_details=cl.get("protein_change"),
+            ))
+
+        if models:
+            tracker.sources_with_data.append("CCLE")
+        return models
+
+    def _process_depmap_result(
+        self,
+        result: Any,
+        cell_line_models: list[CellLineModel],
+        gene: str,
+        variant: str,
+        tracker: FetchResults,
+    ) -> DepMapEvidence | None:
+        """Process DepMap result, merging with cBioPortal cell lines if available."""
+        if isinstance(result, Exception):
+            tracker.sources_failed.append("DepMap")
+            # Even if DepMap failed, create evidence from cBioPortal cell lines
+            if cell_line_models:
+                return DepMapEvidence(gene=gene, variant=variant, cell_line_models=cell_line_models)
+            return None
+
+        if not result:
+            return None
+
+        # Merge with cBioPortal cell lines (primary source) if available
+        if cell_line_models:
+            result = DepMapEvidence(
+                gene=result.gene,
+                variant=result.variant,
+                gene_dependency=result.gene_dependency,
+                co_dependencies=result.co_dependencies,
+                drug_sensitivities=result.drug_sensitivities,
+                cell_line_models=cell_line_models,
+                data_version=result.data_version,
+                n_cell_lines_screened=result.n_cell_lines_screened,
+            )
+
+        if result.has_data():
+            tracker.sources_with_data.append("DepMap")
+        return result
+
+    def _extract_myvariant_data(
+        self, evidence: Any, variant: ParsedVariant, normalized_variant: str
+    ) -> tuple[FunctionalScores, dict[str, Any], str | None, list, list, list]:
+        """Extract structured data from MyVariant evidence."""
+        identifiers_data = {
+            "variant_id": f"{variant.gene}:{normalized_variant}",
+            "gene": variant.gene,
+            "variant": variant.variant,
+            "variant_normalized": normalized_variant,
+            "variant_type": variant.variant_type,
+        }
+
+        if not evidence:
+            return FunctionalScores(), identifiers_data, None, [], [], []
+
+        functional_scores = FunctionalScores(
+            alphamissense_score=getattr(evidence, 'alphamissense_score', None),
+            alphamissense_prediction=getattr(evidence, 'alphamissense_prediction', None),
+            cadd_score=getattr(evidence, 'cadd_phred', None),
+            cadd_raw=getattr(evidence, 'cadd_raw', None),
+            polyphen2_prediction=getattr(evidence, 'polyphen2_prediction', None),
+            polyphen2_score=getattr(evidence, 'polyphen2_score', None),
+            sift_prediction=getattr(evidence, 'sift_prediction', None),
+            sift_score=getattr(evidence, 'sift_score', None),
+            snpeff_effect=getattr(evidence, 'snpeff_effect', None),
+            snpeff_impact=getattr(evidence, 'snpeff_impact', None),
+            gnomad_exome_af=getattr(evidence, 'gnomad_exome_af', None),
+            gnomad_genome_af=getattr(evidence, 'gnomad_genome_af', None),
+        )
+
+        identifiers_data.update({
+            "cosmic_id": getattr(evidence, 'cosmic_id', None),
+            "ncbi_gene_id": getattr(evidence, 'ncbi_gene_id', None),
+            "dbsnp_id": getattr(evidence, 'dbsnp_rsid', None),
+            "clinvar_id": getattr(evidence, 'clinvar_variation_id', None),
+            "hgvs_genomic": getattr(evidence, 'hgvs_genomic', None),
+            "hgvs_protein": getattr(evidence, 'hgvs_protein', None),
+            "hgvs_transcript": getattr(evidence, 'hgvs_coding', None),
+        })
+
+        clinvar_significance = getattr(evidence, 'clinvar_clinical_significance', None)
+        clinvar_entries = getattr(evidence, 'clinvar', []) or []
+        cosmic_entries = getattr(evidence, 'cosmic', []) or []
+        civic_entries = getattr(evidence, 'civic', []) or []
+
+        return functional_scores, identifiers_data, clinvar_significance, clinvar_entries, cosmic_entries, civic_entries
+
+    def _get_gene_context_data(self, gene: str) -> tuple[str | None, str | None, str | None]:
+        """Get gene role, class, and pathway information."""
+        gene_context = get_gene_context(gene)
+        if not gene_context or not gene_context.role:
+            return None, None, None
+
+        gene_role = gene_context.role.value
+        gene_class = gene_context.role.value
+
+        # Check for pathway-actionable TSGs
+        from oncomind.models.gene_context import get_pathway_actionable_info
+        pathway_info = get_pathway_actionable_info(gene)
+        pathway = pathway_info.get("pathway") if pathway_info else None
+
+        return gene_role, gene_class, pathway
+
+    # -------------------------------------------------------------------------
+    # Main Build Method
+    # -------------------------------------------------------------------------
 
     async def build_evidence(
         self,
@@ -293,7 +446,7 @@ class EvidenceAggregator:
         Returns:
             Evidence with all aggregated evidence
         """
-        # Handle string input
+        # Parse string input if needed
         if isinstance(variant, str):
             from oncomind.normalization import parse_variant_input
             variant = parse_variant_input(variant, tumor_type)
@@ -302,80 +455,79 @@ class EvidenceAggregator:
         normalized_variant = variant.variant_normalized or variant.variant
         tumor = tumor_type or variant.tumor_type
 
-        # Track sources and failures
-        sources_queried = ["MyVariant", "FDA", "CGI"]
-        sources_with_data: list[str] = []
-        sources_failed: list[str] = []
-        processing_notes: list[str] = []
+        # Initialize tracking
+        tracker = FetchResults()
+        tracker.sources_queried = ["MyVariant", "FDA", "CGI"]
 
         # Resolve tumor type
         resolved_tumor = await self._resolve_tumor_type(tumor)
 
-        # Build async fetch functions (using *_evidence methods)
+        # Parallel fetch from all sources
+        results = await self._fetch_all_sources(gene, normalized_variant, resolved_tumor, tracker)
+
+        # Process results
+        return self._assemble_evidence(
+            results, variant, normalized_variant, tumor, resolved_tumor, tracker
+        )
+
+    async def _fetch_all_sources(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+        tracker: FetchResults,
+    ) -> tuple:
+        """Fetch data from all sources in parallel."""
+
         async def fetch_vicc():
             if self.vicc_client:
-                sources_queried.append("VICC")
+                tracker.sources_queried.append("VICC")
                 return await self.vicc_client.fetch_vicc_evidence(
-                    gene=gene,
-                    variant=normalized_variant,
-                    tumor_type=resolved_tumor,
+                    gene=gene, variant=variant, tumor_type=tumor_type,
                     max_results=self.config.max_vicc_results,
                 )
             return []
 
-        async def fetch_civic_assertions():
+        async def fetch_civic():
             if self.civic_client:
-                sources_queried.append("CIViC")
+                tracker.sources_queried.append("CIViC")
                 return await self.civic_client.fetch_assertion_evidence(
-                    gene=gene,
-                    variant=normalized_variant,
-                    tumor_type=resolved_tumor,
+                    gene=gene, variant=variant, tumor_type=tumor_type,
                     max_results=self.config.max_civic_assertions,
                 )
             return []
 
-        async def fetch_clinical_trials():
-            """Fetch clinical trials as evidence. Retry is handled by tenacity in client."""
+        async def fetch_trials():
             if not self.clinical_trials_client:
                 return []
-
-            sources_queried.append("ClinicalTrials.gov")
-
+            tracker.sources_queried.append("ClinicalTrials.gov")
             try:
                 return await self.clinical_trials_client.search_trial_evidence(
-                    gene=gene,
-                    variant=normalized_variant,
-                    tumor_type=resolved_tumor,
-                    recruiting_only=True,
-                    max_results=self.config.max_clinical_trials,
+                    gene=gene, variant=variant, tumor_type=tumor_type,
+                    recruiting_only=True, max_results=self.config.max_clinical_trials,
                 )
             except ClinicalTrialsRateLimitError:
-                # After tenacity retries exhausted, return empty
                 return []
 
         async def fetch_literature():
             if self.config.enable_literature:
-                sources_queried.append("Literature")
-                return await self._fetch_literature(gene, normalized_variant, resolved_tumor)
+                tracker.sources_queried.append("Literature")
+                return await self._fetch_literature(gene, variant, tumor_type)
             return []
 
         async def fetch_cbioportal():
             if self.cbioportal_client:
-                sources_queried.append("cBioPortal")
+                tracker.sources_queried.append("cBioPortal")
                 return await self.cbioportal_client.fetch_co_mutation_data(
-                    gene=gene,
-                    variant=normalized_variant,
-                    tumor_type=resolved_tumor,
+                    gene=gene, variant=variant, tumor_type=tumor_type,
                 )
             return None
 
-        async def fetch_cbioportal_cell_lines():
-            """Fetch cell lines from cBioPortal CCLE (primary source for cell lines)."""
+        async def fetch_cell_lines():
             if self.cbioportal_client:
                 try:
                     return await self.cbioportal_client.fetch_cell_lines_with_mutation(
-                        gene=gene,
-                        variant=normalized_variant,
+                        gene=gene, variant=variant,
                     )
                 except Exception:
                     return []
@@ -383,218 +535,73 @@ class EvidenceAggregator:
 
         async def fetch_depmap():
             if self.depmap_client:
-                sources_queried.append("DepMap")
+                tracker.sources_queried.append("DepMap")
                 return await self.depmap_client.fetch_depmap_evidence(
-                    gene=gene,
-                    variant=normalized_variant,
+                    gene=gene, variant=variant,
                 )
             return None
 
-        # Parallel fetch from all sources (using *_evidence methods where available)
-        results = await asyncio.gather(
-            self.myvariant_client.fetch_evidence(gene=gene, variant=normalized_variant),
-            self.fda_client.fetch_approval_evidence(gene=gene, variant=normalized_variant),
-            asyncio.to_thread(
-                self.cgi_client.fetch_biomarker_evidence,
-                gene,
-                normalized_variant,
-                resolved_tumor,
-            ),
+        return await asyncio.gather(
+            self.myvariant_client.fetch_evidence(gene=gene, variant=variant),
+            self.fda_client.fetch_approval_evidence(gene=gene, variant=variant),
+            asyncio.to_thread(self.cgi_client.fetch_biomarker_evidence, gene, variant, tumor_type),
             fetch_vicc(),
-            fetch_civic_assertions(),
-            fetch_clinical_trials(),
+            fetch_civic(),
+            fetch_trials(),
             fetch_literature(),
             fetch_cbioportal(),
-            fetch_cbioportal_cell_lines(),  # Primary source for cell lines
+            fetch_cell_lines(),
             fetch_depmap(),
             return_exceptions=True,
         )
 
-        # Unpack results with error handling
+    def _assemble_evidence(
+        self,
+        results: tuple,
+        variant: ParsedVariant,
+        normalized_variant: str,
+        tumor: str | None,
+        resolved_tumor: str | None,
+        tracker: FetchResults,
+    ) -> Evidence:
+        """Assemble Evidence from fetch results."""
         (
-            myvariant_result,
-            fda_result,
-            cgi_result,
-            vicc_result,
-            civic_result,
-            trials_result,
-            literature_result,
-            cbioportal_result,
-            cbioportal_cell_lines_result,  # Cell lines from cBioPortal CCLE
-            depmap_result,
+            myvariant_result, fda_result, cgi_result, vicc_result, civic_result,
+            trials_result, literature_result, cbioportal_result, cell_lines_result, depmap_result,
         ) = results
 
-        # Handle results using helper method
-        myvariant_evidence = self._handle_result(
-            myvariant_result, "MyVariant", sources_with_data, sources_failed
-        ) or None  # Downstream code checks `if myvariant_evidence:`
-        fda_approvals: list[FDAApproval] = self._handle_result(
-            fda_result, "FDA", sources_with_data, sources_failed
-        )
-        all_cgi_biomarkers: list[CGIBiomarkerEvidence] = self._handle_result(
-            cgi_result, "CGI", sources_with_data, sources_failed
-        )
+        gene = variant.gene
 
-        # Split CGI biomarkers: FDA-approved go to kb, preclinical go to research
-        cgi_biomarkers = [b for b in all_cgi_biomarkers if b.fda_approved]
-        preclinical_biomarkers = [b for b in all_cgi_biomarkers if not b.fda_approved and b.evidence_level in ("Pre-clinical", "Cell line")]
-        early_phase_biomarkers = [b for b in all_cgi_biomarkers if not b.fda_approved and b.evidence_level not in ("Pre-clinical", "Cell line", None)]
+        # Process standard results
+        myvariant_evidence = tracker.handle_result(myvariant_result, "MyVariant")
+        fda_approvals: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
+        all_cgi: list[CGIBiomarkerEvidence] = tracker.handle_result(cgi_result, "CGI") or []
+        vicc_evidence: list[VICCEvidence] = tracker.handle_result(vicc_result, "VICC") or []
+        civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_result, "CIViC") or []
+        clinical_trials: list[ClinicalTrialEvidence] = tracker.handle_result(trials_result, "ClinicalTrials.gov") or []
+        pubmed_articles: list[PubMedEvidence] = tracker.handle_result(literature_result, "Literature") or []
 
-        vicc_evidence: list[VICCEvidence] = self._handle_result(
-            vicc_result, "VICC", sources_with_data, sources_failed
-        )
-        civic_assertions: list[CIViCAssertionEvidence] = self._handle_result(
-            civic_result, "CIViC", sources_with_data, sources_failed
-        )
-        clinical_trials: list[ClinicalTrialEvidence] = self._handle_result(
-            trials_result, "ClinicalTrials.gov", sources_with_data, sources_failed
-        )
-        pubmed_articles: list[PubMedEvidence] = self._handle_result(
-            literature_result, "Literature", sources_with_data, sources_failed
+        # Process CGI biomarkers (split by evidence level)
+        cgi_biomarkers, preclinical_biomarkers, early_phase_biomarkers = self._process_cgi_biomarkers(all_cgi)
+
+        # Process complex results
+        cbioportal_evidence = self._process_cbioportal_result(cbioportal_result, tracker)
+        cell_line_models = self._process_cell_lines(cell_lines_result, tracker)
+        depmap_evidence = self._process_depmap_result(
+            depmap_result, cell_line_models, gene, normalized_variant, tracker
         )
 
-        # Handle cBioPortal result - convert CoMutationData to CBioPortalEvidence
-        cbioportal_evidence: CBioPortalEvidence | None = None
-        if cbioportal_result and not isinstance(cbioportal_result, Exception):
-            try:
-                cbioportal_evidence = CBioPortalEvidence(
-                    gene=cbioportal_result.gene,
-                    variant=cbioportal_result.variant,
-                    tumor_type=cbioportal_result.tumor_type,
-                    study_id=cbioportal_result.study_id,
-                    study_name=cbioportal_result.study_name,
-                    total_samples=cbioportal_result.total_samples,
-                    samples_with_gene_mutation=cbioportal_result.samples_with_gene_mutation,
-                    samples_with_exact_variant=cbioportal_result.samples_with_exact_variant,
-                    gene_prevalence_pct=cbioportal_result.gene_prevalence_pct,
-                    variant_prevalence_pct=cbioportal_result.variant_prevalence_pct,
-                    co_occurring=[CoMutationEntry(**c) for c in cbioportal_result.co_occurring],
-                    mutually_exclusive=[CoMutationEntry(**m) for m in cbioportal_result.mutually_exclusive],
-                )
-                if cbioportal_evidence.has_data():
-                    sources_with_data.append("cBioPortal")
-            except Exception:
-                sources_failed.append("cBioPortal")
-        elif isinstance(cbioportal_result, Exception):
-            sources_failed.append("cBioPortal")
-
-        # Handle cell lines - cBioPortal CCLE is primary source, DepMap is fallback
-        cell_line_models: list[CellLineModel] = []
-        if cbioportal_cell_lines_result and not isinstance(cbioportal_cell_lines_result, Exception):
-            # Convert cBioPortal cell line dicts to CellLineModel
-            for cl in cbioportal_cell_lines_result:
-                cell_line_models.append(CellLineModel(
-                    name=cl.get("name", ""),
-                    ccle_name=cl.get("sample_id"),
-                    primary_disease=cl.get("tissue"),
-                    has_mutation=True,
-                    mutation_details=cl.get("protein_change"),
-                ))
-            if cell_line_models:
-                sources_with_data.append("CCLE")
-
-        # Handle DepMap result - already returns DepMapEvidence or None
-        depmap_evidence = None
-        if depmap_result and not isinstance(depmap_result, Exception):
-            depmap_evidence = depmap_result
-            # If we got cell lines from cBioPortal, use those (primary source)
-            # Otherwise fall back to DepMap's cell line data
-            if cell_line_models:
-                # Replace DepMap cell lines with cBioPortal data
-                depmap_evidence = DepMapEvidence(
-                    gene=depmap_evidence.gene,
-                    variant=depmap_evidence.variant,
-                    gene_dependency=depmap_evidence.gene_dependency,
-                    co_dependencies=depmap_evidence.co_dependencies,
-                    drug_sensitivities=depmap_evidence.drug_sensitivities,
-                    cell_line_models=cell_line_models,  # Use cBioPortal data
-                    data_version=depmap_evidence.data_version,
-                    n_cell_lines_screened=depmap_evidence.n_cell_lines_screened,
-                )
-            if depmap_evidence and depmap_evidence.has_data():
-                sources_with_data.append("DepMap")
-        elif isinstance(depmap_result, Exception):
-            sources_failed.append("DepMap")
-            # Even if DepMap failed, we might have cell lines from cBioPortal
-            if cell_line_models:
-                depmap_evidence = DepMapEvidence(
-                    gene=gene,
-                    variant=normalized_variant,
-                    cell_line_models=cell_line_models,
-                )
-
-        # Extract data from MyVariant evidence
-        functional_scores = FunctionalScores()
-        identifiers_data: dict[str, Any] = {
-            "variant_id": f"{gene}:{normalized_variant}",
-            "gene": gene,
-            "variant": variant.variant,
-            "variant_normalized": normalized_variant,
-            "variant_type": variant.variant_type,
-        }
-
-        clinvar_significance = None
-        clinvar_entries = []
-        cosmic_entries = []
-        civic_entries = []
-
-        if myvariant_evidence:
-            # Extract functional scores
-            functional_scores = FunctionalScores(
-                alphamissense_score=getattr(myvariant_evidence, 'alphamissense_score', None),
-                alphamissense_prediction=getattr(myvariant_evidence, 'alphamissense_prediction', None),
-                cadd_score=getattr(myvariant_evidence, 'cadd_phred', None),
-                cadd_raw=getattr(myvariant_evidence, 'cadd_raw', None),
-                polyphen2_prediction=getattr(myvariant_evidence, 'polyphen2_prediction', None),
-                polyphen2_score=getattr(myvariant_evidence, 'polyphen2_score', None),
-                sift_prediction=getattr(myvariant_evidence, 'sift_prediction', None),
-                sift_score=getattr(myvariant_evidence, 'sift_score', None),
-                snpeff_effect=getattr(myvariant_evidence, 'snpeff_effect', None),
-                snpeff_impact=getattr(myvariant_evidence, 'snpeff_impact', None),
-                gnomad_exome_af=getattr(myvariant_evidence, 'gnomad_exome_af', None),
-                gnomad_genome_af=getattr(myvariant_evidence, 'gnomad_genome_af', None),
-            )
-
-            # Extract identifiers
-            identifiers_data.update({
-                "cosmic_id": getattr(myvariant_evidence, 'cosmic_id', None),
-                "ncbi_gene_id": getattr(myvariant_evidence, 'ncbi_gene_id', None),
-                "dbsnp_id": getattr(myvariant_evidence, 'dbsnp_rsid', None),
-                "clinvar_id": getattr(myvariant_evidence, 'clinvar_variation_id', None),
-                "hgvs_genomic": getattr(myvariant_evidence, 'hgvs_genomic', None),
-                "hgvs_protein": getattr(myvariant_evidence, 'hgvs_protein', None),
-                "hgvs_transcript": getattr(myvariant_evidence, 'hgvs_coding', None),
-            })
-
-            # Extract ClinVar significance
-            clinvar_significance = getattr(myvariant_evidence, 'clinvar_clinical_significance', None)
-
-            # Extract evidence lists if available
-            clinvar_entries = getattr(myvariant_evidence, 'clinvar', []) or []
-            cosmic_entries = getattr(myvariant_evidence, 'cosmic', []) or []
-            civic_entries = getattr(myvariant_evidence, 'civic', []) or []
+        # Extract MyVariant data
+        (
+            functional_scores, identifiers_data, clinvar_significance,
+            clinvar_entries, cosmic_entries, civic_entries
+        ) = self._extract_myvariant_data(myvariant_evidence, variant, normalized_variant)
 
         # Get gene context
-        gene_context = get_gene_context(gene)
-        gene_role = None
-        gene_class = None
-        pathway = None
-        mutation_class = None
+        gene_role, gene_class, pathway = self._get_gene_context_data(gene)
 
-        if gene_context:
-            if gene_context.role:
-                gene_role = gene_context.role.value
-            # GeneContext doesn't have functional_class/pathway - derive from role
-            if gene_context.role:
-                gene_class = gene_context.role.value  # Use role as the class
-            # Check for pathway-actionable TSGs
-            from oncomind.models.gene_context import get_pathway_actionable_info
-            pathway_info = get_pathway_actionable_info(gene_context.gene)
-            if pathway_info:
-                pathway = pathway_info.get("pathway")
-
-        # Build the Evidence with flat list structure
-        evidence = Evidence(
+        # Build Evidence
+        return Evidence(
             identifiers=VariantIdentifiers(**identifiers_data),
             functional=functional_scores,
             context=VariantContext(
@@ -602,10 +609,9 @@ class EvidenceAggregator:
                 tumor_type_resolved=resolved_tumor,
                 gene_role=gene_role,
                 gene_class=gene_class,
-                mutation_class=mutation_class,
+                mutation_class=None,
                 pathway=pathway,
             ),
-            # Evidence lists (flat structure - frontend decides how to display)
             fda_approvals=fda_approvals,
             civic_assertions=civic_assertions,
             civic_evidence=civic_entries,
@@ -621,43 +627,30 @@ class EvidenceAggregator:
             early_phase_biomarkers=early_phase_biomarkers,
             cbioportal_evidence=cbioportal_evidence,
             depmap_evidence=depmap_evidence,
-            # Track what was searched (for accurate gap detection)
             literature_searched=self.config.enable_literature,
         )
-
-        return evidence
 
     async def build_evidences(
         self,
         variants: list[ParsedVariant | str],
         tumor_type: str | None = None,
     ) -> list[Evidence]:
-        """Build Evidence for multiple variants in parallel.
-
-        Args:
-            variants: List of ParsedVariant objects or variant strings
-            tumor_type: Optional tumor type (applied to all variants)
-
-        Returns:
-            List of Evidence objects
-        """
-        tasks = [
-            self.build_evidence(v, tumor_type)
-            for v in variants
-        ]
-
+        """Build Evidence for multiple variants in parallel."""
+        tasks = [self.build_evidence(v, tumor_type) for v in variants]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Filter out exceptions
-        panels = []
+        evidences = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 print(f"  Warning: Failed to process variant {i}: {str(result)}")
             else:
-                panels.append(result)
+                evidences.append(result)
+        return evidences
 
-        return panels
 
+# =============================================================================
+# CONVENIENCE FUNCTIONS
+# =============================================================================
 
 async def build_evidence(
     variant: ParsedVariant | str,
@@ -680,8 +673,6 @@ async def build_evidence(
         >>> evidence = await build_evidence("BRAF V600E", tumor_type="Melanoma")
         >>> print(evidence.identifiers.gene)
         BRAF
-        >>> print(evidence.get_approved_drugs())
-        ['Dabrafenib', 'Vemurafenib']
     """
     async with EvidenceAggregator(config) as builder:
         return await builder.build_evidence(variant, tumor_type)
@@ -692,16 +683,7 @@ async def build_evidences(
     tumor_type: str | None = None,
     config: EvidenceAggregatorConfig | None = None,
 ) -> list[Evidence]:
-    """Convenience function to build Evidence for multiple variants.
-
-    Args:
-        variants: List of ParsedVariant objects or variant strings
-        tumor_type: Optional tumor type (applied to all variants)
-        config: Optional configuration for the builder
-
-    Returns:
-        List of Evidence objects
-    """
+    """Convenience function to build Evidence for multiple variants."""
     async with EvidenceAggregator(config) as builder:
         return await builder.build_evidences(variants, tumor_type)
 
