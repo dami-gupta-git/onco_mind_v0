@@ -21,7 +21,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from config.constants import GENE_ALIASES
+from oncomind.config.constants import GENE_ALIASES
 
 
 class FDAAPIError(Exception):

@@ -24,7 +24,7 @@ from oncomind.models.evidence.depmap import (
     DrugSensitivity,
     CellLineModel,
 )
-from config.constants import (
+from oncomind.config.constants import (
     DEPMAP_GENE_DEPENDENCIES_FALLBACK,
     DEPMAP_DRUG_SENSITIVITIES_FALLBACK,
 )

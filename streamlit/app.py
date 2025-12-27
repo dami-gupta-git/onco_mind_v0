@@ -52,7 +52,7 @@ with tab1:
         if enable_llm:
             st.caption("📚 **LLM Mode** (~25s): Literature search + AI synthesis")
         else:
-            st.caption("⚡ **Annotation Mode** (~7s): Fast structured evidence only")
+            st.caption("⚡ **Annotation and Gap Analysis Mode** (~7s): Fast structured evidence and gap analysis")
 
         # LLM mode also enables literature
         enable_literature = enable_llm
