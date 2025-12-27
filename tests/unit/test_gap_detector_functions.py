@@ -27,6 +27,7 @@ from oncomind.insight_builder.gap_detector import (
     _check_tumor_specific_evidence,
 )
 from oncomind.models.evidence.evidence_gaps import GapCategory, GapSeverity
+from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge, DrugResistance
 
 
 # =============================================================================
@@ -75,6 +76,9 @@ def mock_evidence():
 
     # Literature flag
     evidence.literature_searched = False
+
+    # LLM-extracted literature knowledge
+    evidence.literature_knowledge = None
 
     return evidence
 
@@ -452,6 +456,144 @@ class TestCheckResistanceMechanisms:
         _check_resistance_mechanisms(mock_evidence, ctx)
 
         assert any("resistance" in w.lower() for w in ctx.well_characterized)
+
+    def test_with_civic_assertion_resistance(self, mock_evidence):
+        """CIViC assertion with is_resistance=True should mark as well-characterized."""
+        assertion = MagicMock()
+        assertion.is_resistance = True
+        mock_evidence.civic_assertions = [assertion]
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="T790M",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_resistance_mechanisms(mock_evidence, ctx)
+
+        assert any("resistance" in w.lower() for w in ctx.well_characterized)
+        # Check that CIViC is mentioned in the basis
+        well_char_detail = [w for w in ctx.well_characterized_detailed if "resistance" in w.aspect.lower()]
+        assert len(well_char_detail) > 0
+        assert "CIViC" in well_char_detail[0].basis
+
+    def test_with_vicc_resistance(self, mock_evidence):
+        """VICC evidence with resistance response type should mark as well-characterized."""
+        vicc = MagicMock()
+        vicc.response_type = "RESISTANCE"
+        mock_evidence.vicc_evidence = [vicc]
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="T790M",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_resistance_mechanisms(mock_evidence, ctx)
+
+        assert any("resistance" in w.lower() for w in ctx.well_characterized)
+        # Check that VICC is mentioned in the basis
+        well_char_detail = [w for w in ctx.well_characterized_detailed if "resistance" in w.aspect.lower()]
+        assert len(well_char_detail) > 0
+        assert "VICC" in well_char_detail[0].basis
+
+    def test_with_llm_literature_knowledge_resistance(self, mock_evidence):
+        """LLM literature knowledge with resistant_to should mark as well-characterized."""
+        mock_evidence.literature_knowledge = LiteratureKnowledge(
+            resistant_to=[
+                DrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=True),
+                DrugResistance(drug="Erlotinib", evidence="clinical", is_predictive=True),
+            ],
+            mutation_type="secondary",
+        )
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="T790M",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_resistance_mechanisms(mock_evidence, ctx)
+
+        assert any("resistance" in w.lower() for w in ctx.well_characterized)
+        # Check that LLM is mentioned in the basis with drug count
+        well_char_detail = [w for w in ctx.well_characterized_detailed if "resistance" in w.aspect.lower()]
+        assert len(well_char_detail) > 0
+        assert "LLM literature" in well_char_detail[0].basis
+        assert "2 drugs" in well_char_detail[0].basis
+
+    def test_with_llm_literature_non_predictive_resistance(self, mock_evidence):
+        """Non-predictive resistance in literature should NOT mark as well-characterized."""
+        mock_evidence.literature_knowledge = LiteratureKnowledge(
+            resistant_to=[
+                DrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=False),
+            ],
+            mutation_type="secondary",
+        )
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="T790M",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_resistance_mechanisms(mock_evidence, ctx)
+
+        # Non-predictive resistance should NOT be counted (only prognostic)
+        # So this should add a gap, not well-characterized
+        assert any("resistance" in p.lower() for p in ctx.poorly_characterized)
+
+    def test_multiple_resistance_sources(self, mock_evidence):
+        """Multiple resistance sources should all be included in basis."""
+        # Add multiple sources
+        article = MagicMock()
+        article.is_resistance_evidence.return_value = True
+        mock_evidence.pubmed_articles = [article]
+
+        assertion = MagicMock()
+        assertion.is_resistance = True
+        mock_evidence.civic_assertions = [assertion]
+
+        vicc = MagicMock()
+        vicc.response_type = "RESISTANCE"
+        mock_evidence.vicc_evidence = [vicc]
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="T790M",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=True,
+            has_drug_data=True,
+        )
+
+        _check_resistance_mechanisms(mock_evidence, ctx)
+
+        assert any("resistance" in w.lower() for w in ctx.well_characterized)
+        # Check that multiple sources are mentioned
+        well_char_detail = [w for w in ctx.well_characterized_detailed if "resistance" in w.aspect.lower()]
+        assert len(well_char_detail) > 0
+        basis = well_char_detail[0].basis
+        assert "PubMed" in basis
+        assert "CIViC" in basis
+        assert "VICC" in basis
 
     def test_no_resistance_with_clinical_adds_gap(self, mock_evidence):
         """Clinical variant without resistance data should add gap."""
