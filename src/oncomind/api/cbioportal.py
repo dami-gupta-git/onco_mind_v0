@@ -22,6 +22,7 @@ from config.constants import (
     TUMOR_TYPE_MAPPINGS,
     CBIOPORTAL_STUDY_MAPPINGS,
     CBIOPORTAL_DEFAULT_STUDY,
+    CANCER_GENES_CO_OCCURRENCE,
 )
 
 
@@ -84,43 +85,6 @@ class CBioPortalClient:
 
     BASE_URL = "https://www.cbioportal.org/api"
     DEFAULT_TIMEOUT = 30.0
-
-    # Key cancer genes for co-mutation analysis
-    # Curated for biologically meaningful co-occurrence patterns
-    CANCER_GENES = [
-        # Top tumor suppressors (frequently co-mutated)
-        "TP53",      # Most frequently mutated TSG, co-mutates with many genes
-        "PTEN",      # Often co-mutates with PIK3CA
-        "CDKN2A",    # Cell cycle regulator, co-mutates with TP53
-        "RB1",       # Cell cycle TSG, co-mutates with TP53
-        "SMAD4",     # Co-mutates with KRAS in pancreatic/CRC
-        "STK11",     # Co-mutates with KRAS in lung adenocarcinoma
-        "NF1",       # RAS pathway, co-mutates with TP53
-        "APC",       # Colorectal driver
-        "ARID1A",    # Chromatin remodeling, co-mutates with TP53
-        "KEAP1",     # Oxidative stress pathway (lung)
-        "ATM",       # DDR gene, co-mutates across tumor types
-        "BRCA1", "BRCA2",  # DDR genes
-        # Key oncogenes
-        "KRAS",      # RAS pathway, often mutually exclusive with BRAF/NRAS
-        "NRAS",      # RAS pathway, mutually exclusive with KRAS/BRAF
-        "BRAF",      # MAPK pathway
-        "PIK3CA",    # PI3K pathway, co-mutates with PTEN
-        "EGFR",      # Receptor tyrosine kinase
-        "ERBB2",     # HER2
-        "MET",       # Often co-mutates as resistance mechanism
-        "IDH1", "IDH2",  # Glioma/AML drivers
-        "CTNNB1",    # Wnt pathway
-        # Oxidative stress
-        "NFE2L2",    # Co-mutates with KEAP1 in lung
-        # Chromatin/epigenetic
-        "KMT2D",     # Frequently mutated in solid tumors
-        "ARID2",     # Chromatin remodeling
-        # Receptor tyrosine kinases
-        "FGFR1", "FGFR2", "FGFR3",
-        "KIT", "PDGFRA",
-        "ALK", "ROS1", "RET",
-    ]
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
         """Initialize the cBioPortal client."""
@@ -262,7 +226,7 @@ class CBioPortalClient:
             return None
 
         # Get Entrez IDs for cancer genes (excluding query gene)
-        cancer_genes = [g for g in self.CANCER_GENES if g.upper() != gene.upper()]
+        cancer_genes = [g for g in CANCER_GENES_CO_OCCURRENCE if g.upper() != gene.upper()]
         cancer_entrez_ids = []
         for g in cancer_genes[:20]:  # Limit to 20 for performance
             eid = await self._get_entrez_id(g)

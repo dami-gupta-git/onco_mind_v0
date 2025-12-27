@@ -345,12 +345,22 @@ This is the full vision beyond the lightweight pathway context in Near-Term. Ins
 - Need to weight by biological importance (JAK2 matters more than adapter proteins)
 - LLM context limits make dumping 50+ gene summaries impractical
 
+Your roadmap mentions this—do it soon. Reactome has a clean REST API for:
+Mapping genes/variants to pathways/reactions.
+Disease-specific annotations (e.g., "Signaling by EGFR in Cancer").
+Visual diagrams and downstream effectors.
+→ For a variant like MAP2K1 P124L: "Activates MEK-ERK pathway → downstream targets include MYC, CCND1" → Hypothesis: "Test ERK-dependent transcription in models."
+→ In LLM prompts: "Pathway involvement: Hyperactive MAPK signaling (Reactome R-HSA-5684996)" + gaps like "No annotated resistance bypass in this branch."
+
 **Implementation:**
 - Reactome API integration for pathway membership
 - Gene-level gap scoring (new capability)
 - Pathway aggregation logic with importance weighting
 - Smart summarization: which gaps matter most?
 - New CLI: `mind pathway MAPK --tumor NSCLC`
+
+
+
 
 **Output example:**
 ```
@@ -377,9 +387,63 @@ Research opportunities:
 └── "STAT5B in solid tumors"
 ```
 
+How You'd Use Reactome Data in OncoMind
+The ContentService API is straightforward—RESTful endpoints for querying by gene/protein (UniProt ID), pathway ID, or variant. Key ways to leverage it:
+
+Provide Mechanistic Context
+For a variant like BRAF V600E in melanoma:
+Query pathways involving BRAF → Returns "Signaling by BRAF and RAF fusions," "RAF/MAP kinase cascade," and disease-specific ones like "Signaling by BRAF in Cancer."
+Highlights how V600E leads to constitutive RAF activation → downstream hyperactive ERK signaling.
+→ In your evidence backbone: Add a "Pathway Involvement" section with pathway names, IDs, and brief descriptions.
+
+Annotate Functional Impact at Reaction Level
+Reactome has dedicated "disease reactions" for variants (e.g., "Constitutive Signaling by Mutant BRAF" or similar for MAP2K1 alterations).
+Shows altered inputs/outputs (e.g., BRAF V600E dimerizes independently of RAS, bypassing negative feedback).
+→ For under-studied variants (your sweet spot): If no clinical data, but pathway shows gain-of-function in MAPK → "Predicted oncogenic activation of RAF-independent ERK signaling."
+
+Generate Richer Hypotheses (LLM Mode)
+Feed structured Reactome context into prompts:textPathway Context <a href="https://reactome.org" target="_blank" rel="noopener noreferrer nofollow"></a>:
+  - Involved in: RAF/MAP kinase cascade (R-HSA-5673001), Signaling by BRAF in Cancer
+  - Altered reaction: Constitutive BRAF activation → hyperphosphorylation of MEK/ERK
+  - Downstream effectors: MYC, CCND1 (proliferation), DUSP6 (feedback inhibition bypassed)
+  - Co-occurring genes in pathway: NRAS (mutually exclusive), CDKN2A (co-loss)→ LLM outputs: "Hypothesis: Test if [variant] bypasses RAS dependency, similar to BRAF V600E—use RAS-independent cell lines or ERK readout assays."
+→ Flags gaps: "No annotated bypass mechanisms in this subpathway" or "Missing preclinical data on downstream node X."
+Enhance Gap Detection & Evidence Quality
+High pathway annotation + low clinical data → "Mechanistically well-understood (Reactome disease pathway) but lacking therapeutic validation."
+For co-mutations (your cBioPortal strength): Reactome shows if they hit the same reaction/pathway → "Potential synthetic lethality in [pathway node]."
+
+Suggest Testable Nodes/Experiments
+List upstream regulators, downstream effectors, or parallel pathways.
+→ "Research implication: Target downstream ERK (if inhibitor-resistant) or combine with PI3K inhibitors (parallel survival pathway)."
+
+
+Practical Integration Steps (Low Effort)
+
+Use gene symbol/UniProt to query /data/participates/gene/{symbol}/human or /data/pathways/ids/{uniprot}.
+For variants: Reactome annotates many cancer hotspots directly in disease pathways (e.g., AKT1 E17K constitutive signaling).
+Cache results per gene (pathways don't change often).
+Start with top pathways + disease-flagged ones.
+
+Example Outputs in OncoMind
+For BRAF V600E in Melanoma:
+Pathway Insight (Reactome): Constitutively active in "RAF-independent MAPK signaling" → drives ERK without RAS. Mutual exclusivity with NRAS explained by pathway redundancy.
+Knowledge Gap: Well-characterized activation mechanism, but limited data on variant-specific resistance bypasses.
+Hypothesis: Co-occurring CDKN2A loss may enhance proliferative output—test in isogenic models.
+For rarer MAP2K1 P124L:
+If Reactome shows MEK gain-of-function in MAPK cascade → "Predicted hyperactivation downstream of BRAF; potential MEK inhibitor sensitivity, but resistance via ERK rebound."
+This adds the "why" and "how to test" layer that's missing from most tools—perfect for turning gaps into hypotheses. It's exactly what elevates OncoMind from annotator to true research intelligence.
+When you're ready, this is the feature that will make people go "wow." 🚀
+
 **Research value:** Genuinely novel capability. Nobody does "pathway gap analysis" well — it's all manual literature review today. This could help PIs identify white space for grant proposals.
 
 **Estimated effort:** 6-12 months (not blocking current release)
+
+
+### GDSC (Genomics of Drug Sensitivity in Cancer)
+Complementary to DepMap PRISM:
+~1,000 cell lines, ~500 compounds (more targeted oncology drugs).
+Public API/downloads.
+→ Adds sensitivity data for drugs not in PRISM; cross-validation boosts confidence in preclinical hypotheses.
 
 ---
 

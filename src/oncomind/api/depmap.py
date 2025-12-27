@@ -24,6 +24,10 @@ from oncomind.models.evidence.depmap import (
     DrugSensitivity,
     CellLineModel,
 )
+from config.constants import (
+    DEPMAP_GENE_DEPENDENCIES_FALLBACK,
+    DEPMAP_DRUG_SENSITIVITIES_FALLBACK,
+)
 
 
 class DepMapError(Exception):
@@ -67,59 +71,6 @@ class DepMapClient:
     BASE_URL = "https://api.depmap.org/api"
     PORTAL_URL = "https://depmap.org/portal"
     DEFAULT_TIMEOUT = 30.0
-
-    # Common cancer genes with pre-computed dependency data
-    # This serves as a fallback/cache for frequently queried genes
-    CANCER_GENE_DEPENDENCIES = {
-        "BRAF": {"score": -0.8, "dependent_pct": 45},
-        "KRAS": {"score": -1.2, "dependent_pct": 65},
-        "EGFR": {"score": -0.6, "dependent_pct": 35},
-        "TP53": {"score": -0.1, "dependent_pct": 5},  # TSG - not essential when lost
-        "PIK3CA": {"score": -0.5, "dependent_pct": 30},
-        "NRAS": {"score": -0.7, "dependent_pct": 40},
-        "MYC": {"score": -1.5, "dependent_pct": 80},
-        "ERBB2": {"score": -0.9, "dependent_pct": 50},
-        "ALK": {"score": -0.4, "dependent_pct": 20},
-        "RET": {"score": -0.3, "dependent_pct": 15},
-        "MET": {"score": -0.5, "dependent_pct": 25},
-        "FGFR1": {"score": -0.4, "dependent_pct": 20},
-        "FGFR2": {"score": -0.5, "dependent_pct": 25},
-        "FGFR3": {"score": -0.4, "dependent_pct": 20},
-        "KIT": {"score": -0.6, "dependent_pct": 35},
-        "PDGFRA": {"score": -0.3, "dependent_pct": 15},
-    }
-
-    # Known drug sensitivities by gene
-    GENE_DRUG_SENSITIVITIES = {
-        "BRAF": [
-            {"drug": "vemurafenib", "ic50_mutant": 50, "ic50_wt": 2000, "target": "BRAF V600"},
-            {"drug": "dabrafenib", "ic50_mutant": 30, "ic50_wt": 1500, "target": "BRAF V600"},
-            {"drug": "encorafenib", "ic50_mutant": 20, "ic50_wt": 1200, "target": "BRAF V600"},
-            {"drug": "trametinib", "ic50_mutant": 8, "ic50_wt": 200, "target": "MEK1/2"},
-            {"drug": "cobimetinib", "ic50_mutant": 15, "ic50_wt": 250, "target": "MEK1/2"},
-        ],
-        "KRAS": [
-            {"drug": "sotorasib", "ic50_mutant": 100, "ic50_wt": None, "target": "KRAS G12C"},
-            {"drug": "adagrasib", "ic50_mutant": 80, "ic50_wt": None, "target": "KRAS G12C"},
-            {"drug": "trametinib", "ic50_mutant": 25, "ic50_wt": 300, "target": "MEK1/2"},
-        ],
-        "EGFR": [
-            {"drug": "erlotinib", "ic50_mutant": 40, "ic50_wt": 3000, "target": "EGFR"},
-            {"drug": "gefitinib", "ic50_mutant": 35, "ic50_wt": 2500, "target": "EGFR"},
-            {"drug": "osimertinib", "ic50_mutant": 15, "ic50_wt": 500, "target": "EGFR T790M"},
-            {"drug": "afatinib", "ic50_mutant": 20, "ic50_wt": 1000, "target": "EGFR/HER2"},
-        ],
-        "PIK3CA": [
-            {"drug": "alpelisib", "ic50_mutant": 50, "ic50_wt": 500, "target": "PI3K alpha"},
-            {"drug": "everolimus", "ic50_mutant": 5, "ic50_wt": 50, "target": "mTOR"},
-            {"drug": "capivasertib", "ic50_mutant": 100, "ic50_wt": 800, "target": "AKT"},
-        ],
-        "ERBB2": [
-            {"drug": "lapatinib", "ic50_mutant": 30, "ic50_wt": 2000, "target": "EGFR/HER2"},
-            {"drug": "neratinib", "ic50_mutant": 10, "ic50_wt": 500, "target": "pan-HER"},
-            {"drug": "tucatinib", "ic50_mutant": 8, "ic50_wt": 1000, "target": "HER2"},
-        ],
-    }
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
         """Initialize the DepMap client."""
@@ -191,15 +142,15 @@ class DepMapClient:
         gene_upper = gene.upper()
 
         # Check if we have cached dependency data
-        if gene_upper not in self.CANCER_GENE_DEPENDENCIES:
+        if gene_upper not in DEPMAP_GENE_DEPENDENCIES_FALLBACK:
             return None
 
-        dep_data = self.CANCER_GENE_DEPENDENCIES[gene_upper]
+        dep_data = DEPMAP_GENE_DEPENDENCIES_FALLBACK[gene_upper]
 
         # Get drug sensitivities for this gene
         drug_data = []
-        if gene_upper in self.GENE_DRUG_SENSITIVITIES:
-            for drug in self.GENE_DRUG_SENSITIVITIES[gene_upper]:
+        if gene_upper in DEPMAP_DRUG_SENSITIVITIES_FALLBACK:
+            for drug in DEPMAP_DRUG_SENSITIVITIES_FALLBACK[gene_upper]:
                 drug_data.append({
                     "drug_name": drug["drug"],
                     "ic50_nm": drug["ic50_mutant"],
