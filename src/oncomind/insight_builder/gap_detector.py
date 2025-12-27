@@ -86,10 +86,19 @@ class GapDetectionContext:
     has_clinical: bool = False
     has_drug_data: bool = False
 
-    def add_well_characterized(self, aspect: str, basis: str) -> None:
-        """Add a well-characterized aspect with its basis."""
-        self.well_characterized.append(aspect)
-        self.well_characterized_detailed.append(CharacterizedAspect(aspect=aspect, basis=basis))
+    def add_well_characterized(
+        self,
+        aspect: str,
+        basis: str,
+        category: GapCategory | None = None
+    ) -> None:
+        """Add a well-characterized aspect with its basis and category."""
+        # Use title case for aspect
+        aspect_title = aspect.title()
+        self.well_characterized.append(aspect_title)
+        self.well_characterized_detailed.append(
+            CharacterizedAspect(aspect=aspect_title, basis=basis, category=category)
+        )
 
     def add_gap(
         self,
@@ -156,11 +165,14 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     overall_quality = _compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
     research_priority = _compute_research_priority(evidence, ctx.gaps, overall_quality)
 
+    # Sort well_characterized_detailed by category for grouped display
+    sorted_well_characterized = _sort_characterized_by_category(ctx.well_characterized_detailed)
+
     return EvidenceGaps(
         gaps=ctx.gaps,
         overall_evidence_quality=overall_quality,
         well_characterized=ctx.well_characterized,
-        well_characterized_detailed=ctx.well_characterized_detailed,
+        well_characterized_detailed=sorted_well_characterized,
         poorly_characterized=ctx.poorly_characterized,
         research_priority=research_priority,
     )
@@ -178,13 +190,15 @@ def _check_hotspot_context(evidence: "Evidence", ctx: GapDetectionContext) -> No
     if is_hotspot:
         ctx.add_well_characterized(
             "known cancer hotspot",
-            f"Codon {_extract_codon_position(ctx.variant)} is in cancerhotspots.org"
+            f"Codon {_extract_codon_position(ctx.variant)} is in cancerhotspots.org",
+            category=GapCategory.FUNCTIONAL
         )
     elif is_adjacent and nearest_hotspot:
         # Rare variant near a hotspot - high research value
         ctx.add_well_characterized(
             f"near hotspot codon {nearest_hotspot}",
-            f"Within 5 codons of known hotspot — structural similarity likely"
+            f"Within 5 codons of known hotspot — structural similarity likely",
+            category=GapCategory.FUNCTIONAL
         )
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
@@ -218,7 +232,8 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
             func_sources.append(f"PolyPhen2={evidence.functional.polyphen2_prediction}")
         ctx.add_well_characterized(
             "computational pathogenicity",
-            " | ".join(func_sources) if func_sources else "Predictions available"
+            " | ".join(func_sources) if func_sources else "Predictions available",
+            category=GapCategory.FUNCTIONAL
         )
     else:
         ctx.add_gap(
@@ -243,17 +258,21 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
         role = evidence.context.gene_role or "unknown"
         pathway = evidence.context.pathway or ""
         basis = f"Role: {role}" + (f", Pathway: {pathway}" if pathway else "")
-        ctx.add_well_characterized("gene function", basis)
+        ctx.add_well_characterized("gene function", basis, category=GapCategory.FUNCTIONAL)
 
     if has_depmap_essentiality:
         dep = evidence.depmap_evidence.gene_dependency
         score = dep.mean_dependency_score if dep else None
         score_str = f"CERES={score:.2f}" if score else "DepMap CRISPR data"
-        ctx.add_well_characterized("gene essentiality", score_str)
+        ctx.add_well_characterized("gene essentiality", score_str, category=GapCategory.FUNCTIONAL)
 
         if evidence.depmap_evidence is not None and evidence.depmap_evidence.is_essential():
             pct = dep.dependency_pct if dep else 0
-            ctx.add_well_characterized(f"{ctx.gene} is essential", f"{pct:.0f}% of cell lines depend on it")
+            ctx.add_well_characterized(
+                f"{ctx.gene} is essential",
+                f"{pct:.0f}% of cell lines depend on it",
+                category=GapCategory.FUNCTIONAL
+            )
 
     if not has_mechanism and not has_depmap_essentiality:
         ctx.add_gap(
@@ -280,7 +299,8 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
             parts.append(f"{n_assertions} CIViC assertion{'s' if n_assertions > 1 else ''}")
         ctx.add_well_characterized(
             "clinical actionability",
-            " + ".join(parts) if parts else "Clinical evidence exists"
+            " + ".join(parts) if parts else "Clinical evidence exists",
+            category=GapCategory.CLINICAL
         )
     else:
         ctx.add_gap(
@@ -301,7 +321,11 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
     tumor_specific = _check_tumor_specific_evidence(evidence, ctx.tumor_type)
 
     if tumor_specific:
-        ctx.add_well_characterized(f"evidence in {ctx.tumor_type}", "Tumor-specific CIViC/FDA/VICC/CGI data")
+        ctx.add_well_characterized(
+            f"evidence in {ctx.tumor_type}",
+            "Tumor-specific CIViC/FDA/VICC/CGI data",
+            category=GapCategory.TUMOR_TYPE
+        )
     else:
         # Severity depends on gene importance and pathogenic signal
         if ctx.is_cancer_gene and not ctx.has_clinical and ctx.has_pathogenic_signal:
@@ -351,11 +375,16 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             drug_sources.append(f"{n_preclin} preclinical")
         ctx.add_well_characterized(
             "drug response",
-            " + ".join(drug_sources) if drug_sources else "Drug data available"
+            " + ".join(drug_sources) if drug_sources else "Drug data available",
+            category=GapCategory.DRUG_RESPONSE
         )
         if has_depmap_drug_data:
             n_drugs = len(evidence.depmap_evidence.drug_sensitivities)
-            ctx.add_well_characterized("preclinical drug sensitivity (DepMap)", f"{n_drugs} drug IC50 values")
+            ctx.add_well_characterized(
+                "preclinical drug sensitivity (DepMap)",
+                f"{n_drugs} drug IC50 values",
+                category=GapCategory.DRUG_RESPONSE
+            )
     else:
         ctx.add_gap(
             category=GapCategory.DRUG_RESPONSE,
@@ -417,7 +446,8 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     if has_resistance_data:
         ctx.add_well_characterized(
             "resistance mechanisms",
-            " + ".join(resistance_sources)
+            " + ".join(resistance_sources),
+            category=GapCategory.RESISTANCE
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
@@ -456,7 +486,7 @@ def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
         cbio = evidence.cbioportal_evidence
         study = cbio.study_name if cbio else "cBioPortal"
         pct = cbio.variant_prevalence_pct if cbio else 0
-        ctx.add_well_characterized("prevalence", f"{pct:.1f}% in {study}")
+        ctx.add_well_characterized("prevalence", f"{pct:.1f}% in {study}", category=GapCategory.PREVALENCE)
     else:
         severity = GapSeverity.SIGNIFICANT if (ctx.is_cancer_gene and ctx.has_clinical) else GapSeverity.MINOR
         ctx.add_gap(
@@ -475,7 +505,11 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
 
     if has_trials:
         n_trials = len(evidence.clinical_trials)
-        ctx.add_well_characterized("clinical trial options", f"{n_trials} active trial{'s' if n_trials != 1 else ''}")
+        ctx.add_well_characterized(
+            "clinical trial options",
+            f"{n_trials} active trial{'s' if n_trials != 1 else ''}",
+            category=GapCategory.CLINICAL
+        )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
             category=GapCategory.CLINICAL,
@@ -510,13 +544,15 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                     # Only add tumor-specific entry (not the general one)
                     ctx.add_well_characterized(
                         f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
-                        "cBioPortal CCLE"
+                        "cBioPortal CCLE",
+                        category=GapCategory.PRECLINICAL
                     )
                 else:
                     # No tumor-specific models found - add general entry + gap
                     ctx.add_well_characterized(
                         f"model cell lines ({len(mutant_models)} with mutation)",
-                        "cBioPortal CCLE"
+                        "cBioPortal CCLE",
+                        category=GapCategory.PRECLINICAL
                     )
                     ctx.add_gap(
                         category=GapCategory.PRECLINICAL,
@@ -534,10 +570,15 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                 # No tumor type specified - add general entry
                 ctx.add_well_characterized(
                     f"model cell lines ({len(mutant_models)} with mutation)",
-                    "cBioPortal CCLE"
+                    "cBioPortal CCLE",
+                    category=GapCategory.PRECLINICAL
                 )
         else:
-            ctx.add_well_characterized(f"model cell lines ({n_models} available)", "cBioPortal CCLE")
+            ctx.add_well_characterized(
+                f"model cell lines ({n_models} available)",
+                "cBioPortal CCLE",
+                category=GapCategory.PRECLINICAL
+            )
     else:
         if ctx.has_drug_data or ctx.has_clinical or evidence.context.gene_role:
             ctx.add_gap(
@@ -570,7 +611,11 @@ def _check_literature_depth(evidence: "Evidence", ctx: GapDetectionContext) -> N
     elif pub_count < 5:
         ctx.add_poorly_characterized("literature depth (limited publications)")
     else:
-        ctx.add_well_characterized("published literature", f"{pub_count} PubMed articles")
+        ctx.add_well_characterized(
+            "published literature",
+            f"{pub_count} PubMed articles",
+            category=GapCategory.FUNCTIONAL
+        )
 
 
 def _check_validation_gap(evidence: "Evidence", ctx: GapDetectionContext) -> None:
@@ -588,7 +633,11 @@ def _check_validation_gap(evidence: "Evidence", ctx: GapDetectionContext) -> Non
     )
 
     if has_strong_oncogenic_signal:
-        ctx.add_well_characterized("biological driver potential", "Pathogenic prediction + gene essentiality")
+        ctx.add_well_characterized(
+            "biological driver potential",
+            "Pathogenic prediction + gene essentiality",
+            category=GapCategory.VALIDATION
+        )
 
         if not has_therapeutic_validation:
             ctx.add_gap(
@@ -609,6 +658,36 @@ def _check_validation_gap(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+# Define category ordering for sorting well-characterized aspects
+_CATEGORY_ORDER: dict[GapCategory | None, int] = {
+    GapCategory.CLINICAL: 0,
+    GapCategory.TUMOR_TYPE: 1,
+    GapCategory.DRUG_RESPONSE: 2,
+    GapCategory.RESISTANCE: 3,
+    GapCategory.FUNCTIONAL: 4,
+    GapCategory.PRECLINICAL: 5,
+    GapCategory.PREVALENCE: 6,
+    GapCategory.VALIDATION: 7,
+    GapCategory.PROGNOSTIC: 8,
+    GapCategory.DISCORDANT: 9,
+    None: 99,  # Uncategorized items go last
+}
+
+
+def _sort_characterized_by_category(
+    items: list[CharacterizedAspect]
+) -> list[CharacterizedAspect]:
+    """Sort well-characterized aspects by category for grouped display.
+
+    Args:
+        items: List of CharacterizedAspect items
+
+    Returns:
+        Sorted list with items grouped by category
+    """
+    return sorted(items, key=lambda x: _CATEGORY_ORDER.get(x.category, 99))
+
 
 def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> bool:
     """Check if any evidence is specific to this tumor type."""
@@ -880,9 +959,13 @@ def _compute_research_priority(
 
     Returns: "very_high" | "high" | "medium" | "low"
     """
-    # If evidence is already comprehensive, research priority should be low
-    # (nothing urgent to research)
-    if overall_quality == "comprehensive":
+
+    # Count gaps first
+    critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
+    significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
+
+    # Only return low if comprehensive AND no significant/critical gaps
+    if overall_quality == "comprehensive" and critical_count == 0 and significant_count == 0:
         return "low"
 
     gene = evidence.identifiers.gene
@@ -904,9 +987,6 @@ def _compute_research_priority(
     )
 
     is_adjacent, _ = is_hotspot_adjacent(gene, variant, window=5)
-
-    critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
-    significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
 
     # Very high: strong oncogenic signal + biological gaps = prime research target
     if has_strong_oncogenic_signal and has_biological_gaps:

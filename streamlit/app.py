@@ -255,73 +255,98 @@ with tab1:
                             st.markdown("| Score | Value | Prediction |\n|-------|-------|------------|" + "\n" + "\n".join(rows))
                         else:
                             st.info("No functional scores available")
+
+                        # Add MyVariant.info source link
+                        hgvs_genomic = hgvs.get('genomic')
+                        if hgvs_genomic:
+                            import urllib.parse
+                            encoded_id = urllib.parse.quote(hgvs_genomic, safe='')
+                            myvariant_url = f"https://myvariant.info/v1/variant/{encoded_id}"
+                            st.markdown(f"*Source: [MyVariant.info]({myvariant_url})*")
                     tab_idx += 1
 
                 # CIViC tab
                 if civic_assertions or civic_evidence:
                     with tabs[tab_idx]:
-                        # Assertions (curated AMP/ASCO/CAP) - show as table
+                        # Evidence level legend
+                        with st.expander("📖 Evidence Level Guide", expanded=False):
+                            st.markdown("""
+**AMP/ASCO/CAP Tiers:**
+- **Tier I**: Variants with strong clinical significance (FDA-approved or guideline-recommended)
+- **Tier II**: Variants with potential clinical significance (clinical trials, case studies)
+- **Tier III**: Variants of unknown clinical significance
+- **Tier IV**: Benign or likely benign variants
+
+**Evidence Levels (A-D):**
+- **A**: FDA-approved therapy or included in professional guidelines
+- **B**: Well-powered studies with consensus
+- **C**: Case studies or small studies
+- **D**: Preclinical or inferential evidence
+""")
+                        # Assertions (curated AMP/ASCO/CAP) - show as markdown table with clickable IDs
                         if civic_assertions:
                             st.markdown("**Curated Assertions:**")
-                            assertion_rows = []
+                            rows = ["| ID | Therapies | Significance | Disease | AMP Level |",
+                                    "|-----|-----------|--------------|---------|-----------|"]
                             for a in civic_assertions:
                                 therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
-                                assertion_rows.append({
-                                    "ID": a.get('id', ''),
-                                    "Therapies": therapies_str,
-                                    "Significance": a.get('significance', 'Unknown'),
-                                    "Disease": a.get('disease', '')[:40] if a.get('disease') else '',
-                                    "AMP Level": a.get('amp_level', ''),
-                                })
-                            if assertion_rows:
-                                st.dataframe(pd.DataFrame(assertion_rows), width="stretch", hide_index=True)
+                                aid = a.get('aid') or a.get('id', '')
+                                url = a.get('civic_url', '')
+                                id_link = f"[{aid}]({url})" if url else aid
+                                disease = (a.get('disease', '') or '')[:40]
+                                sig = a.get('significance', 'Unknown')
+                                amp = a.get('amp_level', '')
+                                rows.append(f"| {id_link} | {therapies_str} | {sig} | {disease} | {amp} |")
+                            st.markdown("\n".join(rows))
 
-                        # Evidence items - scrollable table
+                        # Evidence items - markdown table with clickable IDs
                         if civic_evidence:
                             if civic_assertions:
                                 st.markdown("---")
                             st.markdown(f"**Evidence Items ({len(civic_evidence)}):**")
-                            evidence_rows = []
+                            rows = ["| ID | Drugs | Significance | Disease | Level | Type | Rating |",
+                                    "|----|-------|--------------|---------|-------|------|--------|"]
                             for e in civic_evidence:
                                 drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
-                                evidence_rows.append({
-                                    "Drugs": drugs_str[:30] if len(drugs_str) > 30 else drugs_str,
-                                    "Significance": e.get('clinical_significance', 'Unknown'),
-                                    "Disease": (e.get('disease', '') or '')[:25],
-                                    "Level": e.get('evidence_level', ''),
-                                    "Type": e.get('evidence_type', ''),
-                                    "Rating": e.get('trust_rating') or e.get('rating') or '',
-                                })
-                            if evidence_rows:
-                                st.dataframe(
-                                    pd.DataFrame(evidence_rows),
-                                    width="stretch",
-                                    hide_index=True,
-                                    height=300,  # Scrollable with fixed height
-                                )
+                                drugs_str = drugs_str[:30] if len(drugs_str) > 30 else drugs_str
+                                eid = e.get('eid') or ''
+                                url = e.get('civic_url', '')
+                                id_link = f"[{eid}]({url})" if url else eid
+                                sig = e.get('clinical_significance', 'Unknown')
+                                disease = (e.get('disease', '') or '')[:25]
+                                level = e.get('evidence_level', '')
+                                etype = e.get('evidence_type', '')
+                                rating = e.get('trust_rating') or e.get('rating') or ''
+                                rows.append(f"| {id_link} | {drugs_str} | {sig} | {disease} | {level} | {etype} | {rating} |")
+                            st.markdown("\n".join(rows))
                     tab_idx += 1
 
-                # VICC tab - scrollable table
+                # VICC tab - markdown table with clickable sources
                 if vicc:
                     with tabs[tab_idx]:
-                        # Build rows for all VICC entries
-                        vicc_rows = []
+                        # Evidence level legend
+                        with st.expander("📖 Evidence Level Guide", expanded=False):
+                            st.markdown("""
+**Evidence Levels:**
+- **1/A**: FDA-approved or standard of care
+- **2/B**: Clinical trial evidence or expert consensus
+- **3/C**: Case reports or limited evidence
+- **4/D**: Preclinical or computational evidence
+- **R1/R2**: Resistance evidence (strong/emerging)
+""")
+                        rows = ["| Source | Drugs | Response | Disease | Level |",
+                                "|--------|-------|----------|---------|-------|"]
                         for v in vicc:
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
-                            vicc_rows.append({
-                                "Source": (v.get('source') or 'vicc').upper(),
-                                "Drugs": drugs[:30] if len(drugs) > 30 else drugs,
-                                "Response": v.get('response_type', 'Unknown'),
-                                "Disease": (v.get('disease', '') or '')[:25],
-                                "Level": v.get('evidence_level', ''),
-                            })
-                        if vicc_rows:
-                            st.dataframe(
-                                pd.DataFrame(vicc_rows),
-                                width="stretch",
-                                hide_index=True,
-                                height=300,  # Scrollable with fixed height
-                            )
+                            drugs = drugs[:30] if len(drugs) > 30 else drugs
+                            source = (v.get('source') or 'vicc').upper()
+                            url = v.get('publication_url', '')
+                            source_link = f"[{source}]({url})" if url else source
+                            response = v.get('response_type', 'Unknown')
+                            disease = (v.get('disease', '') or '')[:25]
+                            level = v.get('evidence_level', '')
+                            rows.append(f"| {source_link} | {drugs} | {response} | {disease} | {level} |")
+                        st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # CGI tab - scrollable table
@@ -660,7 +685,11 @@ with tab1:
             if well_characterized_detailed:
                 st.markdown("**✅ Well Characterized:**")
                 wc_df = pd.DataFrame([
-                    {"Aspect": item.get('aspect', ''), "Basis": item.get('basis', '')}
+                    {
+                        "Category": (item.get('category') or '').replace('_', ' ').title(),
+                        "Aspect": item.get('aspect', ''),
+                        "Basis": item.get('basis', ''),
+                    }
                     for item in well_characterized_detailed
                 ])
                 st.dataframe(wc_df, width="stretch", hide_index=True)

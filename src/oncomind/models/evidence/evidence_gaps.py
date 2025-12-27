@@ -34,6 +34,7 @@ class CharacterizedAspect(BaseModel):
 
     aspect: str = Field(..., description="What is well characterized (e.g., 'clinical actionability')")
     basis: str = Field(..., description="Why we think so (e.g., 'FDA-approved therapies exist')")
+    category: GapCategory | None = Field(None, description="Category this aspect belongs to (for grouping)")
 
 
 class EvidenceGap(BaseModel):

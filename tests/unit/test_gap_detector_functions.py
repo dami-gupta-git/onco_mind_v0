@@ -104,13 +104,19 @@ class TestGapDetectionContext:
     """Tests for the GapDetectionContext dataclass."""
 
     def test_add_well_characterized(self, base_context):
-        """Test adding well-characterized aspects."""
-        base_context.add_well_characterized("test aspect", "test basis")
+        """Test adding well-characterized aspects with title casing and category."""
+        base_context.add_well_characterized(
+            "test aspect",
+            "test basis",
+            category=GapCategory.FUNCTIONAL
+        )
 
-        assert "test aspect" in base_context.well_characterized
+        # Aspect should be title-cased
+        assert "Test Aspect" in base_context.well_characterized
         assert len(base_context.well_characterized_detailed) == 1
-        assert base_context.well_characterized_detailed[0].aspect == "test aspect"
+        assert base_context.well_characterized_detailed[0].aspect == "Test Aspect"
         assert base_context.well_characterized_detailed[0].basis == "test basis"
+        assert base_context.well_characterized_detailed[0].category == GapCategory.FUNCTIONAL
 
     def test_add_gap(self, base_context):
         """Test adding a gap."""
