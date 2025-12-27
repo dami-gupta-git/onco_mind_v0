@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Add streamlit directory to path for imports
-streamlit_dir = Path(__file__).parent.parent.parent / "streamlit"
+streamlit_dir = Path(__file__).parent.parent.parent.parent / "streamlit"
 sys.path.insert(0, str(streamlit_dir))
 
 from oncomind.models.evidence import (
