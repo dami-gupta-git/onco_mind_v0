@@ -25,8 +25,9 @@ from oncomind.insight_builder.gap_detector import (
     _check_validation_gap,
     _has_pathogenic_signal,
     _check_tumor_specific_evidence,
+    _compute_overall_quality,
 )
-from oncomind.models.evidence.evidence_gaps import GapCategory, GapSeverity
+from oncomind.models.evidence.evidence_gaps import GapCategory, GapSeverity, EvidenceGap
 from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge, DrugResistance
 
 
@@ -1062,3 +1063,67 @@ class TestDetectEvidenceGapsIntegration:
         assert hasattr(gaps, 'well_characterized_detailed')
         assert hasattr(gaps, 'poorly_characterized')
         assert hasattr(gaps, 'research_priority')
+
+
+# =============================================================================
+# TEST _compute_overall_quality
+# =============================================================================
+
+class TestComputeOverallQuality:
+    """Tests for _compute_overall_quality function."""
+
+    def test_no_gaps_comprehensive(self):
+        """No gaps should return comprehensive."""
+        result = _compute_overall_quality([], 5)
+        assert result == "comprehensive"
+
+    def test_well_characterized_offsets_gaps(self):
+        """Well-characterized aspects should offset gap penalties."""
+        minor_gap = EvidenceGap(
+            category=GapCategory.FUNCTIONAL,
+            severity=GapSeverity.MINOR,
+            description="Test gap",
+        )
+        # 1 minor gap with 0 well-characterized = moderate (small positive score)
+        result_no_credit = _compute_overall_quality([minor_gap], 0)
+
+        # Same gap with 5 well-characterized = comprehensive (negative net score)
+        result_with_credit = _compute_overall_quality([minor_gap], 5)
+
+        # With credit should be equal or better than without
+        quality_order = ["comprehensive", "moderate", "limited", "minimal"]
+        assert quality_order.index(result_with_credit) <= quality_order.index(result_no_credit)
+
+    def test_many_well_characterized_yields_comprehensive(self):
+        """Many well-characterized aspects should yield comprehensive even with gaps."""
+        significant_gap = EvidenceGap(
+            category=GapCategory.CLINICAL,
+            severity=GapSeverity.SIGNIFICANT,
+            description="Test gap",
+        )
+        # 1 significant gap but 10 well-characterized aspects
+        result = _compute_overall_quality([significant_gap], 10)
+        assert result == "comprehensive"
+
+    def test_critical_gaps_hard_to_overcome(self):
+        """Critical gaps in high-weight categories should be hard to overcome."""
+        # VALIDATION has weight 3.5, critical multiplier 3.0 = 10.5 points
+        critical_gap = EvidenceGap(
+            category=GapCategory.VALIDATION,
+            severity=GapSeverity.CRITICAL,
+            description="Critical validation gap",
+        )
+        # 3 well-characterized = 4.5 credit, net = 6.0 -> limited
+        result = _compute_overall_quality([critical_gap], 3)
+        assert result in ("moderate", "limited", "minimal")
+
+    def test_many_gaps_yields_poor_quality(self):
+        """Many gaps should yield poor quality even with some well-characterized."""
+        gaps = [
+            EvidenceGap(category=GapCategory.CLINICAL, severity=GapSeverity.CRITICAL, description="Gap 1"),
+            EvidenceGap(category=GapCategory.FUNCTIONAL, severity=GapSeverity.SIGNIFICANT, description="Gap 2"),
+            EvidenceGap(category=GapCategory.PRECLINICAL, severity=GapSeverity.SIGNIFICANT, description="Gap 3"),
+            EvidenceGap(category=GapCategory.VALIDATION, severity=GapSeverity.CRITICAL, description="Gap 4"),
+        ]
+        result = _compute_overall_quality(gaps, 3)
+        assert result in ("limited", "minimal")

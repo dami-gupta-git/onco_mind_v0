@@ -530,6 +530,19 @@ Public API/downloads.
 
 *Note: Data sources increased from 12→14 with DepMap (gene essentiality + drug sensitivity) and cBioPortal integrations.*
 
+### Hardcoded Data Drift
+Location: config/constants.py - DEPMAP_GENE_DEPENDENCIES_FALLBACK, DEPMAP_DRUG_SENSITIVITIES_FALLBACK
+Problem: These constants will become stale. DepMap updates quarterly.
+Suggestion:
+
+Add version/date comments to the fallback data
+Consider a script to refresh from DepMap downloads
+Log when fallback data is used so users know it may be dated
+
+
+#### Minor
+Fix docstrings - inconsistent
+More typehints
 ---
 
 ## Contributing
