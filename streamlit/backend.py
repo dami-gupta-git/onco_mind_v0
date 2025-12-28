@@ -25,6 +25,7 @@ async def get_variant_insight(
     tumor_type: Optional[str] = None,
     enable_llm: bool = False,
     enable_literature: bool = False,
+    literature_source: str = "pubmed",
     model: str = "gpt-4o-mini",
     temperature: float = 0.1
 ) -> Dict[str, Any]:
@@ -37,6 +38,7 @@ async def get_variant_insight(
         tumor_type: Optional tumor type (e.g., Melanoma)
         enable_llm: Enable LLM narrative generation
         enable_literature: Enable literature search
+        literature_source: "none", "pubmed", or "semantic_scholar"
         model: LLM model to use (if enable_llm=True)
         temperature: LLM temperature (0.0-1.0)
 
@@ -47,6 +49,7 @@ async def get_variant_insight(
         # Configure and run the Conductor
         config = ConductorConfig(
             enable_literature=enable_literature,
+            literature_source=literature_source,
             enable_llm=enable_llm,
             llm_model=model,
             llm_temperature=temperature,
@@ -65,6 +68,7 @@ async def batch_get_variant_insights(
     variants: List[Dict[str, str]],
     enable_llm: bool = False,
     enable_literature: bool = False,
+    literature_source: str = "pubmed",
     model: str = "gpt-4o-mini",
     temperature: float = 0.1,
     progress_callback: Optional[Callable[[int, int], None]] = None,
@@ -76,6 +80,7 @@ async def batch_get_variant_insights(
         variants: List of dicts with 'gene', 'variant', and optional 'tumor_type'
         enable_llm: Enable LLM narrative generation
         enable_literature: Enable literature search
+        literature_source: "none", "pubmed", or "semantic_scholar"
         model: LLM model to use (if enable_llm=True)
         temperature: LLM temperature (0.0-1.0)
         progress_callback: Optional callback(current, total) for progress updates
@@ -97,6 +102,7 @@ async def batch_get_variant_insights(
                 tumor_type=v.get('tumor_type'),
                 enable_llm=enable_llm,
                 enable_literature=enable_literature,
+                literature_source=literature_source,
                 model=model,
                 temperature=temperature
             )

@@ -114,7 +114,7 @@ with tab1:
             st.session_state.variant_input = variant
             st.session_state.tumor_input = tumor
 
-    input_cols = st.columns([1.5, 1.5, 2, 2, 1.5])
+    input_cols = st.columns([1.5, 1.5, 2, 1.2, 1.2, 1])
     with input_cols[0]:
         gene = st.text_input("Gene", value="AKT1", placeholder="e.g. AKT1", key="gene_input")
     with input_cols[1]:
@@ -123,15 +123,23 @@ with tab1:
         tumor = st.text_input("Tumor Type", value="Breast Cancer", placeholder="e.g. Breast Cancer", key="tumor_input")
     with input_cols[3]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
+        enable_literature = st.toggle(
+            "Literature",
+            value=True,
+            help="Search recent literature via Semantic Scholar (with citations). Falls back to PubMed if rate limited."
+        )
+        # Semantic Scholar by default, PubMed is automatic fallback on rate limit
+        literature_source = "semantic_scholar" if enable_literature else "none"
+    with input_cols[4]:
+        st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_llm = st.toggle(
             "LLM Mode",
             value=False,
-            help="LLM mode includes literature search and AI-powered synthesis (~25s). Without LLM, you get fast annotation (~7s)."
+            help="LLM mode includes AI-powered synthesis (~15s). Without LLM, you get fast annotation (~5s)."
         )
-        enable_literature = enable_llm
-    with input_cols[4]:
+    with input_cols[5]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
-        insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
+        insight_btn = st.button("🔍 Go", type="primary", use_container_width=True)
 
     # Example variants dropdown (experimental - below the input row)
     st.selectbox(
@@ -182,6 +190,7 @@ with tab1:
                         gene, variant, tumor or None,
                         enable_llm=enable_llm,
                         enable_literature=enable_literature,
+                        literature_source=literature_source,
                         model=MODELS[model_name],
                         temperature=temperature
                     ))
@@ -950,16 +959,23 @@ with tab2:
     st.subheader("Batch Variant Insight")
     st.markdown("**CSV Format:** Must contain `gene`, `variant`, and optionally `tumor_type` columns")
 
-    batch_cols = st.columns([2, 1])
+    batch_cols = st.columns([1.5, 1.5, 1])
     with batch_cols[0]:
+        enable_literature_batch = st.toggle(
+            "Literature",
+            value=True,
+            help="Search recent literature via Semantic Scholar (with citations). Falls back to PubMed if rate limited.",
+            key="batch_literature"
+        )
+        literature_source_value_batch = "semantic_scholar" if enable_literature_batch else "none"
+    with batch_cols[1]:
         enable_llm_batch = st.toggle(
-            "🤖 Enable LLM Mode",
+            "LLM Mode",
             value=False,
-            help="LLM mode includes literature search + AI synthesis (~25s/variant). Without LLM: fast annotation (~7s/variant).",
+            help="LLM mode includes AI synthesis (~25s/variant). Without LLM: fast annotation (~7s/variant).",
             key="batch_llm"
         )
-        enable_literature_batch = enable_llm_batch
-    with batch_cols[1]:
+    with batch_cols[2]:
         if enable_llm_batch:
             model_name_batch = st.selectbox("Model", list(MODELS.keys()), key="batch_model")
         else:
@@ -978,10 +994,13 @@ with tab2:
                 variants = [{"gene": row.get('gene'), "variant": row.get('variant'),
                            "tumor_type": row.get('tumor_type', None)} for _, row in df.iterrows()]
                 results = asyncio.run(batch_get_variant_insights(
-                    variants, MODELS[model_name_batch], 0.1,
-                    lambda i, t: (progress_bar.progress(i/t), status_text.text(f"Processing {i}/{t}...")),
+                    variants=variants,
                     enable_llm=enable_llm_batch,
-                    enable_literature=enable_literature_batch
+                    enable_literature=enable_literature_batch,
+                    literature_source=literature_source_value_batch,
+                    model=MODELS[model_name_batch],
+                    temperature=0.1,
+                    progress_callback=lambda i, t: (progress_bar.progress(i/t), status_text.text(f"Processing {i}/{t}..."))
                 ))
                 status_text.text("✅ Batch processing complete!")
                 progress_bar.progress(1.0)
