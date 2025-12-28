@@ -28,7 +28,12 @@ from tenacity import (
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential_jitter,
+    before_sleep_log,
 )
+import logging
+
+# Logger for tenacity retry logging
+_logger = logging.getLogger(__name__)
 
 
 class SemanticScholarError(Exception):
@@ -310,6 +315,13 @@ class SemanticScholarClient:
         except ValueError:
             return None
 
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
+        reraise=True,
+    )
     async def get_paper_by_pmid(self, pmid: str) -> SemanticPaperInfo | None:
         """Get paper information by PubMed ID.
 
@@ -318,6 +330,9 @@ class SemanticScholarClient:
 
         Returns:
             SemanticPaperInfo or None if not found
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
         """
         client = self._get_client()
 
@@ -337,11 +352,20 @@ class SemanticScholarClient:
                 # Paper not found in Semantic Scholar
                 return None
 
+            if response.status_code == 429:
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+
             response.raise_for_status()
             data = response.json()
 
             return self._parse_paper(data, pmid=pmid)
 
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
         except httpx.HTTPStatusError:
             return None
         except httpx.HTTPError:
@@ -349,6 +373,13 @@ class SemanticScholarClient:
         except Exception:
             return None
 
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
+        reraise=True,
+    )
     async def get_papers_by_pmids(self, pmids: list[str]) -> dict[str, SemanticPaperInfo]:
         """Get paper information for multiple PMIDs.
 
@@ -360,6 +391,9 @@ class SemanticScholarClient:
 
         Returns:
             Dictionary mapping PMID to SemanticPaperInfo
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
         """
         if not pmids:
             return {}
@@ -387,6 +421,12 @@ class SemanticScholarClient:
                 # Batch endpoint not found, fall back to individual requests
                 return await self._get_papers_individually(pmids)
 
+            if response.status_code == 429:
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+
             response.raise_for_status()
             data = response.json()
 
@@ -400,6 +440,9 @@ class SemanticScholarClient:
 
             return results
 
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
         except httpx.HTTPError:
             # Fall back to individual requests
             return await self._get_papers_individually(pmids)
@@ -464,9 +507,10 @@ class SemanticScholarClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type(SemanticScholarRateLimitError),
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,
     )
     async def search_papers(
@@ -535,6 +579,9 @@ class SemanticScholarClient:
 
             return papers
 
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 retry_after = self._parse_retry_after(e.response)
