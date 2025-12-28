@@ -53,7 +53,13 @@ class ConductorConfig:
     max_vicc_results: int = 50
     max_civic_assertions: int = 20
     max_clinical_trials: int = 10
-    max_literature_results: int = 6
+    max_literature_results: int = 4
+
+    # Literature source: "none", "pubmed", or "semantic_scholar"
+    literature_source: str = "pubmed"
+
+    # Semantic Scholar: filter to recent papers (last N years, 0 = no filter)
+    semantic_scholar_recent_years: int = 5
 
     # Performance options
     enable_timing: bool = False  # Log timing breakdown for performance analysis
@@ -66,6 +72,8 @@ class ConductorConfig:
             enable_civic_assertions=self.enable_civic_assertions,
             enable_clinical_trials=self.enable_clinical_trials,
             enable_literature=self.enable_literature,
+            literature_source=self.literature_source,
+            semantic_scholar_recent_years=self.semantic_scholar_recent_years,
             max_vicc_results=self.max_vicc_results,
             max_civic_assertions=self.max_civic_assertions,
             max_clinical_trials=self.max_clinical_trials,

@@ -1,6 +1,7 @@
 """LLM service for variant insight generation."""
 
 import json
+import time
 from litellm import acompletion
 from oncomind.llm.prompts import create_research_prompt
 from oncomind.models.llm_insight import LLMInsight
@@ -96,7 +97,15 @@ class LLMService:
             completion_kwargs["response_format"] = {"type": "json_object"}
 
         try:
+            # Time the LLM API call
+            t0 = time.time()
             response = await acompletion(**completion_kwargs)
+            llm_time = time.time() - t0
+
+            # Calculate input size for context
+            input_chars = sum(len(m.get("content", "")) for m in messages)
+            print(f"⏱️  LLM call: {llm_time:.2f}s | input: {input_chars} chars | lit: {len(literature_summary)} chars")
+
             raw_content = response.choices[0].message.content.strip()
 
             # Parse JSON response

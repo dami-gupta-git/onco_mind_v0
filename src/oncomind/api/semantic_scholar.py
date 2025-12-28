@@ -592,18 +592,18 @@ class SemanticScholarClient:
         except httpx.HTTPError:
             return []
 
-    async def search_resistance_literature(
+    async def search_therapeutic_literature(
         self,
         gene: str,
         variant: str,
         drug: str | None = None,
         tumor_type: str | None = None,
         max_results: int = 5,
+        year_range: tuple[int, int] | None = None,
     ) -> list[SemanticPaperInfo]:
-        """Search for resistance-related literature for a variant.
+        """Search for therapeutic response literature for a variant.
 
-        This is the primary method for finding evidence that a variant
-        causes resistance to a therapy.
+        Finds papers discussing resistance OR sensitivity to therapies.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
@@ -611,12 +611,13 @@ class SemanticScholarClient:
             drug: Optional specific drug to search for
             tumor_type: Optional tumor type for more specific search (e.g., "GIST")
             max_results: Maximum number of articles to return
+            year_range: Optional (start_year, end_year) filter for recent papers
 
         Returns:
-            List of SemanticPaperInfo objects discussing resistance
+            List of SemanticPaperInfo objects discussing therapeutic response
         """
-        # Build query for resistance literature
-        query_parts = [gene, variant, "resistance"]
+        # Build query for therapeutic response literature (resistance OR sensitivity)
+        query_parts = [gene, variant, "resistance OR sensitivity OR response"]
 
         # Use tumor type if provided, otherwise fall back to generic "cancer"
         if tumor_type:
@@ -638,19 +639,21 @@ class SemanticScholarClient:
 
         query = " ".join(query_parts)
 
-        # Fetch more results to filter for resistance
+        # Fetch more results to filter for therapeutic response, require min 5 citations for quality
         papers = await self.search_papers(
             query=query,
             limit=max_results * 2,
+            min_citations=5,
+            year_range=year_range,
         )
 
         if not papers:
             return []
 
-        # Filter to papers that actually mention resistance
-        resistance_papers = [p for p in papers if p.mentions_resistance()]
+        # Filter to papers that mention either resistance or sensitivity
+        therapeutic_papers = [p for p in papers if p.mentions_resistance() or p.mentions_sensitivity()]
 
-        return resistance_papers[:max_results]
+        return therapeutic_papers[:max_results]
 
     async def search_variant_literature(
         self,
@@ -658,6 +661,8 @@ class SemanticScholarClient:
         variant: str,
         tumor_type: str | None = None,
         max_results: int = 5,
+        min_citations: int = 5,
+        year_range: tuple[int, int] | None = None,
     ) -> list[SemanticPaperInfo]:
         """Search for general literature about a variant.
 
@@ -666,6 +671,8 @@ class SemanticScholarClient:
             variant: Variant notation
             tumor_type: Optional tumor type filter
             max_results: Maximum results
+            min_citations: Minimum citation count for quality filtering (default: 5)
+            year_range: Optional (start_year, end_year) filter for recent papers
 
         Returns:
             List of SemanticPaperInfo objects
@@ -682,6 +689,8 @@ class SemanticScholarClient:
         return await self.search_papers(
             query=query,
             limit=max_results,
+            min_citations=min_citations,
+            year_range=year_range,
         )
 
     async def search_pubmed_evidence(
@@ -690,54 +699,53 @@ class SemanticScholarClient:
         variant: str,
         tumor_type: str | None = None,
         max_results: int = 6,
+        year_range: tuple[int, int] | None = None,
     ) -> list:
         """Search for literature and convert to PubMedEvidence model.
 
-        This method searches for general variant literature first, then
-        supplements with resistance-focused papers to ensure diverse coverage.
+        This method searches BOTH therapeutic (resistance/sensitivity) and
+        general variant literature, merges and deduplicates.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
             variant: Variant notation (e.g., "C797S")
             tumor_type: Optional tumor type filter
             max_results: Maximum number of results
+            year_range: Optional (start_year, end_year) filter for recent papers
 
         Returns:
             List of PubMedEvidence objects
         """
         from oncomind.models.evidence.pubmed import PubMedEvidence
 
-        # Search general variant literature first (primary source)
-        # Then supplement with resistance-specific search
-        variant_papers, resistance_papers = await asyncio.gather(
+        # Search both therapeutic (resistance + sensitivity) and general literature in parallel
+        variant_papers, therapeutic_papers = await asyncio.gather(
             self.search_variant_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
                 max_results=max_results,  # Get full count for general search
+                year_range=year_range,
             ),
-            self.search_resistance_literature(
+            self.search_therapeutic_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
-                max_results=max_results // 2,  # Supplement with resistance papers
+                max_results=max_results // 2,  # Supplement with therapeutic papers
+                year_range=year_range,
             ),
         )
 
-        # Merge: prioritize variant papers, then add unique resistance papers
+        # Merge and deduplicate papers
         seen_ids = set()
         merged_papers = []
-        # Add variant papers first
-        for paper in variant_papers:
-            if paper.paper_id not in seen_ids:
-                seen_ids.add(paper.paper_id)
-                merged_papers.append(paper)
-        # Add unique resistance papers
-        for paper in resistance_papers:
+        for paper in variant_papers + therapeutic_papers:
             if paper.paper_id not in seen_ids:
                 seen_ids.add(paper.paper_id)
                 merged_papers.append(paper)
 
+        # Sort by impact score (citations) to surface highest-quality papers
+        merged_papers.sort(key=lambda p: p.get_impact_score(), reverse=True)
         papers = merged_papers[:max_results]
         evidence_list = []
 
@@ -755,8 +763,8 @@ class SemanticScholarClient:
                 year=str(paper.year) if paper.year else None,
                 doi=paper.doi,
                 url=url,
-                signal_type=None,  # Set by LLM layer later
-                drugs_mentioned=[],
+                signal_type=paper.get_signal_type(),  # Analyze abstract for resistance/sensitivity signals
+                drugs_mentioned=paper.extract_drug_mentions(),
                 citation_count=paper.citation_count,
                 influential_citation_count=paper.influential_citation_count,
                 tldr=paper.tldr,

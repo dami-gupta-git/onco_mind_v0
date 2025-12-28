@@ -61,7 +61,7 @@ class PubMedArticle:
 
     def mentions_resistance(self) -> bool:
         """Check if article mentions resistance."""
-        text = f"{self.title} {self.abstract}".lower()
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
         resistance_terms = [
             'resistance', 'resistant', 'refractory',
             'acquired resistance', 'secondary resistance',
@@ -71,7 +71,7 @@ class PubMedArticle:
 
     def mentions_sensitivity(self) -> bool:
         """Check if article mentions sensitivity/response."""
-        text = f"{self.title} {self.abstract}".lower()
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
         sensitivity_terms = [
             'sensitivity', 'sensitive', 'response',
             'efficacy', 'effective', 'benefit',
@@ -85,7 +85,7 @@ class PubMedArticle:
         are classified as 'resistance' even if they discuss overcoming resistance,
         since the primary clinical relevance is that the mutation causes resistance.
         """
-        text = f"{self.title} {self.abstract}".lower()
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
         has_resistance = self.mentions_resistance()
         has_sensitivity = self.mentions_sensitivity()
 
@@ -109,14 +109,15 @@ class PubMedArticle:
             return 'sensitivity'
         elif has_resistance and has_sensitivity:
             # Even if mixed, if resistance is in the title, prioritize it
-            if 'resist' in self.title.lower():
+            title_lower = (self.title or '').lower()
+            if 'resist' in title_lower:
                 return 'resistance'
             return 'mixed'
         return 'unknown'
 
     def extract_drug_mentions(self, known_drugs: list[str] | None = None) -> list[str]:
         """Extract drug names mentioned in the article."""
-        text = f"{self.title} {self.abstract}".lower()
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
 
         # Common targeted therapy drugs
         common_drugs = [
@@ -226,14 +227,16 @@ class PubMedClient:
         except ValueError:
             return None
 
-    def _build_resistance_query(
+    def _build_therapeutic_query(
         self,
         gene: str,
         variant: str,
         drug: str | None = None,
         tumor_type: str | None = None,
     ) -> str:
-        """Build a PubMed search query for resistance information.
+        """Build a PubMed search query for therapeutic response information.
+
+        Searches for both resistance AND sensitivity evidence in a single query.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
@@ -244,11 +247,11 @@ class PubMedClient:
         Returns:
             PubMed search query string
         """
-        # Core query: gene + variant + resistance
+        # Core query: gene + variant + (resistance OR sensitivity terms)
         query_parts = [
             f'"{gene}"[Title/Abstract]',
             f'("{variant}"[Title/Abstract] OR "{gene} {variant}"[Title/Abstract])',
-            '(resistance[Title/Abstract] OR resistant[Title/Abstract] OR refractory[Title/Abstract])',
+            '(resistance[Title/Abstract] OR resistant[Title/Abstract] OR refractory[Title/Abstract] OR sensitivity[Title/Abstract] OR sensitive[Title/Abstract] OR response[Title/Abstract] OR efficacy[Title/Abstract])',
         ]
 
         if drug:
@@ -518,7 +521,7 @@ class PubMedClient:
         except Exception:
             return None
 
-    async def search_resistance_literature(
+    async def search_therapeutic_literature(
         self,
         gene: str,
         variant: str,
@@ -526,10 +529,9 @@ class PubMedClient:
         tumor_type: str | None = None,
         max_results: int = DEFAULT_MAX_RESULTS,
     ) -> list[PubMedArticle]:
-        """Search for resistance-related literature for a variant.
+        """Search for therapeutic response literature for a variant.
 
-        This is the primary method for finding evidence that a variant
-        causes resistance to a therapy.
+        Finds papers discussing resistance OR sensitivity to therapies.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
@@ -539,9 +541,9 @@ class PubMedClient:
             max_results: Maximum number of articles to return
 
         Returns:
-            List of PubMedArticle objects discussing resistance
+            List of PubMedArticle objects discussing therapeutic response
         """
-        query = self._build_resistance_query(gene, variant, drug, tumor_type)
+        query = self._build_therapeutic_query(gene, variant, drug, tumor_type)
         pmids = await self._search_pmids(query, max_results * 2)  # Fetch extra for filtering
 
         if not pmids:
@@ -549,10 +551,10 @@ class PubMedClient:
 
         articles = await self._fetch_articles(pmids)
 
-        # Filter to articles that actually mention resistance
-        resistance_articles = [a for a in articles if a.mentions_resistance()]
+        # Filter to articles that mention either resistance or sensitivity
+        therapeutic_articles = [a for a in articles if a.mentions_resistance() or a.mentions_sensitivity()]
 
-        return resistance_articles[:max_results]
+        return therapeutic_articles[:max_results]
 
     async def search_variant_literature(
         self,
@@ -589,8 +591,8 @@ class PubMedClient:
     ) -> list:
         """Search for literature and convert to PubMedEvidence model.
 
-        This method searches BOTH resistance and variant literature,
-        merges and deduplicates by PMID, then converts to PubMedEvidence.
+        This method searches BOTH therapeutic (resistance/sensitivity) and
+        general variant literature, merges and deduplicates by PMID.
 
         Args:
             gene: Gene symbol (e.g., "EGFR")
@@ -603,9 +605,9 @@ class PubMedClient:
         """
         from oncomind.models.evidence.pubmed import PubMedEvidence
 
-        # Search both resistance and variant literature in parallel
-        resistance_articles, variant_articles = await asyncio.gather(
-            self.search_resistance_literature(
+        # Search both therapeutic (resistance + sensitivity) and general literature in parallel
+        therapeutic_articles, variant_articles = await asyncio.gather(
+            self.search_therapeutic_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
@@ -622,20 +624,23 @@ class PubMedClient:
         # Merge and deduplicate by pmid
         seen_pmids: set[str] = set()
         merged_articles: list[PubMedArticle] = []
-        for article in resistance_articles + variant_articles:
+        for article in therapeutic_articles + variant_articles:
             if article.pmid not in seen_pmids:
                 seen_pmids.add(article.pmid)
                 merged_articles.append(article)
 
-        # Convert to PubMedEvidence
+        # Convert to PubMedEvidence, skipping articles with no title
         evidence_list = []
         for article in merged_articles:
+            # Skip articles without titles (malformed records)
+            if not article.title:
+                continue
             evidence_list.append(PubMedEvidence(
                 pmid=article.pmid,
                 title=article.title,
-                abstract=article.abstract,
+                abstract=article.abstract or "",
                 authors=article.authors,
-                journal=article.journal,
+                journal=article.journal or "",
                 year=article.year,
                 doi=article.doi,
                 url=article.url,

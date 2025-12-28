@@ -64,6 +64,12 @@ from oncomind.models.gene_context import get_gene_context, is_variant_not_action
 # CONFIGURATION
 # =============================================================================
 
+# Literature source options
+LITERATURE_SOURCE_NONE = "none"
+LITERATURE_SOURCE_PUBMED = "pubmed"
+LITERATURE_SOURCE_SEMANTIC_SCHOLAR = "semantic_scholar"
+
+
 @dataclass
 class EvidenceAggregatorConfig:
     """Configuration for the insight builder.
@@ -77,11 +83,18 @@ class EvidenceAggregatorConfig:
     enable_clinical_trials: bool = True
     enable_literature: bool = True
 
+    # Literature source: "none", "pubmed", or "semantic_scholar"
+    literature_source: str = LITERATURE_SOURCE_PUBMED
+
+    # Semantic Scholar: filter to recent papers (last N years, 0 = no filter)
+    # Default is 5 years to get recent, relevant literature
+    semantic_scholar_recent_years: int = 5
+
     # Result limits
     max_vicc_results: int = 50
     max_civic_assertions: int = 20
     max_clinical_trials: int = 10
-    max_literature_results: int = 6
+    max_literature_results: int = 4
 
     # Concurrency control for rate-limited APIs
     literature_concurrency: int = 1
@@ -221,28 +234,31 @@ class EvidenceAggregator:
         variant: str,
         tumor_type: str | None,
     ) -> list[PubMedEvidence]:
-        """Fetch literature from Semantic Scholar with PubMed fallback."""
-        if not self.semantic_scholar_client:
+        """Fetch literature based on configured source.
+
+        Sources:
+        - pubmed: Fast PubMed E-utilities with relevance ranking
+        - semantic_scholar: Richer metadata (citations, TLDR) but slower
+        - none: Skip literature fetching
+        """
+        source = self.config.literature_source
+
+        if source == LITERATURE_SOURCE_NONE:
             return []
 
         async with self._literature_semaphore:
-            try:
-                return await self.semantic_scholar_client.search_pubmed_evidence(
-                    gene=gene,
-                    variant=variant,
-                    tumor_type=tumor_type,
-                    max_results=self.config.max_literature_results,
-                )
-            except SemanticScholarRateLimitError:
-                return await self._fetch_pubmed_fallback(gene, variant, tumor_type)
+            if source == LITERATURE_SOURCE_SEMANTIC_SCHOLAR:
+                return await self._fetch_semantic_scholar_literature(gene, variant, tumor_type)
+            else:  # Default to PubMed
+                return await self._fetch_pubmed_literature(gene, variant, tumor_type)
 
-    async def _fetch_pubmed_fallback(
+    async def _fetch_pubmed_literature(
         self,
         gene: str,
         variant: str,
         tumor_type: str | None,
     ) -> list[PubMedEvidence]:
-        """Fetch literature from PubMed (fallback)."""
+        """Fetch literature from PubMed with relevance ranking."""
         if not self.pubmed_client:
             return []
 
@@ -255,6 +271,42 @@ class EvidenceAggregator:
             )
         except PubMedRateLimitError:
             return []
+
+    async def _fetch_semantic_scholar_literature(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+    ) -> list[PubMedEvidence]:
+        """Fetch literature from Semantic Scholar with citation quality filter.
+
+        Uses Semantic Scholar's minCitationCount filter to get higher-quality papers.
+        Also filters to recent papers (configurable, default 5 years).
+        """
+        if not self.semantic_scholar_client:
+            return []
+
+        # Compute year range for recency filter
+        year_range = None
+        if self.config.semantic_scholar_recent_years > 0:
+            from datetime import datetime
+            current_year = datetime.now().year
+            start_year = current_year - self.config.semantic_scholar_recent_years
+            year_range = (start_year, current_year)
+
+        try:
+            # Semantic Scholar API filters by min_citations=5 for quality
+            return await self.semantic_scholar_client.search_pubmed_evidence(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=self.config.max_literature_results,
+                year_range=year_range,
+            )
+
+        except SemanticScholarRateLimitError:
+            # Fall back to PubMed if rate limited
+            return await self._fetch_pubmed_literature(gene, variant, tumor_type)
 
     # -------------------------------------------------------------------------
     # Result Processing Helpers
@@ -512,7 +564,8 @@ class EvidenceAggregator:
         async def fetch_literature():
             if self.config.enable_literature:
                 tracker.sources_queried.append("Literature")
-                return await self._fetch_literature(gene, variant, tumor_type)
+                x = await self._fetch_literature(gene, variant, tumor_type)
+                return x
             return []
 
         async def fetch_cbioportal():
