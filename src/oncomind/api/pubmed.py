@@ -72,10 +72,7 @@ class PubMedArticle:
     def mentions_sensitivity(self) -> bool:
         """Check if article mentions sensitivity/response."""
         text = f"{self.title or ''} {self.abstract or ''}".lower()
-        sensitivity_terms = [
-            'sensitivity', 'sensitive', 'response',
-            'efficacy', 'effective', 'benefit',
-        ]
+
         return any(term in text for term in sensitivity_terms)
 
     def get_signal_type(self) -> str:

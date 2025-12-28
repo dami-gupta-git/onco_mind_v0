@@ -1,9 +1,11 @@
 """PubMed literature evidence models."""
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from oncomind.models.evidence.base import EvidenceItemBase
 
 
-class PubMedEvidence(BaseModel):
+class PubMedEvidence(EvidenceItemBase):
     """Research article from PubMed providing evidence for a variant.
 
     Enriched with Semantic Scholar metadata when available.

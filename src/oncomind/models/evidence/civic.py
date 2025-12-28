@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, computed_field
+from pydantic import Field, computed_field
+
+from oncomind.models.evidence.base import EvidenceItemBase
 
 
-class CIViCEvidence(BaseModel):
+class CIViCEvidence(EvidenceItemBase):
     """Evidence from CIViC (Clinical Interpretations of Variants in Cancer).
 
     Each evidence item has a unique EID (Evidence Item ID) in the format "EID{number}".
@@ -43,7 +45,7 @@ class CIViCEvidence(BaseModel):
 
 
 
-class CIViCAssertionEvidence(BaseModel):
+class CIViCAssertionEvidence(EvidenceItemBase):
     """Evidence from CIViC Assertions (curated AMP/ASCO/CAP classifications).
 
     Each assertion has a unique AID (Assertion ID) in the format "AID{number}".

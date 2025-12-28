@@ -500,16 +500,28 @@ with tab1:
                 # Trials tab
                 if trials:
                     with tabs[tab_idx]:
-                        # Count matches - all trials match on gene, some also match on variant
-                        variant_specific_trials = [t for t in trials if t.get('variant_specific', False)]
+                        # Count matches by type
+                        specific_trials = [t for t in trials if t.get('match_scope') == 'specific']
+                        ambiguous_trials = [t for t in trials if t.get('match_scope') == 'ambiguous']
                         gene_only_trials = [t for t in trials if not t.get('variant_specific', False)]
 
                         trial_rows = []
                         for t in trials:
-                            is_variant_specific = t.get('variant_specific', False)
-                            match_type = "🎯 Variant" if is_variant_specific else "🧬 Gene"
+                            matched_biomarker = t.get('matched_biomarker', '')
+                            match_scope = t.get('match_scope')
+
+                            # Build display string with icons
+                            if match_scope == 'ambiguous':
+                                match_display = f"⚠️ {matched_biomarker}" if matched_biomarker else "⚠️ Broad"
+                            elif match_scope == 'specific':
+                                match_display = f"🎯 {matched_biomarker}" if matched_biomarker else "🎯 Variant"
+                            elif t.get('variant_specific', False):
+                                match_display = f"🎯 {matched_biomarker}" if matched_biomarker else "🎯 Variant"
+                            else:
+                                match_display = f"🧬 {matched_biomarker}" if matched_biomarker else "🧬 Gene"
+
                             trial_rows.append({
-                                "Matches On": match_type,
+                                "Matches On": match_display,
                                 "NCT ID": t.get('nct_id', ''),
                                 "Phase": t.get('phase', 'N/A'),
                                 "Status": t.get('status', ''),
@@ -518,7 +530,11 @@ with tab1:
 
                         # Show counts and tumor filter status
                         tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else "across **all cancer types**"
-                        count_parts = [f"🎯 **{len(variant_specific_trials)}** variant"]
+                        count_parts = []
+                        if len(specific_trials) > 0:
+                            count_parts.append(f"🎯 **{len(specific_trials)}** specific")
+                        if len(ambiguous_trials) > 0:
+                            count_parts.append(f"⚠️ **{len(ambiguous_trials)}** broad")
                         if len(gene_only_trials) > 0:
                             count_parts.append(f"🧬 **{len(gene_only_trials)}** gene")
                         count_parts.append(tumor_filter_note)
@@ -784,14 +800,17 @@ with tab1:
             with table_cols[0]:
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
 
-                # Compute trial match breakdown once
-                variant_specific_count = len([t for t in trials if t.get('variant_specific', False)]) if trials else 0
-                gene_only_count = len([t for t in trials if not t.get('variant_specific', False)]) if trials else 0
+                # Compute trial match breakdown once using match_scope
+                specific_count = len([t for t in trials if t.get('match_scope') == 'specific']) if trials else 0
+                ambiguous_count = len([t for t in trials if t.get('match_scope') == 'ambiguous']) if trials else 0
+                gene_only_count = len([t for t in trials if t.get('match_scope') not in ('specific', 'ambiguous')]) if trials else 0
 
                 # Build match string for trials
                 match_parts = []
-                if variant_specific_count > 0:
-                    match_parts.append(f"🎯 {variant_specific_count} variant")
+                if specific_count > 0:
+                    match_parts.append(f"🎯 {specific_count} specific")
+                if ambiguous_count > 0:
+                    match_parts.append(f"⚠️ {ambiguous_count} broad")
                 if gene_only_count > 0:
                     match_parts.append(f"🧬 {gene_only_count} gene")
                 trial_match_str = ", ".join(match_parts) if match_parts else ""
@@ -813,7 +832,18 @@ with tab1:
                 if wc_rows:
                     st.markdown("**✅ Well Characterized** — _what we know_")
                     wc_df = pd.DataFrame(wc_rows)
-                    st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(300, 35 * (len(wc_rows) + 1)))
+                    st.dataframe(
+                        wc_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(300, 35 * (len(wc_rows) + 1)),
+                        column_config={
+                            "Category": st.column_config.TextColumn(width="small"),
+                            "Aspect": st.column_config.TextColumn(width="small"),
+                            "Basis": st.column_config.TextColumn(width="medium"),
+                            "Matches On": st.column_config.TextColumn(width="small"),
+                        }
+                    )
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
@@ -846,7 +876,18 @@ with tab1:
 
                 if gaps_data:
                     st.markdown("**❓ Evidence Gaps** — _what we don't know_")
-                    st.dataframe(pd.DataFrame(gaps_data), use_container_width=True, hide_index=True, height=min(300, 35 * (len(gaps_data) + 1)))
+                    st.dataframe(
+                        pd.DataFrame(gaps_data),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(300, 35 * (len(gaps_data) + 1)),
+                        column_config={
+                            "Severity": st.column_config.TextColumn(width="small"),
+                            "Category": st.column_config.TextColumn(width="small"),
+                            "Description": st.column_config.TextColumn(width="medium"),
+                            "Matches On": st.column_config.TextColumn(width="small"),
+                        }
+                    )
 
             # Suggested studies (collapsible) - full width below tables
             gaps = evidence_gaps.get('gaps', [])

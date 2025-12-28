@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from oncomind.models.evidence.base import EvidenceItemBase
+
 
 class DrugSensitivity(BaseModel):
     """Drug sensitivity data from PRISM or other screens."""
@@ -40,7 +42,7 @@ class CellLineModel(BaseModel):
     mutation_details: str | None = Field(None, description="Specific mutation if known")
 
 
-class DepMapEvidence(BaseModel):
+class DepMapEvidence(EvidenceItemBase):
     """Evidence from DepMap/CCLE showing gene dependencies and drug sensitivities.
 
     DepMap provides:

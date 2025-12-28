@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from oncomind.models.evidence.base import EvidenceItemBase
 
 
-class COSMICEvidence(BaseModel):
+class COSMICEvidence(EvidenceItemBase):
     """Evidence from COSMIC (Catalogue of Somatic Mutations in Cancer)."""
 
     mutation_id: str | None = None

@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class VICCEvidence(BaseModel):
+from oncomind.models.evidence.base import EvidenceItemBase
+
+
+class VICCEvidence(EvidenceItemBase):
     """Evidence from VICC MetaKB (harmonized multi-KB interpretations)."""
 
     description: str | None = None

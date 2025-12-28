@@ -71,17 +71,26 @@ class ClinicalTrial:
             'NOT_YET_RECRUITING'
         ]
 
-    def mentions_variant(self, variant: str, gene: str | None = None) -> bool:
-        """Check if trial mentions the specific variant for the given gene.
+    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+        """Check if trial mentions the gene and/or variant.
 
         Args:
-            variant: Variant notation (e.g., "G12D", "V600E")
+            variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
             gene: Gene symbol (e.g., "NRAS", "BRAF"). If provided, ensures
                   the variant is mentioned in context of this gene to avoid
                   false positives (e.g., KRAS G12D trial matching NRAS G12D query).
+
+        Returns:
+            Tuple of (match_type, matched_biomarker):
+            - ("specific", "KRAS G12D") - both gene and variant found in text
+            - ("ambiguous", "KRAS G12") - gene found and ambiguous variant in BROAD_VARIANTS
+            - ("gene", "KRAS") - only gene found in text
+            - ("none", None) - no match found
         """
-        variant_upper = variant.upper()
+        from oncomind.config.constants import BROAD_VARIANTS
+
         gene_upper = gene.upper() if gene else None
+        variant_upper = variant.upper() if variant else None
 
         # Combine all text to search
         search_texts = [self.title.upper()]
@@ -92,47 +101,32 @@ class ClinicalTrial:
 
         full_text = " ".join(search_texts)
 
-        # If gene is provided, check for gene+variant pattern to avoid cross-gene matches
-        # e.g., "KRAS G12D" should not match for NRAS G12D query
-        if gene_upper:
-            # Check for explicit gene+variant pattern (e.g., "NRAS G12D", "NRAS-G12D", "NRAS:G12D")
-            gene_variant_patterns = [
-                f"{gene_upper} {variant_upper}",
-                f"{gene_upper}-{variant_upper}",
-                f"{gene_upper}:{variant_upper}",
-                f"{gene_upper}({variant_upper})",
-            ]
+        gene_found = gene_upper and gene_upper in full_text
+        variant_found = variant_upper and variant_upper in full_text
 
-            for pattern in gene_variant_patterns:
-                if pattern in full_text:
-                    return True
+        # Find ambiguous variants where both gene and variant are in the text
+        ambig_variants = [
+            (g, v) for (g, v) in BROAD_VARIANTS
+            if g.upper() in full_text and v.upper() in full_text
+        ]
+        # Find the ambiguous variant that matches the queried gene
+        matched_ambig = next(
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
+            None
+        )
 
-            # Also check if the gene is mentioned AND the variant is mentioned
-            # but make sure no OTHER gene is mentioned with this variant
-            if gene_upper in full_text and variant_upper in full_text:
-                # Check for other common genes that might have the same variant
-                other_genes = ['KRAS', 'NRAS', 'HRAS', 'BRAF', 'EGFR', 'PIK3CA']
-                other_genes = [g for g in other_genes if g != gene_upper]
+        if variant_found:
+            biomarker = f"{gene} {variant}" if gene else variant
+            return ('specific', biomarker)
+        elif matched_ambig:
+            g, v = matched_ambig
+            return ('ambiguous', f"{g} {v}")
+        elif gene_found:
+            return ('gene', gene)
+        else:
+            return ('none', None)
 
-                # If another gene is explicitly paired with this variant, don't match
-                for other_gene in other_genes:
-                    other_patterns = [
-                        f"{other_gene} {variant_upper}",
-                        f"{other_gene}-{variant_upper}",
-                        f"{other_gene}:{variant_upper}",
-                        f"{other_gene}({variant_upper})",
-                    ]
-                    if any(p in full_text for p in other_patterns):
-                        # Another gene is paired with this variant - don't match
-                        return False
-
-                # Gene and variant both present, no conflicting gene-variant pair found
-                return True
-
-            return False
-
-        # Legacy behavior when no gene specified - just check for variant
-        return variant_upper in full_text
+       
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -441,10 +435,12 @@ class ClinicalTrialsClient:
 
             # Filter by variant mention if variant specified
             # Pass gene to avoid false positives (e.g., KRAS G12D matching NRAS G12D query)
-            if variant and not trial.mentions_variant(variant, gene=gene):
-                # Still include if it mentions the gene prominently
-                if gene.upper() not in trial.title.upper():
-                    continue
+            if variant:
+                match_type, _ = trial.mentions_variant(variant, gene=gene)
+                if match_type == "none":
+                    # Still include if it mentions the gene prominently
+                    if gene.upper() not in trial.title.upper():
+                        continue
 
             trials.append(trial)
 
@@ -453,43 +449,58 @@ class ClinicalTrialsClient:
 
         return trials
 
-    async def search_variant_specific_trials(
+    async def search_trials_by_disease(
         self,
-        gene: str,
-        variant: str,
-        tumor_type: str | None = None,
-        max_results: int = 5,
+        tumor_type: str,
+        recruiting_only: bool = True,
+        max_results: int = 10,
     ) -> list[ClinicalTrial]:
-        """Search for trials that specifically mention the variant.
+        """Search for clinical trials by disease/tumor type only.
 
-        This is more restrictive than search_trials - only returns
-        trials where the variant is explicitly mentioned.
+        This finds disease-based trials (e.g., "Chemotherapy for NSCLC")
+        that may not mention specific genes or variants.
 
         Args:
-            gene: Gene symbol
-            variant: Variant notation (required)
-            tumor_type: Optional tumor type filter
-            max_results: Maximum results
+            tumor_type: Tumor type / disease (e.g., "NSCLC", "Melanoma")
+            recruiting_only: If True, only return recruiting trials
+            max_results: Maximum number of results
 
         Returns:
-            List of variant-specific trials
+            List of ClinicalTrial objects
         """
-        # First get general trials
-        all_trials = await self.search_trials(
-            gene=gene,
-            variant=variant,
-            tumor_type=tumor_type,
-            recruiting_only=True,
-            max_results=max_results * 3,  # Fetch more to filter
-        )
+        # Build parameters - search by condition only
+        params: dict[str, Any] = {
+            'query.cond': tumor_type,
+            'pageSize': min(max_results * 2, self.DEFAULT_PAGE_SIZE),
+            'countTotal': 'true',
+            'format': 'json',
+            'fields': '|'.join(self.FIELDS),
+        }
 
-        # Filter to only those mentioning the variant for this gene
-        variant_specific = [
-            t for t in all_trials
-            if t.mentions_variant(variant, gene=gene)
-        ]
+        # Filter by status
+        if recruiting_only:
+            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING'
+        else:
+            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING'
 
-        return variant_specific[:max_results]
+        # Make request
+        data = await self._make_request(params)
+
+        # Parse studies
+        studies = data.get('studies', [])
+        trials = []
+
+        for study in studies:
+            trial = self._parse_study(study)
+            if trial is None:
+                continue
+
+            trials.append(trial)
+
+            if len(trials) >= max_results:
+                break
+
+        return trials
 
     async def search_trial_evidence(
         self,
@@ -515,6 +526,7 @@ class ClinicalTrialsClient:
             List of ClinicalTrialEvidence objects
         """
         from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
+        from oncomind.models.evidence.base import EvidenceLevel
 
         trials = await self.search_trials(
             gene=gene,
@@ -526,7 +538,48 @@ class ClinicalTrialsClient:
         evidence_list = []
 
         for trial in trials:
-            variant_specific = trial.mentions_variant(variant, gene=gene)
+            # mentions_variant returns: (match_type, matched_biomarker)
+            match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
+
+            # Determine level and scope based on match type
+            if match_type == "specific":
+                level = "variant"
+                scope = "specific"
+            elif match_type == "ambiguous":
+                level = "variant"
+                scope = "ambiguous"
+            elif match_type == "gene":
+                level = "gene"
+                scope = "unspecified"
+            else:  # "none"
+                level = "gene"
+                scope = "unspecified"
+
+            # Build variant_level based on match type
+            variant_level = EvidenceLevel(
+                level=level,
+                scope=scope,
+                origin="trial",
+            )
+
+            # Build cancer_type_level based on whether trial targets specific tumor type
+            # Only set if tumor_type was queried; otherwise leave as None (unknown)
+            cancer_type_level = None
+            if tumor_type:
+                tumor_type_lower = tumor_type.lower()
+                cancer_matches = False
+                if trial.conditions:
+                    for condition in trial.conditions:
+                        if tumor_type_lower in condition.lower() or condition.lower() in tumor_type_lower:
+                            cancer_matches = True
+                            break
+
+                cancer_type_level = EvidenceLevel(
+                    level="cancer_specific" if cancer_matches else "pan_cancer",
+                    scope="specific" if cancer_matches else "unspecified",
+                    origin="trial",
+                )
+
             evidence_list.append(ClinicalTrialEvidence(
                 nct_id=trial.nct_id,
                 title=trial.title,
@@ -536,10 +589,182 @@ class ClinicalTrialsClient:
                 interventions=trial.interventions,
                 sponsor=trial.sponsor,
                 url=trial.url,
-                variant_specific=variant_specific,
+                variant_level=variant_level,
+                cancer_type_level=cancer_type_level,
+                matched_biomarker=matched_biomarker,
             ))
 
         return evidence_list
+
+    async def search_trial_evidence_by_disease(
+        self,
+        tumor_type: str,
+        gene: str | None = None,
+        variant: str | None = None,
+        recruiting_only: bool = True,
+        max_results: int = 10,
+    ) -> list["ClinicalTrialEvidence"]:
+        """Search for clinical trials by disease and convert to evidence model.
+
+        This searches by disease/tumor type only. If gene/variant are provided,
+        they are used to determine the variant_level (whether trial mentions
+        the biomarker), but the search itself is disease-based.
+
+        Args:
+            tumor_type: Tumor type / disease (e.g., "NSCLC", "Melanoma")
+            gene: Optional gene symbol to check for mentions
+            variant: Optional variant notation to check for mentions
+            recruiting_only: If True, only return recruiting trials
+            max_results: Maximum number of results
+
+        Returns:
+            List of ClinicalTrialEvidence objects
+        """
+        from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        trials = await self.search_trials_by_disease(
+            tumor_type=tumor_type,
+            recruiting_only=recruiting_only,
+            max_results=max_results,
+        )
+        evidence_list = []
+
+        for trial in trials:
+            # Determine variant_level using mentions_variant
+            # mentions_variant returns: (match_type, matched_biomarker)
+            variant_level = None
+            matched_biomarker = None
+            if gene:
+                match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
+                if match_type == "specific":
+                    variant_level = EvidenceLevel(
+                        level="variant",
+                        scope="specific",
+                        origin="trial",
+                    )
+                elif match_type == "ambiguous":
+                    variant_level = EvidenceLevel(
+                        level="variant",
+                        scope="ambiguous",
+                        origin="trial",
+                    )
+                elif match_type == "gene":
+                    variant_level = EvidenceLevel(
+                        level="gene",
+                        scope="unspecified",
+                        origin="trial",
+                    )
+                # else: match_type == "none", variant_level stays None
+
+            # cancer_type_level - we searched by disease so it should match
+            tumor_type_lower = tumor_type.lower()
+            cancer_matches = False
+            if trial.conditions:
+                for condition in trial.conditions:
+                    if tumor_type_lower in condition.lower() or condition.lower() in tumor_type_lower:
+                        cancer_matches = True
+                        break
+
+            cancer_type_level = EvidenceLevel(
+                level="cancer_specific" if cancer_matches else "pan_cancer",
+                scope="specific" if cancer_matches else "unspecified",
+                origin="trial",
+            )
+
+            evidence_list.append(ClinicalTrialEvidence(
+                nct_id=trial.nct_id,
+                title=trial.title,
+                status=trial.status,
+                phase=trial.phase,
+                conditions=trial.conditions,
+                interventions=trial.interventions,
+                sponsor=trial.sponsor,
+                url=trial.url,
+                variant_level=variant_level,
+                cancer_type_level=cancer_type_level,
+                matched_biomarker=matched_biomarker,
+            ))
+
+        return evidence_list
+
+    async def search_all_trial_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        recruiting_only: bool = True,
+        max_results: int = 10,
+    ) -> list["ClinicalTrialEvidence"]:
+        """Search for clinical trials using both biomarker and disease searches, then merge.
+
+        This performs two searches:
+        1. Gene/variant-based search (finds biomarker-specific trials)
+        2. Disease-based search if tumor_type provided (finds disease-based trials)
+
+        Results are merged and deduplicated by NCT ID.
+
+        Args:
+            gene: Gene symbol (e.g., "KRAS")
+            variant: Variant notation (e.g., "G12D")
+            tumor_type: Optional tumor type for disease-based search
+            recruiting_only: If True, only return recruiting trials
+            max_results: Maximum number of results (after merging)
+
+        Returns:
+            List of ClinicalTrialEvidence objects, deduplicated
+        """
+        import asyncio
+
+        # Run both searches in parallel if tumor_type provided
+        if tumor_type:
+            biomarker_task = self.search_trial_evidence(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                recruiting_only=recruiting_only,
+                max_results=max_results,
+            )
+            disease_task = self.search_trial_evidence_by_disease(
+                tumor_type=tumor_type,
+                gene=gene,
+                variant=variant,
+                recruiting_only=recruiting_only,
+                max_results=max_results,
+            )
+            biomarker_results, disease_results = await asyncio.gather(
+                biomarker_task, disease_task
+            )
+        else:
+            # No tumor_type, only do biomarker search
+            biomarker_results = await self.search_trial_evidence(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                recruiting_only=recruiting_only,
+                max_results=max_results,
+            )
+            disease_results = []
+
+        # Merge and deduplicate by NCT ID
+        # Prefer biomarker results (they have more specific variant_level)
+        seen_nct_ids: set[str] = set()
+        merged: list["ClinicalTrialEvidence"] = []
+
+        # Add biomarker results first (higher priority)
+        for trial in biomarker_results:
+            if trial.nct_id not in seen_nct_ids:
+                seen_nct_ids.add(trial.nct_id)
+                merged.append(trial)
+
+        # Add disease results that weren't in biomarker results
+        for trial in disease_results:
+            if trial.nct_id not in seen_nct_ids:
+                seen_nct_ids.add(trial.nct_id)
+                merged.append(trial)
+
+        # Limit to max_results
+        return merged[:max_results]
 
     async def close(self) -> None:
         """Close the HTTP client."""

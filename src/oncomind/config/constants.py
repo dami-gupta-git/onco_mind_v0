@@ -561,3 +561,27 @@ DEPMAP_DRUG_SENSITIVITIES_FALLBACK: dict[str, list[dict]] = {
         {"drug": "tucatinib", "ic50_mutant": 8, "ic50_wt": 1000, "target": "HER2"},
     ],
 }
+
+LITERATURE_SENSITIVITY_TERMS = [
+    'sensitivity', 'sensitive', 'response',
+    'efficacy', 'effective', 'benefit',
+]
+
+
+# =============================================================================
+# AMBIGUOUS VARIANTS
+# =============================================================================
+# Variants that are ambiguous - same notation exists in multiple genes or
+# the variant notation is too broad to be considered specific.
+# These should have scope="ambiguous" when variant_level.level="variant"
+# Format: (gene, variant) tuples with exact match required
+
+BROAD_VARIANTS: set[tuple[str, str]] = {
+    ("BRAF", "V600"), ("IDH1", "R132"), ("IDH2", "R140"),
+    ("IDH2", "R172"), ("EGFR", "exon 19 deletion"), ("PIK3CA", "E542"),
+    ("PIK3CA", "E545"), ("PIK3CA", "H1047"),
+    ("KRAS", "G12"), ("NRAS", "G12"), ("HRAS", "G12"),
+    ("KRAS", "G13"), ("NRAS", "G13"), ("HRAS", "G13"),
+    ("KRAS", "Q61"), ("NRAS", "Q61"), ("HRAS", "Q61"),
+    ("PIK3CA", "hotspot"), ("MET", "exon 14 skipping"),
+}
