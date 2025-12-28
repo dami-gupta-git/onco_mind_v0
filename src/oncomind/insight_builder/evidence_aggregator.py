@@ -57,7 +57,7 @@ from oncomind.models.evidence import (
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 
 from oncomind.normalization import ParsedVariant
-from oncomind.models.gene_context import get_gene_context
+from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
 
 
 # =============================================================================
@@ -574,7 +574,7 @@ class EvidenceAggregator:
 
         # Process standard results
         myvariant_evidence = tracker.handle_result(myvariant_result, "MyVariant")
-        fda_approvals: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
+        fda_approvals_raw: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
         all_cgi: list[CGIBiomarkerEvidence] = tracker.handle_result(cgi_result, "CGI") or []
         vicc_evidence: list[VICCEvidence] = tracker.handle_result(vicc_result, "VICC") or []
         civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_result, "CIViC") or []
@@ -596,6 +596,22 @@ class EvidenceAggregator:
             functional_scores, identifiers_data, clinvar_significance,
             clinvar_entries, cosmic_entries, civic_entries
         ) = self._extract_myvariant_data(myvariant_evidence, variant, normalized_variant)
+
+        # Check if variant is not actionable (benign polymorphism)
+        # If so, skip FDA trial matching to avoid false positives
+        gnomad_af = functional_scores.gnomad_exome_af
+        not_actionable, not_actionable_reason = is_variant_not_actionable(
+            gene=gene,
+            variant=normalized_variant,
+            clinvar_significance=clinvar_significance,
+            gnomad_af=gnomad_af,
+        )
+
+        if not_actionable:
+            print(f"  Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
+            fda_approvals: list[FDAApproval] = []
+        else:
+            fda_approvals = fda_approvals_raw
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
