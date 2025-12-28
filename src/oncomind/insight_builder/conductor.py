@@ -15,6 +15,7 @@ ARCHITECTURE:
 from dataclasses import dataclass
 from typing import Callable
 
+from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
 from oncomind.insight_builder.evidence_aggregator import (
     EvidenceAggregator,
     EvidenceAggregatorConfig,
@@ -256,28 +257,24 @@ def _check_tumor_specific_cbioportal(evidence, tumor_type: str | None) -> bool:
     tumor_lower = tumor_type.lower().replace(" ", "_")
     tumor_words = tumor_type.lower().split()
 
-    # Common tumor type abbreviations mapping
-    tumor_abbreviations = {
-        "melanoma": ["mel", "skcm"],
-        "lung": ["luad", "lusc", "nsclc"],
-        "breast": ["brca"],
-        "colorectal": ["crc", "coad", "read"],
-        "pancreatic": ["paad", "pdac"],
-        "ovarian": ["ov"],
-        "glioblastoma": ["gbm"],
-        "leukemia": ["laml", "aml"],
-        "myeloproliferative": ["mpn"],
-    }
-
-    # Check if any tumor word or abbreviation appears in study_id
+    # Check if any tumor word appears in study_id
     for word in tumor_words:
         if word in study_lower:
             return True
 
-    for tumor_key, abbrevs in tumor_abbreviations.items():
-        if tumor_key in tumor_lower:
-            if any(abbrev in study_lower for abbrev in abbrevs):
+    # Use TUMOR_TYPE_MAPPINGS to find matching abbreviations
+    # TUMOR_TYPE_MAPPINGS maps abbreviation -> list of synonyms
+    # We check if any synonym matches the tumor_type, then check if the abbreviation is in study_id
+    for abbrev, synonyms in TUMOR_TYPE_MAPPINGS.items():
+        # Check if tumor_type matches this abbreviation or any of its synonyms
+        if tumor_lower in [s.lower() for s in synonyms] or tumor_lower == abbrev:
+            if abbrev in study_lower:
                 return True
+        # Also check if any tumor word is in the synonyms
+        for word in tumor_words:
+            if any(word in syn.lower() for syn in synonyms):
+                if abbrev in study_lower:
+                    return True
 
     return False
 
