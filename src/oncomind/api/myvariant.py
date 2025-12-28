@@ -411,8 +411,15 @@ class MyVariantClient:
         ncbi_gene_id = None
         if hit.entrezgene:
             ncbi_gene_id = str(hit.entrezgene)
-        elif hit.dbsnp and hit.dbsnp.gene and hit.dbsnp.gene.geneid:
-            ncbi_gene_id = str(hit.dbsnp.gene.geneid)
+        elif hit.dbsnp and hit.dbsnp.gene:
+            # gene can be a single DbSNPGene or a list of them
+            gene_data = hit.dbsnp.gene
+            if isinstance(gene_data, list):
+                # Take the first gene if it's a list
+                if gene_data and gene_data[0].geneid:
+                    ncbi_gene_id = str(gene_data[0].geneid)
+            elif gene_data.geneid:
+                ncbi_gene_id = str(gene_data.geneid)
 
         dbsnp_id = None
         if hit.dbsnp and hit.dbsnp.rsid:
