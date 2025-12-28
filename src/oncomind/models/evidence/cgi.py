@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class CGIBiomarkerEvidence(BaseModel):
+from oncomind.models.evidence.base import EvidenceItemBase
+
+
+class CGIBiomarkerEvidence(EvidenceItemBase):
     """Evidence from Cancer Genome Interpreter biomarkers database."""
 
     gene: str | None = None

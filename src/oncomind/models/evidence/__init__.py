@@ -1,3 +1,5 @@
+from oncomind.config.constants import BROAD_VARIANTS
+from oncomind.models.evidence.base import EvidenceItemBase, EvidenceLevel, VariantGeneLevel, Scope, Origin, CancerSpecificity, is_ambiguous_variant
 from oncomind.models.evidence.cbioportal import CBioPortalEvidence, CoMutationEntry
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
@@ -29,6 +31,14 @@ from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
 
 __all__ = [
+    # Base class and types
+    "EvidenceItemBase",
+    "EvidenceLevel",
+    "VariantGeneLevel",
+    "Scope",
+    "Origin",
+    "CancerSpecificity",
+    "BROAD_VARIANTS",
     # Core model
     "Evidence",
     # Core components

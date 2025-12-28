@@ -1,9 +1,11 @@
 """Clinical trial evidence models."""
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from oncomind.models.evidence.base import EvidenceItemBase
 
 
-class ClinicalTrialEvidence(BaseModel):
+class ClinicalTrialEvidence(EvidenceItemBase):
     """Clinical trial information for a variant."""
 
     nct_id: str = Field(..., description="ClinicalTrials.gov NCT ID")
@@ -14,7 +16,7 @@ class ClinicalTrialEvidence(BaseModel):
     interventions: list[str] = Field(default_factory=list, description="Drug/treatment names")
     sponsor: str | None = Field(None, description="Lead sponsor")
     url: str = Field(..., description="ClinicalTrials.gov URL")
-    variant_specific: bool = Field(False, description="True if variant explicitly mentioned")
+    matched_biomarker: str | None = Field(None, description="Biomarker that matched (e.g., 'KRAS G12D', 'KRAS G12', 'KRAS')")
 
     def is_phase2_or_later(self) -> bool:
         """Check if trial is Phase 2 or later."""

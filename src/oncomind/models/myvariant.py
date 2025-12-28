@@ -90,7 +90,7 @@ class AlphaMissenseData(BaseModel):
     """AlphaMissense pathogenicity prediction data structure."""
 
     score: float | list[float] | None = None  # Pathogenicity score (0-1)
-    pred: str | list[str] | None = None  # P=pathogenic, B=benign, A=ambiguous
+    pred: str | list[str] | None = None  # P=pathogenic, B=benign, Aambiguous
     rankscore: float | None = None
 
 

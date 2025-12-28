@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class FDAApproval(BaseModel):
+from oncomind.models.evidence.base import EvidenceItemBase
+
+
+class FDAApproval(EvidenceItemBase):
     """FDA drug approval information."""
 
     drug_name: str | None = None

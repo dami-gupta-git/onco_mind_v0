@@ -3,6 +3,8 @@
 from pydantic import BaseModel, Field
 from typing import Any
 
+from oncomind.models.evidence.base import EvidenceItemBase
+
 
 class CoMutationEntry(BaseModel):
     """A single co-mutation or mutual exclusivity entry."""
@@ -13,7 +15,7 @@ class CoMutationEntry(BaseModel):
     odds_ratio: float | None = None
 
 
-class CBioPortalEvidence(BaseModel):
+class CBioPortalEvidence(EvidenceItemBase):
     """Evidence from cBioPortal showing mutation prevalence and co-occurrence patterns."""
 
     gene: str

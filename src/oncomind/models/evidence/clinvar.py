@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-class ClinVarEvidence(BaseModel):
+from oncomind.models.evidence.base import EvidenceItemBase
+
+
+class ClinVarEvidence(EvidenceItemBase):
     """Evidence from ClinVar."""
 
     clinical_significance: str | None = None
