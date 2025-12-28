@@ -245,6 +245,17 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
         )
         ctx.add_poorly_characterized("pathogenicity predictions")
 
+    # Check for gnomAD population frequency data (informational, not a penalty)
+    # If gnomAD AF > 0.01% (0.0001), note that the variant is observed in the general population
+    gnomad_af = evidence.functional.gnomad_exome_af or evidence.functional.gnomad_genome_af
+    if gnomad_af is not None and gnomad_af > 0.0001:  # > 0.01%
+        af_pct = gnomad_af * 100
+        ctx.add_well_characterized(
+            "population frequency",
+            f"Observed in general population (gnomAD AF: {af_pct:.3f}%)",
+            category=GapCategory.PREVALENCE
+        )
+
 
 def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for gene function and essentiality data."""

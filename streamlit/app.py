@@ -36,6 +36,20 @@ st.markdown("""
         color: #999 !important;
         font-style: italic !important;
     }
+    /* Smaller text in dataframes/tables */
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        font-size: 0.8rem !important;
+    }
+    .stDataFrame table {
+        font-size: 0.8rem !important;
+    }
+    .stDataFrame th {
+        font-size: 0.75rem !important;
+    }
+    .stDataFrame td {
+        font-size: 0.8rem !important;
+        padding: 4px 8px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -437,14 +451,30 @@ with tab1:
                 # Trials tab
                 if trials:
                     with tabs[tab_idx]:
+                        # Count matches - all trials match on gene, some also match on variant
+                        variant_specific_trials = [t for t in trials if t.get('variant_specific', False)]
+                        gene_only_trials = [t for t in trials if not t.get('variant_specific', False)]
+
                         trial_rows = []
                         for t in trials:
+                            is_variant_specific = t.get('variant_specific', False)
+                            match_type = "🎯 Variant" if is_variant_specific else "🧬 Gene"
                             trial_rows.append({
+                                "Matches On": match_type,
                                 "NCT ID": t.get('nct_id', ''),
                                 "Phase": t.get('phase', 'N/A'),
                                 "Status": t.get('status', ''),
                                 "Title": (t.get('title', '') or '')[:50] + "...",
                             })
+
+                        # Show counts and tumor filter status
+                        tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else "across **all cancer types**"
+                        count_parts = [f"🎯 **{len(variant_specific_trials)}** variant"]
+                        if len(gene_only_trials) > 0:
+                            count_parts.append(f"🧬 **{len(gene_only_trials)}** gene")
+                        count_parts.append(tumor_filter_note)
+                        st.caption(" &nbsp;|&nbsp; ".join(count_parts))
+
                         st.dataframe(
                             pd.DataFrame(trial_rows),
                             width="stretch",
@@ -704,17 +734,37 @@ with tab1:
 
             with table_cols[0]:
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
+
+                # Compute trial match breakdown once
+                variant_specific_count = len([t for t in trials if t.get('variant_specific', False)]) if trials else 0
+                gene_only_count = len([t for t in trials if not t.get('variant_specific', False)]) if trials else 0
+
+                # Build match string for trials
+                match_parts = []
+                if variant_specific_count > 0:
+                    match_parts.append(f"🎯 {variant_specific_count} variant")
+                if gene_only_count > 0:
+                    match_parts.append(f"🧬 {gene_only_count} gene")
+                trial_match_str = ", ".join(match_parts) if match_parts else ""
+
+                # Build rows from well_characterized_detailed
+                wc_rows = []
                 if well_characterized_detailed:
-                    st.markdown("**✅ Well Characterized** — _what we know_")
-                    wc_df = pd.DataFrame([
-                        {
+                    for item in well_characterized_detailed:
+                        aspect = item.get('aspect', '')
+                        # Check if this row is about clinical trials
+                        is_trial_row = 'trial' in aspect.lower()
+                        wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
-                            "Aspect": item.get('aspect', ''),
+                            "Aspect": aspect,
                             "Basis": item.get('basis', ''),
-                        }
-                        for item in well_characterized_detailed
-                    ])
-                    st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(300, 35 * (len(well_characterized_detailed) + 1)))
+                            "Matches On": trial_match_str if is_trial_row else "",
+                        })
+
+                if wc_rows:
+                    st.markdown("**✅ Well Characterized** — _what we know_")
+                    wc_df = pd.DataFrame(wc_rows)
+                    st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(300, 35 * (len(wc_rows) + 1)))
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
@@ -724,9 +774,10 @@ with tab1:
 
             with table_cols[1]:
                 gaps = evidence_gaps.get('gaps', [])
+
+                # Build gaps rows
+                gaps_data = []
                 if gaps:
-                    st.markdown("**❓ Evidence Gaps** — _what we don't know_")
-                    gaps_data = []
                     for gap in gaps:
                         severity = gap.get('severity', 'unknown')
                         severity_icon = {"critical": "🔴", "significant": "🟠", "minor": "🟡"}.get(severity, "⚪")
@@ -734,13 +785,19 @@ with tab1:
                         desc = re.sub(r'\s+for\s+\w+\s+\S+$', '', desc)
                         desc = re.sub(r'\s+of\s+\w+\s+\S+\s+in\s+\S+$', '', desc)
                         desc = re.sub(r'\s+of\s+\w+\s+\S+$', '', desc)
+                        category = gap.get('category', '').replace('_', ' ').title()
+                        # Check if this is a trial-related gap
+                        is_trial_gap = 'trial' in desc.lower() or 'trial' in category.lower()
                         gaps_data.append({
                             "Severity": f"{severity_icon} {severity.capitalize()}",
-                            "Category": gap.get('category', '').replace('_', ' ').title(),
+                            "Category": category,
                             "Description": desc,
+                            "Matches On": trial_match_str if is_trial_gap else "",
                         })
-                    if gaps_data:
-                        st.dataframe(pd.DataFrame(gaps_data), use_container_width=True, hide_index=True, height=min(300, 35 * (len(gaps_data) + 1)))
+
+                if gaps_data:
+                    st.markdown("**❓ Evidence Gaps** — _what we don't know_")
+                    st.dataframe(pd.DataFrame(gaps_data), use_container_width=True, hide_index=True, height=min(300, 35 * (len(gaps_data) + 1)))
 
             # Suggested studies (collapsible) - full width below tables
             gaps = evidence_gaps.get('gaps', [])
