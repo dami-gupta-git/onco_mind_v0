@@ -64,6 +64,26 @@ MODELS = {
     "Groq Llama 3.1 70B": "groq/llama-3.1-70b-versatile"
 }
 
+# Pre-populated example variants (Gene, Variant, Tumor Type)
+EXAMPLE_VARIANTS = {
+    "-- Select an example --": ("", "", ""),
+    "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+    "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
+    "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
+    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
+    "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
+    "PIK3CA H1047R - Breast Cancer": ("PIK3CA", "H1047R", "Breast Cancer"),
+    "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
+    "TP53 R248W - Multiple": ("TP53", "R248W", ""),
+    "TP53 R273H - Multiple": ("TP53", "R273H", ""),
+    "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
+    "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
+    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
+    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+    "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
+    "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
+    "MET exon 14 skip - NSCLC": ("MET", "exon14del", "NSCLC"),
+}
 
 # Initialize session state for persisting results
 if "single_result" not in st.session_state:
@@ -84,6 +104,16 @@ with tab1:
     # ==============================================
     # COMPACT INPUT ROW
     # ==============================================
+
+    # Callback for example dropdown - updates the text input keys directly
+    def on_example_change():
+        selected = st.session_state.get("example_selector")
+        if selected and selected != "-- Select an example --":
+            gene, variant, tumor = EXAMPLE_VARIANTS[selected]
+            st.session_state.gene_input = gene
+            st.session_state.variant_input = variant
+            st.session_state.tumor_input = tumor
+
     input_cols = st.columns([1.5, 1.5, 2, 2, 1.5])
     with input_cols[0]:
         gene = st.text_input("Gene", value="AKT1", placeholder="e.g. AKT1", key="gene_input")
@@ -102,6 +132,15 @@ with tab1:
     with input_cols[4]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
+
+    # Example variants dropdown (experimental - below the input row)
+    st.selectbox(
+        "Try an example",
+        options=list(EXAMPLE_VARIANTS.keys()),
+        key="example_selector",
+        on_change=on_example_change,
+        label_visibility="collapsed"
+    )
 
     # LLM settings expander (only if LLM enabled)
     if enable_llm:
