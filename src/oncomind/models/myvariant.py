@@ -18,11 +18,25 @@ class DbSNPData(BaseModel):
     gene: DbSNPGene | None = None
 
 
+class ClinVarCondition(BaseModel):
+    """ClinVar condition/disease information."""
+
+    name: str | None = None
+    synonyms: list[str] | None = None
+    identifiers: dict | None = None
+
+
 class ClinVarRCV(BaseModel):
     """ClinVar RCV record."""
 
     accession: str | None = None
     clinical_significance: str | None = None
+    conditions: ClinVarCondition | dict | None = None
+    review_status: str | None = None
+    last_evaluated: str | None = None
+    origin: str | None = None
+    preferred_name: str | None = None
+    number_submitters: int | None = None
 
 
 class ClinVarData(BaseModel):

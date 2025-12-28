@@ -282,33 +282,72 @@ class MyVariantClient:
             if not isinstance(item, dict):
                 continue
 
-            # Extract clinical significance
-            clin_sig = item.get("clinical_significance")
-            if isinstance(clin_sig, list):
-                clin_sig = ", ".join(str(s) for s in clin_sig)
+            variant_id = item.get("variant_id")
 
-            # Extract conditions
-            conditions = []
-            if "conditions" in item:
-                cond_data = item["conditions"]
-                if isinstance(cond_data, list):
-                    for cond in cond_data:
-                        if isinstance(cond, dict):
-                            conditions.append(cond.get("name", ""))
-                        else:
-                            conditions.append(str(cond))
-                elif isinstance(cond_data, dict):
-                    conditions.append(cond_data.get("name", ""))
+            # MyVariant ClinVar format: rcv array contains the clinical interpretations
+            rcv_data = item.get("rcv", [])
+            if rcv_data:
+                rcv_list = rcv_data if isinstance(rcv_data, list) else [rcv_data]
+                # Deduplicate by clinical significance to avoid showing 6x "Pathogenic"
+                seen_significances: set[str] = set()
+                for rcv in rcv_list:
+                    if not isinstance(rcv, dict):
+                        continue
+                    clin_sig = rcv.get("clinical_significance")
+                    sig_key = str(clin_sig).lower() if clin_sig else ""
+                    if sig_key in seen_significances:
+                        continue  # Skip duplicates
+                    seen_significances.add(sig_key)
 
-            evidence_list.append(
-                ClinVarEvidence(
-                    clinical_significance=str(clin_sig) if clin_sig else None,
-                    review_status=item.get("review_status"),
-                    conditions=conditions,
-                    last_evaluated=item.get("last_evaluated"),
-                    variation_id=str(item.get("variation_id")) if "variation_id" in item else None,
+                    conditions = []
+                    # RCV entries may have conditions
+                    if "conditions" in rcv:
+                        cond_data = rcv["conditions"]
+                        if isinstance(cond_data, list):
+                            for cond in cond_data:
+                                if isinstance(cond, dict):
+                                    conditions.append(cond.get("name", ""))
+                                else:
+                                    conditions.append(str(cond))
+                        elif isinstance(cond_data, dict):
+                            conditions.append(cond_data.get("name", ""))
+
+                    evidence_list.append(
+                        ClinVarEvidence(
+                            clinical_significance=str(clin_sig) if clin_sig else None,
+                            review_status=rcv.get("review_status"),
+                            conditions=conditions,
+                            last_evaluated=rcv.get("last_evaluated"),
+                            variation_id=str(variant_id) if variant_id else None,
+                        )
+                    )
+            else:
+                # Fallback: old format with clinical_significance at top level
+                clin_sig = item.get("clinical_significance")
+                if isinstance(clin_sig, list):
+                    clin_sig = ", ".join(str(s) for s in clin_sig)
+
+                conditions = []
+                if "conditions" in item:
+                    cond_data = item["conditions"]
+                    if isinstance(cond_data, list):
+                        for cond in cond_data:
+                            if isinstance(cond, dict):
+                                conditions.append(cond.get("name", ""))
+                            else:
+                                conditions.append(str(cond))
+                    elif isinstance(cond_data, dict):
+                        conditions.append(cond_data.get("name", ""))
+
+                evidence_list.append(
+                    ClinVarEvidence(
+                        clinical_significance=str(clin_sig) if clin_sig else None,
+                        review_status=item.get("review_status"),
+                        conditions=conditions,
+                        last_evaluated=item.get("last_evaluated"),
+                        variation_id=str(variant_id) if variant_id else None,
+                    )
                 )
-            )
 
         return evidence_list
 
@@ -543,36 +582,63 @@ class MyVariantClient:
         Returns:
             ClinVar data dict with variant_id, clinical_significance, and accession if found
         """
+        import re
+
         try:
             client = self._get_client()
-
-            # Search ClinVar using NCBI E-utilities
-            # Use [gene] field and simple text search for variant
-            search_term = f"{gene}[gene] AND {variant}"
             search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-            search_params = {
-                "db": "clinvar",
-                "term": search_term,
-                "retmode": "json",
-                "retmax": 1
+
+            # Build search terms - try multiple formats for better matching
+            # Convert X/Ter notation: K3326X -> Lys3326Ter, V600E -> Val600Glu
+            aa_map = {
+                'A': 'Ala', 'R': 'Arg', 'N': 'Asn', 'D': 'Asp', 'C': 'Cys',
+                'E': 'Glu', 'Q': 'Gln', 'G': 'Gly', 'H': 'His', 'I': 'Ile',
+                'L': 'Leu', 'K': 'Lys', 'M': 'Met', 'F': 'Phe', 'P': 'Pro',
+                'S': 'Ser', 'T': 'Thr', 'W': 'Trp', 'Y': 'Tyr', 'V': 'Val',
+                'X': 'Ter', '*': 'Ter',
             }
 
-            search_response = await client.get(search_url, params=search_params)
-            if search_response.status_code != 200:
-                return None
+            search_terms = []
 
-            search_data = search_response.json()
-            id_list = search_data.get("esearchresult", {}).get("idlist", [])
+            # Parse variant like V600E, K3326X, etc.
+            match = re.match(r'^([A-Z])(\d+)([A-Z*])$', variant.upper())
+            if match:
+                ref_aa, pos, alt_aa = match.groups()
+                ref_long = aa_map.get(ref_aa, ref_aa)
+                alt_long = aa_map.get(alt_aa, alt_aa)
+                # Try three-letter format FIRST - more reliable for ClinVar
+                search_terms.append(f"{ref_long}{pos}{alt_long}")
+                # Then try position-only for more lenient matching
+                search_terms.append(f"{ref_long}{pos}")
+
+            # Finally try original notation
+            search_terms.append(variant)
+
+            id_list = []
+            for search_variant in search_terms:
+                search_term = f"{gene}[gene] AND {search_variant}"
+                search_params = {
+                    "db": "clinvar",
+                    "term": search_term,
+                    "retmode": "json",
+                    "retmax": 5  # Get multiple results to find best match
+                }
+
+                search_response = await client.get(search_url, params=search_params)
+                if search_response.status_code == 200:
+                    search_data = search_response.json()
+                    id_list = search_data.get("esearchresult", {}).get("idlist", [])
+                    if id_list:
+                        break  # Found results, stop searching
 
             if not id_list:
                 return None
 
-            # Fetch summary for the variant
-            variant_id = id_list[0]
+            # Fetch summaries for all candidates to find best match
             summary_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
             summary_params = {
                 "db": "clinvar",
-                "id": variant_id,
+                "id": ",".join(id_list),  # Fetch all at once
                 "retmode": "json"
             }
 
@@ -581,17 +647,58 @@ class MyVariantClient:
                 return None
 
             summary_data = summary_response.json()
-            result = summary_data.get("result", {}).get(variant_id, {})
 
-            # Extract relevant fields
-            clinical_significance = result.get("clinical_significance", {}).get("description")
-            accession = result.get("accession")
+            # Find the best matching result by checking the title contains our variant
+            # Build expected patterns to match in title
+            expected_patterns = []
+            if match:
+                # For K3326X, look for "Lys3326Ter" or "p.Lys3326Ter" in title
+                expected_patterns.append(f"{ref_long}{pos}{alt_long}".lower())
+                expected_patterns.append(f"p.{ref_long}{pos}{alt_long}".lower())
+            expected_patterns.append(variant.lower())
+
+            best_result = None
+            best_variant_id = None
+
+            for vid in id_list:
+                result = summary_data.get("result", {}).get(vid, {})
+                title = result.get("title", "").lower()
+
+                # Check if any expected pattern is in the title
+                is_match = any(pat in title for pat in expected_patterns)
+                if is_match:
+                    best_result = result
+                    best_variant_id = vid
+                    break
+
+            # Fall back to first result if no exact match found
+            if not best_result:
+                best_variant_id = id_list[0]
+                best_result = summary_data.get("result", {}).get(best_variant_id, {})
+
+            # Extract relevant fields - NCBI ClinVar API has multiple classification fields
+            # Try clinical_significance first (legacy), then germline_classification, then somatic_classification
+            clinical_significance = best_result.get("clinical_significance", {}).get("description")
+            if not clinical_significance:
+                clinical_significance = best_result.get("germline_classification", {}).get("description")
+            if not clinical_significance:
+                clinical_significance = best_result.get("somatic_classification", {}).get("description")
+
+            # Also get review status
+            review_status = None
+            if best_result.get("germline_classification", {}).get("review_status"):
+                review_status = best_result["germline_classification"]["review_status"]
+            elif best_result.get("somatic_classification", {}).get("review_status"):
+                review_status = best_result["somatic_classification"]["review_status"]
+
+            accession = best_result.get("accession")
 
             if clinical_significance or accession:
                 return {
-                    "variant_id": variant_id,
+                    "variant_id": best_variant_id,
                     "clinical_significance": clinical_significance,
-                    "accession": accession
+                    "accession": accession,
+                    "review_status": review_status,
                 }
 
             return None

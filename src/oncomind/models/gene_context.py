@@ -1006,6 +1006,193 @@ def is_hotspot_variant(gene: str, variant: str) -> bool:
     return codon in hotspots
 
 
+# =============================================================================
+# NON-ACTIONABLE VARIANTS
+# =============================================================================
+# Known variants that appear pathogenic by position but are actually benign.
+# These are common polymorphisms or variants with strong benign evidence.
+# Format: {gene: [variant_notations]}
+
+NON_ACTIONABLE_VARIANTS: dict[str, list[str]] = {
+    # BRCA2 K3326X (rs11571833) - Common benign polymorphism
+    # Despite being a stop-gain, it's in a non-critical C-terminal region
+    # ClinVar: Benign (VCV000038266)
+    "BRCA2": ["K3326X", "K3326*", "p.K3326X", "p.K3326*", "Lys3326Ter"],
+
+    # Add other known benign variants as discovered
+    # Example patterns:
+    # "GENE": ["V123M", "p.V123M"],  # Common polymorphism, ClinVar Benign
+}
+
+
+def is_known_non_actionable(gene: str, variant: str) -> bool:
+    """Check if a variant is in the known non-actionable list.
+
+    These are variants that may appear concerning (e.g., stop-gain in cancer gene)
+    but have strong evidence of being benign.
+
+    Args:
+        gene: Gene symbol (case-insensitive)
+        variant: Variant notation (e.g., K3326X, p.K3326*)
+
+    Returns:
+        True if variant is known to be non-actionable
+    """
+    gene_upper = gene.upper()
+    variants = NON_ACTIONABLE_VARIANTS.get(gene_upper)
+    if not variants:
+        return False
+
+    # Normalize variant for comparison
+    variant_clean = variant.strip()
+
+    # Check exact match first
+    if variant_clean in variants:
+        return True
+
+    # Check case-insensitive match
+    variant_upper = variant_clean.upper()
+    for v in variants:
+        if v.upper() == variant_upper:
+            return True
+
+    return False
+
+
+def is_clinvar_benign(clinvar_significance: str | None) -> bool:
+    """Check if ClinVar classification indicates benign.
+
+    Args:
+        clinvar_significance: ClinVar clinical significance string
+
+    Returns:
+        True if classification is Benign or Likely benign (without pathogenic)
+    """
+    if not clinvar_significance:
+        return False
+    sig_lower = clinvar_significance.lower()
+    # Must contain benign and NOT contain pathogenic
+    # This handles "Benign", "Likely benign", but excludes "Conflicting" or "Benign/Likely pathogenic"
+    return "benign" in sig_lower and "pathogenic" not in sig_lower
+
+
+def is_clinvar_pathogenic(clinvar_significance: str | None) -> bool:
+    """Check if ClinVar classification indicates pathogenic.
+
+    Args:
+        clinvar_significance: ClinVar clinical significance string
+
+    Returns:
+        True if classification is Pathogenic or Likely pathogenic (without benign)
+    """
+    if not clinvar_significance:
+        return False
+    sig_lower = clinvar_significance.lower()
+    # Must contain pathogenic and NOT contain benign
+    return "pathogenic" in sig_lower and "benign" not in sig_lower
+
+
+def is_likely_benign_variant(
+    gene: str,
+    variant: str,
+    clinvar_significance: str | None = None
+) -> tuple[bool, str]:
+    """Determine if a variant is likely benign based on multiple signals.
+
+    Checks both the known non-actionable list AND ClinVar classification.
+
+    Args:
+        gene: Gene symbol
+        variant: Variant notation
+        clinvar_significance: Optional ClinVar significance
+
+    Returns:
+        Tuple of (is_benign, reason)
+    """
+    # Check known non-actionable list first
+    if is_known_non_actionable(gene, variant):
+        return True, "Known benign variant (in NON_ACTIONABLE_VARIANTS list)"
+
+    # Check ClinVar benign classification
+    if is_clinvar_benign(clinvar_significance):
+        return True, f"ClinVar classification: {clinvar_significance}"
+
+    return False, ""
+
+
+# =============================================================================
+# POPULATION FREQUENCY CHECK (gnomAD)
+# =============================================================================
+# Variants that are common in the general population (gnomAD AF > 0.5%)
+# are almost certainly benign polymorphisms, not cancer drivers.
+# Somatic driver mutations are essentially never present at >0.5% in gnomAD.
+
+GNOMAD_BENIGN_THRESHOLD = 0.005  # 0.5%
+
+
+def is_common_polymorphism(gnomad_af: float | None) -> bool:
+    """Check if gnomAD allele frequency indicates a common polymorphism.
+
+    Variants with population frequency > 0.5% are almost certainly benign.
+    True somatic cancer drivers are extremely rare in the general population.
+
+    Args:
+        gnomad_af: gnomAD allele frequency (0-1 scale)
+
+    Returns:
+        True if AF > 0.5% (indicating likely benign polymorphism)
+    """
+    if gnomad_af is None:
+        return False
+    return gnomad_af > GNOMAD_BENIGN_THRESHOLD
+
+
+def is_variant_not_actionable(
+    gene: str,
+    variant: str,
+    clinvar_significance: str | None = None,
+    gnomad_af: float | None = None,
+) -> tuple[bool, str]:
+    """Determine if a variant should NOT be matched to FDA approvals.
+
+    A variant is considered not actionable if it has BOTH:
+    1. ClinVar benign classification (or is in known non-actionable list)
+    2. gnomAD AF > 0.5% (common in population)
+
+    Having both signals provides high confidence that this is a benign
+    polymorphism, not a cancer driver. FDA trial matching should be skipped.
+
+    Note: We require BOTH signals to avoid false negatives. Some true drivers
+    may have one signal but not both (e.g., missing ClinVar annotation, or
+    very rare in gnomAD but still benign).
+
+    Args:
+        gene: Gene symbol
+        variant: Variant notation
+        clinvar_significance: ClinVar clinical significance
+        gnomad_af: gnomAD allele frequency (0-1 scale)
+
+    Returns:
+        Tuple of (is_not_actionable, reason)
+    """
+    # Check for known non-actionable variants (these are always excluded)
+    if is_known_non_actionable(gene, variant):
+        return True, f"Known non-actionable variant: {gene} {variant}"
+
+    # Check if we have BOTH benign signals
+    has_clinvar_benign = is_clinvar_benign(clinvar_significance)
+    has_common_af = is_common_polymorphism(gnomad_af)
+
+    if has_clinvar_benign and has_common_af:
+        af_pct = (gnomad_af * 100) if gnomad_af else 0
+        return True, (
+            f"Likely benign polymorphism: ClinVar={clinvar_significance}, "
+            f"gnomAD AF={af_pct:.2f}% (>{GNOMAD_BENIGN_THRESHOLD*100}%)"
+        )
+
+    return False, ""
+
+
 def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool, int | None]:
     """Check if a variant is near (but not at) a known cancer hotspot.
 
