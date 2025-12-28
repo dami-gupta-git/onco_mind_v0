@@ -345,6 +345,83 @@ class TestClinVarConditionsList:
             )
 
 
+class TestClinVarSingleRCV:
+    """Tests for ClinVar variants with single RCV dict (regression test).
+
+    Some ClinVar records return 'rcv' as a single dict instead of a list.
+    This caused MyVariant parsing to fail for variants like GNAQ Q209L.
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_gnaq_q209l_uveal_melanoma(self):
+        """GNAQ Q209L should return evidence despite single RCV structure.
+
+        This variant is a key driver in uveal melanoma and has ClinVar RCV
+        returned as a single dict (not a list), which previously caused
+        'object of type ClinVarRCV has no len()' error.
+        """
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("GNAQ", "Q209L")
+
+            assert evidence is not None
+            assert evidence.gene == "GNAQ"
+            assert evidence.variant == "Q209L"
+
+            # Should have ClinVar data
+            has_clinvar = any([
+                evidence.clinvar_id,
+                evidence.clinvar_clinical_significance,
+                evidence.clinvar_accession,
+                len(evidence.clinvar) > 0,
+            ])
+            assert has_clinvar, (
+                "GNAQ Q209L should have ClinVar data - "
+                "single RCV parsing may have failed"
+            )
+
+            # Should be pathogenic (known uveal melanoma driver)
+            if evidence.clinvar_clinical_significance:
+                sig_lower = evidence.clinvar_clinical_significance.lower()
+                assert "pathogenic" in sig_lower, (
+                    f"GNAQ Q209L should be pathogenic, got: {evidence.clinvar_clinical_significance}"
+                )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_gnaq_q209l_identifiers(self):
+        """GNAQ Q209L should have database identifiers."""
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("GNAQ", "Q209L")
+
+            assert evidence is not None
+
+            # Should have at least one identifier
+            has_identifiers = any([
+                evidence.dbsnp_id,
+                evidence.cosmic_id,
+                evidence.clinvar_id,
+            ])
+            assert has_identifiers, (
+                "GNAQ Q209L should have database identifiers"
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_gnaq_q209p_alternate_variant(self):
+        """GNAQ Q209P (alternate hotspot) should also work.
+
+        Tests that both Q209L and Q209P variants at the same codon
+        are handled correctly.
+        """
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("GNAQ", "Q209P")
+
+            assert evidence is not None
+            assert evidence.gene == "GNAQ"
+            assert evidence.variant == "Q209P"
+
+
 class TestCIViCFallback:
     """Tests for CIViC fallback for fusions and amplifications."""
 

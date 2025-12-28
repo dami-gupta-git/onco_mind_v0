@@ -64,6 +64,27 @@ MODELS = {
     "Groq Llama 3.1 70B": "groq/llama-3.1-70b-versatile"
 }
 
+# Pre-populated example variants (Gene, Variant, Tumor Type)
+EXAMPLE_VARIANTS = {
+    "-- Select an example --": ("", "", ""),
+    "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+    "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
+    "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
+    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
+    "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
+    "PIK3CA H1047R - Breast Cancer": ("PIK3CA", "H1047R", "Breast Cancer"),
+    "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
+    "TP53 R248W - Multiple": ("TP53", "R248W", ""),
+    "TP53 R273H - Multiple": ("TP53", "R273H", ""),
+    "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
+    "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
+    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
+    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+    "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
+    "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
+    "MET exon 14 skip - NSCLC": ("MET", "exon14del", "NSCLC"),
+}
+
 # Initialize session state for persisting results
 if "single_result" not in st.session_state:
     st.session_state.single_result = None

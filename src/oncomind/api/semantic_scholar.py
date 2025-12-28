@@ -221,8 +221,9 @@ class SemanticScholarClient:
 
     BASE_URL = "https://api.semanticscholar.org/graph/v1"
     DEFAULT_TIMEOUT = 30.0
-    # Rate limit: 1 RPS without API key
-    RATE_LIMIT_DELAY = 1.1
+    # Rate limits: 1 RPS without API key, 10 RPS with API key
+    RATE_LIMIT_DELAY_NO_KEY = 1.1
+    RATE_LIMIT_DELAY_WITH_KEY = 0.12  # ~8 RPS, safely under 10 RPS limit
 
     # Fields to request from the API
     PAPER_FIELDS = [
@@ -278,12 +279,17 @@ class SemanticScholarClient:
         return self._client
 
     async def _rate_limit(self) -> None:
-        """Enforce rate limiting to respect API limits."""
+        """Enforce rate limiting to respect API limits.
+
+        Uses faster rate limit (10 RPS) when API key is present,
+        otherwise falls back to 1 RPS for unauthenticated requests.
+        """
         import time
+        delay = self.RATE_LIMIT_DELAY_WITH_KEY if self.api_key else self.RATE_LIMIT_DELAY_NO_KEY
         now = time.time()
         elapsed = now - self._last_request_time
-        if elapsed < self.RATE_LIMIT_DELAY:
-            await asyncio.sleep(self.RATE_LIMIT_DELAY - elapsed)
+        if elapsed < delay:
+            await asyncio.sleep(delay - elapsed)
         self._last_request_time = time.time()
 
     def _parse_retry_after(self, response: httpx.Response) -> float | None:

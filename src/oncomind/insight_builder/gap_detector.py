@@ -161,6 +161,9 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     _check_literature_depth(evidence, ctx)
     _check_validation_gap(evidence, ctx)
 
+    # Enrich gaps with dynamic, context-aware suggestions based on actual evidence
+    _enrich_gaps_with_context(evidence, ctx)
+
     # Compute overall assessments
     overall_quality = _compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
     research_priority = _compute_research_priority(evidence, ctx.gaps, overall_quality)
@@ -664,6 +667,152 @@ def _check_validation_gap(evidence: "Evidence", ctx: GapDetectionContext) -> Non
                 addressable_with=["AlphaFold", "DepMap", "CRISPR screens", "Literature"]
             )
             ctx.add_poorly_characterized("therapeutic validation")
+
+
+# =============================================================================
+# CONTEXT-AWARE SUGGESTION ENRICHMENT
+# =============================================================================
+
+def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) -> None:
+    """Enrich gap suggestions with dynamic, context-aware recommendations.
+
+    Analyzes actual evidence to generate specific, actionable study suggestions
+    based on gene, variant, tumor type, and available data.
+    """
+    gene = ctx.gene
+    variant = ctx.variant
+    tumor_type = ctx.tumor_type
+
+    # Get primary approved drug if available
+    primary_drug = _get_primary_drug(evidence)
+
+    # Get top sensitive drugs from DepMap if available
+    top_sensitive_drugs = _get_top_sensitive_drugs(evidence)
+
+    # Get top co-occurring gene if available
+    top_cooc_gene = _get_top_cooccurring_gene(evidence)
+
+    # Check for strong co-occurrence signal
+    has_strong_cooc = _has_strong_cooccurrence(evidence)
+
+    # Iterate through gaps and add context-specific suggestions
+    for gap in ctx.gaps:
+        new_suggestions = []
+
+        # RESISTANCE gaps: suggest bypass mechanism testing for the primary drug
+        if gap.category == GapCategory.RESISTANCE and primary_drug:
+            new_suggestions.append(
+                f"Test bypass mechanisms for {primary_drug} resistance in {gene}-mutant models"
+            )
+            new_suggestions.append(
+                f"ctDNA monitoring for {gene} {variant} emergence under {primary_drug} treatment"
+            )
+
+        # PRECLINICAL gaps: suggest testing with DepMap-identified sensitive drugs
+        if gap.category == GapCategory.PRECLINICAL and top_sensitive_drugs:
+            drugs_str = ", ".join(top_sensitive_drugs[:3])
+            new_suggestions.append(
+                f"Validate sensitivity to {drugs_str} in isogenic {gene} {variant} models"
+            )
+
+        # VALIDATION gaps: suggest synthetic lethality with strong co-occurring gene
+        if gap.category == GapCategory.VALIDATION and has_strong_cooc and top_cooc_gene:
+            new_suggestions.append(
+                f"Investigate synthetic lethality with {top_cooc_gene} co-mutation"
+            )
+            new_suggestions.append(
+                f"CRISPR screen in {gene}/{top_cooc_gene} double-mutant background"
+            )
+
+        # DRUG_RESPONSE gaps: suggest testing FDA-approved drugs in this context
+        if gap.category == GapCategory.DRUG_RESPONSE:
+            if primary_drug and tumor_type:
+                new_suggestions.append(
+                    f"Evaluate {primary_drug} efficacy in {tumor_type} with {gene} {variant}"
+                )
+            if top_sensitive_drugs:
+                new_suggestions.append(
+                    f"Confirm DepMap-predicted sensitivities ({', '.join(top_sensitive_drugs[:2])}) in PDX"
+                )
+
+        # TUMOR_TYPE gaps: suggest basket trial or cross-histology comparison
+        if gap.category == GapCategory.TUMOR_TYPE and tumor_type:
+            # Check if we have evidence in other tumor types
+            if evidence.civic_assertions or evidence.fda_approvals:
+                new_suggestions.append(
+                    f"Retrospective analysis of {gene} {variant} response in {tumor_type} vs other histologies"
+                )
+            if primary_drug:
+                new_suggestions.append(
+                    f"Basket trial cohort for {primary_drug} in {tumor_type} with {gene} {variant}"
+                )
+
+        # FUNCTIONAL gaps: suggest structural modeling with specific focus
+        if gap.category == GapCategory.FUNCTIONAL:
+            if evidence.context.gene_role == "oncogene":
+                new_suggestions.append(
+                    f"Kinase activity assay for {gene} {variant} vs wild-type"
+                )
+            elif evidence.context.gene_role in ("TSG", "tumor_suppressor"):
+                new_suggestions.append(
+                    f"LOF assay: assess {gene} {variant} impact on tumor suppressor function"
+                )
+
+        # Add co-dependency suggestions if relevant
+        if gap.category == GapCategory.VALIDATION:
+            co_deps = _get_top_codependencies(evidence)
+            if co_deps:
+                deps_str = ", ".join(co_deps[:2])
+                new_suggestions.append(
+                    f"Test synthetic lethality with co-essential genes: {deps_str}"
+                )
+
+        # Append new suggestions to existing ones (avoid duplicates)
+        for suggestion in new_suggestions:
+            if suggestion not in gap.suggested_studies:
+                gap.suggested_studies.append(suggestion)
+
+
+def _get_primary_drug(evidence: "Evidence") -> str | None:
+    """Get the primary approved drug for this variant."""
+    if evidence.fda_approvals:
+        approval = evidence.fda_approvals[0]
+        return approval.brand_name or approval.generic_name or approval.drug_name
+    # Fall back to CIViC assertion therapies
+    for assertion in evidence.civic_assertions:
+        if assertion.therapies:
+            return assertion.therapies[0] if isinstance(assertion.therapies, list) else assertion.therapies
+    return None
+
+
+def _get_top_sensitive_drugs(evidence: "Evidence") -> list[str]:
+    """Get top sensitive drugs from DepMap data."""
+    if evidence.depmap_evidence and evidence.depmap_evidence.drug_sensitivities:
+        top_drugs = evidence.depmap_evidence.get_top_sensitive_drugs(5)
+        return [ds.drug_name for ds in top_drugs]
+    return []
+
+
+def _get_top_cooccurring_gene(evidence: "Evidence") -> str | None:
+    """Get the top co-occurring gene from cBioPortal data."""
+    if evidence.cbioportal_evidence and evidence.cbioportal_evidence.co_occurring:
+        return evidence.cbioportal_evidence.co_occurring[0].gene
+    return None
+
+
+def _has_strong_cooccurrence(evidence: "Evidence", threshold_pct: float = 20.0) -> bool:
+    """Check if there's a strong co-occurrence signal (>threshold% co-mutation rate)."""
+    if evidence.cbioportal_evidence and evidence.cbioportal_evidence.co_occurring:
+        top_cooc = evidence.cbioportal_evidence.co_occurring[0]
+        return top_cooc.pct >= threshold_pct
+    return False
+
+
+def _get_top_codependencies(evidence: "Evidence") -> list[str]:
+    """Get top co-dependent genes from DepMap data."""
+    if evidence.depmap_evidence and evidence.depmap_evidence.co_dependencies:
+        return [cd.gene for cd in evidence.depmap_evidence.co_dependencies[:3]]
+    return []
 
 
 # =============================================================================
