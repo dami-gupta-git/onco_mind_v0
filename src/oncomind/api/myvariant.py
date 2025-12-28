@@ -436,13 +436,15 @@ class MyVariantClient:
                 first_clinvar = clinvar_list[0]
                 if first_clinvar.variant_id:
                     clinvar_id = str(first_clinvar.variant_id)
-                # Extract from rcv array
-                if first_clinvar.rcv and len(first_clinvar.rcv) > 0:
-                    first_rcv = first_clinvar.rcv[0]
-                    if first_rcv.clinical_significance:
-                        clinvar_clinical_significance = first_rcv.clinical_significance
-                    if first_rcv.accession:
-                        clinvar_accession = first_rcv.accession
+                # Extract from rcv (can be single object or list)
+                if first_clinvar.rcv:
+                    rcv_list = first_clinvar.rcv if isinstance(first_clinvar.rcv, list) else [first_clinvar.rcv]
+                    if rcv_list:
+                        first_rcv = rcv_list[0]
+                        if first_rcv.clinical_significance:
+                            clinvar_clinical_significance = first_rcv.clinical_significance
+                        if first_rcv.accession:
+                            clinvar_accession = first_rcv.accession
 
         # Extract HGVS notations
         hgvs_genomic = None

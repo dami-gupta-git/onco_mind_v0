@@ -45,7 +45,8 @@ class ClinVarData(BaseModel):
     """ClinVar data structure."""
 
     variant_id: int | str | None = None
-    rcv: list[ClinVarRCV] | None = None
+    # rcv can be a single dict or a list of dicts (API returns either depending on variant)
+    rcv: ClinVarRCV | list[ClinVarRCV] | None = None
 
 
 class CosmicData(BaseModel):

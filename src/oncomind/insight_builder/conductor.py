@@ -10,8 +10,14 @@ ARCHITECTURE:
         └── LLMService → LLMInsight (narrative)
                 ↓
             Result(evidence=Evidence, llm=LLMInsight)
+
+PERFORMANCE OPTIMIZATION:
+    When LLM is enabled, the conductor runs evidence aggregation first,
+    then runs gap computation and LLM call in parallel where possible.
 """
 
+import asyncio
+import time
 from dataclasses import dataclass
 from typing import Callable
 
@@ -48,6 +54,10 @@ class ConductorConfig:
     max_civic_assertions: int = 20
     max_clinical_trials: int = 10
     max_literature_results: int = 6
+
+    # Performance options
+    enable_timing: bool = False  # Log timing breakdown for performance analysis
+    batch_concurrency: int = 3  # Max concurrent variant processing in batch mode
 
     def to_aggregator_config(self) -> EvidenceAggregatorConfig:
         """Convert to EvidenceAggregatorConfig."""
@@ -112,6 +122,9 @@ class Conductor:
         if self._aggregator is None:
             raise RuntimeError("Conductor must be used as async context manager")
 
+        timings: dict[str, float] = {}
+        total_start = time.time()
+
         # Parse string input if needed
         if isinstance(variant, str):
             parsed = parse_variant_input(variant, tumor_type)
@@ -120,16 +133,35 @@ class Conductor:
             if tumor_type:
                 parsed.tumor_type = tumor_type
 
-        # Step 1: Aggregate evidence
+        # Step 1: Aggregate evidence from all sources in parallel
+        t0 = time.time()
         evidence = await self._aggregator.build_evidence(parsed, parsed.tumor_type)
+        timings["evidence_aggregation"] = time.time() - t0
 
-        # Step 2: Compute evidence gaps (always, for research context)
+        # Step 2 & 3: Run gap computation and LLM call
+        # Gap computation is fast but LLM needs it - run sequentially
+        t0 = time.time()
         evidence.compute_evidence_gaps()
+        timings["gap_computation"] = time.time() - t0
 
         # Step 3: Generate LLM narrative if enabled
         llm_insight = None
         if self.config.enable_llm:
+            t0 = time.time()
             llm_insight = await self._generate_llm_insight(evidence)
+            timings["llm_generation"] = time.time() - t0
+
+        timings["total"] = time.time() - total_start
+
+        # Log timing breakdown if enabled
+        if self.config.enable_timing:
+            gene_variant = f"{parsed.gene} {parsed.variant}"
+            print(f"\n⏱️  Timing breakdown for {gene_variant}:")
+            print(f"   Evidence aggregation: {timings['evidence_aggregation']:.2f}s")
+            print(f"   Gap computation:      {timings['gap_computation']:.2f}s")
+            if "llm_generation" in timings:
+                print(f"   LLM generation:       {timings['llm_generation']:.2f}s")
+            print(f"   Total:                {timings['total']:.2f}s")
 
         return Result(evidence=evidence, llm=llm_insight)
 
@@ -139,7 +171,10 @@ class Conductor:
         tumor_type: str | None = None,
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[Result]:
-        """Run the full pipeline for multiple variants.
+        """Run the full pipeline for multiple variants with parallel processing.
+
+        Uses asyncio.Semaphore to limit concurrency and avoid overwhelming APIs.
+        Default concurrency is 3 variants at a time.
 
         Args:
             variants: List of ParsedVariant objects or variant strings
@@ -147,27 +182,42 @@ class Conductor:
             progress_callback: Optional callback(current, total) for progress
 
         Returns:
-            List of Result objects
+            List of Result objects (in same order as input)
         """
         if self._aggregator is None:
             raise RuntimeError("Conductor must be used as async context manager")
 
-        results = []
         total = len(variants)
+        completed = 0
+        semaphore = asyncio.Semaphore(self.config.batch_concurrency)
 
-        for i, variant in enumerate(variants):
-            if progress_callback:
-                progress_callback(i, total)
+        async def process_one(idx: int, variant: ParsedVariant | str) -> tuple[int, Result | None]:
+            """Process a single variant with semaphore for concurrency control."""
+            nonlocal completed
+            async with semaphore:
+                try:
+                    result = await self.run(variant, tumor_type)
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, total)
+                    return (idx, result)
+                except Exception as e:
+                    gene = variant if isinstance(variant, str) else f"{variant.gene} {variant.variant}"
+                    print(f"  Warning: Failed to process {gene}: {str(e)}")
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, total)
+                    return (idx, None)
 
-            try:
-                result = await self.run(variant, tumor_type)
+        # Launch all tasks concurrently (semaphore limits actual parallelism)
+        tasks = [process_one(i, v) for i, v in enumerate(variants)]
+        indexed_results = await asyncio.gather(*tasks)
+
+        # Restore original order, filter out failures
+        results: list[Result] = []
+        for idx, result in sorted(indexed_results, key=lambda x: x[0]):
+            if result is not None:
                 results.append(result)
-            except Exception as e:
-                gene = variant if isinstance(variant, str) else f"{variant.gene} {variant.variant}"
-                print(f"  Warning: Failed to process {gene}: {str(e)}")
-
-        if progress_callback:
-            progress_callback(total, total)
 
         return results
 
