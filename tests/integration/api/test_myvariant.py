@@ -276,6 +276,75 @@ class TestClinVar:
                 )
 
 
+class TestClinVarConditionsList:
+    """Tests for ClinVar variants with list-type conditions (regression test).
+
+    Some ClinVar records have 'conditions' as a list instead of a single dict.
+    This caused MyVariant parsing to fail for variants like TP53 R273H.
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_tp53_r273h_functional_data(self):
+        """TP53 R273H should return functional data despite complex ClinVar structure.
+
+        This variant has ClinVar RCV records where 'conditions' is a list,
+        which previously caused Pydantic validation to fail.
+        """
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("TP53", "R273H")
+
+            assert evidence is not None
+            assert evidence.gene == "TP53"
+            assert evidence.variant == "R273H"
+
+            # Should have functional predictions (this was failing before the fix)
+            has_functional = any([
+                evidence.alphamissense_score is not None,
+                evidence.alphamissense_prediction is not None,
+                evidence.polyphen2_prediction is not None,
+                evidence.cadd_score is not None,
+            ])
+            assert has_functional, (
+                "TP53 R273H should have functional predictions - "
+                "ClinVar parsing may have failed"
+            )
+
+            # AlphaMissense should indicate pathogenic
+            if evidence.alphamissense_score is not None:
+                assert evidence.alphamissense_score > 0.9, (
+                    f"TP53 R273H is a major hotspot, expected high score, "
+                    f"got {evidence.alphamissense_score}"
+                )
+
+            if evidence.alphamissense_prediction is not None:
+                assert evidence.alphamissense_prediction in ["P", "pathogenic"], (
+                    f"TP53 R273H should be pathogenic, got {evidence.alphamissense_prediction}"
+                )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_tp53_r273h_identifiers(self):
+        """TP53 R273H should have COSMIC and HGVS identifiers."""
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("TP53", "R273H")
+
+            assert evidence is not None
+
+            # Should have COSMIC ID (this is a major hotspot)
+            assert evidence.cosmic_id is not None, (
+                "TP53 R273H should have COSMIC ID"
+            )
+            assert evidence.cosmic_id.startswith("COSM") or evidence.cosmic_id.startswith("COSV"), (
+                f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
+            )
+
+            # Should have HGVS genomic notation
+            assert evidence.hgvs_genomic is not None, (
+                "TP53 R273H should have HGVS genomic notation"
+            )
+
+
 class TestCIViCFallback:
     """Tests for CIViC fallback for fusions and amplifications."""
 

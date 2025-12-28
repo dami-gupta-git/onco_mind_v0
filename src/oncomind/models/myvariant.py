@@ -31,7 +31,8 @@ class ClinVarRCV(BaseModel):
 
     accession: str | None = None
     clinical_significance: str | None = None
-    conditions: ClinVarCondition | dict | None = None
+    # conditions can be a single dict, a ClinVarCondition, or a list of either
+    conditions: ClinVarCondition | dict | list[ClinVarCondition | dict] | None = None
     review_status: str | None = None
     last_evaluated: str | None = None
     origin: str | None = None
