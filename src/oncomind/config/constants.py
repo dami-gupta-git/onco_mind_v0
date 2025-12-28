@@ -41,66 +41,102 @@ GENE_ALIASES: dict[str, list[str]] = {
 
 TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     # Lung
-    "nsclc": ["non-small cell lung", "nsclc", "lung non-small cell", "lung adenocarcinoma", "lung squamous", "lung non-small cell carcinoma"],
-    "l": ["lung", "non-small cell lung", "nsclc", "small cell lung", "lung carcinoma"],
-    "sclc": ["small cell lung", "sclc"],
-    "luad": ["lung adenocarcinoma", "luad"],
-    "lusc": ["lung squamous", "lusc", "squamous cell lung"],
+    "nsclc": [
+        "non-small cell lung", "nsclc", "lung non-small cell",
+        "non small cell lung cancer", "non-small cell lung carcinoma",
+        "lung adenocarcinoma", "lung squamous", "lung adenosquamous"
+    ],
+    "lung": ["lung", "lung cancer", "lung carcinoma"],
+    "sclc": ["small cell lung", "sclc", "small cell lung cancer", "small cell lung carcinoma"],
+    "luad": ["lung adenocarcinoma", "luad", "adenocarcinoma of lung"],
+    "lusc": ["lung squamous", "lusc", "squamous cell lung", "squamous cell carcinoma of lung"],
 
     # Colorectal
-    "crc": ["colorectal", "colon", "crc", "rectal", "rectum"],
-    "coad": ["colon adenocarcinoma", "coad"],
-    "read": ["rectal adenocarcinoma", "read", "rectum"],
-    "coread": ["colorectal", "colon", "rectal", "colorectal adenocarcinoma", "crc"],  # CGI uses COREAD
+    "crc": ["colorectal", "colon", "rectal", "crc", "colorectal cancer", "colorectal carcinoma"],
+    "coad": ["colon adenocarcinoma", "coad", "colon cancer"],
+    "read": ["rectal adenocarcinoma", "read", "rectum adenocarcinoma", "rectal cancer"],
+    "coread": ["colorectal", "colon", "rectal", "colorectal adenocarcinoma", "crc", "coadread"],
 
     # Melanoma
-    "mel": ["melanoma", "mel", "cutaneous melanoma", "skin melanoma", "skin"],
-    "skcm": ["skin cutaneous melanoma", "skcm", "melanoma"],
+    "mel": ["melanoma", "mel", "cutaneous melanoma", "skin melanoma"],
+    "skcm": ["skin cutaneous melanoma", "skcm", "cutaneous melanoma"],
+    "uvm": ["uveal melanoma", "uvm", "ocular melanoma"],
 
     # Breast
     "bc": ["breast", "bc", "breast cancer", "breast carcinoma"],
-    "brca": ["breast carcinoma", "brca", "breast cancer"],
-    "idc": ["invasive ductal carcinoma", "idc", "breast ductal"],
-    "ilc": ["invasive lobular carcinoma", "ilc", "breast lobular"],
+    "brca": ["breast invasive carcinoma", "brca", "breast cancer", "breast carcinoma"],
+    "idc": ["invasive ductal carcinoma", "idc", "ductal carcinoma", "breast ductal"],
+    "ilc": ["invasive lobular carcinoma", "ilc", "lobular carcinoma", "breast lobular"],
+    "tnbc": ["triple negative breast cancer", "tnbc", "triple-negative breast"],
 
     # Thyroid
-    "atc": ["anaplastic thyroid", "atc", "thyroid anaplastic"],
     "thca": ["thyroid carcinoma", "thca", "thyroid cancer"],
-    "ptc": ["papillary thyroid", "ptc"],
+    "ptc": ["papillary thyroid carcinoma", "ptc", "papillary thyroid"],
+    "ftc": ["follicular thyroid carcinoma", "ftc"],
+    "atc": ["anaplastic thyroid carcinoma", "atc", "anaplastic thyroid cancer"],
 
     # Gastrointestinal
-    "gist": ["gastrointestinal stromal", "gist"],
-    "stad": ["stomach adenocarcinoma", "stad", "gastric"],
-    "esca": ["esophageal carcinoma", "esca", "esophageal"],
-    "paad": ["pancreatic adenocarcinoma", "paad", "pancreatic", "pancreas"],
-    "lihc": ["liver hepatocellular", "lihc", "hepatocellular", "hcc"],
-    "chol": ["cholangiocarcinoma", "chol", "bile duct"],
+    "gist": ["gastrointestinal stromal tumor", "gist", "gastrointestinal stromal"],
+    "stad": ["stomach adenocarcinoma", "stad", "gastric adenocarcinoma", "gastric cancer"],
+    "esca": ["esophageal carcinoma", "esca", "esophageal cancer", "oesophageal"],
+    "escc": ["esophageal squamous cell carcinoma", "escc"],
+    "eadc": ["esophageal adenocarcinoma", "eadc", "barrett"],
+    "paad": ["pancreatic adenocarcinoma", "paad", "pancreatic cancer", "pancreas adenocarcinoma"],
+    "pdac": ["pancreatic ductal adenocarcinoma", "pdac", "pancreatic ductal"],
+    "lihc": ["liver hepatocellular carcinoma", "lihc", "hepatocellular carcinoma", "hcc"],
+    "hcc": ["hepatocellular carcinoma", "hcc"],
+    "chol": ["cholangiocarcinoma", "chol", "bile duct cancer", "intrahepatic cholangiocarcinoma"],
 
     # Genitourinary
-    "prad": ["prostate adenocarcinoma", "prad", "prostate"],
-    "blca": ["bladder carcinoma", "blca", "bladder", "urothelial"],
-    "rcc": ["renal cell carcinoma", "rcc", "kidney"],
-    "ccrcc": ["clear cell renal", "ccrcc", "kidney clear cell"],
+    "prad": ["prostate adenocarcinoma", "prad", "prostate cancer", "prostate carcinoma"],
+    "prostate": ["prostate", "prostate cancer"],
+    "blca": ["bladder urothelial carcinoma", "blca", "bladder cancer", "urothelial carcinoma"],
+    "rcc": ["renal cell carcinoma", "rcc", "kidney cancer"],
+    "ccrcc": ["clear cell renal cell carcinoma", "ccrcc", "clear cell kidney"],
+    "prcc": ["papillary renal cell carcinoma", "prcc"],
+    "chrcc": ["chromophobe renal cell carcinoma", "chrcc"],
 
     # Gynecologic
-    "ov": ["ovarian", "ov", "ovary"],
-    "ucec": ["uterine corpus endometrial", "ucec", "endometrial", "uterine"],
-    "cesc": ["cervical squamous", "cesc", "cervical"],
+    "ov": ["ovarian carcinoma", "ov", "ovarian cancer", "ovary"],
+    "hgsc": ["high grade serous ovarian", "hgsc", "serous ovarian"],
+    "ucec": ["uterine corpus endometrial carcinoma", "ucec", "endometrial cancer", "endometrial carcinoma"],
+    "ucs": ["uterine carcinosarcoma", "ucs"],
+    "cesc": ["cervical squamous cell carcinoma", "cesc", "cervical cancer"],
 
     # Head and Neck
-    "hnsc": ["head and neck squamous", "hnsc", "head neck"],
+    "hnsc": [
+        "head and neck squamous cell carcinoma", "hnsc",
+        "head neck", "head and neck cancer", "oral cavity", "oropharynx", "larynx", "hypopharynx"
+    ],
 
-    # Brain
-    "gbm": ["glioblastoma", "gbm", "glioblastoma multiforme"],
-    "lgg": ["low grade glioma", "lgg", "glioma"],
+    # Brain / CNS
+    "gbm": ["glioblastoma multiforme", "gbm", "glioblastoma"],
+    "lgg": ["low grade glioma", "lgg", "diffuse glioma"],
+    "astrocytoma": ["astrocytoma", "idhm"],
+    "oligodendroglioma": ["oligodendroglioma", "oligo"],
+
+    # Sarcoma
+    "sarc": ["sarcoma", "sarc", "soft tissue sarcoma"],
+    "ups": ["undifferentiated pleomorphic sarcoma", "ups"],
+    "leiomyosarcoma": ["leiomyosarcoma", "lms"],
+    "liposarcoma": ["liposarcoma"],
 
     # Hematologic
     "aml": ["acute myeloid leukemia", "aml"],
+    "all": ["acute lymphoblastic leukemia", "all", "acute lymphocytic leukemia"],
+    "cll": ["chronic lymphocytic leukemia", "cll", "sll"],
     "cml": ["chronic myeloid leukemia", "cml"],
-    "all": ["acute lymphoblastic leukemia", "all"],
-    "cll": ["chronic lymphocytic leukemia", "cll"],
     "dlbcl": ["diffuse large b-cell lymphoma", "dlbcl"],
-    "mm": ["multiple myeloma", "mm", "myeloma"],
+    "fl": ["follicular lymphoma", "fl"],
+    "mm": ["multiple myeloma", "mm", "plasma cell myeloma", "myeloma"],
+
+    # Other / Rare
+    "acc": ["adrenocortical carcinoma", "acc"],
+    "meso": ["mesothelioma", "meso"],
+    "tgct": ["testicular germ cell tumor", "tgct"],
+    "thym": ["thymoma", "thym"],
+    "pnet": ["pancreatic neuroendocrine tumor", "pnet", "pancreatic net"],
+    "nets": ["neuroendocrine tumor", "nets", "net"],
 }
 
 
