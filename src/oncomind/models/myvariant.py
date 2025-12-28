@@ -15,7 +15,8 @@ class DbSNPData(BaseModel):
     """dbSNP data structure."""
 
     rsid: str | None = None
-    gene: DbSNPGene | None = None
+    # gene can be a single dict or a list of dicts (for variants spanning multiple genes)
+    gene: DbSNPGene | list[DbSNPGene] | None = None
 
 
 class ClinVarCondition(BaseModel):
