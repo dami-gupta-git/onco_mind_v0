@@ -9,11 +9,32 @@ from pdb_images import get_pdb_image_url, get_pdb_page_url
 
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 
-# Reduce top padding
+# Custom styling
 st.markdown("""
 <style>
     .block-container {
         padding-top: 1rem;
+    }
+    /* Make text inputs clearly look like input fields */
+    .stTextInput > div > div > input {
+        border: 1.5px solid #d0d0d0 !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 0.75rem !important;
+        background-color: #fafafa !important;
+        transition: border-color 0.2s, box-shadow 0.2s !important;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #ff4b4b !important;
+        box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2) !important;
+        background-color: #fff !important;
+    }
+    .stTextInput > div > div > input:hover {
+        border-color: #a0a0a0 !important;
+    }
+    /* Placeholder text styling */
+    .stTextInput > div > div > input::placeholder {
+        color: #999 !important;
+        font-style: italic !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -50,20 +71,22 @@ with tab1:
     # ==============================================
     input_cols = st.columns([1.5, 1.5, 2, 2, 1.5])
     with input_cols[0]:
-        gene = st.text_input("Gene", value="AKT1", placeholder="AKT1", key="gene_input", label_visibility="collapsed")
+        gene = st.text_input("Gene", value="AKT1", placeholder="e.g. AKT1", key="gene_input")
     with input_cols[1]:
-        variant = st.text_input("Variant", value="E17K", placeholder="E17K", key="variant_input", label_visibility="collapsed")
+        variant = st.text_input("Variant", value="E17K", placeholder="e.g. E17K", key="variant_input")
     with input_cols[2]:
-        tumor = st.text_input("Tumor (optional)", value="Breast Cancer", placeholder="Tumor type", key="tumor_input", label_visibility="collapsed")
+        tumor = st.text_input("Tumor Type", value="Breast Cancer", placeholder="e.g. Breast Cancer", key="tumor_input")
     with input_cols[3]:
+        st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_llm = st.toggle(
-            "🤖 LLM Mode",
+            "LLM Mode",
             value=False,
             help="LLM mode includes literature search and AI-powered synthesis (~25s). Without LLM, you get fast annotation (~7s)."
         )
         enable_literature = enable_llm
     with input_cols[4]:
-        insight_btn = st.button("🔍 Get Insight", type="primary", width="stretch")
+        st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
+        insight_btn = st.button("🔍 Get Insight", type="primary", use_container_width=True)
 
     # LLM settings expander (only if LLM enabled)
     if enable_llm:
