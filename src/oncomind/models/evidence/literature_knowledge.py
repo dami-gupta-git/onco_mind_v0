@@ -9,6 +9,7 @@ class DrugResistance(BaseModel):
     evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
     mechanism: str | None = Field(None, description="Mechanism of resistance if known")
     is_predictive: bool = Field(True, description="True if PREDICTIVE resistance (affects drug selection), False if just prognostic")
+    match_level: str = Field("gene", description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)")
 
 
 class DrugSensitivity(BaseModel):
@@ -16,6 +17,7 @@ class DrugSensitivity(BaseModel):
     drug: str = Field(..., description="Drug name")
     evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
     ic50_nM: str | None = Field(None, description="IC50 value if reported")
+    match_level: str = Field("gene", description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)")
 
 
 class LiteratureKnowledge(BaseModel):

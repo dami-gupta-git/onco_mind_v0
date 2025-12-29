@@ -967,3 +967,132 @@ class Evidence(BaseModel):
             lines.append("")
 
         return "\n".join(lines)
+
+    def _count_match_levels(self, items: list, attr: str = 'match_level') -> dict[str, int]:
+        """Count items by match level.
+
+        Args:
+            items: List of evidence items with match_level attribute
+            attr: Attribute name to check for match level
+
+        Returns:
+            Dict with counts for variant, codon, and gene levels
+        """
+        counts = {'variant': 0, 'codon': 0, 'gene': 0}
+        for item in items:
+            level = getattr(item, attr, None) or 'gene'
+            if level in counts:
+                counts[level] += 1
+            else:
+                counts['gene'] += 1
+        return counts
+
+    def get_match_level_summary(self) -> dict:
+        """Compute summary statistics about evidence match specificity.
+
+        Returns:
+            Dict with counts and summary text for LLM prompt
+        """
+        variant_count = 0
+        codon_count = 0
+        gene_count = 0
+
+        # FDA approvals
+        fda_counts = self._count_match_levels(self.fda_approvals)
+        variant_count += fda_counts['variant']
+        codon_count += fda_counts['codon']
+        gene_count += fda_counts['gene']
+
+        # VICC evidence
+        vicc_counts = self._count_match_levels(self.vicc_evidence)
+        variant_count += vicc_counts['variant']
+        codon_count += vicc_counts['codon']
+        gene_count += vicc_counts['gene']
+
+        # CIViC assertions
+        civic_a_counts = self._count_match_levels(self.civic_assertions)
+        variant_count += civic_a_counts['variant']
+        codon_count += civic_a_counts['codon']
+        gene_count += civic_a_counts['gene']
+
+        # CIViC evidence items
+        civic_e_counts = self._count_match_levels(self.civic_evidence)
+        variant_count += civic_e_counts['variant']
+        codon_count += civic_e_counts['codon']
+        gene_count += civic_e_counts['gene']
+
+        # CGI biomarkers
+        cgi_counts = self._count_match_levels(self.cgi_biomarkers)
+        variant_count += cgi_counts['variant']
+        codon_count += cgi_counts['codon']
+        gene_count += cgi_counts['gene']
+
+        # Clinical trials (use match_scope attribute)
+        for trial in self.clinical_trials:
+            scope = getattr(trial, 'match_scope', None)
+            if scope == 'specific':
+                variant_count += 1
+            elif scope == 'ambiguous':
+                codon_count += 1
+            else:
+                gene_count += 1
+
+        # Literature knowledge - resistance and sensitivity signals
+        if self.literature_knowledge:
+            for entry in self.literature_knowledge.resistant_to:
+                level = getattr(entry, 'match_level', None) or 'gene'
+                if level == 'variant':
+                    variant_count += 1
+                elif level == 'codon':
+                    codon_count += 1
+                else:
+                    gene_count += 1
+            for entry in self.literature_knowledge.sensitive_to:
+                level = getattr(entry, 'match_level', None) or 'gene'
+                if level == 'variant':
+                    variant_count += 1
+                elif level == 'codon':
+                    codon_count += 1
+                else:
+                    gene_count += 1
+
+        # cBioPortal - check if we have variant-specific data
+        cbioportal_variant_specific = False
+        if self.cbioportal_evidence:
+            if self.cbioportal_evidence.samples_with_exact_variant > 0:
+                cbioportal_variant_specific = True
+
+        total = variant_count + codon_count + gene_count
+
+        # Build summary text
+        if total == 0:
+            summary_text = "No therapeutic evidence available."
+        elif variant_count == total:
+            summary_text = f"All {total} therapeutic evidence items are variant-specific."
+        elif gene_count == total:
+            summary_text = f"All {total} therapeutic evidence items are gene-level (no variant-specific data)."
+        else:
+            parts = []
+            if variant_count > 0:
+                parts.append(f"{variant_count} variant-specific")
+            if codon_count > 0:
+                parts.append(f"{codon_count} codon-level")
+            if gene_count > 0:
+                parts.append(f"{gene_count} gene-level")
+            summary_text = f"Therapeutic evidence: {', '.join(parts)}."
+
+        # Add cBioPortal note
+        if self.cbioportal_evidence and self.cbioportal_evidence.has_data():
+            if not cbioportal_variant_specific:
+                summary_text += f" cBioPortal has gene-level data only (0 samples with exact variant)."
+
+        return {
+            "variant_count": variant_count,
+            "codon_count": codon_count,
+            "gene_count": gene_count,
+            "total": total,
+            "summary_text": summary_text,
+            "has_variant_specific": variant_count > 0,
+            "is_all_gene_level": gene_count == total and total > 0,
+            "cbioportal_variant_specific": cbioportal_variant_specific,
+        }

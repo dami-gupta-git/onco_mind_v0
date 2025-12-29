@@ -37,6 +37,7 @@ class LLMService:
         data_availability: dict | None = None,
         resistance_summary: str = "",
         sensitivity_summary: str = "",
+        match_level_summary: dict | None = None,
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -54,6 +55,7 @@ class LLMService:
                 (has_tumor_specific_cbioportal, has_civic_assertions, has_fda_approvals, has_vicc_evidence)
             resistance_summary: Concise summary of resistance evidence
             sensitivity_summary: Concise summary of sensitivity evidence
+            match_level_summary: Dict with match specificity info (variant/codon/gene counts)
 
         Returns:
             LLMInsight with LLM-generated research-focused narrative
@@ -78,6 +80,18 @@ class LLMService:
                 "has_vicc_evidence": False,
             }
 
+        # Default empty match level summary if not provided
+        if match_level_summary is None:
+            match_level_summary = {
+                "variant_count": 0,
+                "codon_count": 0,
+                "gene_count": 0,
+                "total": 0,
+                "summary_text": "Match specificity not computed.",
+                "has_variant_specific": False,
+                "is_all_gene_level": False,
+            }
+
         # Create research-focused prompt
         messages = create_research_prompt(
             gene=gene,
@@ -90,6 +104,7 @@ class LLMService:
             data_availability=data_availability,
             resistance_summary=resistance_summary,
             sensitivity_summary=sensitivity_summary,
+            match_level_summary=match_level_summary,
         )
 
         # Call LLM for narrative generation
@@ -437,6 +452,14 @@ CRITICAL DISTINCTION - PREDICTIVE vs PROGNOSTIC:
 - PREDICTIVE: Variant predicts response to a SPECIFIC TARGETED THERAPY
 - PROGNOSTIC: Variant associated with outcomes but NOT specific drug response
 
+CRITICAL DISTINCTION - MATCH LEVEL:
+For each drug response finding, determine the MATCH LEVEL:
+- "variant": The paper discusses THIS EXACT VARIANT (e.g., "EGFR L858R shows sensitivity to...")
+- "codon": The paper discusses the same codon position but different amino acid (e.g., paper discusses V600K when queried about V600E)
+- "gene": The paper discusses the gene generally (e.g., "EGFR mutations respond to...") without specifying this exact variant
+
+Default to "gene" if the paper doesn't clearly specify the exact variant.
+
 Be PRECISE and EVIDENCE-BASED:
 - Only report findings directly supported by the papers
 - Distinguish between preclinical and clinical evidence
@@ -452,10 +475,10 @@ Return JSON with these exact fields:
 {{
     "mutation_type": "<primary|secondary|both|unknown>",
     "resistant_to": [
-        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "mechanism": "<mechanism>"}}
+        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "mechanism": "<mechanism>", "match_level": "<variant|codon|gene>"}}
     ],
     "sensitive_to": [
-        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>"}}
+        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "match_level": "<variant|codon|gene>"}}
     ],
     "clinical_significance": "<2-3 sentence summary>",
     "evidence_level": "<FDA-approved|Phase 3|Phase 2|Preclinical|Case reports|None>",

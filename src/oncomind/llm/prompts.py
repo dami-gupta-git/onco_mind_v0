@@ -153,10 +153,10 @@ Respond ONLY with valid JSON:
   "functional_summary": "IF overall_quality is 'limited'/'minimal': Generic gene function only (e.g., 'JAK1 encodes a tyrosine kinase involved in cytokine receptor signaling'). IF 'moderate'/'comprehensive': Variant-specific effects with citations.",
   "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {{tumor_type}}-specific data available.' Cite source ONCE at end.",
   "therapeutic_landscape": {{
-    "fda_approved": ["ONLY drugs explicitly listed in FDA APPROVALS section. Empty array if none."],
-    "clinical_evidence": ["ONLY drugs with CIViC/VICC clinical evidence OR from THERAPEUTIC SIGNALS Sensitivity. Empty array if none."],
-    "preclinical": ["Drugs from DepMap or preclinical sources only."],
-    "resistance_mechanisms": ["MUST include signals from THERAPEUTIC SIGNALS Resistance section. Also include any mechanisms from evidence. Do not infer beyond what's stated."]
+    "fda_approved": ["Drug - ONLY drugs explicitly listed in FDA APPROVALS. Empty array if none."],
+    "clinical_evidence": ["Drug - from CIViC/VICC or THERAPEUTIC SIGNALS. Empty array if none."],
+    "preclinical": ["Drug - from DepMap or preclinical sources only."],
+    "resistance_mechanisms": ["From THERAPEUTIC SIGNALS Resistance section."]
   }},
   "evidence_assessment": {{
     "overall_quality": "{overall_quality}",
@@ -194,6 +194,7 @@ def create_research_prompt(
     data_availability: dict | None = None,
     resistance_summary: str = "",
     sensitivity_summary: str = "",
+    match_level_summary: dict | None = None,
 ) -> list[dict]:
     """
     Create prompt for research-focused variant synthesis.
@@ -209,6 +210,7 @@ def create_research_prompt(
         data_availability: Dict with boolean flags for data presence (tumor_specific_cbioportal, civic_assertions, etc.)
         resistance_summary: Concise summary of resistance signals
         sensitivity_summary: Concise summary of sensitivity signals
+        match_level_summary: Dict with match specificity info (variant/codon/gene counts)
 
     Returns:
         Messages list for LLM API call.
@@ -228,6 +230,11 @@ def create_research_prompt(
     has_civic_assertions = data_availability.get("has_civic_assertions", False)
     has_fda_approvals = data_availability.get("has_fda_approvals", False)
     has_vicc_evidence = data_availability.get("has_vicc_evidence", False)
+
+    # NOTE: match_level_summary is accepted but not used in LLM prompt
+    # Match level info is shown in UI/CLI via Evidence Specificity panel instead
+    # Keeping parameter for backwards compatibility
+    _ = match_level_summary  # Suppress unused variable warning
 
     # Build the JSON-safe strings for the template
     user_content = RESEARCH_USER_PROMPT.format(

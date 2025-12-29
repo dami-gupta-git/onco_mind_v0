@@ -427,6 +427,7 @@ def _build_evidence_gaps(evidence) -> dict:
                 "category": wc.category.value if wc.category else None,
                 "aspect": wc.aspect,
                 "basis": wc.basis,
+                "matches_on": wc.matches_on,
             }
             for wc in gaps.well_characterized_detailed
         ],
