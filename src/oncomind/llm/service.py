@@ -6,7 +6,9 @@ from litellm import acompletion
 from oncomind.llm.prompts import create_research_prompt
 from oncomind.models.llm_insight import LLMInsight
 
-from oncomind.config.logging_config import get_logger
+from oncomind.config.debug import get_logger
+
+logger = get_logger(__name__)
 
 
 class LLMService:
@@ -16,11 +18,10 @@ class LLMService:
     human-readable summary of the variant's clinical significance.
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.0, enable_logging: bool = False):
+    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.0):
         self.model = model
         self.temperature = temperature
-        self.enable_logging = enable_logging
-        self.logger = get_logger(enable_console_logging=enable_logging) if enable_logging else None
+        logger.debug(f"LLMService initialized with model={model}, temperature={temperature}")
 
     async def get_llm_insight(
         self,
@@ -106,22 +107,12 @@ class LLMService:
         if "gpt" in self.model.lower():
             completion_kwargs["response_format"] = {"type": "json_object"}
 
-        # Debug: Print the exact payload going to the LLM
-        print("\n" + "=" * 80)
-        print("🔍 LLM PAYLOAD DEBUG")
-        print("=" * 80)
-        print(f"Model: {self.model}")
-        print(f"Temperature: {self.temperature}")
-        print(f"Max tokens: {completion_kwargs.get('max_tokens')}")
-        print(f"Timeout: {completion_kwargs.get('timeout')}")
-        print("-" * 80)
+        # Debug logging for LLM payload
+        logger.debug(f"LLM request: model={self.model}, temperature={self.temperature}, max_tokens={completion_kwargs.get('max_tokens')}, timeout={completion_kwargs.get('timeout')}")
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            print(f"\n[{i}] ROLE: {role}")
-            print(f"CONTENT ({len(content)} chars):")
-            print(content[:3000] + ("..." if len(content) > 3000 else ""))
-        print("\n" + "=" * 80 + "\n")
+            logger.debug(f"Message[{i}] role={role}, content_length={len(content)} chars")
 
         try:
             # Time the LLM API call
@@ -129,9 +120,9 @@ class LLMService:
             response = await acompletion(**completion_kwargs)
             llm_time = time.time() - t0
 
-            # Calculate input size for context
+            # Log timing and input size
             input_chars = sum(len(m.get("content", "")) for m in messages)
-            print(f"⏱️  LLM call: {llm_time:.2f}s | input: {input_chars} chars | lit: {len(literature_summary)} chars")
+            logger.debug(f"LLM call completed in {llm_time:.2f}s | input: {input_chars} chars | literature: {len(literature_summary)} chars")
 
             raw_content = response.choices[0].message.content.strip()
 
@@ -197,7 +188,8 @@ class LLMService:
             )
 
         except Exception as e:
-            # On LLM failure, return insight with basic error message
+            # Log error and return insight with basic error message
+            logger.error(f"LLM narrative generation failed for {gene} {variant}: {str(e)}")
             return LLMInsight(
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
                 rationale=f"LLM narrative generation failed: {str(e)}",
@@ -321,7 +313,7 @@ Return JSON with these exact fields:
             }
 
         except Exception as e:
-            print(f"Paper relevance scoring error: {e}")
+            logger.error(f"Paper relevance scoring error: {e}")
             return {
                 "relevance_score": 0.5,
                 "is_relevant": False,
@@ -448,7 +440,7 @@ Return JSON with these exact fields:
             }
 
         except Exception as e:
-            print(f"Variant knowledge extraction error: {e}")
+            logger.error(f"Variant knowledge extraction error: {e}")
             return {
                 "mutation_type": "unknown",
                 "resistant_to": [],

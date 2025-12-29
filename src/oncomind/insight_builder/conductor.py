@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.config.debug import get_logger
 from oncomind.insight_builder.evidence_aggregator import (
     EvidenceAggregator,
     EvidenceAggregatorConfig,
@@ -29,6 +30,8 @@ from oncomind.insight_builder.evidence_aggregator import (
 from oncomind.models.evidence import Evidence
 from oncomind.models.result import Result
 from oncomind.normalization import ParsedVariant, parse_variant_input
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -141,10 +144,14 @@ class Conductor:
             if tumor_type:
                 parsed.tumor_type = tumor_type
 
+        gene_variant = f"{parsed.gene} {parsed.variant}"
+        logger.debug(f"Processing {gene_variant} (tumor={parsed.tumor_type})")
+
         # Step 1: Aggregate evidence from all sources in parallel
         t0 = time.time()
         evidence = await self._aggregator.build_evidence(parsed, parsed.tumor_type)
         timings["evidence_aggregation"] = time.time() - t0
+        logger.debug(f"Evidence aggregation completed in {timings['evidence_aggregation']:.2f}s")
 
         # Step 2 & 3: Run gap computation and LLM call
         # Gap computation is fast but LLM needs it - run sequentially
@@ -155,15 +162,17 @@ class Conductor:
         # Step 3: Generate LLM narrative if enabled
         llm_insight = None
         if self.config.enable_llm:
+            logger.debug(f"Generating LLM insight with model={self.config.llm_model}")
             t0 = time.time()
             llm_insight = await self._generate_llm_insight(evidence)
             timings["llm_generation"] = time.time() - t0
+            logger.debug(f"LLM generation completed in {timings['llm_generation']:.2f}s")
 
         timings["total"] = time.time() - total_start
+        logger.debug(f"Total processing time for {gene_variant}: {timings['total']:.2f}s")
 
         # Log timing breakdown if enabled
         if self.config.enable_timing:
-            gene_variant = f"{parsed.gene} {parsed.variant}"
             print(f"\n⏱️  Timing breakdown for {gene_variant}:")
             print(f"   Evidence aggregation: {timings['evidence_aggregation']:.2f}s")
             print(f"   Gap computation:      {timings['gap_computation']:.2f}s")
@@ -211,7 +220,7 @@ class Conductor:
                     return (idx, result)
                 except Exception as e:
                     gene = variant if isinstance(variant, str) else f"{variant.gene} {variant.variant}"
-                    print(f"  Warning: Failed to process {gene}: {str(e)}")
+                    logger.error(f"Failed to process {gene}: {str(e)}")
                     completed += 1
                     if progress_callback:
                         progress_callback(completed, total)
