@@ -383,7 +383,10 @@ def _build_response(result) -> Dict[str, Any]:
                 "mechanism": t.mechanism,
                 "tumor_types_tested": t.tumor_types_tested,
                 "source": t.source,
+                "source_url": t.source_url,
                 "confidence": t.confidence,
+                # Match specificity tracking
+                "match_level": t.match_level,
             }
             for t in therapeutic_list
         ],
