@@ -175,8 +175,6 @@ def insight(
             padding=(0, 2),
         ))
 
-
-
         # Build IDs and Scores content
         ids_lines = []
 
@@ -225,6 +223,39 @@ def insight(
                 padding=(0, 2),
             ))
 
+        # Evidence Match Specificity (show if LLM mode or if we have therapeutic evidence)
+        match_summary = result.evidence.get_match_level_summary()
+        if match_summary.get('total', 0) > 0:
+            match_lines = []
+            summary_text = match_summary.get('summary_text', '')
+            if summary_text:
+                match_lines.append(f"[dim]{summary_text}[/dim]")
+
+            # Show warning if all gene-level
+            if match_summary.get('is_all_gene_level'):
+                match_lines.append("")
+                match_lines.append("[yellow]⚠️  All therapeutic evidence is gene-level[/yellow]")
+                match_lines.append("[dim]   Variant-specific drug response unknown[/dim]")
+            elif match_summary.get('has_variant_specific'):
+                v = match_summary.get('variant_count', 0)
+                c = match_summary.get('codon_count', 0)
+                g = match_summary.get('gene_count', 0)
+                match_lines.append("")
+                if v > 0:
+                    match_lines.append(f"[green]✓ {v} variant-specific[/green]")
+                if c > 0:
+                    match_lines.append(f"[yellow]○ {c} codon-level[/yellow]")
+                if g > 0:
+                    match_lines.append(f"[dim]○ {g} gene-level[/dim]")
+
+            if match_lines:
+                console.print(Panel(
+                    "\n".join(match_lines),
+                    title="[bold]Evidence Specificity[/bold]",
+                    border_style="green",
+                    padding=(0, 2),
+                ))
+
         # Gap Analysis panel (shown in both LLM and annotation modes)
         evidence_gaps = result.evidence.evidence_gaps
         if evidence_gaps:
@@ -270,6 +301,70 @@ def insight(
                     "\n".join(gap_lines),
                     title="[bold]Gap Analysis[/bold]",
                     border_style="magenta",
+                    padding=(0, 2),
+                ))
+
+        # LLM Research Synthesis panel (only if LLM was enabled and succeeded)
+        if result.llm and not (result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:")):
+            llm_lines = []
+
+            # Functional summary
+            if result.llm.functional_summary:
+                wrapped = textwrap.fill(result.llm.functional_summary, width=70)
+                llm_lines.append(f"[bold]Functional Impact:[/bold]\n{wrapped}")
+
+            # Biological context
+            if result.llm.biological_context:
+                wrapped = textwrap.fill(result.llm.biological_context, width=70)
+                llm_lines.append(f"\n[bold]Biological Context:[/bold]\n{wrapped}")
+
+            # Therapeutic landscape
+            tl = result.llm.therapeutic_landscape
+            if tl:
+                tl_parts = []
+                if tl.get("fda_approved"):
+                    tl_parts.append(f"[green]FDA-approved:[/green] {', '.join(tl['fda_approved'])}")
+                if tl.get("clinical_evidence"):
+                    tl_parts.append(f"[yellow]Clinical evidence:[/yellow] {', '.join(tl['clinical_evidence'])}")
+                if tl.get("preclinical"):
+                    tl_parts.append(f"[dim]Preclinical:[/dim] {', '.join(tl['preclinical'])}")
+                if tl.get("resistance_mechanisms"):
+                    tl_parts.append(f"[red]Resistance:[/red] {', '.join(tl['resistance_mechanisms'])}")
+                if tl_parts:
+                    llm_lines.append(f"\n[bold]Therapeutic Landscape:[/bold]\n" + "\n".join(tl_parts))
+
+                # Match level note
+                if tl.get("match_level_note"):
+                    llm_lines.append(f"\n[yellow]⚠️  {tl['match_level_note']}[/yellow]")
+
+            # Research implications
+            if result.llm.research_implications:
+                wrapped = textwrap.fill(result.llm.research_implications, width=70)
+                llm_lines.append(f"\n[bold]Research Implications:[/bold]\n{wrapped}")
+
+            # Research hypotheses
+            if result.llm.research_hypotheses:
+                llm_lines.append(f"\n[bold]Research Hypotheses:[/bold]")
+                for hyp in result.llm.research_hypotheses[:3]:
+                    wrapped = textwrap.fill(f"• {hyp}", width=70, subsequent_indent="  ")
+                    llm_lines.append(wrapped)
+
+            # Conflicting evidence
+            if result.llm.conflicting_evidence:
+                conflicts = " · ".join(result.llm.conflicting_evidence)
+                wrapped = textwrap.fill(f"⚠️ {conflicts}", width=70)
+                llm_lines.append(f"\n[yellow]{wrapped}[/yellow]")
+
+            # Evidence tags
+            if result.llm.evidence_tags:
+                tags = " | ".join(result.llm.evidence_tags)
+                llm_lines.append(f"\n[dim]Evidence: {tags}[/dim]")
+
+            if llm_lines:
+                console.print(Panel(
+                    "\n".join(llm_lines),
+                    title="[bold]🤖 LLM Research Synthesis[/bold]",
+                    border_style="bright_magenta",
                     padding=(0, 2),
                 ))
 
