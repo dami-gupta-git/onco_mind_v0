@@ -91,11 +91,15 @@ class LLMService:
         )
 
         # Call LLM for narrative generation
+        # Set timeout based on model - Claude models need longer
+        timeout = 120 if "claude" in self.model.lower() else 60
+
         completion_kwargs = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": 1000,
+            "timeout": timeout,
         }
 
         # Use JSON mode for OpenAI models
