@@ -225,6 +225,54 @@ def insight(
                 padding=(0, 2),
             ))
 
+        # Gap Analysis panel (shown in both LLM and annotation modes)
+        evidence_gaps = result.evidence.evidence_gaps
+        if evidence_gaps:
+            gap_lines = []
+
+            # Overall quality and research priority
+            quality = evidence_gaps.overall_evidence_quality or "unknown"
+            priority = evidence_gaps.research_priority or "unknown"
+            quality_colors = {"comprehensive": "green", "moderate": "yellow", "limited": "red", "minimal": "red"}
+            priority_colors = {"very_high": "red", "high": "red", "medium": "yellow", "low": "green"}
+            q_color = quality_colors.get(quality.lower(), "white")
+            p_color = priority_colors.get(priority.lower(), "white")
+
+            gap_lines.append(f"[dim]Evidence Quality:[/dim]   [{q_color}]{quality.capitalize()}[/{q_color}]")
+            gap_lines.append(f"[dim]Research Priority:[/dim]  [{p_color}]{priority.replace('_', ' ').title()}[/{p_color}]")
+
+            # Well characterized aspects (compact)
+            if evidence_gaps.well_characterized:
+                gap_lines.append("")
+                gap_lines.append("[dim]✅ Well Characterized:[/dim]")
+                for aspect in evidence_gaps.well_characterized[:5]:
+                    gap_lines.append(f"   • {aspect}")
+
+            # Evidence gaps by severity
+            from oncomind.models.evidence.evidence_gaps import GapSeverity
+            critical_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.CRITICAL)
+            significant_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
+
+            if critical_gaps:
+                gap_lines.append("")
+                gap_lines.append(f"[red]🔴 Critical Gaps ({len(critical_gaps)}):[/red]")
+                for g in critical_gaps[:3]:
+                    gap_lines.append(f"   • {g.description}")
+
+            if significant_gaps:
+                gap_lines.append("")
+                gap_lines.append(f"[yellow]🟠 Significant Gaps ({len(significant_gaps)}):[/yellow]")
+                for g in significant_gaps[:3]:
+                    gap_lines.append(f"   • {g.description}")
+
+            if gap_lines:
+                console.print(Panel(
+                    "\n".join(gap_lines),
+                    title="[bold]Gap Analysis[/bold]",
+                    border_style="magenta",
+                    padding=(0, 2),
+                ))
+
         # Save JSON if requested
         if output:
             # The result object now contains everything, including llm if present
