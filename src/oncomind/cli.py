@@ -11,6 +11,10 @@ Modes:
     --lit      + Literature search (PubMed/Semantic Scholar) (~15s)
     --llm      + LLM synthesis (~20s)
     --full     Both --lit and --llm (~25s)
+
+Logging:
+    --log-level  Set log level (DEBUG, INFO, WARN, ERROR). Default: INFO
+    Environment: ONCOMIND_LOG_LEVEL=DEBUG|INFO|WARN|ERROR
 """
 
 import asyncio
@@ -23,6 +27,7 @@ from dotenv import load_dotenv
 
 
 from oncomind import get_insight, InsightConfig
+from oncomind.config.debug import set_log_level, get_logger
 
 # Suppress litellm's async cleanup warnings (harmless internal warnings)
 warnings.filterwarnings("ignore", message=".*async_success_handler.*")
@@ -47,6 +52,7 @@ def insight(
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
+    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
 ) -> None:
     """Get variant insight with structured evidence and optional LLM narrative.
 
@@ -59,12 +65,19 @@ def insight(
         --llm      + LLM synthesis (~20s)
         --full     Both --lit and --llm (~25s)
 
+    Logging:
+        --log-level  DEBUG, INFO, WARN, ERROR (default: INFO)
+        Or set ONCOMIND_LOG_LEVEL environment variable
+
     Examples:
         mind insight BRAF V600E --tumor Melanoma
         mind insight EGFR L858R -t NSCLC --lit
-        mind insight KRAS G12D -t CRC --llm
+        mind insight KRAS G12D -t CRC --llm --log-level DEBUG
         mind insight TP53 R248W --full --output result.json
     """
+    # Initialize logging
+    set_log_level(log_level)
+    logger = get_logger(__name__)
 
     from rich.console import Console
     from rich.panel import Panel
@@ -82,16 +95,24 @@ def insight(
         # --full implies both --lit and --llm
         # --lit and --llm are independent
         enable_lit = lit or full
-        enable_llm = llm or full
+        enable_llm_flag = llm or full
+
+        logger.debug(f"Processing {gene} {variant} (tumor={tumor})")
+        logger.debug(f"Flags: lit={enable_lit}, llm={enable_llm_flag}, model={model}")
 
         # Configure and run the Conductor
         config = ConductorConfig(
             enable_literature=enable_lit,
-            enable_llm=enable_llm,
+            enable_llm=enable_llm_flag,
             llm_model=model,
         )
+        logger.debug(f"ConductorConfig: {config}")
+
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor)
+
+        logger.debug(f"Result received: evidence_sources={len(result.evidence.fda_approvals)} FDA, "
+                    f"{len(result.evidence.civic_assertions)} CIViC, llm={'yes' if result.llm else 'no'}")
 
         # === RENDER OUTPUT ===
 
@@ -185,43 +206,13 @@ def insight(
             ))
 
 
-        # LLM Insight (when LLM mode is enabled)
+        # LLM Insight (debug logging only)
         if result.llm:
-            # Build formatted LLM insight from raw components
-            llm_parts = []
-            if result.llm.functional_summary:
-                wrapped = textwrap.fill(result.llm.functional_summary, width=70)
-                llm_parts.append(f"[bold]Functional Impact:[/bold] {wrapped}")
-            if result.llm.biological_context:
-                wrapped = textwrap.fill(result.llm.biological_context, width=70)
-                llm_parts.append(f"[bold]Biological Context:[/bold] {wrapped}")
-            if result.llm.therapeutic_landscape:
-                tl = result.llm.therapeutic_landscape
-                therapy_parts = []
-                if tl.get("fda_approved"):
-                    therapy_parts.append(f"FDA-approved: {', '.join(tl['fda_approved'])}")
-                if tl.get("clinical_evidence"):
-                    therapy_parts.append(f"Clinical evidence: {', '.join(tl['clinical_evidence'])}")
-                if tl.get("preclinical"):
-                    therapy_parts.append(f"Preclinical: {', '.join(tl['preclinical'])}")
-                if tl.get("resistance_mechanisms"):
-                    therapy_parts.append(f"Resistance: {', '.join(tl['resistance_mechanisms'])}")
-                if therapy_parts:
-                    wrapped = textwrap.fill("; ".join(therapy_parts), width=70)
-                    llm_parts.append(f"[bold]Therapeutic Landscape:[/bold] {wrapped}")
-            if result.llm.research_implications:
-                wrapped = textwrap.fill(result.llm.research_implications, width=70)
-                llm_parts.append(f"[bold]Research Implications:[/bold] {wrapped}")
-
-            # Fall back to plain summary if no structured components
-            llm_content = "\n\n".join(llm_parts) if llm_parts else textwrap.fill(result.llm.llm_summary, width=74)
-
-            console.print(Panel(
-                llm_content,
-                title="[bold]LLM Insight[/bold]",
-                border_style="magenta",
-                padding=(1, 2),
-            ))
+            logger.debug(f"LLM Insight functional_summary: {result.llm.functional_summary}")
+            logger.debug(f"LLM Insight biological_context: {result.llm.biological_context}")
+            logger.debug(f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}")
+            logger.debug(f"LLM Insight research_implications: {result.llm.research_implications}")
+            logger.debug(f"LLM Insight llm_summary: {result.llm.llm_summary}")
 
         # Save JSON if requested
         if output:
@@ -242,6 +233,7 @@ def batch(
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
     temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
+    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
 ) -> None:
     """Batch process multiple variants.
 
@@ -253,8 +245,16 @@ def batch(
         mind batch variants.json --lit               # With literature search
         mind batch variants.json --llm               # With literature + LLM
         mind batch variants.json --full --model gpt-4o
+        mind batch variants.json --log-level DEBUG   # Verbose logging
     """
+    # Initialize logging
+    set_log_level(log_level)
+    logger = get_logger(__name__)
+
+    logger.debug(f"Batch processing: input={input_file}, output={output}")
+
     if not input_file.exists():
+        logger.error(f"Input file not found: {input_file}")
         print(f"Error: Input file not found: {input_file}")
         raise typer.Exit(1)
 

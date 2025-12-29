@@ -89,19 +89,46 @@ asyncio.run(main())
 # Annotation mode (~7s)
 mind insight BRAF V600E --tumor Melanoma
 
-# LLM research mode (~25s)
+# Literature search only (~15s)
+mind insight EGFR L858R -t NSCLC --lit
+
+# LLM research mode (~20s)
 mind insight MAP2K1 P124L -t Melanoma --llm
+
+# Full mode: literature + LLM (~25s)
+mind insight KRAS G12D -t CRC --full
 
 # Save to JSON
 mind insight EGFR L858R -t NSCLC --llm --output result.json
+
+# Debug logging
+mind insight BRAF V600E --log-level DEBUG
 ```
 
 **Modes:**
 
-| Mode           | Flag   | Output                                           |
-|----------------|--------|--------------------------------------------------|
-| Annotation     | (none) | Structured evidence from all databases          |
-| LLM Research   | `--llm`| + Literature + research narrative + hypotheses  |
+| Mode           | Flag     | Output                                           |
+|----------------|----------|--------------------------------------------------|
+| Annotation     | (none)   | Structured evidence from all databases          |
+| Literature     | `--lit`  | + PubMed/Semantic Scholar search                |
+| LLM Research   | `--llm`  | + LLM synthesis and research narrative          |
+| Full           | `--full` | Both `--lit` and `--llm`                        |
+
+**Logging:**
+
+Set log level via CLI flag or environment variable:
+
+```bash
+# CLI flag (DEBUG, INFO, WARN, ERROR)
+mind insight BRAF V600E --log-level DEBUG
+mind insight BRAF V600E -l DEBUG  # shorthand
+
+# Environment variable
+ONCOMIND_LOG_LEVEL=DEBUG mind insight BRAF V600E
+
+# Batch command also supports --log-level
+mind batch variants.json --log-level DEBUG
+```
 
 ---
 
