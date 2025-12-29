@@ -21,6 +21,9 @@ from typing import Any
 import httpx
 
 from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.config.debug import get_logger
+
+logger = get_logger(__name__)
 
 
 class CIViCError(Exception):
@@ -374,8 +377,10 @@ class CIViCClient:
             response.raise_for_status()
             data = response.json()
         except httpx.HTTPError as e:
+            logger.error(f"CIViC API request failed: {e}")
             raise CIViCError(f"CIViC API request failed: {e}")
         except Exception as e:
+            logger.error(f"Failed to parse CIViC response: {e}")
             raise CIViCError(f"Failed to parse CIViC response: {e}")
 
         # Check for GraphQL errors

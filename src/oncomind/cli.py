@@ -205,7 +205,7 @@ def insight(
                 padding=(0, 2),
             ))
 
-
+        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
         # LLM Insight (debug logging only)
         if result.llm:
             logger.debug(f"LLM Insight functional_summary: {result.llm.functional_summary}")
@@ -213,6 +213,7 @@ def insight(
             logger.debug(f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}")
             logger.debug(f"LLM Insight research_implications: {result.llm.research_implications}")
             logger.debug(f"LLM Insight llm_summary: {result.llm.llm_summary}")
+        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
         # Save JSON if requested
         if output:

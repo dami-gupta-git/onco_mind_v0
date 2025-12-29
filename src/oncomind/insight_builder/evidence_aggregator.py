@@ -58,6 +58,9 @@ from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
+from oncomind.config.debug import get_logger
+
+logger = get_logger(__name__)
 
 
 # =============================================================================
@@ -123,7 +126,7 @@ class FetchResults:
             The result if successful, empty list/None if failed
         """
         if isinstance(result, Exception):
-            print(f"  Warning: {source_name} failed: {str(result)}")
+            logger.warning(f"{source_name} fetch failed: {str(result)}")
             self.sources_failed.append(source_name)
             return [] if source_name not in ("cBioPortal", "DepMap", "MyVariant") else None
         elif result:
@@ -218,10 +221,10 @@ class EvidenceAggregator:
         try:
             resolved = await self.oncotree_client.resolve_tumor_type(tumor_type)
             if resolved != tumor_type:
-                print(f"  Resolved tumor type: {tumor_type} → {resolved}")
+                logger.debug(f"Resolved tumor type: {tumor_type} → {resolved}")
             return resolved
         except Exception as e:
-            print(f"  Warning: OncoTree resolution failed: {str(e)}")
+            logger.warning(f"OncoTree resolution failed: {str(e)}")
             return tumor_type
 
     # -------------------------------------------------------------------------
@@ -661,7 +664,7 @@ class EvidenceAggregator:
         )
 
         if not_actionable:
-            print(f"  Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
+            logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
             fda_approvals: list[FDAApproval] = []
         else:
             fda_approvals = fda_approvals_raw
@@ -711,7 +714,7 @@ class EvidenceAggregator:
         evidences = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                print(f"  Warning: Failed to process variant {i}: {str(result)}")
+                logger.error(f"Failed to process variant {i}: {str(result)}")
             else:
                 evidences.append(result)
         return evidences

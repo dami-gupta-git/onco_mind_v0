@@ -28,6 +28,9 @@ from oncomind.models.evidence.civic import CIViCEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
+from oncomind.config.debug import get_logger
+
+logger = get_logger(__name__)
 
 
 class MyVariantAPIError(Exception):
@@ -1090,6 +1093,7 @@ class MyVariantClient:
         except MyVariantAPIError:
             raise
         except Exception as e:
+            logger.error(f"Failed to parse evidence for {gene} {variant}: {str(e)}")
             raise MyVariantAPIError(f"Failed to parse evidence: {str(e)}")
 
     async def close(self) -> None:
