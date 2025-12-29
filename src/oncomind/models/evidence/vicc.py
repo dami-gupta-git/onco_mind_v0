@@ -22,3 +22,12 @@ class VICCEvidence(EvidenceItemBase):
     # Additional fields for molecular profile context
     molecular_profile: str | None = None
     molecular_profile_score: float | None = None
+    # Match specificity tracking
+    match_level: str | None = Field(
+        default=None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+    )
+    matched_profile: str | None = Field(
+        default=None,
+        description="The molecular profile that was actually matched"
+    )

@@ -15,3 +15,12 @@ class CGIBiomarkerEvidence(EvidenceItemBase):
     source: str | None = None
     tumor_type: str | None = None
     fda_approved: bool = False
+    # Match specificity tracking
+    match_level: str | None = Field(
+        default=None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+    )
+    matched_alteration: str | None = Field(
+        default=None,
+        description="The alteration that was actually matched"
+    )
