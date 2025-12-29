@@ -4,11 +4,13 @@ ARCHITECTURE:
     CLI Commands → Conductor → Result (evidence + optional LLM narrative)
 
 Main command:
-    mind insight GENE VARIANT [--tumor] [--llm]
+    mind insight GENE VARIANT [--tumor] [--lit] [--llm] [--full]
 
 Modes:
     (default)  Structured evidence only, fast annotation (~7s)
-    --llm      + Literature search + LLM synthesis (~25s)
+    --lit      + Literature search (PubMed/Semantic Scholar) (~15s)
+    --llm      + LLM synthesis (~20s)
+    --full     Both --lit and --llm (~25s)
 """
 
 import asyncio
@@ -40,24 +42,28 @@ def insight(
     gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
     variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
-    llm: bool = typer.Option(False, "--llm", help="Enable LLM mode: literature search + AI synthesis"),
+    lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
+    llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
+    full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
 ) -> None:
     """Get variant insight with structured evidence and optional LLM narrative.
 
     By default, fetches evidence from all databases (fast annotation mode).
-    Use --llm to enable literature search and AI-powered synthesis.
+    Use --lit for literature search, --llm for AI synthesis, --full for both.
 
     Modes:
         (default)  Structured evidence only, fast annotation (~7s)
-        --llm      + Literature search + LLM synthesis (~25s)
+        --lit      + Literature search (PubMed/Semantic Scholar) (~15s)
+        --llm      + LLM synthesis (~20s)
+        --full     Both --lit and --llm (~25s)
 
     Examples:
         mind insight BRAF V600E --tumor Melanoma
-        mind insight EGFR L858R -t NSCLC
+        mind insight EGFR L858R -t NSCLC --lit
         mind insight KRAS G12D -t CRC --llm
-        mind insight TP53 R248W --llm --output result.json
+        mind insight TP53 R248W --full --output result.json
     """
 
     from rich.console import Console
@@ -72,10 +78,16 @@ def insight(
 
         console.print(f"\n[dim]Generating insight ...[/dim]\n", highlight=False)
 
+        # Handle flag combinations:
+        # --full implies both --lit and --llm
+        # --lit and --llm are independent
+        enable_lit = lit or full
+        enable_llm = llm or full
+
         # Configure and run the Conductor
         config = ConductorConfig(
-            enable_literature=llm,  # Literature search only with --llm
-            enable_llm=llm,         # LLM synthesis only with --llm
+            enable_literature=enable_lit,
+            enable_llm=enable_llm,
             llm_model=model,
         )
         async with Conductor(config) as conductor:
@@ -225,19 +237,22 @@ def insight(
 def batch(
     input_file: Path = typer.Argument(..., help="Input JSON file with variants"),
     output: Path = typer.Option("results.json", "--output", "-o", help="Output file"),
-    llm: bool = typer.Option(False, "--llm", help="Enable LLM mode: literature search + AI synthesis"),
+    lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
+    llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
+    full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
     model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
     temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
 ) -> None:
     """Batch process multiple variants.
 
     By default, fetches evidence from all databases (fast annotation mode).
-    Use --llm to enable literature search and AI-powered synthesis.
+    Use --lit for literature, --llm for AI synthesis, --full for both.
 
     Examples:
         mind batch variants.json --output results.json
+        mind batch variants.json --lit               # With literature search
         mind batch variants.json --llm               # With literature + LLM
-        mind batch variants.json --llm --model gpt-4o
+        mind batch variants.json --full --model gpt-4o
     """
     if not input_file.exists():
         print(f"Error: Input file not found: {input_file}")
@@ -258,15 +273,21 @@ def batch(
             variant_strs.append(f"{g} {v}")
             tumor_types.append(item.get('tumor_type'))
 
-        mode_str = "llm" if llm else "annotation"
+        # Handle flag combinations:
+        # --full implies both --lit and --llm
+        # --lit and --llm are independent
+        enable_lit = lit or full
+        enable_llm_mode = llm or full
+
+        mode_str = "llm" if enable_llm_mode else ("literature" if enable_lit else "annotation")
         print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
         print(f"  Mode: {mode_str}")
 
         config = InsightConfig(
-            enable_llm=llm,
+            enable_llm=enable_llm_mode,
             llm_model=model,
             llm_temperature=temperature,
-            enable_literature=llm,
+            enable_literature=enable_lit,
         )
 
         def progress_callback(current: int, total: int) -> None:
