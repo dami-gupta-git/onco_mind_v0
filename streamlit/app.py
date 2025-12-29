@@ -57,10 +57,10 @@ st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
-    "OpenAI GPT-4o-mini": "gpt-4o-mini",
-    "OpenAI GPT-4o": "gpt-4o",
     "Anthropic Claude Sonnet 4": "claude-sonnet-4-20250514",
     "Anthropic Claude 3.5 Haiku": "claude-3-5-haiku-20241022",
+    "OpenAI GPT-4o-mini": "gpt-4o-mini",
+    "OpenAI GPT-4o": "gpt-4o",
     "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
     "xAI Grok 3": "xai/grok-3",
 }
