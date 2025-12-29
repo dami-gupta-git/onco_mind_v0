@@ -1,6 +1,7 @@
 """LLM service for variant insight generation."""
 
 import json
+import re
 import time
 from litellm import acompletion
 from oncomind.llm.prompts import create_research_prompt
@@ -99,7 +100,7 @@ class LLMService:
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
-            "max_tokens": 1000,
+            "max_tokens": 2000,  # Increased from 1000 to avoid truncation
             "timeout": timeout,
         }
 
@@ -132,20 +133,68 @@ class LLMService:
 
             raw_content = response.choices[0].message.content.strip()
 
+            # Check for truncation (finish_reason != 'stop' means incomplete)
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == "length":
+                logger.warning(f"LLM response was truncated (finish_reason=length). Response may be incomplete.")
+
             # Log raw LLM response
             logger.debug("************************************************************")
-            logger.debug(f"LLM raw response:\n{raw_content}")
+            logger.debug(f"LLM raw response (finish_reason={finish_reason}):\n{raw_content}")
             logger.debug("************************************************************")
 
-            # Parse JSON response
+            # Parse JSON response - handle various LLM output formats
             content = raw_content
-            if content.startswith("```"):
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else parts[0]
-                if content.lower().startswith("json"):
-                    content = content[4:].lstrip()
 
-            data = json.loads(content)
+            # Strip markdown code blocks if present
+            if "```" in content:
+                # Find JSON block between ``` markers
+                parts = content.split("```")
+                for part in parts:
+                    stripped = part.strip()
+                    if stripped.lower().startswith("json"):
+                        stripped = stripped[4:].lstrip()
+                    if stripped.startswith("{"):
+                        content = stripped
+                        break
+
+            # If still not starting with {, try to find JSON object
+            if not content.strip().startswith("{"):
+                # Look for first { and last }
+                start_idx = content.find("{")
+                end_idx = content.rfind("}")
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    content = content[start_idx:end_idx + 1]
+
+            content = content.strip()
+            logger.debug(f"Parsing JSON content (first 500 chars): {content[:500]}")
+
+            # Try to parse JSON, with fallback repair attempts
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Initial JSON parse failed: {e}. Attempting repair...")
+                # Log the problematic area
+                error_pos = e.pos if hasattr(e, 'pos') else 0
+                logger.debug(f"JSON error near position {error_pos}: ...{content[max(0,error_pos-50):error_pos+50]}...")
+
+                # Common fixes for LLM JSON output
+                repaired = content
+                # Fix escaped single quotes (Claude often does \' which is invalid in JSON)
+                repaired = repaired.replace("\\'", "'")
+                # Fix unescaped newlines in strings (common issue)
+                # Replace literal newlines inside strings with \n
+                repaired = re.sub(r'(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)', '\\n', repaired)
+                # Fix trailing commas before } or ]
+                repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+                # Try parsing again
+                try:
+                    data = json.loads(repaired)
+                    logger.info("JSON repair successful")
+                except json.JSONDecodeError as e2:
+                    logger.error(f"JSON repair failed: {e2}")
+                    # Re-raise original error
+                    raise e
 
             # Extract research-focused LLM response components (raw data, no formatting)
             functional_summary = data.get("functional_summary", "")
