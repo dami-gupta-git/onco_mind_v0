@@ -213,6 +213,58 @@ class CGIClient:
 
         return False
 
+    def _determine_match_level(self, cgi_alteration: str, gene: str, variant: str) -> str:
+        """Determine the match specificity level for a CGI alteration.
+
+        Args:
+            cgi_alteration: CGI alteration string (e.g., "EGFR:G719.,L858R")
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "G719S")
+
+        Returns:
+            Match level: 'variant' (exact), 'codon' (same position/pattern), or 'gene' (gene-only)
+        """
+        if not cgi_alteration:
+            return "gene"
+
+        gene_upper = gene.upper()
+        variant_upper = variant.upper().replace("P.", "")
+
+        # Split by comma to get individual variants
+        parts = cgi_alteration.replace(f"{gene_upper}:", "").split(",")
+
+        for part in parts:
+            part = part.strip().upper()
+            if not part:
+                continue
+
+            if ":" in part:
+                part = part.split(":")[-1]
+
+            # Exact match = variant level
+            if part == variant_upper:
+                return "variant"
+
+            # Wildcard for any mutation: "." = gene level
+            if part == ".":
+                return "gene"
+
+            # Pattern match: "G719." = codon level (same position, any AA)
+            if part.endswith(".") and not part.startswith("."):
+                base_pattern = part[:-1]
+                if variant_upper.startswith(base_pattern):
+                    return "codon"
+
+            # Position wildcard: ".13." = codon level
+            if part.startswith(".") and part.endswith(".") and len(part) > 2:
+                position_str = part[1:-1]
+                if position_str.isdigit():
+                    variant_match = re.match(r'^([A-Z])(\d+)([A-Z])$', variant_upper)
+                    if variant_match and variant_match.group(2) == position_str:
+                        return "codon"
+
+        return "gene"
+
     def _tumor_type_matches(self, cgi_tumor_type: str, tumor_type: str | None) -> bool:
         """Check if tumor types match.
 
@@ -338,6 +390,9 @@ class CGIClient:
         evidence_list = []
 
         for biomarker in biomarkers:
+            # Determine match specificity
+            match_level = self._determine_match_level(biomarker.alteration, gene, variant)
+
             evidence_list.append(CGIBiomarkerEvidence(
                 gene=biomarker.gene,
                 alteration=biomarker.alteration,
@@ -348,6 +403,8 @@ class CGIClient:
                 source=biomarker.source,
                 tumor_type=biomarker.tumor_type,
                 fda_approved=biomarker.is_fda_approved(),
+                match_level=match_level,
+                matched_alteration=biomarker.alteration,
             ))
 
         return evidence_list

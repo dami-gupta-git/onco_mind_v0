@@ -530,7 +530,7 @@ with tab1:
                         tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else "across **all cancer types**"
                         count_parts = []
                         if len(specific_trials) > 0:
-                            count_parts.append(f"🎯 **{len(specific_trials)}** specific")
+                            count_parts.append(f"🎯 **{len(specific_trials)}** variant")
                         if len(ambiguous_trials) > 0:
                             count_parts.append(f"⚠️ **{len(ambiguous_trials)}** broad")
                         if len(gene_only_trials) > 0:
@@ -806,25 +806,55 @@ with tab1:
                 # Build match string for trials
                 match_parts = []
                 if specific_count > 0:
-                    match_parts.append(f"🎯 {specific_count} specific")
+                    match_parts.append(f"🎯 {specific_count} variant")
                 if ambiguous_count > 0:
                     match_parts.append(f"⚠️ {ambiguous_count} broad")
                 if gene_only_count > 0:
                     match_parts.append(f"🧬 {gene_only_count} gene")
                 trial_match_str = ", ".join(match_parts) if match_parts else ""
 
+                # Compute drug response match breakdown from VICC and CGI
+                vicc_variant = len([v for v in vicc if v.get('match_level') == 'variant']) if vicc else 0
+                vicc_codon = len([v for v in vicc if v.get('match_level') == 'codon']) if vicc else 0
+                vicc_gene = len([v for v in vicc if v.get('match_level') == 'gene']) if vicc else 0
+                cgi_variant = len([b for b in cgi_biomarkers if b.get('match_level') == 'variant']) if cgi_biomarkers else 0
+                cgi_codon = len([b for b in cgi_biomarkers if b.get('match_level') == 'codon']) if cgi_biomarkers else 0
+                cgi_gene = len([b for b in cgi_biomarkers if b.get('match_level') == 'gene']) if cgi_biomarkers else 0
+
+                drug_variant = vicc_variant + cgi_variant
+                drug_codon = vicc_codon + cgi_codon
+                drug_gene = vicc_gene + cgi_gene
+
+                drug_match_parts = []
+                if drug_variant > 0:
+                    drug_match_parts.append(f"🎯 {drug_variant} variant")
+                if drug_codon > 0:
+                    drug_match_parts.append(f"📍 {drug_codon} codon")
+                if drug_gene > 0:
+                    drug_match_parts.append(f"🧬 {drug_gene} gene")
+                drug_match_str = ", ".join(drug_match_parts) if drug_match_parts else ""
+
                 # Build rows from well_characterized_detailed
                 wc_rows = []
                 if well_characterized_detailed:
                     for item in well_characterized_detailed:
                         aspect = item.get('aspect', '')
-                        # Check if this row is about clinical trials
+                        # Determine match string based on row type
                         is_trial_row = 'trial' in aspect.lower()
+                        is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response'])
+
+                        if is_trial_row:
+                            match_str = trial_match_str
+                        elif is_drug_row:
+                            match_str = drug_match_str
+                        else:
+                            match_str = ""
+
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
                             "Aspect": aspect,
                             "Basis": item.get('basis', ''),
-                            "Matches On": trial_match_str if is_trial_row else "",
+                            "Matches On": match_str,
                         })
 
                 if wc_rows:

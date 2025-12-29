@@ -249,6 +249,9 @@ def _build_response(result) -> Dict[str, Any]:
                 "molecular_profile": v.molecular_profile,
                 "molecular_profile_score": v.molecular_profile_score,
                 "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
+                # Match specificity tracking
+                "match_level": v.match_level,
+                "matched_profile": v.matched_profile,
             }
             for v in evidence.vicc_evidence
         ],
@@ -259,6 +262,9 @@ def _build_response(result) -> Dict[str, Any]:
                 "tumor_type": b.tumor_type,
                 "evidence_level": b.evidence_level,
                 "fda_approved": b.fda_approved,
+                # Match specificity tracking
+                "match_level": b.match_level,
+                "matched_alteration": b.matched_alteration,
             }
             for b in evidence.cgi_biomarkers
         ],

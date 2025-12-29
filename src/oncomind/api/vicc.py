@@ -207,6 +207,48 @@ class VICCClient:
         """
         return f'{gene.upper()} AND "exon {exon}"'
 
+    def _determine_match_level(
+        self,
+        assoc_variant: str | None,
+        queried_gene: str,
+        queried_variant: str | None,
+    ) -> str:
+        """Determine the match specificity level for a VICC association.
+
+        Args:
+            assoc_variant: The variant from the VICC association (e.g., "V600E")
+            queried_gene: The gene being queried
+            queried_variant: The variant being queried (e.g., "V600E")
+
+        Returns:
+            Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
+        """
+        import re
+
+        if not queried_variant:
+            return "gene"
+
+        if not assoc_variant:
+            return "gene"
+
+        # Clean variants for comparison
+        assoc_upper = assoc_variant.replace("p.", "").upper()
+        queried_upper = queried_variant.replace("p.", "").upper()
+
+        # Exact variant match
+        if queried_upper in assoc_upper or assoc_upper in queried_upper:
+            return "variant"
+
+        # Check for codon-level match (same position, different amino acid change)
+        queried_pos_match = re.search(r'[A-Z](\d+)', queried_upper)
+        assoc_pos_match = re.search(r'[A-Z](\d+)', assoc_upper)
+
+        if queried_pos_match and assoc_pos_match:
+            if queried_pos_match.group(1) == assoc_pos_match.group(1):
+                return "codon"
+
+        return "gene"
+
     def _tumor_matches(self, vicc_disease: str, tumor_type: str | None) -> bool:
         """Check if VICC disease matches user tumor type.
 
@@ -506,6 +548,11 @@ class VICCClient:
         evidence_list = []
 
         for assoc in associations:
+            # Determine match specificity
+            match_level = self._determine_match_level(assoc.variant, gene, variant)
+            # Build matched profile string
+            matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
+
             evidence_list.append(VICCEvidence(
                 description=assoc.description,
                 gene=assoc.gene,
@@ -520,6 +567,8 @@ class VICCClient:
                 is_sensitivity=assoc.is_sensitivity(),
                 is_resistance=assoc.is_resistance(),
                 oncokb_level=assoc.get_oncokb_level(),
+                match_level=match_level,
+                matched_profile=matched_profile,
             ))
 
         return evidence_list
