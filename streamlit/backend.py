@@ -197,6 +197,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "companion_diagnostic": a.companion_diagnostic,
                 "black_box_warning": a.black_box_warning,
                 "dosing_for_variant": a.dosing_for_variant,
+                # Match specificity tracking
+                "match_level": a.match_level,
             }
             for a in evidence.fda_approvals
         ],
