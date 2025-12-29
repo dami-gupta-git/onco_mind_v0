@@ -173,6 +173,71 @@ class TestVersionCommand:
         assert "version" in result.stdout.lower()
 
 
+class TestCLILogLevel:
+    """Tests for CLI --log-level option."""
+
+    @pytest.mark.integration
+    def test_insight_help_shows_log_level(self):
+        """Insight help should show --log-level option."""
+        result = runner.invoke(app, ["insight", "--help"])
+
+        assert result.exit_code == 0
+        assert "--log-level" in result.stdout
+        assert "DEBUG" in result.stdout or "INFO" in result.stdout
+
+    @pytest.mark.integration
+    def test_batch_help_shows_log_level(self):
+        """Batch help should show --log-level option."""
+        result = runner.invoke(app, ["batch", "--help"])
+
+        assert result.exit_code == 0
+        assert "--log-level" in result.stdout
+
+    @pytest.mark.integration
+    def test_insight_with_debug_log_level(self):
+        """Insight with --log-level DEBUG should work."""
+        result = runner.invoke(app, ["insight", "BRAF", "V600E", "--log-level", "DEBUG"])
+
+        assert result.exit_code == 0
+        assert "BRAF" in result.stdout
+
+    @pytest.mark.integration
+    def test_insight_with_error_log_level(self):
+        """Insight with --log-level ERROR should work."""
+        result = runner.invoke(app, ["insight", "BRAF", "V600E", "--log-level", "ERROR"])
+
+        assert result.exit_code == 0
+        assert "BRAF" in result.stdout
+
+
+class TestCLILitFlag:
+    """Tests for CLI --lit flag."""
+
+    @pytest.mark.integration
+    def test_insight_help_shows_lit_option(self):
+        """Insight help should show --lit option."""
+        result = runner.invoke(app, ["insight", "--help"])
+
+        assert result.exit_code == 0
+        assert "--lit" in result.stdout
+
+    @pytest.mark.integration
+    def test_batch_help_shows_lit_option(self):
+        """Batch help should show --lit option."""
+        result = runner.invoke(app, ["batch", "--help"])
+
+        assert result.exit_code == 0
+        assert "--lit" in result.stdout
+
+    @pytest.mark.integration
+    def test_insight_help_shows_full_option(self):
+        """Insight help should show --full option."""
+        result = runner.invoke(app, ["insight", "--help"])
+
+        assert result.exit_code == 0
+        assert "--full" in result.stdout
+
+
 class TestCLIModes:
     """Tests for CLI mode behavior."""
 

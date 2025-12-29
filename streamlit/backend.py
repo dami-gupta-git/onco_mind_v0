@@ -17,6 +17,9 @@ Modes:
 from typing import Any, Dict, List, Optional, Callable
 
 from oncomind.insight_builder import Conductor, ConductorConfig
+from oncomind.config.debug import get_logger
+
+logger = get_logger(__name__)
 
 
 async def get_variant_insight(
@@ -46,6 +49,9 @@ async def get_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
+        logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
+        logger.debug(f"  enable_llm={enable_llm}, enable_literature={enable_literature}, model={model}")
+
         # Configure and run the Conductor
         config = ConductorConfig(
             enable_literature=enable_literature,
@@ -57,10 +63,14 @@ async def get_variant_insight(
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor_type)
 
+        logger.debug(f"  Result: {len(result.evidence.fda_approvals)} FDA, "
+                    f"{len(result.evidence.civic_assertions)} CIViC")
+
         # Build response
         return _build_response(result)
 
     except Exception as e:
+        logger.error(f"Insight generation failed for {gene} {variant}: {e}")
         return {"error": f"Insight generation failed: {str(e)}"}
 
 

@@ -4,8 +4,14 @@ import pandas as pd
 import asyncio
 import json
 import re
+import os
 from backend import get_variant_insight, batch_get_variant_insights
 from pdb_images import get_pdb_image_url, get_pdb_page_url
+
+# Initialize logging from environment variable (ONCOMIND_LOG_LEVEL=DEBUG|INFO|WARN|ERROR)
+# This import triggers the logger initialization which reads from env
+from oncomind.config.debug import get_logger
+logger = get_logger(__name__)
 
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 
