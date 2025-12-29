@@ -24,6 +24,19 @@ class CIViCEvidence(EvidenceItemBase):
     pmid: str | None = None
     source_url: str | None = None
     trust_rating: int | None = None  # 1-5 star rating
+    # Match specificity tracking
+    match_level: str | None = Field(
+        default=None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+    )
+    matched_profile: str | None = Field(
+        default=None,
+        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
+    )
+    disease_match: bool = Field(
+        default=True,
+        description="True if disease/tumor type matches the query"
+    )
 
     @computed_field
     @property
@@ -68,6 +81,19 @@ class CIViCAssertionEvidence(EvidenceItemBase):
     description: str | None = None
     is_sensitivity: bool = False
     is_resistance: bool = False
+    # Match specificity tracking
+    match_level: str | None = Field(
+        default=None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+    )
+    matched_profile: str | None = Field(
+        default=None,
+        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
+    )
+    disease_match: bool = Field(
+        default=True,
+        description="True if disease/tumor type matches the query"
+    )
 
     @computed_field
     @property

@@ -211,6 +211,10 @@ def _build_response(result) -> Dict[str, Any]:
                 "amp_level": a.amp_level,
                 "amp_tier": a.amp_tier,
                 "description": a.description,
+                # Match specificity tracking
+                "match_level": a.match_level,
+                "matched_profile": a.matched_profile,
+                "disease_match": a.disease_match,
             }
             for a in evidence.civic_assertions
         ],
@@ -228,6 +232,10 @@ def _build_response(result) -> Dict[str, Any]:
                 "pmid": e.pmid,
                 "source_url": e.source_url,
                 "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
+                # Match specificity tracking
+                "match_level": e.match_level,
+                "matched_profile": e.matched_profile,
+                "disease_match": e.disease_match,
             }
             for e in evidence.civic_evidence
         ],
