@@ -1,6 +1,2 @@
 [server]
 port = 8502
-
-[runner]
-# Increase script timeout for long-running LLM calls (default is ~30s)
-scriptRunnerTimeout = 300

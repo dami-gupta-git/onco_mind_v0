@@ -997,8 +997,14 @@ with tab1:
         # ==============================================
         # LLM RESEARCH SYNTHESIS (at bottom, if enabled) - in bordered card
         # ==============================================
+        # Check for LLM error first
+        llm_rationale = result['insight'].get('rationale', '')
+        if llm_rationale and llm_rationale.startswith("LLM narrative generation failed:"):
+            error_msg = llm_rationale.replace("LLM narrative generation failed: ", "")
+            st.warning(f"⚠️ **LLM synthesis failed:** {error_msg}\n\nEvidence-only results are shown above.")
+
         llm_narrative = result['insight'].get('llm_narrative')
-        if llm_narrative:
+        if llm_narrative and not (llm_rationale and llm_rationale.startswith("LLM narrative generation failed:")):
             with st.container(border=True):
                 st.markdown("### 🤖 LLM Research Synthesis")
 
@@ -1143,6 +1149,19 @@ with tab2:
                 progress_bar.progress(1.0)
 
                 st.session_state.batch_results = results
+
+                # Check for LLM errors in batch results
+                llm_errors = []
+                for r in results:
+                    if 'error' not in r:
+                        rationale = r.get('insight', {}).get('rationale', '')
+                        if rationale and rationale.startswith("LLM narrative generation failed:"):
+                            error_msg = rationale.replace("LLM narrative generation failed: ", "")
+                            llm_errors.append(f"{r['variant']['gene']} {r['variant']['variant']}: {error_msg}")
+
+                if llm_errors:
+                    st.warning(f"⚠️ **LLM errors ({len(llm_errors)}):**\n" + "\n".join([f"- {e}" for e in llm_errors]))
+
                 results_df = pd.DataFrame([{"Gene": r['variant']['gene'], "Variant": r['variant']['variant'],
                     "Tumor": r['variant'].get('tumor_type', 'N/A'),
                     "Therapies": len(r.get('recommended_therapies', []))} for r in results if 'error' not in r])
