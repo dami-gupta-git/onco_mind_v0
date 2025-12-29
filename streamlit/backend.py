@@ -26,7 +26,7 @@ async def get_variant_insight(
     enable_llm: bool = False,
     enable_literature: bool = False,
     literature_source: str = "pubmed",
-    model: str = "gpt-4o-mini",
+    model: str = "claude-sonnet-4-20250514",
     temperature: float = 0.1
 ) -> Dict[str, Any]:
     """
@@ -69,7 +69,7 @@ async def batch_get_variant_insights(
     enable_llm: bool = False,
     enable_literature: bool = False,
     literature_source: str = "pubmed",
-    model: str = "gpt-4o-mini",
+    model: str = "claude-sonnet-4-20250514",
     temperature: float = 0.1,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> List[Dict[str, Any]]:
