@@ -269,6 +269,10 @@ class Conductor:
             "has_vicc_evidence": bool(evidence.vicc_evidence),
         }
 
+        # Get therapeutic signal summaries
+        resistance_summary = evidence.get_resistance_summary()
+        sensitivity_summary = evidence.get_sensitivity_summary()
+
         # Generate LLM insight with research-focused prompt
         return await llm_service.get_llm_insight(
             gene=evidence.identifiers.gene,
@@ -280,6 +284,8 @@ class Conductor:
             literature_summary=literature_summary,
             has_clinical_trials=bool(evidence.clinical_trials),
             data_availability=data_availability,
+            resistance_summary=resistance_summary,
+            sensitivity_summary=sensitivity_summary,
         )
 
 

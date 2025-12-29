@@ -33,6 +33,8 @@ class LLMService:
         literature_summary: str = "",
         has_clinical_trials: bool = False,
         data_availability: dict | None = None,
+        resistance_summary: str = "",
+        sensitivity_summary: str = "",
     ) -> LLMInsight:
         """Generate variant insight by synthesizing evidence with LLM.
 
@@ -48,6 +50,8 @@ class LLMService:
             has_clinical_trials: Whether clinical trials are available
             data_availability: Dict with boolean flags for data presence
                 (has_tumor_specific_cbioportal, has_civic_assertions, has_fda_approvals, has_vicc_evidence)
+            resistance_summary: Concise summary of resistance evidence
+            sensitivity_summary: Concise summary of sensitivity evidence
 
         Returns:
             LLMInsight with LLM-generated research-focused narrative
@@ -82,6 +86,8 @@ class LLMService:
             evidence_assessment=evidence_assessment,
             literature_summary=literature_summary,
             data_availability=data_availability,
+            resistance_summary=resistance_summary,
+            sensitivity_summary=sensitivity_summary,
         )
 
         # Call LLM for narrative generation

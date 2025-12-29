@@ -58,6 +58,13 @@ EVIDENCE TAG VALIDATION (STRICT):
 
 Your narrative should read like a concise discussion section in a strong cancer paper: integrative, precise, and explicitly pointing to testable research questions, but strictly bounded by the provided evidence.
 
+=== THERAPEUTIC SIGNALS HANDLING ===
+
+When the THERAPEUTIC SIGNALS section contains Sensitivity or Resistance data:
+- ALWAYS include sensitivity signals in therapeutic_landscape.clinical_evidence or therapeutic_landscape.preclinical as appropriate
+- ALWAYS include resistance signals in therapeutic_landscape.resistance_mechanisms
+- Generate at least one research hypothesis that addresses resistance mechanisms, bypass pathways, or sensitivity validation when resistance or sensitivity evidence exists
+
 === RESEARCH HYPOTHESIS GENERATION RULES ===
 
 Generate 2-3 testable research hypotheses based on the evidence gaps. Focus on:
@@ -102,6 +109,10 @@ has_vicc_evidence: {has_vicc_evidence}
 ## BIOLOGICAL CONTEXT
 {biological_context}
 
+## THERAPEUTIC SIGNALS
+Sensitivity: {sensitivity_summary}
+Resistance: {resistance_summary}
+
 ## DATABASE EVIDENCE
 {evidence_summary}
 
@@ -129,21 +140,23 @@ Task:
 
 CALIBRATION RULES (MUST FOLLOW):
 - If overall_quality is "limited" or "minimal": Keep functional_summary GENERIC (describe the gene's general function, not variant-specific effects). Focus on gaps.
-- If has_tumor_specific_cbioportal_data is FALSE: State "pan-cancer data shown; no {tumor_type}-specific prevalence available."
+- If has_tumor_specific_cbioportal_data is FALSE: State "pan-cancer data shown; no {{tumor_type}}-specific prevalence available."
 - If has_civic_assertions, has_fda_approvals, AND has_vicc_evidence are ALL FALSE: Do NOT use "direct clinical data" in evidence_tags.
 - Do NOT assign oncogene/tumor-suppressor roles unless GENE ROLE section explicitly states it.
+- CRITICAL: If THERAPEUTIC SIGNALS section contains resistance data, you MUST include those resistance mechanisms in therapeutic_landscape.resistance_mechanisms.
+- CRITICAL: If THERAPEUTIC SIGNALS section contains sensitivity data, you MUST include those drugs in therapeutic_landscape.clinical_evidence or therapeutic_landscape.preclinical.
 
 CRITICAL: For biological_context, include the source citation ONCE at the end of all cBioPortal statistics. Look for "cite as: ([cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section and copy that markdown link.
 
 Respond ONLY with valid JSON:
 {{
   "functional_summary": "IF overall_quality is 'limited'/'minimal': Generic gene function only (e.g., 'JAK1 encodes a tyrosine kinase involved in cytokine receptor signaling'). IF 'moderate'/'comprehensive': Variant-specific effects with citations.",
-  "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {tumor_type}-specific data available.' Cite source ONCE at end.",
+  "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {{tumor_type}}-specific data available.' Cite source ONCE at end.",
   "therapeutic_landscape": {{
     "fda_approved": ["ONLY drugs explicitly listed in FDA APPROVALS section. Empty array if none."],
-    "clinical_evidence": ["ONLY drugs with CIViC/VICC clinical evidence. Empty array if none."],
+    "clinical_evidence": ["ONLY drugs with CIViC/VICC clinical evidence OR from THERAPEUTIC SIGNALS Sensitivity. Empty array if none."],
     "preclinical": ["Drugs from DepMap or preclinical sources only."],
-    "resistance_mechanisms": ["ONLY mechanisms explicitly stated in evidence. Do not infer."]
+    "resistance_mechanisms": ["MUST include signals from THERAPEUTIC SIGNALS Resistance section. Also include any mechanisms from evidence. Do not infer beyond what's stated."]
   }},
   "evidence_assessment": {{
     "overall_quality": "{overall_quality}",
@@ -179,6 +192,8 @@ def create_research_prompt(
     evidence_assessment: dict,
     literature_summary: str = "",
     data_availability: dict | None = None,
+    resistance_summary: str = "",
+    sensitivity_summary: str = "",
 ) -> list[dict]:
     """
     Create prompt for research-focused variant synthesis.
@@ -192,6 +207,8 @@ def create_research_prompt(
         evidence_assessment: Dict with keys overall_quality, well_characterized, knowledge_gaps, conflicting_evidence
         literature_summary: PubMed/Semantic Scholar findings (optional)
         data_availability: Dict with boolean flags for data presence (tumor_specific_cbioportal, civic_assertions, etc.)
+        resistance_summary: Concise summary of resistance signals
+        sensitivity_summary: Concise summary of sensitivity signals
 
     Returns:
         Messages list for LLM API call.
@@ -222,6 +239,8 @@ def create_research_prompt(
         has_fda_approvals=str(has_fda_approvals).upper(),
         has_vicc_evidence=str(has_vicc_evidence).upper(),
         biological_context=biological_context or "No cBioPortal or co-mutation data available.",
+        resistance_summary=resistance_summary or "No resistance signals identified.",
+        sensitivity_summary=sensitivity_summary or "No sensitivity signals identified.",
         evidence_summary=(evidence_summary or "No database evidence available.").strip()[:4000],
         literature_summary=literature_summary or "No literature search performed.",
         evidence_gaps="\n".join(gaps) or "No explicit gaps analysis available.",
@@ -238,44 +257,3 @@ def create_research_prompt(
         {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
-
-
-# =============================================================================
-# Legacy clinical-annotation prompts (kept for backwards compatibility)
-# =============================================================================
-
-ANNOTATION_SYSTEM_PROMPT = """You are an expert molecular tumor board pathologist writing a concise clinical summary for a cancer variant.
-
-Your task is to synthesize the provided evidence into a clear, actionable summary that:
-1. States the clinical significance of this variant based on the evidence provided.
-2. Notes any therapeutic implications (approved therapies, contraindications, or relevant trials).
-3. Identifies key database annotations and their clinical relevance.
-4. Is suitable for inclusion in a clinical-style report.
-
-Use ONLY the supplied evidence. Keep the tone focused and evidence-based. Do not speculate beyond the data.
-"""
-
-ANNOTATION_USER_PROMPT = """Write a clinical annotation summary for this variant:
-
-Gene: {gene}
-Variant: {variant}
-Tumor Type: {tumor_type}
-{therapy_note_section}
-Evidence Summary:
-{evidence_summary}
-
-Respond ONLY with valid JSON:
-{{
-  "summary": "3–5 sentence clinical-style summary covering significance and therapeutic implications, using only the provided evidence.",
-  "rationale": "Brief explanation of how the evidence supports this summary.",
-  "recommended_therapies": [
-    {{
-      "drug_name": "Drug name",
-      "evidence_level": "FDA-approved | Clinical trial | Preclinical",
-      "approval_status": "Approved | Investigational | Off-label",
-      "clinical_context": "e.g., first-line, second-line, post-resistance, biomarker-selected"
-    }}
-  ],
-  "references": ["Key PMIDs, guidelines, or database sources mentioned in the evidence block."]
-}}
-"""

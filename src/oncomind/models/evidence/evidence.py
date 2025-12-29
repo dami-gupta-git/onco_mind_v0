@@ -599,81 +599,239 @@ class Evidence(BaseModel):
             "pubmed_articles_count": len(self.pubmed_articles),
         }
 
+    def get_resistance_summary(self) -> str:
+        """Get a synthesized summary of resistance evidence.
+
+        Returns a narrative summary grouping drugs by class/generation where possible.
+        Example: "Gatekeeper mutation conferring resistance to 1st/2nd-gen EGFR TKIs
+                  (erlotinib, gefitinib, afatinib); variable response to osimertinib (conflicting evidence)"
+        """
+        # Collect all resistance drugs with their sources
+        resistance_drugs: dict[str, set[str]] = {}  # drug -> set of sources
+
+        # VICC resistance evidence
+        for vicc in self.vicc_evidence:
+            if vicc.is_resistance and vicc.drugs:
+                for drug in vicc.drugs:
+                    drug_lower = drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("VICC")
+
+        # CIViC resistance assertions
+        for assertion in self.civic_assertions:
+            if assertion.is_resistance and assertion.therapies:
+                for therapy in assertion.therapies:
+                    drug_lower = therapy.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("CIViC")
+
+        # CGI resistance biomarkers
+        for biomarker in self.cgi_biomarkers:
+            if biomarker.association and "RESIST" in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("CGI")
+
+        # Literature resistance signals
+        if self.literature_knowledge and self.literature_knowledge.resistant_to:
+            for entry in self.literature_knowledge.resistant_to:
+                drug = entry.get("drug", "")
+                if drug:
+                    drug_lower = drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("Literature")
+
+        if not resistance_drugs:
+            return ""
+
+        # Check for conflicting evidence
+        conflicting_drugs: dict[str, str] = {}  # drug -> conflict description
+        if self.evidence_gaps:
+            from oncomind.models.evidence.evidence_gaps import GapCategory
+            discordant_gaps = self.evidence_gaps.get_gaps_by_category(GapCategory.DISCORDANT)
+            for gap in discordant_gaps:
+                if "Conflicting drug response for" in gap.description:
+                    # Extract drug name from "Conflicting drug response for X: ..."
+                    parts = gap.description.split(":")
+                    if parts:
+                        drug_part = parts[0].replace("Conflicting drug response for", "").strip()
+                        conflicting_drugs[drug_part.lower()] = gap.description
+
+        # Group drugs by class for synthesis
+        summaries = []
+        gene = self.identifiers.gene.upper()
+
+        # EGFR TKI grouping
+        egfr_1st_2nd_gen = {"erlotinib", "gefitinib", "afatinib", "lapatinib", "dacomitinib", "neratinib"}
+        egfr_3rd_gen = {"osimertinib"}
+
+        # Build synthesized summary
+        if gene == "EGFR":
+            resistant_1st_2nd = [d for d in resistance_drugs if d in egfr_1st_2nd_gen]
+            resistant_3rd = [d for d in resistance_drugs if d in egfr_3rd_gen]
+            other_drugs = [d for d in resistance_drugs if d not in egfr_1st_2nd_gen and d not in egfr_3rd_gen]
+
+            if resistant_1st_2nd:
+                drug_list = ", ".join(sorted(resistant_1st_2nd))
+                summaries.append(f"Resistance to 1st/2nd-gen EGFR TKIs ({drug_list})")
+
+            for drug in resistant_3rd:
+                if drug in conflicting_drugs:
+                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                else:
+                    summaries.append(f"Resistance to {drug}")
+
+            for drug in other_drugs[:3]:
+                if drug in conflicting_drugs:
+                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                else:
+                    sources = ", ".join(sorted(resistance_drugs[drug]))
+                    summaries.append(f"{drug} resistance ({sources})")
+        else:
+            # Generic grouping for non-EGFR genes
+            # First add any conflicting drugs
+            for drug in list(resistance_drugs.keys())[:8]:
+                if drug in conflicting_drugs:
+                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                else:
+                    sources = ", ".join(sorted(resistance_drugs[drug]))
+                    summaries.append(f"{drug} resistance ({sources})")
+
+        return "; ".join(summaries[:5]) if summaries else ""
+
+    def get_sensitivity_summary(self) -> str:
+        """Get a synthesized summary of sensitivity evidence.
+
+        Returns a narrative summary grouping drugs by evidence tier (FDA > Clinical > Preclinical).
+        Example: "FDA-approved: osimertinib; Clinical evidence: gefitinib, erlotinib"
+        """
+        # Collect drugs by evidence tier
+        fda_drugs: set[str] = set()
+        clinical_drugs: set[str] = set()  # VICC, CIViC, CGI
+        literature_drugs: set[str] = set()
+
+        tumor_type = self.context.tumor_type or "cancer"
+
+        # FDA approvals (strongest evidence)
+        for approval in self.fda_approvals:
+            # Prefer generic name for consistency
+            drug = approval.generic_name or approval.brand_name or approval.drug_name
+            if drug:
+                fda_drugs.add(drug.lower())
+
+        # VICC sensitivity evidence
+        for vicc in self.vicc_evidence:
+            if vicc.is_sensitivity and vicc.drugs:
+                for drug in vicc.drugs:
+                    drug_lower = drug.lower()
+                    if drug_lower not in fda_drugs:
+                        clinical_drugs.add(drug_lower)
+
+        # CIViC sensitivity assertions
+        for assertion in self.civic_assertions:
+            if assertion.is_sensitivity and assertion.therapies:
+                for therapy in assertion.therapies:
+                    drug_lower = therapy.lower()
+                    if drug_lower not in fda_drugs:
+                        clinical_drugs.add(drug_lower)
+
+        # CGI sensitivity biomarkers
+        for biomarker in self.cgi_biomarkers:
+            if biomarker.association and "RESIST" not in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in fda_drugs:
+                        clinical_drugs.add(drug_lower)
+
+        # Literature sensitivity signals
+        if self.literature_knowledge and self.literature_knowledge.sensitive_to:
+            for entry in self.literature_knowledge.sensitive_to:
+                drug = entry.get("drug", "")
+                if drug:
+                    drug_lower = drug.lower()
+                    if drug_lower not in fda_drugs and drug_lower not in clinical_drugs:
+                        literature_drugs.add(drug_lower)
+
+        # Build synthesized summary
+        summaries = []
+
+        if fda_drugs:
+            drug_list = ", ".join(sorted(fda_drugs)[:5])
+            summaries.append(f"FDA-approved: {drug_list}")
+
+        if clinical_drugs:
+            drug_list = ", ".join(sorted(clinical_drugs)[:5])
+            summaries.append(f"Clinical evidence: {drug_list}")
+
+        if literature_drugs and not fda_drugs and not clinical_drugs:
+            # Only show literature if no higher-tier evidence
+            drug_list = ", ".join(sorted(literature_drugs)[:3])
+            summaries.append(f"Literature signals: {drug_list}")
+
+        return "; ".join(summaries) if summaries else ""
+
     def get_evidence_summary_for_llm(self) -> str:
         """Generate a compact evidence summary for LLM prompt consumption."""
-        lines = [f"Evidence for {self.identifiers.gene} {self.identifiers.variant}:\n"]
+        lines = []
         tumor_type = self.context.tumor_type
 
-        # FDA Approvals
+        # FDA Approvals - very compact
         if self.fda_approvals:
-            lines.append(f"FDA Approved Drugs ({len(self.fda_approvals)}):")
-            for approval in self.fda_approvals[:5]:
-                drug = approval.brand_name or approval.generic_name or approval.drug_name
+            fda_drugs = []
+            for approval in self.fda_approvals[:4]:
+                drug = approval.generic_name or approval.brand_name or approval.drug_name
                 if tumor_type:
                     parsed = approval.parse_indication_for_tumor(tumor_type)
                     if parsed['tumor_match']:
-                        line_info = parsed['line_of_therapy'].upper()
-                        approval_info = parsed['approval_type'].upper()
-                        lines.append(f"  - {drug} [FOR {tumor_type.upper()}]:")
-                        lines.append(f"      Line of therapy: {line_info}")
-                        lines.append(f"      Approval type: {approval_info}")
-                        lines.append(f"      Excerpt: {parsed['indication_excerpt'][:200]}...")
+                        line_info = parsed['line_of_therapy']
+                        fda_drugs.append(f"{drug} ({line_info})")
                     else:
-                        indication = (approval.indication or "")[:300]
-                        lines.append(f"  - {drug} [DIFFERENT TUMOR TYPE]: {indication}...")
+                        fda_drugs.append(f"{drug} (other indication)")
                 else:
-                    indication = (approval.indication or "")[:300]
-                    date_str = f" (Approved: {approval.approval_date})" if approval.approval_date else ""
-                    lines.append(f"  - {drug}{date_str}: {indication}...")
-            lines.append("")
+                    fda_drugs.append(drug)
+            lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
 
-        # CGI Biomarkers
+        # CGI Biomarkers - compact
         if self.cgi_biomarkers:
             approved = [b for b in self.cgi_biomarkers if b.fda_approved]
             if approved:
-                resistance = [b for b in approved if b.association and 'RESIST' in b.association.upper()]
-                sensitivity = [b for b in approved if b.association and 'RESIST' not in b.association.upper()]
-
+                resistance = [b.drug for b in approved if b.association and 'RESIST' in b.association.upper()]
+                sensitivity = [b.drug for b in approved if b.association and 'RESIST' not in b.association.upper()]
                 if resistance:
-                    lines.append(f"CGI FDA-APPROVED RESISTANCE MARKERS ({len(resistance)}):")
-                    for b in resistance[:5]:
-                        lines.append(f"  - {b.drug} [{b.association.upper()}] in {b.tumor_type or 'solid tumors'} - Evidence: {b.evidence_level}")
-                    lines.append("")
-
+                    lines.append(f"CGI Resistance: {', '.join(resistance[:3])}")
                 if sensitivity:
-                    lines.append(f"CGI FDA-Approved Sensitivity Biomarkers ({len(sensitivity)}):")
-                    for b in sensitivity[:5]:
-                        lines.append(f"  - {b.drug} [{b.association}] in {b.tumor_type or 'solid tumors'} - Evidence: {b.evidence_level}")
-                    lines.append("")
+                    lines.append(f"CGI Sensitivity: {', '.join(sensitivity[:3])}")
 
-        # CIViC Assertions
+        # CIViC Assertions - compact
         if self.civic_assertions:
-            predictive_tier_i = [a for a in self.civic_assertions
-                                  if a.amp_tier == "Tier I" and a.assertion_type == "PREDICTIVE"]
-            if predictive_tier_i:
-                lines.append(f"CIViC PREDICTIVE TIER I ASSERTIONS ({len(predictive_tier_i)}):")
-                for a in predictive_tier_i[:5]:
-                    therapies = ", ".join(a.therapies) if a.therapies else "N/A"
-                    lines.append(f"  - {a.molecular_profile}: {therapies} [{a.significance}]")
-                    lines.append(f"      AMP Level: {a.amp_level}, Disease: {a.disease}")
-                lines.append("")
+            predictive = [a for a in self.civic_assertions if a.assertion_type == "PREDICTIVE"]
+            if predictive:
+                civic_drugs = []
+                for a in predictive[:3]:
+                    therapies = ", ".join(a.therapies[:2]) if a.therapies else ""
+                    sig = "sens" if a.is_sensitivity else "res" if a.is_resistance else ""
+                    if therapies:
+                        civic_drugs.append(f"{therapies} ({sig})")
+                if civic_drugs:
+                    lines.append(f"CIViC: {'; '.join(civic_drugs)}")
 
-        # ClinVar
+        # ClinVar - one line
         if self.clinvar_significance:
             lines.append(f"ClinVar: {self.clinvar_significance}")
-            lines.append("")
 
-        # PubMed Literature
+        # PubMed Literature - compact
         if self.pubmed_articles:
             resistance_articles = [a for a in self.pubmed_articles if a.is_resistance_evidence()]
             if resistance_articles:
-                lines.append(f"PUBMED RESISTANCE LITERATURE ({len(resistance_articles)} articles):")
-                for article in resistance_articles[:3]:
-                    drugs_str = f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]" if article.drugs_mentioned else ""
-                    lines.append(f"  - PMID {article.pmid}: {article.title[:100]}...{drugs_str}")
-                lines.append("")
+                pmids = [a.pmid for a in resistance_articles[:3]]
+                lines.append(f"Literature (resistance): PMIDs {', '.join(pmids)}")
 
-        return "\n".join(lines) if len(lines) > 1 else ""
+        return "\n".join(lines) if lines else ""
 
     def get_biological_context_for_llm(self) -> str:
         """Get biological context formatted for LLM prompt.
