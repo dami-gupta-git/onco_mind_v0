@@ -107,24 +107,35 @@ class LLMService:
         if "gpt" in self.model.lower():
             completion_kwargs["response_format"] = {"type": "json_object"}
 
-        # Debug logging for LLM payload
-        logger.debug(f"LLM request: model={self.model}, temperature={self.temperature}, max_tokens={completion_kwargs.get('max_tokens')}, timeout={completion_kwargs.get('timeout')}")
+        # Log payload length at INFO level
+        input_chars = sum(len(m.get("content", "")) for m in messages)
+
+        logger.debug(f"LLM request: model={self.model}, payload={input_chars} chars")
+        logger.debug(
+            f"LLM params: temperature={self.temperature}, max_tokens={completion_kwargs.get('max_tokens')}, timeout={completion_kwargs.get('timeout')}")
+
+        # Debug logging for full LLM payload
+        logger.debug("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
-            logger.debug(f"Message[{i}] role={role}, content_length={len(content)} chars")
-
+            logger.debug(f"Message[{i}] role={role}:\n{content}")
+        logger.debug("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
         try:
             # Time the LLM API call
             t0 = time.time()
             response = await acompletion(**completion_kwargs)
             llm_time = time.time() - t0
 
-            # Log timing and input size
-            input_chars = sum(len(m.get("content", "")) for m in messages)
-            logger.debug(f"LLM call completed in {llm_time:.2f}s | input: {input_chars} chars | literature: {len(literature_summary)} chars")
+            # Log timing at INFO level
+            logger.info(f"LLM call completed in {llm_time:.2f}s")
 
             raw_content = response.choices[0].message.content.strip()
+
+            # Log raw LLM response
+            logger.debug("************************************************************")
+            logger.debug(f"LLM raw response:\n{raw_content}")
+            logger.debug("************************************************************")
 
             # Parse JSON response
             content = raw_content

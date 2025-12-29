@@ -114,6 +114,16 @@ def insight(
         logger.debug(f"Result received: evidence_sources={len(result.evidence.fda_approvals)} FDA, "
                     f"{len(result.evidence.civic_assertions)} CIViC, llm={'yes' if result.llm else 'no'}")
 
+        # LLM Insight (debug logging only)
+        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+        if result.llm:
+            logger.debug(f"LLM Insight functional_summary: {result.llm.functional_summary}")
+            logger.debug(f"LLM Insight biological_context: {result.llm.biological_context}")
+            logger.debug(f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}")
+            logger.debug(f"LLM Insight research_implications: {result.llm.research_implications}")
+            logger.debug(f"LLM Insight llm_summary: {result.llm.llm_summary}")
+        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+
         # === RENDER OUTPUT ===
 
         # Variant header with metrics
@@ -144,6 +154,16 @@ def insight(
             box=DOUBLE,
             padding=(0, 2),
         ))
+
+        # Check for LLM error and display to user
+        if result.llm and result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:"):
+            error_msg = result.llm.rationale.replace("LLM narrative generation failed: ", "")
+            console.print(Panel(
+                f"[yellow]LLM synthesis failed: {error_msg}[/yellow]\n\n[dim]Showing evidence-only results below.[/dim]",
+                title="[bold yellow]⚠ LLM Error[/bold yellow]",
+                border_style="yellow",
+                padding=(0, 2),
+            ))
 
         # Summary panel
         summary_text = result.get_summary()
@@ -204,16 +224,6 @@ def insight(
                 border_style="blue",
                 padding=(0, 2),
             ))
-
-        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-        # LLM Insight (debug logging only)
-        if result.llm:
-            logger.debug(f"LLM Insight functional_summary: {result.llm.functional_summary}")
-            logger.debug(f"LLM Insight biological_context: {result.llm.biological_context}")
-            logger.debug(f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}")
-            logger.debug(f"LLM Insight research_implications: {result.llm.research_implications}")
-            logger.debug(f"LLM Insight llm_summary: {result.llm.llm_summary}")
-        logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
         # Save JSON if requested
         if output:
@@ -281,6 +291,8 @@ def batch(
         enable_llm_mode = llm or full
 
         mode_str = "llm" if enable_llm_mode else ("literature" if enable_lit else "annotation")
+        logger.info(f"Loaded {len(variant_strs)} variants from {input_file}")
+        logger.info(f"Mode: {mode_str}")
         print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
         print(f"  Mode: {mode_str}")
 
@@ -292,22 +304,39 @@ def batch(
         )
 
         def progress_callback(current: int, total: int) -> None:
+            logger.info(f"Processing {current}/{total}...")
             print(f"  Processing {current}/{total}...", end='\r')
 
         results = await get_insights(variant_strs, config=config, progress_callback=progress_callback)
         print()  # Clear progress line
 
-        # Apply tumor types and build output
+        # Apply tumor types and build output, tracking LLM errors
         output_data = []
+        llm_errors = []
         for i, result in enumerate(results):
             if tumor_types[i]:
                 result.context.tumor_type = tumor_types[i]
             output_data.append(result.model_dump(mode="json"))
+            # Track LLM errors
+            if result.llm and result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:"):
+                error_msg = result.llm.rationale.replace("LLM narrative generation failed: ", "")
+                llm_errors.append(f"{variant_strs[i]}: {error_msg}")
 
         with open(output, "w") as f:
             json.dump(output_data, f, indent=2)
 
+        logger.info(f"Successfully processed {len(results)}/{len(variant_strs)} variants")
         print(f"\nSuccessfully processed {len(results)}/{len(variant_strs)} variants")
+
+        # Show LLM errors if any occurred
+        if llm_errors:
+            logger.warning(f"LLM errors ({len(llm_errors)}):")
+            print(f"\n⚠ LLM errors ({len(llm_errors)}):")
+            for err in llm_errors:
+                logger.warning(f"  - {err}")
+                print(f"  - {err}")
+
+        logger.info(f"Results saved to {output}")
         print(f"Results saved to {output}")
 
     asyncio.run(run_batch())
