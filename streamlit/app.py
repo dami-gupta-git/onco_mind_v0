@@ -459,43 +459,42 @@ with tab1:
     - **4/D**: Preclinical or computational evidence
     - **R1/R2**: Resistance evidence (strong/emerging)
     """)
-                        vicc_rows = []
+                        # Use markdown table for clickable source links
+                        rows = ["| Source | Drugs | Response | Disease | Level |",
+                                "|--------|-------|----------|---------|-------|"]
                         for v in vicc:
+                            source = (v.get('source') or 'vicc').upper()
+                            pub_url = v.get('publication_url')
+                            # Handle publication_url being a list or string
+                            if isinstance(pub_url, list) and pub_url:
+                                pub_url = pub_url[0]
+                            source_link = f"[{source}]({pub_url})" if pub_url else source
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
-                            vicc_rows.append({
-                                "Source": (v.get('source') or 'vicc').upper(),
-                                "Drugs": drugs,
-                                "Response": v.get('response_type', 'Unknown'),
-                                "Disease": (v.get('disease', '') or '')[:25],
-                                "Level": v.get('evidence_level', ''),
-                            })
-                        st.dataframe(
-                            pd.DataFrame(vicc_rows),
-                            width="stretch",
-                            hide_index=True,
-                            height=min(300, 35 * (len(vicc_rows) + 1))
-                        )
+                            response = v.get('response_type', 'Unknown')
+                            disease = (v.get('disease', '') or '')[:25]
+                            level = v.get('evidence_level', '')
+                            rows.append(f"| {source_link} | {drugs} | {response} | {disease} | {level} |")
+                        st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # CGI tab
                 if cgi_biomarkers:
                     with tabs[tab_idx]:
-                        cgi_rows = []
+                        # Use markdown table with links to CGI database
+                        rows = ["| Drug | Association | Tumor Type | Level |",
+                                "|------|-------------|------------|-------|"]
                         for b in cgi_biomarkers:
-                            cgi_rows.append({
-                                "Drug": b.get('drug', 'Unknown'),
-                                "Association": b.get('association', 'Unknown'),
-                                "Tumor Type": (b.get('tumor_type', '') or '')[:25],
-                                "Level": b.get('evidence_level', ''),
-                            })
-                        if cgi_rows:
-                            st.dataframe(
-                                pd.DataFrame(cgi_rows),
-                                width="stretch",
-                                hide_index=True,
-                                height=min(300, 35 * (len(cgi_rows) + 1))
-                            )
+                            drug = b.get('drug', 'Unknown')
+                            gene = b.get('gene', gene_display)
+                            # Link to CGI biomarkers search for this gene
+                            cgi_url = f"https://www.cancergenomeinterpreter.org/biomarkers?gene={gene}"
+                            drug_link = f"[{drug}]({cgi_url})"
+                            association = b.get('association', 'Unknown')
+                            tumor = (b.get('tumor_type', '') or '')[:25]
+                            level = b.get('evidence_level', '')
+                            rows.append(f"| {drug_link} | {association} | {tumor} | {level} |")
+                        st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # ClinVar tab
@@ -503,11 +502,22 @@ with tab1:
                     with tabs[tab_idx]:
                         if clinvar_sig:
                             st.markdown(f"**Clinical Significance:** {clinvar_sig}")
-                        for entry in clinvar_entries:
-                            sig = entry.get('clinical_significance', 'Unknown')
-                            conds = entry.get('conditions', [])
-                            review = entry.get('review_status', '')
-                            st.markdown(f"- {sig}: {', '.join(conds) if conds else 'N/A'} ({review})")
+                        if clinvar_entries:
+                            # Use markdown table for clickable variation IDs
+                            rows = ["| Variation ID | Significance | Conditions | Review Status |",
+                                    "|--------------|--------------|------------|---------------|"]
+                            for entry in clinvar_entries:
+                                var_id = entry.get('variation_id', '')
+                                var_url = f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{var_id}/" if var_id else ''
+                                var_link = f"[{var_id}]({var_url})" if var_id and var_url else (var_id or '-')
+                                sig = entry.get('clinical_significance', 'Unknown')
+                                conds = entry.get('conditions', [])
+                                conds_str = ', '.join(conds)[:30] if conds else 'N/A'
+                                review = entry.get('review_status', '')
+                                rows.append(f"| {var_link} | {sig} | {conds_str} | {review} |")
+                            st.markdown("\n".join(rows))
+                        elif not clinvar_sig:
+                            st.info("No ClinVar entries found")
                     tab_idx += 1
 
                 # COSMIC tab
@@ -526,7 +536,21 @@ with tab1:
                         ambiguous_trials = [t for t in trials if t.get('match_scope') == 'ambiguous']
                         gene_only_trials = [t for t in trials if not t.get('variant_specific', False)]
 
-                        trial_rows = []
+                        # Show counts and tumor filter status
+                        tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else "across **all cancer types**"
+                        count_parts = []
+                        if len(specific_trials) > 0:
+                            count_parts.append(f"🎯 **{len(specific_trials)}** variant")
+                        if len(ambiguous_trials) > 0:
+                            count_parts.append(f"⚠️ **{len(ambiguous_trials)}** broad")
+                        if len(gene_only_trials) > 0:
+                            count_parts.append(f"🧬 **{len(gene_only_trials)}** gene")
+                        count_parts.append(tumor_filter_note)
+                        st.caption(" &nbsp;|&nbsp; ".join(count_parts))
+
+                        # Use markdown table for clickable NCT IDs
+                        rows = ["| Match | NCT ID | Phase | Status | Title |",
+                                "|-------|--------|-------|--------|-------|"]
                         for t in trials:
                             matched_biomarker = t.get('matched_biomarker', '')
                             match_scope = t.get('match_scope')
@@ -541,51 +565,31 @@ with tab1:
                             else:
                                 match_display = f"🧬 {matched_biomarker}" if matched_biomarker else "🧬 Gene"
 
-                            trial_rows.append({
-                                "Matches On": match_display,
-                                "NCT ID": t.get('nct_id', ''),
-                                "Phase": t.get('phase', 'N/A'),
-                                "Status": t.get('status', ''),
-                                "Title": (t.get('title', '') or '')[:50] + "...",
-                            })
-
-                        # Show counts and tumor filter status
-                        tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else "across **all cancer types**"
-                        count_parts = []
-                        if len(specific_trials) > 0:
-                            count_parts.append(f"🎯 **{len(specific_trials)}** variant")
-                        if len(ambiguous_trials) > 0:
-                            count_parts.append(f"⚠️ **{len(ambiguous_trials)}** broad")
-                        if len(gene_only_trials) > 0:
-                            count_parts.append(f"🧬 **{len(gene_only_trials)}** gene")
-                        count_parts.append(tumor_filter_note)
-                        st.caption(" &nbsp;|&nbsp; ".join(count_parts))
-
-                        st.dataframe(
-                            pd.DataFrame(trial_rows),
-                            width="stretch",
-                            hide_index=True,
-                            height=min(300, 35 * (len(trial_rows) + 1))
-                        )
+                            nct_id = t.get('nct_id', '')
+                            nct_url = t.get('url') or f"https://clinicaltrials.gov/study/{nct_id}" if nct_id else ''
+                            nct_link = f"[{nct_id}]({nct_url})" if nct_id and nct_url else nct_id
+                            phase = t.get('phase', 'N/A')
+                            status = t.get('status', '')
+                            title = (t.get('title', '') or '')[:50] + "..."
+                            rows.append(f"| {match_display} | {nct_link} | {phase} | {status} | {title} |")
+                        st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # Literature tab
                 if articles:
                     with tabs[tab_idx]:
-                        article_rows = []
+                        # Use markdown table for clickable PMIDs
+                        rows = ["| PMID | Year | Journal | Title |",
+                                "|------|------|---------|-------|"]
                         for a in articles:
-                            article_rows.append({
-                                "PMID": a.get('pmid', ''),
-                                "Year": a.get('year', ''),
-                                "Journal": (a.get('journal', '') or '')[:15],
-                                "Title": (a.get('title', '') or '')[:50] + "...",
-                            })
-                        st.dataframe(
-                            pd.DataFrame(article_rows),
-                            width="stretch",
-                            hide_index=True,
-                            height=min(300, 35 * (len(article_rows) + 1))
-                        )
+                            pmid = a.get('pmid', '')
+                            url = a.get('url') or f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ''
+                            pmid_link = f"[{pmid}]({url})" if pmid and url else pmid
+                            year = a.get('year', '')
+                            journal = (a.get('journal', '') or '')[:20]
+                            title = (a.get('title', '') or '')[:50] + "..."
+                            rows.append(f"| {pmid_link} | {year} | {journal} | {title} |")
+                        st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # Research tab
