@@ -1,17 +1,13 @@
 Example Screenshots  
-TP53 p.G245S in Breast Cancer  
-<img width="901" height="620" alt="image" src="https://github.com/user-attachments/assets/53567516-bc18-4d32-af24-d978b4d42ac4" />
-<img width="866" height="665" alt="image" src="https://github.com/user-attachments/assets/caf96c18-3396-4567-aab7-65d1184b03f3" />
-<img width="1013" height="588" alt="image" src="https://github.com/user-attachments/assets/ebb21509-a2cb-4c64-bf39-bc2d84903902" />  
+AKT1 E17K in Breast Cancer
+<img width="1610" height="455" alt="image" src="https://github.com/user-attachments/assets/da362b10-e726-412f-900d-263be9e4bfb1" />
+<img width="1655" height="542" alt="image" src="https://github.com/user-attachments/assets/e86e1c4a-331a-4169-be2d-d689a5830a8c" />
 
- AKT1 E17K in Breast Cancer  
- <img width="765" height="587" alt="image" src="https://github.com/user-attachments/assets/9a3326ec-2c20-4e3e-a573-8b1d6f2502fc" />
-<img width="907" height="571" alt="image" src="https://github.com/user-attachments/assets/065987b6-4cd5-442f-aa2a-69686a8c643b" />
+KIT D816V in GIST
 
-JAK1 P652L in Melanoma  
-<img width="809" height="574" alt="image" src="https://github.com/user-attachments/assets/a45ad948-2b62-4f8d-87b1-10f2b76ef79f" />
-<img width="743" height="537" alt="image" src="https://github.com/user-attachments/assets/a73a9bfa-5d25-4a99-9fa8-81ef7c946a40" />
-<img width="875" height="525" alt="image" src="https://github.com/user-attachments/assets/d4d4e4be-9047-4e36-ab43-317fe3e5c573" />
+<img width="1589" height="645" alt="image" src="https://github.com/user-attachments/assets/d7920b5c-fc52-4376-b072-89ac687e08de" />
+<img width="1637" height="617" alt="image" src="https://github.com/user-attachments/assets/da789775-9a14-463a-9171-b168c33228d6" />
+
 
 
 
