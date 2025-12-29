@@ -59,9 +59,10 @@ st.caption("**Note:** This tool is for research purposes only. Clinical decision
 MODELS = {
     "OpenAI GPT-4o-mini": "gpt-4o-mini",
     "OpenAI GPT-4o": "gpt-4o",
-    "Anthropic Claude 3 Haiku": "claude-3-haiku-20240307",
+    "Anthropic Claude Sonnet 4": "claude-sonnet-4-20250514",
+    "Anthropic Claude 3.5 Haiku": "claude-3-5-haiku-20241022",
     "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
-    "Groq Llama 3.1 70B": "groq/llama-3.1-70b-versatile"
+    "xAI Grok 3": "xai/grok-3",
 }
 
 # Pre-populated example variants (Gene, Variant, Tumor Type)

@@ -65,7 +65,7 @@ class CBioPortalEvidence(EvidenceItemBase):
         return None
 
     def to_prompt_context(self) -> str:
-        """Format cBioPortal evidence for LLM prompt.
+        """Format cBioPortal evidence for LLM prompt (compact version).
 
         Returns:
             Formatted string with prevalence and co-mutation context
@@ -75,7 +75,7 @@ class CBioPortalEvidence(EvidenceItemBase):
 
         lines = []
 
-        # Build source citation that must be used inline with statistics
+        # Build source citation once at the end
         tumor_str = self.tumor_type or "pan-cancer"
         study_url = self.get_study_url()
         study_display = self.study_name or self.study_id
@@ -84,49 +84,29 @@ class CBioPortalEvidence(EvidenceItemBase):
         else:
             source_cite = f"cBioPortal ({study_display})"
 
-        # Show study name in cohort description
-        study_desc = f" ({self.study_name})" if self.study_name else ""
-        lines.append(f"Study: {self.study_id}{study_desc}")
-        lines.append(f"Cohort: {self.total_samples} {tumor_str} samples")
-        lines.append("")
+        # Compact header
+        lines.append(f"Study: {self.study_id} ({self.total_samples} {tumor_str} samples)")
 
-        # Prevalence - embed source citation directly with each statistic
-        lines.append("PREVALENCE (copy the source citation when quoting these numbers):")
-        lines.append(f"  {self.gene} mutations: {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples}) - cite as: ({source_cite})")
+        # Prevalence - compact format
+        lines.append(f"Prevalence: {self.gene} {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples})")
         if self.variant and self.samples_with_exact_variant > 0:
-            lines.append(f"  {self.gene} {self.variant} specifically: {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples}) - cite as: ({source_cite})")
-        elif self.variant:
-            lines.append(f"  {self.gene} {self.variant} specifically: Not observed in this cohort")
-        lines.append("")
+            lines.append(f"  {self.gene} {self.variant}: {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples})")
 
-        # Co-occurring mutations
+        # Co-occurring mutations - top 3 only, compact format
         if self.co_occurring:
-            lines.append("CO-OCCURRING MUTATIONS (cite source when quoting these percentages):")
-            for co in self.co_occurring[:5]:
-                or_str = f", OR={co.odds_ratio:.2f}" if co.odds_ratio else ""
-                lines.append(f"  - {co.gene}: {co.pct:.1f}% of {self.gene}-mutant samples ({co.count} cases{or_str}) - cite as: ({source_cite})")
-            if len(self.co_occurring) > 5:
-                lines.append(f"  ... and {len(self.co_occurring) - 5} more")
-            lines.append("")
+            co_strs = []
+            for co in self.co_occurring[:3]:
+                co_strs.append(f"{co.gene} {co.pct:.1f}%")
+            lines.append(f"Co-occurring: {', '.join(co_strs)}")
 
-        # Mutually exclusive mutations
+        # Mutually exclusive - top 2 only
         if self.mutually_exclusive:
-            lines.append("MUTUALLY EXCLUSIVE MUTATIONS (cite source when quoting these percentages):")
-            for me in self.mutually_exclusive[:5]:
-                or_str = f", OR={me.odds_ratio:.2f}" if me.odds_ratio else ""
-                lines.append(f"  - {me.gene}: {me.pct:.1f}% co-occurrence ({me.count} cases{or_str}) - cite as: ({source_cite})")
-            if len(self.mutually_exclusive) > 5:
-                lines.append(f"  ... and {len(self.mutually_exclusive) - 5} more")
-            lines.append("")
+            me_strs = []
+            for me in self.mutually_exclusive[:2]:
+                me_strs.append(f"{me.gene}")
+            lines.append(f"Mutually exclusive: {', '.join(me_strs)}")
 
-        # Interpretation hints for LLM
-        if self.co_occurring or self.mutually_exclusive:
-            lines.append("INTERPRETATION (cite source for all statistics):")
-            if self.co_occurring:
-                top_co = self.co_occurring[0]
-                lines.append(f"  - {self.gene} mutations frequently co-occur with {top_co.gene} ({top_co.pct:.1f}%) - cite as: ({source_cite})")
-            if self.mutually_exclusive:
-                top_me = self.mutually_exclusive[0]
-                lines.append(f"  - {self.gene} and {top_me.gene} mutations are mutually exclusive ({top_me.pct:.1f}%) - cite as: ({source_cite})")
+        # Single citation at end
+        lines.append(f"Source: {source_cite}")
 
         return "\n".join(lines)
