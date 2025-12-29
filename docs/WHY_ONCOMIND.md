@@ -103,7 +103,30 @@ suggests testing JAK inhibitor panels in cell lines harboring this mutation.
 
 **Why it matters:** You know exactly how speculative each hypothesis is. Direct clinical data is more reliable than pathway-level inference.
 
-### 4. We Output Context, Not Data Dumps
+### 4. We Track Match Specificity
+
+Not all evidence is created equal. Evidence for "BRAF mutations" is less specific than evidence for "BRAF V600E" specifically.
+
+OncoMind tracks match specificity:
+
+| Match Level | Meaning | Confidence |
+|-------------|---------|------------|
+| `variant` | Exact match (V600E → V600E) | High |
+| `codon` | Same position (V600K → V600 mutations) | Medium |
+| `gene` | Gene-level only (V600E → BRAF mutations) | Lower |
+
+```python
+therapeutic_evidence = result.evidence.get_therapeutic_evidence()
+for tx in therapeutic_evidence:
+    print(f"{tx.drug_name} [{tx.match_level}] - {tx.evidence_level}")
+# dabrafenib [variant] - FDA-approved
+# vemurafenib [variant] - FDA-approved
+# MEK inhibitors [gene] - Preclinical
+```
+
+**Why it matters:** Researchers need to know if evidence applies to their exact variant or is extrapolated from similar mutations.
+
+### 5. We Output Context, Not Data Dumps
 
 Legacy tools produce 50-page PDFs or 10,000-row CSVs. An LLM chokes on that. A human skims it.
 
@@ -120,7 +143,7 @@ EGFR T790M in NSCLC:
 
 **Why it matters:** This is the "fuel" for downstream AI systems. We're not building the car; we're providing high-octane context.
 
-### 5. No Source, No Claim
+### 6. No Source, No Claim
 
 Every assertion links to a PMID, FDA label, or database entry. If we can't cite it, we don't say it.
 
@@ -134,7 +157,7 @@ class AttributedClaim(BaseModel):
 
 **Why it matters:** "Click through to verify" beats "trust the AI."
 
-### 6. We Detect Cancer Hotspots and Near-Hotspot Variants
+### 7. We Detect Cancer Hotspots and Near-Hotspot Variants
 
 Known cancer hotspots (BRAF V600, KRAS G12, etc.) are well-characterized. But what about a rare variant 3 codons away from a hotspot?
 
@@ -147,7 +170,7 @@ BRAF V598E (near hotspot codon 600):
 
 **Why it matters:** Near-hotspot variants are high-value research targets. They may share functional properties with the hotspot but lack clinical validation.
 
-### 7. We Focus on What Happens Next
+### 8. We Focus on What Happens Next
 
 Most annotators tell you what the variant *is*. We tell you what happens *next*.
 
@@ -173,6 +196,7 @@ We don't say "trust the AI." We provide a verification framework:
 | Layer | What It Proves |
 |-------|----------------|
 | **Source Attribution** | Every claim has a receipt |
+| **Match Specificity** | You know if evidence is for exact variant, codon, or gene |
 | **Conflict Detection** | We're not hiding disagreement |
 | **Evidence Gaps** | We're honest about what we don't know |
 | **Well-Characterized Basis** | We explain *why* we think something is known |
@@ -322,6 +346,14 @@ result = await get_insight("EGFR T790M", tumor_type="NSCLC")
 print(result.evidence.civic_assertions)
 print(result.evidence.fda_approvals)
 
+# Therapeutic evidence with match specificity
+for tx in result.evidence.get_therapeutic_evidence():
+    print(f"{tx.drug_name} [{tx.match_level}] - {tx.evidence_level}")
+
+# Resistance and sensitivity summaries
+print(result.evidence.get_resistance_summary())
+print(result.evidence.get_sensitivity_summary())
+
 # Evidence assessment with basis
 gaps = result.evidence.evidence_gaps
 for wc in gaps.well_characterized_detailed:
@@ -331,6 +363,7 @@ for wc in gaps.well_characterized_detailed:
 if result.llm:
     print(result.llm.llm_summary)
     print(result.llm.research_hypotheses)  # Tagged with evidence basis
+    print(result.llm.evidence_tags)  # Transparency tags
 ```
 
 See [README.md](../README.md) for installation and full API documentation.
