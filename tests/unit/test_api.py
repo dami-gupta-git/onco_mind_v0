@@ -89,11 +89,13 @@ class TestMyVariantClient:
             ]
         }
 
-        parsed = client._parse_civic_evidence(civic_data)
+        parsed = client._parse_civic_evidence(civic_data, gene="BRAF", variant="V600E")
 
         assert len(parsed) == 1
         assert parsed[0].evidence_type == "Predictive"
         assert len(parsed[0].drugs) == 2
+        # Check match_level is set (gene-level since no molecular profile in test data)
+        assert parsed[0].match_level is not None
 
     @pytest.mark.asyncio
     async def test_parse_clinvar_evidence(self):

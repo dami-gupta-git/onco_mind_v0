@@ -384,47 +384,44 @@ with tab1:
     """)
                         if civic_assertions:
                             st.markdown("**Curated Assertions:**")
-                            rows = ["| ID | Therapies | Significance | Disease | AMP Level |",
-                                    "|-----|-----------|--------------|---------|-----------|"]
+                            rows = ["| ID | Match | Therapies | Significance | Disease | AMP Level |",
+                                    "|-----|-------|-----------|--------------|---------|-----------|"]
                             for a in civic_assertions:
                                 therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
                                 aid = a.get('aid') or a.get('id', '')
                                 url = a.get('civic_url', '')
                                 id_link = f"[{aid}]({url})" if url else aid
-                                disease = (a.get('disease', '') or '')[:40]
+                                disease = (a.get('disease', '') or '')[:35]
                                 sig = a.get('significance', 'Unknown')
                                 amp = a.get('amp_level', '')
-                                rows.append(f"| {id_link} | {therapies_str} | {sig} | {disease} | {amp} |")
+                                # Match level indicator with label
+                                match = a.get('match_level', '')
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                rows.append(f"| {id_link} | {match_display} | {therapies_str} | {sig} | {disease} | {amp} |")
                             st.markdown("\n".join(rows))
 
                         if civic_evidence:
                             if civic_assertions:
                                 st.markdown("---")
                             st.markdown(f"**Evidence Items ({len(civic_evidence)}):**")
-                            evidence_rows = []
-                            for e in civic_evidence:
+                            # Use markdown table so IDs are clickable
+                            rows = ["| ID | Match | Drugs | Significance | Disease | Level | Type |",
+                                    "|----|-------|-------|--------------|---------|-------|------|"]
+                            for e in civic_evidence[:15]:  # Limit to 15 rows
                                 drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
-                                drugs_str = drugs_str[:30] if len(drugs_str) > 30 else drugs_str
+                                drugs_str = drugs_str[:25] if len(drugs_str) > 25 else drugs_str
                                 eid = e.get('eid') or ''
                                 url = e.get('civic_url', '')
-                                evidence_rows.append({
-                                    "ID": eid,
-                                    "Drugs": drugs_str,
-                                    "Significance": e.get('clinical_significance', 'Unknown'),
-                                    "Disease": (e.get('disease', '') or '')[:25],
-                                    "Level": e.get('evidence_level', ''),
-                                    "Type": e.get('evidence_type', ''),
-                                    "Rating": e.get('trust_rating') or e.get('rating') or '',
-                                    "_url": url,
-                                })
-                            evidence_df = pd.DataFrame(evidence_rows)
-                            # Make ID clickable via column config
-                            st.dataframe(
-                                evidence_df.drop(columns=['_url']),
-                                width="stretch",
-                                hide_index=True,
-                                height=min(300, 35 * (len(evidence_rows) + 1))  # ~8 rows visible
-                            )
+                                id_link = f"[{eid}]({url})" if url else eid
+                                disease = (e.get('disease', '') or '')[:20]
+                                sig = e.get('clinical_significance', 'Unknown')
+                                level = e.get('evidence_level', '')
+                                etype = e.get('evidence_type', '')
+                                # Match level indicator with label
+                                match = e.get('match_level', '')
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                rows.append(f"| {id_link} | {match_display} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
+                            st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # VICC tab

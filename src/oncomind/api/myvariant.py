@@ -168,13 +168,68 @@ class MyVariantClient:
         response.raise_for_status()
         return response.json()
 
-    def _parse_civic_evidence(self, civic_data: dict[str, Any] | list[Any]) -> list[CIViCEvidence]:
+    def _determine_match_level(
+        self,
+        molecular_profile: str | None,
+        gene: str | None,
+        variant: str | None,
+    ) -> str:
+        """Determine the match specificity level for a molecular profile.
+
+        Args:
+            molecular_profile: The molecular profile string (e.g., "EGFR L858R")
+            gene: The queried gene symbol
+            variant: The queried variant (e.g., "L858R")
+
+        Returns:
+            Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
+        """
+        import re
+
+        if not gene:
+            return "gene"
+
+        profile_upper = (molecular_profile or "").upper()
+        gene_upper = gene.upper()
+
+        # Check if gene is even in the profile
+        if gene_upper not in profile_upper:
+            return "gene"
+
+        if not variant:
+            return "gene"
+
+        # Clean variant for comparison
+        clean_variant = variant.replace("p.", "").upper()
+
+        # Exact variant match
+        if clean_variant in profile_upper:
+            return "variant"
+
+        # Check for codon-level match (same position, different amino acid change)
+        pos_match = re.search(r'[A-Z](\d+)', clean_variant)
+        if pos_match:
+            position = pos_match.group(1)
+            codon_pattern = rf'[A-Z]{position}[A-Z]?'
+            if re.search(codon_pattern, profile_upper):
+                return "codon"
+
+        return "gene"
+
+    def _parse_civic_evidence(
+        self,
+        civic_data: dict[str, Any] | list[Any],
+        gene: str | None = None,
+        variant: str | None = None,
+    ) -> list[CIViCEvidence]:
         """Parse CIViC data into evidence objects.
 
         Supports both old API format (evidence_items) and new API format (molecularProfiles).
 
         Args:
             civic_data: Raw CIViC data from API
+            gene: Queried gene symbol (for match level tracking)
+            variant: Queried variant (for match level tracking)
 
         Returns:
             List of CIViC evidence objects
@@ -193,6 +248,7 @@ class MyVariantClient:
                 for mp in item.get("molecularProfiles", []):
                     if not isinstance(mp, dict):
                         continue
+                    mp_name = mp.get("name", "")
                     for ev_item in mp.get("evidenceItems", []):
                         # Extract disease name
                         disease_data = ev_item.get("disease", {})
@@ -201,6 +257,9 @@ class MyVariantClient:
                         # Extract therapies (new API uses "therapies" instead of "drugs")
                         therapies = ev_item.get("therapies", [])
                         drugs = [t.get("name", "") for t in therapies if isinstance(t, dict)]
+
+                        # Determine match level
+                        match_level = self._determine_match_level(mp_name, gene, variant)
 
                         evidence_list.append(
                             CIViCEvidence(
@@ -216,11 +275,19 @@ class MyVariantClient:
                                 if isinstance(ev_item.get("source"), dict)
                                 else None,
                                 rating=ev_item.get("rating"),
+                                match_level=match_level,
+                                matched_profile=mp_name or None,
                             )
                         )
             # OLD API FORMAT: evidence_items
             elif "evidence_items" in item:
+                # Try to extract molecular profile name from item context
+                item_gene = item.get("gene", {}).get("name", "") if isinstance(item.get("gene"), dict) else ""
+                item_variant = item.get("name", "")  # Old format often has variant name at top level
+                mp_name = f"{item_gene} {item_variant}".strip() if item_gene else item_variant
+
                 for ev_item in item.get("evidence_items", []):
+                    match_level = self._determine_match_level(mp_name, gene, variant)
                     evidence_list.append(
                         CIViCEvidence(
                             evidence_id=ev_item.get("id"),  # CIViC evidence item ID
@@ -241,10 +308,17 @@ class MyVariantClient:
                             if isinstance(ev_item.get("source"), dict)
                             else None,
                             rating=ev_item.get("rating"),
+                            match_level=match_level,
+                            matched_profile=mp_name or None,
                         )
                     )
             else:
                 # Direct evidence object (legacy format)
+                # Construct best-guess molecular profile from available fields
+                item_gene = item.get("gene", "")
+                mp_name = f"{item_gene} {variant}".strip() if item_gene and variant else (gene or "")
+                match_level = self._determine_match_level(mp_name, gene, variant)
+
                 evidence_list.append(
                     CIViCEvidence(
                         evidence_id=item.get("id"),  # CIViC evidence item ID
@@ -257,6 +331,8 @@ class MyVariantClient:
                         description=item.get("description"),
                         source=item.get("source"),
                         rating=item.get("rating"),
+                        match_level=match_level,
+                        matched_profile=mp_name or None,
                     )
                 )
 
@@ -531,7 +607,7 @@ class MyVariantClient:
         # Parse evidence using existing parsers (CIViC, ClinVar, COSMIC)
         civic_evidence = []
         if hit.civic:
-            civic_evidence = self._parse_civic_evidence(hit.civic)
+            civic_evidence = self._parse_civic_evidence(hit.civic, gene=gene, variant=variant)
 
         clinvar_evidence = []
         if hit.clinvar:

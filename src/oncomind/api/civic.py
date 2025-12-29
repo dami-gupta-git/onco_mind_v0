@@ -203,6 +203,54 @@ class CIViCClient:
             self._client = httpx.AsyncClient(timeout=self.timeout)
         return self._client
 
+    def _determine_match_level(
+        self,
+        molecular_profile: str,
+        gene: str,
+        variant: str | None,
+    ) -> str:
+        """Determine the match specificity level for a molecular profile.
+
+        Args:
+            molecular_profile: The molecular profile string from CIViC (e.g., "EGFR L858R")
+            gene: The queried gene symbol
+            variant: The queried variant (e.g., "L858R")
+
+        Returns:
+            Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
+        """
+        import re
+
+        profile_upper = molecular_profile.upper() if molecular_profile else ""
+        gene_upper = gene.upper()
+
+        # Check if gene is even in the profile
+        if gene_upper not in profile_upper:
+            return "gene"  # Shouldn't happen but fallback
+
+        if not variant:
+            return "gene"
+
+        # Clean variant for comparison
+        clean_variant = variant.replace("p.", "").upper()
+
+        # Exact variant match
+        if clean_variant in profile_upper:
+            return "variant"
+
+        # Check for codon-level match (same position, different amino acid change)
+        # Extract position from variant (e.g., L858R -> 858, V600E -> 600)
+        pos_match = re.search(r'[A-Z](\d+)', clean_variant)
+        if pos_match:
+            position = pos_match.group(1)
+            # Check if profile contains same position with any amino acid
+            codon_pattern = rf'[A-Z]{position}[A-Z]?'
+            if re.search(codon_pattern, profile_upper):
+                # Make sure it's actually a different variant at same position
+                return "codon"
+
+        return "gene"
+
     def _tumor_matches(self, civic_disease: str, tumor_type: str | None) -> bool:
         """Check if CIViC disease matches user tumor type.
 
@@ -429,6 +477,15 @@ class CIViCClient:
         evidence_list = []
 
         for assertion in assertions:
+            # Determine match specificity
+            match_level = self._determine_match_level(
+                assertion.molecular_profile,
+                gene,
+                variant,
+            )
+            # Check if disease matches (tumor type filtering already applied, but track it)
+            disease_match = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
+
             evidence_list.append(CIViCAssertionEvidence(
                 assertion_id=assertion.assertion_id,
                 name=assertion.name,
@@ -446,6 +503,9 @@ class CIViCClient:
                 description=assertion.description,
                 is_sensitivity=assertion.is_sensitivity(),
                 is_resistance=assertion.is_resistance(),
+                match_level=match_level,
+                matched_profile=assertion.molecular_profile,
+                disease_match=disease_match,
             ))
 
         return evidence_list
