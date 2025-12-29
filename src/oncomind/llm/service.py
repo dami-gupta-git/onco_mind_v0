@@ -106,6 +106,23 @@ class LLMService:
         if "gpt" in self.model.lower():
             completion_kwargs["response_format"] = {"type": "json_object"}
 
+        # Debug: Print the exact payload going to the LLM
+        print("\n" + "=" * 80)
+        print("🔍 LLM PAYLOAD DEBUG")
+        print("=" * 80)
+        print(f"Model: {self.model}")
+        print(f"Temperature: {self.temperature}")
+        print(f"Max tokens: {completion_kwargs.get('max_tokens')}")
+        print(f"Timeout: {completion_kwargs.get('timeout')}")
+        print("-" * 80)
+        for i, msg in enumerate(messages):
+            role = msg.get('role', 'unknown')
+            content = msg.get('content', '')
+            print(f"\n[{i}] ROLE: {role}")
+            print(f"CONTENT ({len(content)} chars):")
+            print(content[:3000] + ("..." if len(content) > 3000 else ""))
+        print("\n" + "=" * 80 + "\n")
+
         try:
             # Time the LLM API call
             t0 = time.time()

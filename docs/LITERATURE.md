@@ -6,34 +6,42 @@ This document evaluates external tools for literature synthesis and outlines Onc
 
 ## Tool Evaluation
 
-| Tool | What It Is | Recommendation |
-|------|-----------|----------------|
-| **LitLLM** | LLM API router (OpenAI, Anthropic, Cohere, etc.) | **Yes, for v0.6** - simplifies ensemble LLM orchestration |
+| Tool | What It Is | Status |
+|------|-----------|--------|
+| **litellm** | LLM API router (OpenAI, Anthropic, Cohere, etc.) | **✅ Implemented** - powers multi-provider LLM support |
 | **hint-lab/pubmed-agent** | Agentic PubMed search with tool use | No - adds complexity, we have the APIs already |
 | **llm-literature-review-tool** | Generic literature review automation | No - overkill for focused oncology use case |
 | **LitSense** | NIH semantic search for PubMed | Maybe - supplementary data source |
 | **PubMedSummarizer** | Basic LLM summarization of abstracts | No - trivial to build ourselves |
 
-### LitLLM
+### litellm ✅ IMPLEMENTED
 
 **What it does:** Unified interface to 100+ LLM providers. One API call, swap models via config.
 
-**Why it's useful for OncoMind:**
-- v0.6 requires running extraction across multiple models (GPT-4o-mini, Claude Haiku, etc.)
-- LitLLM handles the provider differences, rate limits, fallbacks
-- Makes ensemble voting straightforward
+**Current implementation in OncoMind:**
+- Integrated in `src/oncomind/llm/service.py`
+- Supports Claude (Sonnet 4, Haiku), GPT-4o, GPT-4o-mini, GPT-4-turbo
+- Handles provider differences via unified `acompletion()` interface
+- Configured via `ONCOMIND_MODEL` environment variable
 
-**Example:**
+**Supported models:**
 ```python
-from litellm import completion
-
-# Same code, different models
-response1 = completion(model="gpt-4o-mini", messages=messages)
-response2 = completion(model="claude-3-haiku-20240307", messages=messages)
-response3 = completion(model="gemini/gemini-1.5-flash", messages=messages)
+SUPPORTED_MODELS = [
+    "claude-sonnet-4-20250514",    # Default, recommended
+    "claude-3-5-haiku-20241022",   # Faster, lower cost
+    "gpt-4o-mini",                 # OpenAI
+    "gpt-4o",                      # OpenAI
+    "gpt-4-turbo",                 # OpenAI
+]
 ```
 
-**When to add:** v0.6 (Ensemble LLM & Uncertainty)
+**Usage:**
+```python
+from litellm import acompletion
+
+# Same code, different models
+response = await acompletion(model="claude-sonnet-4-20250514", messages=messages)
+```
 
 **Link:** https://github.com/BerriAI/litellm
 
@@ -93,40 +101,52 @@ response3 = completion(model="gemini/gemini-1.5-flash", messages=messages)
 
 ## OncoMind's Literature Strategy
 
-### Current Implementation (v0.1)
+### Current Implementation ✅
 
 1. **Search:** Semantic Scholar API + PubMed E-utilities
 2. **Filter:** Cancer-relevant papers, recency weighting
-3. **Extract:** LLM extracts resistance/sensitivity signals from abstracts
-4. **Synthesize:** Summary with key findings and evidence gaps
+3. **Score:** LLM-powered relevance scoring with signal type extraction
+4. **Extract:** Structured knowledge extraction into `LiteratureKnowledge` model
+5. **Synthesize:** Summary with key findings, therapeutic signals, and evidence gaps
 
-### Target Implementation (v0.2)
-
-Structured `LiteratureSynthesis` output:
+### Implemented Models
 
 ```python
-class KeyPaper(BaseModel):
-    pmid: str
-    title: str
-    year: int
-    relevance_score: float  # 0-1
-    key_finding: str
-
-class DrugSignal(BaseModel):
+class DrugResistance(BaseModel):
     drug: str
-    signal_type: Literal["sensitivity", "resistance", "mixed"]
-    evidence_level: str  # "clinical", "preclinical", "case_report"
-    mechanism: Optional[str]
-    supporting_pmids: list[str]
+    evidence: str  # "in vitro" | "preclinical" | "clinical" | "FDA-labeled"
+    mechanism: str | None
+    is_predictive: bool  # True = affects drug selection, False = just prognostic
 
-class LiteratureSynthesis(BaseModel):
-    key_papers: list[KeyPaper]
-    resistance_signals: list[DrugSignal]
-    sensitivity_signals: list[DrugSignal]
-    summary: str
-    evidence_gaps: list[str]
-    confidence: float  # 0-1, based on paper count and agreement
-    cross_paper_agreement: float  # 0-1
+class DrugSensitivity(BaseModel):
+    drug: str
+    evidence: str  # "in vitro" | "preclinical" | "clinical" | "FDA-labeled"
+    ic50_nM: str | None
+
+class LiteratureKnowledge(BaseModel):
+    mutation_type: str  # "primary" | "secondary" | "both" | "unknown"
+    is_prognostic_only: bool  # True if variant only prognostic, not predictive
+    resistant_to: list[DrugResistance]
+    sensitive_to: list[DrugSensitivity]
+    clinical_significance: str
+    evidence_level: str  # "FDA-approved" | "Phase 3" | ... | "None"
+    references: list[str]  # PMIDs
+    key_findings: list[str]
+    confidence: float  # 0-1
+```
+
+### Paper Relevance Scoring
+
+```python
+# LLM service returns structured scoring
+{
+    "relevance_score": 0.85,  # 0-1
+    "is_relevant": True,      # >= 0.6 threshold
+    "signal_type": "resistance",  # resistance | sensitivity | mixed | prognostic | unclear
+    "drugs_mentioned": ["osimertinib", "gefitinib"],
+    "key_finding": "T790M confers resistance to first-gen EGFR TKIs",
+    "confidence": 0.9
+}
 ```
 
 ### Search Strategy
@@ -176,14 +196,14 @@ One sentence, be specific about outcomes if mentioned.
 
 ### Ensemble Literature Extraction (v0.6)
 
-Run extraction across multiple LLMs:
-- GPT-4o-mini
-- Claude 3 Haiku
-- Gemini 1.5 Flash
+Run extraction across multiple LLMs and compare outputs:
+- Claude Sonnet 4 (primary)
+- GPT-4o-mini (secondary)
+- Claude 3.5 Haiku (fast/cheap)
 
 Compare outputs, flag disagreements, report confidence.
 
-**Implementation:** Use LitLLM for provider abstraction.
+**Implementation:** Already have litellm integrated. Need ensemble voting logic.
 
 ### Pre-fetched Literature Cache
 
@@ -215,6 +235,8 @@ Future feature: trace citation chains to find seminal papers and emerging work.
 | Decision | Rationale |
 |----------|-----------|
 | Build own extraction, not use generic tools | Cancer-specific logic is our IP |
-| Use LitLLM for ensemble (v0.6) | Simplifies multi-provider orchestration |
+| Use litellm for multi-provider support | ✅ Implemented - simplifies provider orchestration |
 | Skip agentic frameworks for now | Adds complexity, not needed for literature search |
 | Structured output over summaries | Enables downstream analysis and conflict detection |
+| Predictive vs prognostic distinction | Critical for clinical relevance - prognostic markers don't guide drug selection |
+| Signal type extraction | Enables automated resistance/sensitivity classification |

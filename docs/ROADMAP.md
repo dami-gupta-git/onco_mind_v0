@@ -21,13 +21,16 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 
 ### Research Intelligence
 - Evidence gap detection (`gap_detector.py`)
-  - Gap categories: functional, clinical, tumor_type, drug_response, resistance, preclinical, prevalence, prognostic
+  - Gap categories: functional, clinical, tumor_type, drug_response, resistance, preclinical, prevalence, prognostic, discordant, validation (10 categories)
   - Severity levels: critical, significant, minor
   - Suggested studies and addressable data sources per gap
-- Evidence quality assessment (comprehensive/moderate/limited/minimal)
-- Research priority scoring (high/medium/low based on gene importance + gaps)
-- Source conflict detection (in LLM output)
-- LLM-powered hypothesis generation with evidence tags
+  - Context-aware enrichment (dynamic suggestions based on actual evidence)
+  - Hotspot and near-hotspot detection (via cancerhotspots.org integration)
+- `CharacterizedAspect` model with basis explanations for what's well-characterized
+- Evidence quality assessment (comprehensive/moderate/limited/minimal) using net scoring
+- Research priority scoring (very_high/high/medium/low based on gene importance + gap profile)
+- Cross-source conflict detection (CGI vs CIViC vs VICC)
+- LLM-powered hypothesis generation with evidence basis tags
 - Cited sources for all claims (enforced in prompts)
 
 ### Therapeutic Evidence Model
@@ -37,12 +40,16 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
   - Mechanism of action
   - Quantitative data (IC50, response rates)
   - Source attribution and PMIDs
+  - Match specificity tracking (variant/codon/gene level)
+  - Cell lines tested for preclinical data
+  - Confidence scoring
 
 ### Literature
 - Semantic Scholar + PubMed search
-- LLM relevance scoring with signal type extraction
-- Resistance/sensitivity signal extraction
-- Structured knowledge extraction from papers
+- LLM relevance scoring with signal type extraction (resistance/sensitivity/mixed/prognostic/unclear)
+- `LiteratureKnowledge` model with structured resistance/sensitivity extraction
+- `DrugResistance` and `DrugSensitivity` models with predictive vs prognostic distinction
+- Multi-provider LLM support via litellm (Claude, GPT-4o, GPT-4o-mini, Haiku)
 
 ### Gene Context
 - Oncogene/TSG/DDR role detection
@@ -522,13 +529,13 @@ Public API/downloads.
 | Metric | Current | Q1 Target | Q2 Target |
 |--------|---------|-----------|-----------|
 | Data sources integrated | 14 | 17 | 22 |
-| Gap categories detected | 8 | 10 | 12 |
-| Avg gaps identified per query | ~3 | ~5 | ~6 |
+| Gap categories detected | 10 | 11 | 12 |
+| Avg gaps identified per query | ~4 | ~5 | ~6 |
 | Evidence quality "comprehensive" rate | ~20% | ~25% | ~30% |
 | Hypothesis generation rate | 100% | 100% | 100% |
 | User research questions answered | - | Track | Improve |
 
-*Note: Data sources increased from 12→14 with DepMap (gene essentiality + drug sensitivity) and cBioPortal integrations.*
+*Note: Data sources increased from 12→14 with DepMap (gene essentiality + drug sensitivity) and cBioPortal integrations. Gap categories expanded from 8→10 with addition of DISCORDANT and VALIDATION categories.*
 
 ### Hardcoded Data Drift
 Location: config/constants.py - DEPMAP_GENE_DEPENDENCIES_FALLBACK, DEPMAP_DRUG_SENSITIVITIES_FALLBACK

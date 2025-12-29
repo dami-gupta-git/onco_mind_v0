@@ -71,7 +71,7 @@ async def main():
     print(result.evidence.get_recommended_therapies())
 
     # LLM mode: annotation backbone + literature + research insight (~25s)
-    config = InsightConfig(enable_llm=True, llm_model="gpt-4o-mini")
+    config = InsightConfig(enable_llm=True, llm_model="claude-sonnet-4-20250514")
     result = await get_insight("MAP2K1 P124L", tumor_type="Melanoma", config=config)
 
     if result.llm:
@@ -135,6 +135,31 @@ Clinical Evidence
 
 This backbone is available even when LLM is disabled and can be consumed directly via Python, CLI, or JSON.
 
+#### Match Specificity
+
+OncoMind tracks how precisely each piece of evidence matches your query:
+
+| Match Level | Meaning | Example |
+|-------------|---------|---------|
+| `variant` | Exact variant match | BRAF V600E → evidence specifically for V600E |
+| `codon` | Same position, different change | BRAF V600K → evidence for "V600 mutations" |
+| `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
+
+This helps distinguish targeted therapies (variant-specific) from broader biomarkers (gene-level).
+
+#### Evidence Gap Analysis
+
+OncoMind automatically identifies what's well-characterized vs under-studied:
+
+```python
+gaps = result.evidence.compute_evidence_gaps()
+
+gaps.overall_evidence_quality  # "comprehensive" | "moderate" | "limited" | "minimal"
+gaps.well_characterized        # ["FDA-approved therapies", "Functional impact"]
+gaps.poorly_characterized      # ["Resistance mechanisms", "Preclinical models"]
+gaps.gaps                      # Structured list with severity and suggested studies
+```
+
 ---
 
 ### 2) Research Insight (LLM Mode)
@@ -179,15 +204,20 @@ context = panel.to_knowledge_header()
 Create a `.env` file:
 
 ```bash
-# Required for LLM research mode
+# Required for LLM research mode (Claude Sonnet 4 is the default)
+ANTHROPIC_API_KEY=your-anthropic-key
+
+# Optional: use OpenAI models instead
 OPENAI_API_KEY=your-openai-key
 
 # Optional: better literature context (used in LLM mode)
 SEMANTIC_SCHOLAR_API_KEY=your-s2-key
-
-# Optional: alternative LLM providers
-ANTHROPIC_API_KEY=your-anthropic-key
 ```
+
+**Supported LLM models:**
+- `claude-sonnet-4-20250514` (default, recommended)
+- `claude-3-5-haiku-20241022` (faster, lower cost)
+- `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
 
 ---
 

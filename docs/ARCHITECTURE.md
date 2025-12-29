@@ -168,6 +168,49 @@ else:
     sources_with_data.append("VICC")
 ```
 
+### 6. Match Specificity Tracking
+
+Evidence sources often return results at different specificity levels. OncoMind tracks this explicitly:
+
+```python
+# Each evidence item includes match_level
+class CIViCAssertionEvidence(BaseModel):
+    match_level: str | None  # "variant" | "codon" | "gene"
+    matched_profile: str | None  # The profile that was matched
+
+# Match levels:
+# - "variant": Exact match (e.g., V600E → V600E evidence)
+# - "codon": Same position (e.g., V600K → "V600 mutations" evidence)
+# - "gene": Gene-level only (e.g., V600E → "BRAF mutations" evidence)
+```
+
+This helps users distinguish between:
+- **Variant-specific** therapies (e.g., vemurafenib for BRAF V600E)
+- **Codon-level** biomarkers (e.g., EGFR exon 19 deletions)
+- **Gene-level** associations (e.g., BRCA mutations)
+
+### 7. Deterministic Evidence Gap Analysis
+
+OncoMind includes a rule-based gap detector that identifies what's well-characterized vs under-studied:
+
+```python
+# Compute gaps (no LLM required)
+gaps = evidence.compute_evidence_gaps()
+
+# Structured output
+gaps.overall_evidence_quality  # "comprehensive" | "moderate" | "limited" | "minimal"
+gaps.well_characterized        # ["FDA-approved therapies", "Functional impact"]
+gaps.poorly_characterized      # ["Resistance mechanisms", "Preclinical models"]
+gaps.gaps                      # List of EvidenceGap with severity and suggested studies
+```
+
+Gap categories:
+- **Clinical actionability**: FDA approvals, clinical trials, KB assertions
+- **Functional characterization**: Pathogenicity scores, functional studies
+- **Biological context**: Prevalence, co-mutations, pathway data
+- **Preclinical evidence**: DepMap essentiality, drug sensitivity
+- **Literature support**: PubMed coverage, resistance/sensitivity signals
+
 ## Module Details
 
 ### Public API (`api_public/insight.py`)
@@ -374,15 +417,23 @@ Result
 │   ├── cbioportal_evidence: CBioPortalEvidence | None
 │   │   ├── co_occurring, mutually_exclusive
 │   │   └── gene_prevalence_pct, variant_prevalence_pct
-│   └── depmap_evidence: DepMapEvidence | None
-│       ├── gene_dependency: GeneDependency (CERES score)
-│       ├── drug_sensitivities: list[DrugSensitivity] (IC50s)
-│       └── cell_line_models: list[CellLineModel]
+│   ├── depmap_evidence: DepMapEvidence | None
+│   │   ├── gene_dependency: GeneDependency (CERES score)
+│   │   ├── drug_sensitivities: list[DrugSensitivity] (IC50s)
+│   │   └── cell_line_models: list[CellLineModel]
+│   └── evidence_gaps: EvidenceGaps | None  ← Deterministic gap analysis
+│       ├── overall_evidence_quality: str
+│       ├── well_characterized: list[str]
+│       ├── poorly_characterized: list[str]
+│       └── gaps: list[EvidenceGap]
 └── llm: LLMInsight | None  ← Optional, when LLM mode enabled
     ├── llm_summary: str
     ├── rationale: str
-    ├── recommended_therapies: list[RecommendedTherapy]
-    ├── clinical_trials_available: bool
+    ├── evidence_quality: str
+    ├── knowledge_gaps: list[str]
+    ├── well_characterized: list[str]
+    ├── research_implications: str
+    ├── research_hypotheses: list[str]
     └── references: list[str]
 ```
 
@@ -562,7 +613,7 @@ class InsightConfig:
 
     # LLM
     enable_llm: bool = False
-    llm_model: str = "gpt-4o-mini"
+    llm_model: str = "claude-sonnet-4-20250514"  # Default: Claude Sonnet 4
     llm_temperature: float = 0.1
 
     # Limits
