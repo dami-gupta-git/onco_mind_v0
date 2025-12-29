@@ -819,6 +819,14 @@ with tab1:
         # ==============================================
         # EVIDENCE ASSESSMENT (after Evidence by Source) - in bordered card
         # ==============================================
+        # Note about match levels - displayed above both Gap Analysis and LLM Synthesis
+        st.markdown(
+            "<p style='color: #5a5a5a; font-size: 0.95rem; margin: 1rem 0 0.5rem 0;'>"
+            "⚠️ <strong>Note:</strong> Some of the evidence may only be a gene- or codon-level match, "
+            "but that is not accounted for in the quality ranking or LLM Research Synthesis.</p>",
+            unsafe_allow_html=True
+        )
+
         with st.container(border=True):
             evidence_gaps = result.get('evidence_gaps', {})
 
@@ -834,15 +842,15 @@ with tab1:
 
             # Title with badges on the right
             st.markdown(
-                f"<div style='display: flex; justify-content: space-between; align-items: center;'>"
+                f"<div style='display: flex; justify-content: space-between; align-items: flex-start;'>"
                 f"<span style='font-size: 1.5rem; font-weight: 600;'>🔍 Gap Analysis</span>"
-                f"<span style='font-size: 0.9rem;'>"
+                f"<span style='font-size: 0.9rem; text-align: right;'>"
                 f"<strong>Evidence Quality:</strong> {badge} {evidence_quality.capitalize()} &nbsp;&nbsp; "
                 f"<strong>Research Priority:</strong> {priority_badge} {display_priority}"
-                f"</span></div>",
+                f"</span></div>"
+                f"<p style='color: rgba(49, 51, 63, 0.6); font-size: 0.875rem; margin-top: 0.25rem;'>What's known vs. unknown about this variant — identifying opportunities for further research.</p>",
                 unsafe_allow_html=True
             )
-            st.caption("What's known vs. unknown about this variant — identifying opportunities for further research.")
 
             # Two tables side by side
             table_cols = st.columns(2)
