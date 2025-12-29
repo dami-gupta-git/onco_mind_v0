@@ -906,19 +906,22 @@ with tab1:
                     for item in well_characterized_detailed:
                         aspect = item.get('aspect', '')
                         basis = item.get('basis', '').lower()
-                        # Determine match string based on row type
-                        is_trial_row = 'trial' in aspect.lower()
-                        is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response'])
-                        is_fda_row = 'fda' in basis or 'actionability' in aspect.lower()
 
-                        if is_trial_row:
-                            match_str = trial_match_str
-                        elif is_fda_row:
-                            match_str = fda_match_str
-                        elif is_drug_row:
-                            match_str = drug_match_str
-                        else:
-                            match_str = ""
+                        # First check if matches_on is already set in the data
+                        match_str = item.get('matches_on', '') or ''
+
+                        # Fall back to computed match string for backwards compatibility
+                        if not match_str:
+                            is_trial_row = 'trial' in aspect.lower()
+                            is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response', 'resistance'])
+                            is_fda_row = 'fda' in basis or 'actionability' in aspect.lower()
+
+                            if is_trial_row:
+                                match_str = trial_match_str
+                            elif is_fda_row:
+                                match_str = fda_match_str
+                            elif is_drug_row:
+                                match_str = drug_match_str
 
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
@@ -1032,6 +1035,8 @@ with tab1:
                         tl_parts.append(f"Resistance: {', '.join(therapeutic_landscape['resistance_mechanisms'])}")
                     if tl_parts:
                         st.markdown(f"**Therapeutic Landscape:** {'; '.join(tl_parts)}")
+                    # NOTE: match_level_note removed from LLM output
+                    # Match level info is shown in Evidence Specificity panel instead
 
                 if not any([functional_summary, biological_context, therapeutic_landscape]):
                     st.markdown(llm_narrative)

@@ -223,38 +223,38 @@ def insight(
                 padding=(0, 2),
             ))
 
-        # Evidence Match Specificity (show if LLM mode or if we have therapeutic evidence)
-        match_summary = result.evidence.get_match_level_summary()
-        if match_summary.get('total', 0) > 0:
-            match_lines = []
-            summary_text = match_summary.get('summary_text', '')
-            if summary_text:
-                match_lines.append(f"[dim]{summary_text}[/dim]")
-
-            # Show warning if all gene-level
-            if match_summary.get('is_all_gene_level'):
-                match_lines.append("")
-                match_lines.append("[yellow]⚠️  All therapeutic evidence is gene-level[/yellow]")
-                match_lines.append("[dim]   Variant-specific drug response unknown[/dim]")
-            elif match_summary.get('has_variant_specific'):
-                v = match_summary.get('variant_count', 0)
-                c = match_summary.get('codon_count', 0)
-                g = match_summary.get('gene_count', 0)
-                match_lines.append("")
-                if v > 0:
-                    match_lines.append(f"[green]✓ {v} variant-specific[/green]")
-                if c > 0:
-                    match_lines.append(f"[yellow]○ {c} codon-level[/yellow]")
-                if g > 0:
-                    match_lines.append(f"[dim]○ {g} gene-level[/dim]")
-
-            if match_lines:
-                console.print(Panel(
-                    "\n".join(match_lines),
-                    title="[bold]Evidence Specificity[/bold]",
-                    border_style="green",
-                    padding=(0, 2),
-                ))
+        # NOTE: Evidence Specificity panel commented out pending validation
+        # match_summary = result.evidence.get_match_level_summary()
+        # if match_summary.get('total', 0) > 0:
+        #     match_lines = []
+        #     summary_text = match_summary.get('summary_text', '')
+        #     if summary_text:
+        #         match_lines.append(f"[dim]{summary_text}[/dim]")
+        #
+        #     # Show warning if all gene-level
+        #     if match_summary.get('is_all_gene_level'):
+        #         match_lines.append("")
+        #         match_lines.append("[yellow]⚠️  All therapeutic evidence is gene-level[/yellow]")
+        #         match_lines.append("[dim]   Variant-specific drug response unknown[/dim]")
+        #     elif match_summary.get('has_variant_specific'):
+        #         v = match_summary.get('variant_count', 0)
+        #         c = match_summary.get('codon_count', 0)
+        #         g = match_summary.get('gene_count', 0)
+        #         match_lines.append("")
+        #         if v > 0:
+        #             match_lines.append(f"[green]✓ {v} variant-specific[/green]")
+        #         if c > 0:
+        #             match_lines.append(f"[yellow]○ {c} codon-level[/yellow]")
+        #         if g > 0:
+        #             match_lines.append(f"[dim]○ {g} gene-level[/dim]")
+        #
+        #     if match_lines:
+        #         console.print(Panel(
+        #             "\n".join(match_lines),
+        #             title="[bold]Evidence Specificity[/bold]",
+        #             border_style="green",
+        #             padding=(0, 2),
+        #         ))
 
         # Gap Analysis panel (shown in both LLM and annotation modes)
         evidence_gaps = result.evidence.evidence_gaps
@@ -332,10 +332,6 @@ def insight(
                     tl_parts.append(f"[red]Resistance:[/red] {', '.join(tl['resistance_mechanisms'])}")
                 if tl_parts:
                     llm_lines.append(f"\n[bold]Therapeutic Landscape:[/bold]\n" + "\n".join(tl_parts))
-
-                # Match level note
-                if tl.get("match_level_note"):
-                    llm_lines.append(f"\n[yellow]⚠️  {tl['match_level_note']}[/yellow]")
 
             # Research implications
             if result.llm.research_implications:

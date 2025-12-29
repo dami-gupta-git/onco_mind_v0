@@ -90,14 +90,15 @@ class GapDetectionContext:
         self,
         aspect: str,
         basis: str,
-        category: GapCategory | None = None
+        category: GapCategory | None = None,
+        matches_on: str | None = None
     ) -> None:
         """Add a well-characterized aspect with its basis and category."""
         # Use title case for aspect
         aspect_title = aspect.title()
         self.well_characterized.append(aspect_title)
         self.well_characterized_detailed.append(
-            CharacterizedAspect(aspect=aspect_title, basis=basis, category=category)
+            CharacterizedAspect(aspect=aspect_title, basis=basis, category=category, matches_on=matches_on)
         )
 
     def add_gap(
@@ -387,10 +388,43 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             drug_sources.append(f"{n_vicc} VICC")
         if n_preclin:
             drug_sources.append(f"{n_preclin} preclinical")
+
+        # Compute match level breakdown for drug response data
+        variant_count = 0
+        codon_count = 0
+        gene_count = 0
+        for b in evidence.cgi_biomarkers:
+            level = getattr(b, 'match_level', 'gene') or 'gene'
+            if level == 'variant':
+                variant_count += 1
+            elif level == 'codon':
+                codon_count += 1
+            else:
+                gene_count += 1
+        for v in evidence.vicc_evidence:
+            level = getattr(v, 'match_level', 'gene') or 'gene'
+            if level == 'variant':
+                variant_count += 1
+            elif level == 'codon':
+                codon_count += 1
+            else:
+                gene_count += 1
+
+        # Build matches_on string
+        match_parts = []
+        if variant_count > 0:
+            match_parts.append(f"{variant_count} variant")
+        if codon_count > 0:
+            match_parts.append(f"{codon_count} codon")
+        if gene_count > 0:
+            match_parts.append(f"{gene_count} gene")
+        matches_on = ", ".join(match_parts) if match_parts else None
+
         ctx.add_well_characterized(
             "drug response",
             " + ".join(drug_sources) if drug_sources else "Drug data available",
-            category=GapCategory.DRUG_RESPONSE
+            category=GapCategory.DRUG_RESPONSE,
+            matches_on=matches_on
         )
         if has_depmap_drug_data:
             n_drugs = len(evidence.depmap_evidence.drug_sensitivities)
@@ -423,10 +457,17 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     # Collect resistance signals from all sources
     resistance_sources: list[str] = []
 
+    # Track match levels for all resistance data
+    variant_count = 0
+    codon_count = 0
+    gene_count = 0
+
     # 1. PubMed articles with resistance evidence
     resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
     if resistance_articles:
         resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
+        # PubMed articles don't have match_level, count as gene-level
+        gene_count += len(resistance_articles)
 
     # 2. CGI biomarkers with resistance association
     cgi_resistance = [
@@ -435,11 +476,27 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     ]
     if cgi_resistance:
         resistance_sources.append(f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}")
+        for b in cgi_resistance:
+            level = getattr(b, 'match_level', 'gene') or 'gene'
+            if level == 'variant':
+                variant_count += 1
+            elif level == 'codon':
+                codon_count += 1
+            else:
+                gene_count += 1
 
     # 3. CIViC assertions with is_resistance=True
     civic_resistance = [a for a in evidence.civic_assertions if a.is_resistance]
     if civic_resistance:
         resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
+        for a in civic_resistance:
+            level = getattr(a, 'match_level', 'gene') or 'gene'
+            if level == 'variant':
+                variant_count += 1
+            elif level == 'codon':
+                codon_count += 1
+            else:
+                gene_count += 1
 
     # 4. VICC evidence with resistance response types
     vicc_resistance = [
@@ -448,20 +505,48 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     ]
     if vicc_resistance:
         resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
+        for v in vicc_resistance:
+            level = getattr(v, 'match_level', 'gene') or 'gene'
+            if level == 'variant':
+                variant_count += 1
+            elif level == 'codon':
+                codon_count += 1
+            else:
+                gene_count += 1
 
     # 5. LLM-extracted literature knowledge with resistance signals
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
         drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)
         if drugs:
             resistance_sources.append(f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})")
+            # Count match levels from literature resistance entries
+            for entry in evidence.literature_knowledge.resistant_to:
+                level = getattr(entry, 'match_level', 'gene') or 'gene'
+                if level == 'variant':
+                    variant_count += 1
+                elif level == 'codon':
+                    codon_count += 1
+                else:
+                    gene_count += 1
 
     has_resistance_data = bool(resistance_sources)
 
     if has_resistance_data:
+        # Build matches_on string
+        match_parts = []
+        if variant_count > 0:
+            match_parts.append(f"{variant_count} variant")
+        if codon_count > 0:
+            match_parts.append(f"{codon_count} codon")
+        if gene_count > 0:
+            match_parts.append(f"{gene_count} gene")
+        matches_on = ", ".join(match_parts) if match_parts else None
+
         ctx.add_well_characterized(
             "resistance mechanisms",
             " + ".join(resistance_sources),
-            category=GapCategory.RESISTANCE
+            category=GapCategory.RESISTANCE,
+            matches_on=matches_on
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
