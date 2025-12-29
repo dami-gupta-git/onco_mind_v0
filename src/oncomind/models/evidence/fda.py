@@ -19,6 +19,11 @@ class FDAApproval(EvidenceItemBase):
     companion_diagnostic: str | None = None
     black_box_warning: str | None = None
     dosing_for_variant: str | None = None
+    # Match specificity tracking
+    match_level: str | None = Field(
+        default=None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+    )
 
     def parse_indication_for_tumor(self, tumor_type: str) -> dict:
         """Parse FDA indication text to extract line-of-therapy and approval type for a specific tumor."""

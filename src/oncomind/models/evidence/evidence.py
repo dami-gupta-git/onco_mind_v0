@@ -395,6 +395,7 @@ class Evidence(BaseModel):
                     tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
                     source="FDA",
                     confidence="high",
+                    match_level=approval.match_level,
                 ))
 
         # From CIViC assertions (Tier 1-2)

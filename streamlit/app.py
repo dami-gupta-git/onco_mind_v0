@@ -140,7 +140,7 @@ with tab1:
         )
     with input_cols[5]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
-        insight_btn = st.button("🔍 Go", type="primary", use_container_width=True)
+        insight_btn = st.button("🔍 Go", type="primary", width="stretch")
 
     # Example variants dropdown (experimental - below the input row)
     st.selectbox(
@@ -876,17 +876,35 @@ with tab1:
                     drug_match_parts.append(f"🧬 {drug_gene} gene")
                 drug_match_str = ", ".join(drug_match_parts) if drug_match_parts else ""
 
+                # Compute FDA approval match breakdown
+                fda_variant = len([a for a in fda_approvals if a.get('match_level') == 'variant']) if fda_approvals else 0
+                fda_codon = len([a for a in fda_approvals if a.get('match_level') == 'codon']) if fda_approvals else 0
+                fda_gene = len([a for a in fda_approvals if a.get('match_level') == 'gene']) if fda_approvals else 0
+
+                fda_match_parts = []
+                if fda_variant > 0:
+                    fda_match_parts.append(f"🎯 {fda_variant} variant")
+                if fda_codon > 0:
+                    fda_match_parts.append(f"📍 {fda_codon} codon")
+                if fda_gene > 0:
+                    fda_match_parts.append(f"🧬 {fda_gene} gene")
+                fda_match_str = ", ".join(fda_match_parts) if fda_match_parts else ""
+
                 # Build rows from well_characterized_detailed
                 wc_rows = []
                 if well_characterized_detailed:
                     for item in well_characterized_detailed:
                         aspect = item.get('aspect', '')
+                        basis = item.get('basis', '').lower()
                         # Determine match string based on row type
                         is_trial_row = 'trial' in aspect.lower()
                         is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response'])
+                        is_fda_row = 'fda' in basis or 'actionability' in aspect.lower()
 
                         if is_trial_row:
                             match_str = trial_match_str
+                        elif is_fda_row:
+                            match_str = fda_match_str
                         elif is_drug_row:
                             match_str = drug_match_str
                         else:
@@ -904,7 +922,7 @@ with tab1:
                     wc_df = pd.DataFrame(wc_rows)
                     st.dataframe(
                         wc_df,
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         height=min(300, 35 * (len(wc_rows) + 1)),
                         column_config={
@@ -919,7 +937,7 @@ with tab1:
                     if well_characterized:
                         st.markdown("**✅ Well Characterized** — _what we know_")
                         wc_df = pd.DataFrame({"Aspect": well_characterized})
-                        st.dataframe(wc_df, use_container_width=True, hide_index=True, height=min(300, 35 * (len(well_characterized) + 1)))
+                        st.dataframe(wc_df, width="stretch", hide_index=True, height=min(300, 35 * (len(well_characterized) + 1)))
 
             with table_cols[1]:
                 gaps = evidence_gaps.get('gaps', [])
@@ -948,7 +966,7 @@ with tab1:
                     st.markdown("**❓ Evidence Gaps** — _what we don't know_")
                     st.dataframe(
                         pd.DataFrame(gaps_data),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         height=min(300, 35 * (len(gaps_data) + 1)),
                         column_config={
@@ -1041,6 +1059,8 @@ with tab1:
                         else:
                             clickable_refs.append(ref_str)
                     st.markdown(f"**📚 Key References:** {', '.join(clickable_refs)}")
+
+                st.caption("_Synthesis incorporates established domain knowledge beyond queried databases._")
 
         # ==============================================
         # FOOTER: Download & Clear
