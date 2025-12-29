@@ -368,6 +368,23 @@ with tab1:
                 # CIViC tab
                 if civic_assertions or civic_evidence:
                     with tabs[tab_idx]:
+                        # Build match summary for CIViC
+                        all_civic = civic_assertions + civic_evidence
+                        civic_variant = len([c for c in all_civic if c.get('match_level') == 'variant'])
+                        civic_codon = len([c for c in all_civic if c.get('match_level') == 'codon'])
+                        civic_gene = len([c for c in all_civic if c.get('match_level') == 'gene'])
+                        civic_match_parts = []
+                        if civic_variant > 0:
+                            civic_match_parts.append(f"🎯 **{civic_variant}** variant")
+                        if civic_codon > 0:
+                            civic_match_parts.append(f"📍 **{civic_codon}** codon")
+                        if civic_gene > 0:
+                            civic_match_parts.append(f"🧬 **{civic_gene}** gene")
+                        tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else ""
+                        if civic_match_parts:
+                            civic_match_parts.append(tumor_filter_note) if tumor_filter_note else None
+                            st.caption(" &nbsp;|&nbsp; ".join([p for p in civic_match_parts if p]))
+
                         with st.expander("📖 Evidence Level Guide", expanded=False):
                             st.markdown("""
     **AMP/ASCO/CAP Tiers:**
@@ -712,54 +729,79 @@ with tab1:
                 # Therapies tab
                 if therapies:
                     with tabs[tab_idx]:
+                        # Build match summary
+                        therapy_variant = len([t for t in therapies if t.get('match_level') == 'variant'])
+                        therapy_codon = len([t for t in therapies if t.get('match_level') == 'codon'])
+                        therapy_gene = len([t for t in therapies if t.get('match_level') == 'gene'])
+                        therapy_match_parts = []
+                        if therapy_variant > 0:
+                            therapy_match_parts.append(f"🎯 **{therapy_variant}** variant")
+                        if therapy_codon > 0:
+                            therapy_match_parts.append(f"📍 **{therapy_codon}** codon")
+                        if therapy_gene > 0:
+                            therapy_match_parts.append(f"🧬 **{therapy_gene}** gene")
+                        tumor_filter_note = f"filtered by **{tumor_display}**" if tumor_display else ""
+                        if therapy_match_parts:
+                            therapy_match_parts.append(tumor_filter_note) if tumor_filter_note else None
+                            st.caption(" &nbsp;|&nbsp; ".join([p for p in therapy_match_parts if p]))
+
                         fda_approved = [t for t in therapies if t.get('evidence_level', '').lower() == 'fda-approved']
                         clinical = [t for t in therapies if t.get('evidence_level', '').lower() in ('phase 3', 'phase 2', 'phase 1', 'case report')]
                         preclinical_therapies = [t for t in therapies if t.get('evidence_level', '').lower() in ('preclinical', 'in vitro')]
 
                         if fda_approved:
                             st.markdown("**✅ FDA-Approved:**")
-                            fda_rows = []
+                            # Use markdown table for clickable links
+                            rows = ["| Drug | Match | Response | Context | Source |",
+                                    "|------|-------|----------|---------|--------|"]
                             for t in fda_approved:
                                 drug = t.get('drug_name', 'Unknown')
-                                response = t.get('response_type', '')
+                                source_url = t.get('source_url', '')
+                                drug_display = f"[{drug}]({source_url})" if source_url else drug
+                                response = t.get('response_type', '') or "Sensitivity"
                                 source = t.get('source', '')
                                 context = t.get('clinical_context', '') or ''
-                                context = context[:40] + '...' if len(context) > 40 else context
-                                fda_rows.append({
-                                    "Drug": drug,
-                                    "Response": response or "Sensitivity",
-                                    "Context": context,
-                                    "Source": source,
-                                })
-                            st.dataframe(pd.DataFrame(fda_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(fda_rows) + 1)))
+                                context = context[:30] + '...' if len(context) > 30 else context
+                                match = t.get('match_level', '')
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                rows.append(f"| {drug_display} | {match_display} | {response} | {context} | {source} |")
+                            st.markdown("\n".join(rows))
 
                         if clinical:
                             if fda_approved:
                                 st.markdown("---")
                             st.markdown("**🔬 Clinical Evidence:**")
-                            clinical_rows = []
+                            rows = ["| Drug | Match | Level | Response | Source |",
+                                    "|------|-------|-------|----------|--------|"]
                             for t in clinical:
-                                clinical_rows.append({
-                                    "Drug": t.get('drug_name', 'Unknown'),
-                                    "Level": t.get('evidence_level', ''),
-                                    "Response": t.get('response_type', '') or "-",
-                                    "Source": t.get('source', ''),
-                                })
-                            st.dataframe(pd.DataFrame(clinical_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(clinical_rows) + 1)))
+                                drug = t.get('drug_name', 'Unknown')
+                                source_url = t.get('source_url', '')
+                                drug_display = f"[{drug}]({source_url})" if source_url else drug
+                                level = t.get('evidence_level', '')
+                                response = t.get('response_type', '') or "-"
+                                source = t.get('source', '')
+                                match = t.get('match_level', '')
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                rows.append(f"| {drug_display} | {match_display} | {level} | {response} | {source} |")
+                            st.markdown("\n".join(rows))
 
                         if preclinical_therapies:
                             if fda_approved or clinical:
                                 st.markdown("---")
                             st.markdown("**🧪 Preclinical:**")
                             st.warning("⚠️ Preclinical data - not validated in humans")
-                            preclin_rows = []
+                            rows = ["| Drug | Match | Response | Source |",
+                                    "|------|-------|----------|--------|"]
                             for t in preclinical_therapies:
-                                preclin_rows.append({
-                                    "Drug": t.get('drug_name', 'Unknown'),
-                                    "Response": t.get('response_type', '') or "-",
-                                    "Source": t.get('source', ''),
-                                })
-                            st.dataframe(pd.DataFrame(preclin_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(preclin_rows) + 1)))
+                                drug = t.get('drug_name', 'Unknown')
+                                source_url = t.get('source_url', '')
+                                drug_display = f"[{drug}]({source_url})" if source_url else drug
+                                response = t.get('response_type', '') or "-"
+                                source = t.get('source', '')
+                                match = t.get('match_level', '')
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                rows.append(f"| {drug_display} | {match_display} | {response} | {source} |")
+                            st.markdown("\n".join(rows))
                     tab_idx += 1
             else:
                 st.info("No evidence found from any source")

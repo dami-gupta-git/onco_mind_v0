@@ -422,7 +422,9 @@ class Evidence(BaseModel):
                             mechanism=None,
                             tumor_types_tested=[assertion.disease] if assertion.disease else [],
                             source="CIViC",
+                            source_url=assertion.civic_url,
                             confidence="high" if assertion.amp_tier == "Tier I" else "moderate",
+                            match_level=assertion.match_level,
                         ))
 
         # From CGI biomarkers - FDA approved
@@ -449,6 +451,7 @@ class Evidence(BaseModel):
                         tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                         source="CGI",
                         confidence="high",
+                        match_level=biomarker.match_level,
                     ))
 
         # From VICC evidence
@@ -459,6 +462,9 @@ class Evidence(BaseModel):
                     if drug_key not in seen_drugs:
                         seen_drugs.add(drug_key)
 
+                        # Build source URL for VICC
+                        vicc_url = vicc.publication_url[0] if isinstance(vicc.publication_url, list) and vicc.publication_url else vicc.publication_url
+
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=drug,
                             evidence_level=self._vicc_level_to_evidence_level(vicc.evidence_level),
@@ -468,7 +474,9 @@ class Evidence(BaseModel):
                             mechanism=None,
                             tumor_types_tested=[vicc.disease] if vicc.disease else [],
                             source=f"VICC ({vicc.source})" if vicc.source else "VICC",
+                            source_url=vicc_url,
                             confidence="moderate" if vicc.evidence_level in ("A", "B") else "low",
+                            match_level=vicc.match_level,
                         ))
 
         # From preclinical biomarkers (if requested)

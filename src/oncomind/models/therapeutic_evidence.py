@@ -82,11 +82,21 @@ class TherapeuticEvidence(BaseModel):
         default_factory=list,
         description="PubMed IDs supporting this evidence"
     )
+    source_url: str | None = Field(
+        None,
+        description="URL to source evidence (e.g., CIViC assertion page)"
+    )
 
     # Confidence assessment
     confidence: str = Field(
         "low",
         description="Confidence level: high | moderate | low"
+    )
+
+    # Match specificity tracking
+    match_level: str | None = Field(
+        None,
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
     )
 
     # === Helper methods ===
