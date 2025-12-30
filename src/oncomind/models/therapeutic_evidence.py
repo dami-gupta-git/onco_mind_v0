@@ -99,6 +99,14 @@ class TherapeuticEvidence(BaseModel):
         description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
     )
 
+    # Cancer type specificity tracking
+    cancer_specificity: str | None = Field(
+        None,
+        description="Cancer type specificity: 'cancer_specific' (matches queried tumor), "
+                    "'pan_cancer' (tumor-agnostic), or specific cancer name (e.g., 'ovarian cancer') "
+                    "when evidence is for a different cancer than queried"
+    )
+
     # === Helper methods ===
 
     def is_sensitivity(self) -> bool:

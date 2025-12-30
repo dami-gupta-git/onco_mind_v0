@@ -241,3 +241,79 @@ class FDAApproval(EvidenceItemBase):
             'indication_excerpt': matched_section[:300]
         }
 
+    def extract_indication_cancer_type(self) -> str | None:
+        """Extract the primary cancer type from the FDA indication text.
+
+        Returns:
+            The cancer type string (e.g., "ovarian cancer", "melanoma") or None if not found
+        """
+        if not self.indication:
+            return None
+
+        indication_lower = self.indication.lower()
+
+        # Common cancer type patterns to look for
+        # Order matters - more specific patterns first
+        cancer_patterns = [
+            # Specific cancer types with modifiers
+            ("low-grade serous ovarian cancer", "ovarian cancer"),
+            ("high-grade serous ovarian cancer", "ovarian cancer"),
+            ("serous ovarian cancer", "ovarian cancer"),
+            ("epithelial ovarian cancer", "ovarian cancer"),
+            ("ovarian cancer", "ovarian cancer"),
+            ("non-small cell lung cancer", "NSCLC"),
+            ("nsclc", "NSCLC"),
+            ("small cell lung cancer", "small cell lung cancer"),
+            ("lung cancer", "lung cancer"),
+            ("metastatic melanoma", "melanoma"),
+            ("melanoma", "melanoma"),
+            ("colorectal cancer", "colorectal cancer"),
+            ("colon cancer", "colorectal cancer"),
+            ("rectal cancer", "colorectal cancer"),
+            ("breast cancer", "breast cancer"),
+            ("pancreatic cancer", "pancreatic cancer"),
+            ("pancreatic adenocarcinoma", "pancreatic cancer"),
+            ("thyroid cancer", "thyroid cancer"),
+            ("anaplastic thyroid cancer", "thyroid cancer"),
+            ("hepatocellular carcinoma", "hepatocellular carcinoma"),
+            ("liver cancer", "hepatocellular carcinoma"),
+            ("renal cell carcinoma", "renal cell carcinoma"),
+            ("kidney cancer", "renal cell carcinoma"),
+            ("bladder cancer", "bladder cancer"),
+            ("urothelial carcinoma", "bladder cancer"),
+            ("gastric cancer", "gastric cancer"),
+            ("stomach cancer", "gastric cancer"),
+            ("esophageal cancer", "esophageal cancer"),
+            ("glioblastoma", "glioblastoma"),
+            ("brain cancer", "brain cancer"),
+            ("prostate cancer", "prostate cancer"),
+            ("endometrial cancer", "endometrial cancer"),
+            ("uterine cancer", "endometrial cancer"),
+            ("cervical cancer", "cervical cancer"),
+            ("head and neck cancer", "head and neck cancer"),
+            ("squamous cell carcinoma of the head and neck", "head and neck cancer"),
+            ("cholangiocarcinoma", "cholangiocarcinoma"),
+            ("bile duct cancer", "cholangiocarcinoma"),
+            ("gastrointestinal stromal tumor", "GIST"),
+            ("gist", "GIST"),
+            ("acute myeloid leukemia", "AML"),
+            ("aml", "AML"),
+            ("chronic myeloid leukemia", "CML"),
+            ("cml", "CML"),
+            ("multiple myeloma", "multiple myeloma"),
+            ("lymphoma", "lymphoma"),
+            ("myelofibrosis", "myelofibrosis"),
+            ("polycythemia vera", "polycythemia vera"),
+            ("myeloproliferative", "myeloproliferative neoplasm"),
+            # Tumor-agnostic
+            ("solid tumor", "solid tumors (pan-cancer)"),
+            ("msi-h", "MSI-H tumors (pan-cancer)"),
+            ("dmmr", "dMMR tumors (pan-cancer)"),
+        ]
+
+        for pattern, cancer_type in cancer_patterns:
+            if pattern in indication_lower:
+                return cancer_type
+
+        return None
+
