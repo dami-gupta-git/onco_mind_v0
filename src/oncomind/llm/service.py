@@ -390,7 +390,7 @@ Return JSON with these exact fields:
         except Exception as e:
             logger.error(f"Paper relevance scoring error: {e}")
             return {
-                "relevance_score": 0.5,
+                "relevance_score": None,
                 "is_relevant": False,
                 "signal_type": "unclear",
                 "drugs_mentioned": [],
@@ -420,15 +420,7 @@ Return JSON with these exact fields:
             dict with structured knowledge about therapeutic implications
         """
         if not paper_contents:
-            return {
-                "mutation_type": "unknown",
-                "resistant_to": [],
-                "sensitive_to": [],
-                "clinical_significance": "No literature available for analysis",
-                "evidence_level": "None",
-                "references": [],
-                "confidence": 0.0,
-            }
+            return None
 
         # Format paper contents for the prompt
         papers_text = []
@@ -524,13 +516,4 @@ Return JSON with these exact fields:
 
         except Exception as e:
             logger.error(f"Variant knowledge extraction error: {e}")
-            return {
-                "mutation_type": "unknown",
-                "resistant_to": [],
-                "sensitive_to": [],
-                "clinical_significance": f"Error during extraction: {str(e)[:100]}",
-                "evidence_level": "None",
-                "references": [],
-                "key_findings": [],
-                "confidence": 0.0,
-            }
+            return None

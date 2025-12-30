@@ -95,24 +95,3 @@ def get_cached_cancer_genes() -> Set[str]:
     return _cancer_gene_cache or set()
 
 
-# Fallback list if API is unavailable
-# Source: OncoKB curated genes (top tier cancer genes)
-FALLBACK_CANCER_GENES: Set[str] = {
-    # Most commonly mutated cancer genes from OncoKB
-    'ABL1', 'AKT1', 'ALK', 'APC', 'AR', 'ARID1A', 'ASXL1', 'ATM', 'ATRX',
-    'BAP1', 'BCL2', 'BRAF', 'BRCA1', 'BRCA2', 'CDH1', 'CDKN2A', 'CREBBP',
-    'CTNNB1', 'DNMT3A', 'EGFR', 'EP300', 'ERBB2', 'EZH2', 'FBXW7', 'FGFR1',
-    'FGFR2', 'FGFR3', 'FLT3', 'GATA3', 'GNA11', 'GNAQ', 'GNAS', 'HNF1A',
-    'HRAS', 'IDH1', 'IDH2', 'JAK1', 'JAK2', 'JAK3', 'KDM5C', 'KDM6A',
-    'KIT', 'KMT2A', 'KMT2C', 'KMT2D', 'KRAS', 'MAP2K1', 'MAP3K1', 'MED12',
-    'MEN1', 'MET', 'MLH1', 'MPL', 'MSH2', 'MSH6', 'MTOR', 'MYC', 'MYCN',
-    'MYD88', 'NF1', 'NF2', 'NFE2L2', 'NOTCH1', 'NOTCH2', 'NPM1', 'NRAS',
-    'NTRK1', 'NTRK2', 'NTRK3', 'PALB2', 'PAX5', 'PBRM1', 'PDGFRA', 'PIK3CA',
-    'PIK3R1', 'PMS2', 'POLE', 'POLD1', 'PTCH1', 'PTEN', 'PTPN11', 'RAD51C',
-    'RAD51D', 'RB1', 'RET', 'RNF43', 'ROS1', 'RUNX1', 'SETD2', 'SF3B1',
-    'SMAD2', 'SMAD4', 'SMARCA4', 'SMARCB1', 'SMO', 'SOCS1', 'SPOP', 'STAG2',
-    'STK11', 'TET2', 'TNFAIP3', 'TP53', 'TSC1', 'TSC2', 'U2AF1', 'VHL',
-    'WT1', 'CHEK2', 'ATR', 'BRIP1', 'CDK4', 'CDK6', 'CDK12', 'CCND1',
-    'CCND2', 'CCND3', 'CCNE1', 'ERBB3', 'ERBB4', 'ESR1', 'FGFR4', 'KEAP1',
-    'MDM2', 'MDM4', 'MUTYH', 'SDHA', 'SDHB', 'SDHC', 'SDHD', 'TGFBR2',
-}
