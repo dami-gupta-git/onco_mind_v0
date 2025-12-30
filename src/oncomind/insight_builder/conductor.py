@@ -138,7 +138,7 @@ class Conductor:
 
         # Parse string input if needed
         if isinstance(variant, str):
-            parsed = parse_variant_input(variant, tumor_type)
+            parsed = (variant, tumor_type)
         else:
             parsed = variant
             if tumor_type:

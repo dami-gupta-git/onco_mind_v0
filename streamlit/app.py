@@ -77,7 +77,7 @@ EXAMPLE_VARIANTS = {
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
-    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
+    "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
     "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
     "PIK3CA H1047R - Breast Cancer": ("PIK3CA", "H1047R", "Breast Cancer"),
     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
@@ -762,27 +762,37 @@ with tab1:
                         if fda_approved:
                             st.markdown("**✅ FDA-Approved:**")
                             # Use markdown table for clickable links
-                            rows = ["| Drug | Match | Response | Context | Source |",
-                                    "|------|-------|----------|---------|--------|"]
+                            rows = ["| Drug | Locus Match | Tumor Match | Response | Source |",
+                                    "|------|-------------|-------------|----------|--------|"]
                             for t in fda_approved:
                                 drug = t.get('drug_name', 'Unknown')
                                 source_url = t.get('source_url', '')
                                 drug_display = f"[{drug}]({source_url})" if source_url else drug
                                 response = t.get('response_type', '') or "Sensitivity"
                                 source = t.get('source', '')
-                                context = t.get('clinical_context', '') or ''
-                                context = context[:30] + '...' if len(context) > 30 else context
                                 match = t.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                rows.append(f"| {drug_display} | {match_display} | {response} | {context} | {source} |")
+                                locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
+
+                                # Tumor match column
+                                cancer_spec = t.get('cancer_specificity', '')
+                                if cancer_spec == 'cancer_specific':
+                                    tumor_display = "✅ Yes"
+                                elif cancer_spec == 'pan_cancer':
+                                    tumor_display = "🌐 Pan-cancer"
+                                elif cancer_spec:
+                                    tumor_display = "⚠️ Other"
+                                else:
+                                    tumor_display = "-"
+
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {response} | {source} |")
                             st.markdown("\n".join(rows))
 
                         if clinical:
                             if fda_approved:
                                 st.markdown("---")
                             st.markdown("**🔬 Clinical Evidence:**")
-                            rows = ["| Drug | Match | Level | Response | Source |",
-                                    "|------|-------|-------|----------|--------|"]
+                            rows = ["| Drug | Locus Match | Tumor Match | Level | Response | Source |",
+                                    "|------|-------------|-------------|-------|----------|--------|"]
                             for t in clinical:
                                 drug = t.get('drug_name', 'Unknown')
                                 source_url = t.get('source_url', '')
@@ -791,8 +801,20 @@ with tab1:
                                 response = t.get('response_type', '') or "-"
                                 source = t.get('source', '')
                                 match = t.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                rows.append(f"| {drug_display} | {match_display} | {level} | {response} | {source} |")
+                                locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
+
+                                # Tumor match column
+                                cancer_spec = t.get('cancer_specificity', '')
+                                if cancer_spec == 'cancer_specific':
+                                    tumor_display = "✅ Yes"
+                                elif cancer_spec == 'pan_cancer':
+                                    tumor_display = "🌐 Pan-cancer"
+                                elif cancer_spec:
+                                    tumor_display = "⚠️ Other"
+                                else:
+                                    tumor_display = "-"
+
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {level} | {response} | {source} |")
                             st.markdown("\n".join(rows))
 
                         if preclinical_therapies:
@@ -800,8 +822,8 @@ with tab1:
                                 st.markdown("---")
                             st.markdown("**🧪 Preclinical:**")
                             st.warning("⚠️ Preclinical data - not validated in humans")
-                            rows = ["| Drug | Match | Response | Source |",
-                                    "|------|-------|----------|--------|"]
+                            rows = ["| Drug | Locus Match | Tumor Match | Response | Source |",
+                                    "|------|-------------|-------------|----------|--------|"]
                             for t in preclinical_therapies:
                                 drug = t.get('drug_name', 'Unknown')
                                 source_url = t.get('source_url', '')
@@ -809,8 +831,20 @@ with tab1:
                                 response = t.get('response_type', '') or "-"
                                 source = t.get('source', '')
                                 match = t.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                rows.append(f"| {drug_display} | {match_display} | {response} | {source} |")
+                                locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
+
+                                # Tumor match column
+                                cancer_spec = t.get('cancer_specificity', '')
+                                if cancer_spec == 'cancer_specific':
+                                    tumor_display = "✅ Yes"
+                                elif cancer_spec == 'pan_cancer':
+                                    tumor_display = "🌐 Pan-cancer"
+                                elif cancer_spec:
+                                    tumor_display = "⚠️ Other"
+                                else:
+                                    tumor_display = "-"
+
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {response} | {source} |")
                             st.markdown("\n".join(rows))
                     tab_idx += 1
             else:
@@ -916,43 +950,48 @@ with tab1:
                         basis = item.get('basis', '').lower()
 
                         # First check if matches_on is already set in the data
-                        match_str = item.get('matches_on', '') or ''
+                        locus_str = item.get('matches_on', '') or ''
 
                         # Fall back to computed match string for backwards compatibility
-                        if not match_str:
+                        if not locus_str:
                             is_trial_row = 'trial' in aspect.lower()
                             is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response', 'resistance'])
                             is_fda_row = 'fda' in basis or 'actionability' in aspect.lower()
 
                             if is_trial_row:
-                                match_str = trial_match_str
+                                locus_str = trial_match_str
                             elif is_fda_row:
-                                match_str = fda_match_str
+                                locus_str = fda_match_str
                             elif is_drug_row:
-                                match_str = drug_match_str
+                                locus_str = drug_match_str
+
+                        # Tumor match column - check for cancer mismatch
+                        cancer_mismatch = item.get('cancer_mismatch', '')
+                        if cancer_mismatch:
+                            tumor_str = "⚠️ Other"
+                        else:
+                            tumor_str = "✅ Yes"
 
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
                             "Aspect": aspect,
                             "Basis": item.get('basis', ''),
-                            "Matches On": match_str,
+                            "Locus Match": locus_str,
+                            "Tumor Match": tumor_str,
                         })
 
                 if wc_rows:
                     st.markdown("**✅ Well Characterized** — _what we know_")
-                    wc_df = pd.DataFrame(wc_rows)
-                    st.dataframe(
-                        wc_df,
-                        width="stretch",
-                        hide_index=True,
-                        height=min(300, 35 * (len(wc_rows) + 1)),
-                        column_config={
-                            "Category": st.column_config.TextColumn(width="small"),
-                            "Aspect": st.column_config.TextColumn(width="small"),
-                            "Basis": st.column_config.TextColumn(width="medium"),
-                            "Matches On": st.column_config.TextColumn(width="small"),
-                        }
-                    )
+                    # Use markdown table for text wrapping
+                    md_rows = ["| Aspect | Basis | Locus Match | Tumor Match |",
+                               "|--------|-------|-------------|-------------|"]
+                    for row in wc_rows:
+                        aspect = row.get("Aspect", "")
+                        basis = row.get("Basis", "")
+                        locus = row.get("Locus Match", "")
+                        tumor = row.get("Tumor Match", "")
+                        md_rows.append(f"| {aspect} | {basis} | {locus} | {tumor} |")
+                    st.markdown("\n".join(md_rows))
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
@@ -985,18 +1024,15 @@ with tab1:
 
                 if gaps_data:
                     st.markdown("**❓ Evidence Gaps** — _what we don't know_")
-                    st.dataframe(
-                        pd.DataFrame(gaps_data),
-                        width="stretch",
-                        hide_index=True,
-                        height=min(300, 35 * (len(gaps_data) + 1)),
-                        column_config={
-                            "Severity": st.column_config.TextColumn(width="small"),
-                            "Category": st.column_config.TextColumn(width="small"),
-                            "Description": st.column_config.TextColumn(width="medium"),
-                            "Matches On": st.column_config.TextColumn(width="small"),
-                        }
-                    )
+                    # Use markdown table for text wrapping
+                    md_rows = ["| Severity | Category | Description |",
+                               "|----------|----------|-------------|"]
+                    for row in gaps_data:
+                        severity = row.get("Severity", "")
+                        category = row.get("Category", "")
+                        desc = row.get("Description", "")
+                        md_rows.append(f"| {severity} | {category} | {desc} |")
+                    st.markdown("\n".join(md_rows))
 
             # Suggested studies (collapsible) - full width below tables
             gaps = evidence_gaps.get('gaps', [])

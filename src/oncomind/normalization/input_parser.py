@@ -130,7 +130,7 @@ def parse_variant_input(
     variant_str: str,
     tumor_type: str | None = None,
 ) -> ParsedVariant:
-    """Parse a free-text variant input string.
+    """Parse a free-text variaparse_variant_inputnt input string.
 
     Args:
         variant_str: Free-text variant input (e.g., "BRAF V600E", "EGFR L858R in NSCLC")

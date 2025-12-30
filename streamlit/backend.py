@@ -399,6 +399,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "confidence": t.confidence,
                 # Match specificity tracking
                 "match_level": t.match_level,
+                # Cancer type specificity
+                "cancer_specificity": t.cancer_specificity,
             }
             for t in therapeutic_list
         ],
@@ -428,6 +430,7 @@ def _build_evidence_gaps(evidence) -> dict:
                 "aspect": wc.aspect,
                 "basis": wc.basis,
                 "matches_on": wc.matches_on,
+                "cancer_mismatch": wc.cancer_mismatch,
             }
             for wc in gaps.well_characterized_detailed
         ],

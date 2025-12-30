@@ -91,14 +91,21 @@ class GapDetectionContext:
         aspect: str,
         basis: str,
         category: GapCategory | None = None,
-        matches_on: str | None = None
+        matches_on: str | None = None,
+        cancer_mismatch: str | None = None
     ) -> None:
         """Add a well-characterized aspect with its basis and category."""
         # Use title case for aspect
         aspect_title = aspect.title()
         self.well_characterized.append(aspect_title)
         self.well_characterized_detailed.append(
-            CharacterizedAspect(aspect=aspect_title, basis=basis, category=category, matches_on=matches_on)
+            CharacterizedAspect(
+                aspect=aspect_title,
+                basis=basis,
+                category=category,
+                matches_on=matches_on,
+                cancer_mismatch=cancer_mismatch
+            )
         )
 
     def add_gap(
@@ -308,14 +315,45 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
         n_assertions = len(evidence.civic_assertions)
         n_fda = len(evidence.fda_approvals)
         parts = []
+
+        # Check if FDA approvals match the queried tumor type
+        fda_matching = 0
+        fda_other_cancers: list[str] = []  # List of cancer types that DON'T match
+
         if n_fda:
+            tumor_type = evidence.context.tumor_type
+            for approval in evidence.fda_approvals:
+                if tumor_type and approval.indication:
+                    parsed = approval.parse_indication_for_tumor(tumor_type)
+                    if parsed.get('tumor_match'):
+                        fda_matching += 1
+                    else:
+                        # Extract what cancer it IS approved for
+                        indication_cancer = approval.extract_indication_cancer_type()
+                        if indication_cancer and "pan-cancer" not in indication_cancer.lower():
+                            if indication_cancer not in fda_other_cancers:
+                                fda_other_cancers.append(indication_cancer)
+                        else:
+                            fda_matching += 1  # pan-cancer counts as matching
+                else:
+                    fda_matching += 1  # No tumor type specified, count as matching
+
             parts.append(f"{n_fda} FDA approval{'s' if n_fda > 1 else ''}")
+
         if n_assertions:
             parts.append(f"{n_assertions} CIViC assertion{'s' if n_assertions > 1 else ''}")
+
+        # Determine cancer_mismatch value
+        cancer_mismatch = None
+        if fda_other_cancers and fda_matching == 0:
+            # ALL FDA approvals are for different cancers
+            cancer_mismatch = ", ".join(fda_other_cancers[:2])  # Show first 2
+
         ctx.add_well_characterized(
             "clinical actionability",
             " + ".join(parts) if parts else "Clinical evidence exists",
-            category=GapCategory.CLINICAL
+            category=GapCategory.CLINICAL,
+            cancer_mismatch=cancer_mismatch
         )
     else:
         ctx.add_gap(

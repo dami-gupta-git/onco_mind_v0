@@ -131,12 +131,12 @@ class LLMService:
             f"LLM params: temperature={self.temperature}, max_tokens={completion_kwargs.get('max_tokens')}, timeout={completion_kwargs.get('timeout')}")
 
         # Debug logging for full LLM payload
-        logger.debug("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        logger.debug("++++++++++++++++++++++++++LLM payload++++++++++++++++++++++++++++++++++++++++")
         for i, msg in enumerate(messages):
             role = msg.get('role', 'unknown')
             content = msg.get('content', '')
             logger.debug(f"Message[{i}] role={role}:\n{content}")
-        logger.debug("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        logger.debug("+++++++++++++++++++++++++LLM payload+++++++++++++++++++++++++++++++++++++++++")
         try:
             # Time the LLM API call
             t0 = time.time()

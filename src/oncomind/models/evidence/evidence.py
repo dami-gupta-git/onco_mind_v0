@@ -385,6 +385,9 @@ class Evidence(BaseModel):
                 if approval.generic_name and approval.brand_name:
                     drug_name = f"{approval.generic_name} ({approval.brand_name})"
 
+                # Determine cancer_specificity based on tumor type match
+                cancer_specificity = self._get_fda_cancer_specificity(approval)
+
                 evidence_list.append(TherapeuticEvidence(
                     drug_name=drug_name,
                     evidence_level="FDA-approved",
@@ -396,6 +399,7 @@ class Evidence(BaseModel):
                     source="FDA",
                     confidence="high",
                     match_level=approval.match_level,
+                    cancer_specificity=cancer_specificity,
                 ))
 
         # From CIViC assertions (Tier 1-2)
@@ -414,6 +418,9 @@ class Evidence(BaseModel):
                         else:
                             evidence_level = "Case report"
 
+                        # Determine cancer specificity
+                        cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
+
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=therapy,
                             evidence_level=evidence_level,
@@ -426,11 +433,13 @@ class Evidence(BaseModel):
                             source_url=assertion.civic_url,
                             confidence="high" if assertion.amp_tier == "Tier I" else "moderate",
                             match_level=assertion.match_level,
+                            cancer_specificity=cancer_specificity,
                         ))
 
         # From CGI biomarkers - FDA approved
         for biomarker in self.cgi_biomarkers:
-            if biomarker.fda_approved and biomarker.drug:
+            # Ensure drug is a non-empty string (not a list or empty)
+            if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
                 drug_key = biomarker.drug.lower()
                 if drug_key not in seen_drugs:
                     seen_drugs.add(drug_key)
@@ -441,6 +450,9 @@ class Evidence(BaseModel):
                             response_type = "Resistance"
                         else:
                             response_type = "Sensitivity"
+
+                    # Determine cancer specificity
+                    cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
 
                     evidence_list.append(TherapeuticEvidence(
                         drug_name=biomarker.drug,
@@ -453,6 +465,7 @@ class Evidence(BaseModel):
                         source="CGI",
                         confidence="high",
                         match_level=biomarker.match_level,
+                        cancer_specificity=cancer_specificity,
                     ))
 
         # From VICC evidence
@@ -466,6 +479,9 @@ class Evidence(BaseModel):
                         # Build source URL for VICC
                         vicc_url = vicc.publication_url[0] if isinstance(vicc.publication_url, list) and vicc.publication_url else vicc.publication_url
 
+                        # Determine cancer specificity
+                        cancer_specificity = self._get_cancer_specificity_from_disease(vicc.disease)
+
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=drug,
                             evidence_level=self._vicc_level_to_evidence_level(vicc.evidence_level),
@@ -478,12 +494,14 @@ class Evidence(BaseModel):
                             source_url=vicc_url,
                             confidence="moderate" if vicc.evidence_level in ("A", "B") else "low",
                             match_level=vicc.match_level,
+                            cancer_specificity=cancer_specificity,
                         ))
 
         # From preclinical biomarkers (if requested)
         if include_preclinical:
             for biomarker in self.preclinical_biomarkers:
-                if biomarker.drug:
+                # Ensure drug is a non-empty string (not a list or empty)
+                if biomarker.drug and isinstance(biomarker.drug, str):
                     drug_key = biomarker.drug.lower()
                     if drug_key not in seen_drugs:
                         seen_drugs.add(drug_key)
@@ -495,6 +513,9 @@ class Evidence(BaseModel):
                             else:
                                 response_type = "Sensitivity"
 
+                        # Determine cancer specificity
+                        cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=biomarker.drug,
                             evidence_level="Preclinical",
@@ -505,6 +526,8 @@ class Evidence(BaseModel):
                             tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                             source="CGI (preclinical)",
                             confidence="low",
+                            match_level=biomarker.match_level,
+                            cancer_specificity=cancer_specificity,
                         ))
 
         # Sort by evidence tier
@@ -544,6 +567,109 @@ class Evidence(BaseModel):
             if parsed.get('tumor_match'):
                 return parsed.get('line_of_therapy')
         return None
+
+    def _get_fda_cancer_specificity(self, approval) -> str:
+        """Determine cancer_specificity for an FDA approval.
+
+        Returns:
+            - "cancer_specific": if the FDA indication matches the queried tumor type
+            - The actual cancer type (e.g., "ovarian cancer"): if no match but we know the cancer
+            - "pan_cancer": if tumor-agnostic or unknown
+        """
+        # First check if there's a tumor type match
+        if self.context.tumor_type and approval.indication:
+            parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
+            if parsed.get('tumor_match'):
+                return "cancer_specific"
+
+        # No match - extract what cancer the drug IS approved for
+        indication_cancer = approval.extract_indication_cancer_type()
+        if indication_cancer:
+            # Check if it's a pan-cancer approval
+            if "pan-cancer" in indication_cancer.lower():
+                return "pan_cancer"
+            return indication_cancer
+
+        # Unknown
+        return "pan_cancer"
+
+    def _get_cancer_specificity_from_disease(self, disease: str | None) -> str:
+        """Determine cancer_specificity from a disease/tumor type string.
+
+        Compares the evidence disease against the queried tumor type.
+
+        Args:
+            disease: The disease/tumor type from the evidence (e.g., "Ovarian Cancer")
+
+        Returns:
+            - "cancer_specific": if the disease matches the queried tumor type
+            - The disease name: if no match but we have a specific disease
+            - "pan_cancer": if unknown or tumor-agnostic
+        """
+        if not disease:
+            return "pan_cancer"
+
+        queried_tumor = self.context.tumor_type
+        if not queried_tumor:
+            return "pan_cancer"
+
+        disease_lower = disease.lower()
+        queried_lower = queried_tumor.lower()
+
+        # Check for tumor-agnostic terms
+        pan_cancer_terms = [
+            "solid tumor", "all solid", "pan-cancer", "any solid",
+            "advanced solid", "all tumor", "tumor agnostic"
+        ]
+        if any(term in disease_lower for term in pan_cancer_terms):
+            return "pan_cancer"
+
+        # Build keyword mappings for flexible matching
+        tumor_keywords = {
+            'colorectal': ['colorectal', 'colon', 'rectal', 'crc', 'mcrc'],
+            'melanoma': ['melanoma'],
+            'lung': ['lung', 'nsclc', 'non-small cell'],
+            'breast': ['breast'],
+            'thyroid': ['thyroid', 'atc', 'anaplastic thyroid'],
+            'gist': ['gist', 'gastrointestinal stromal'],
+            'bladder': ['bladder', 'urothelial', 'transitional cell'],
+            'cholangiocarcinoma': ['cholangiocarcinoma', 'bile duct', 'biliary'],
+            'myeloproliferative': ['myelofibrosis', 'polycythemia vera', 'myeloproliferative', 'mpn'],
+            'ovarian': ['ovarian', 'ovary'],
+            'pancreatic': ['pancreatic', 'pancreas'],
+            'prostate': ['prostate'],
+            'gastric': ['gastric', 'stomach'],
+            'esophageal': ['esophageal', 'esophagus'],
+            'renal': ['renal', 'kidney'],
+            'hepatocellular': ['hepatocellular', 'liver', 'hcc'],
+            'endometrial': ['endometrial', 'uterine', 'uterus'],
+            'cervical': ['cervical', 'cervix'],
+            'head and neck': ['head and neck', 'hnscc', 'oral', 'laryngeal', 'pharyngeal'],
+            'glioblastoma': ['glioblastoma', 'gbm', 'glioma'],
+            'leukemia': ['leukemia', 'aml', 'cml', 'all', 'cll'],
+            'lymphoma': ['lymphoma', 'hodgkin', 'non-hodgkin'],
+            'myeloma': ['myeloma', 'multiple myeloma'],
+        }
+
+        # Find keywords for queried tumor
+        queried_keywords = []
+        for key, keywords in tumor_keywords.items():
+            if any(kw in queried_lower for kw in keywords):
+                queried_keywords = keywords
+                break
+        if not queried_keywords:
+            queried_keywords = [queried_lower]
+
+        # Check if disease matches queried tumor
+        if any(kw in disease_lower for kw in queried_keywords):
+            return "cancer_specific"
+
+        # Also check direct substring match
+        if queried_lower in disease_lower or disease_lower in queried_lower:
+            return "cancer_specific"
+
+        # No match - return the specific disease
+        return disease
 
     def _get_approval_status_from_tier(self, amp_tier: str | None) -> str:
         """Map AMP tier to approval status."""
@@ -717,28 +843,40 @@ class Evidence(BaseModel):
         """Get a synthesized summary of sensitivity evidence.
 
         Returns a narrative summary grouping drugs by evidence tier (FDA > Clinical > Preclinical).
-        Example: "FDA-approved: osimertinib; Clinical evidence: gefitinib, erlotinib"
+        Now includes cancer specificity to distinguish FDA approvals that match vs don't match
+        the queried tumor type.
+        Example: "FDA-approved for melanoma: osimertinib; FDA-approved for OTHER cancer (ovarian cancer): avutometinib"
         """
-        # Collect drugs by evidence tier
-        fda_drugs: set[str] = set()
+        # Collect drugs by evidence tier and cancer specificity
+        fda_matching_drugs: set[str] = set()  # FDA approved for THIS tumor
+        fda_other_drugs: dict[str, str] = {}  # drug -> cancer type (for other tumors)
         clinical_drugs: set[str] = set()  # VICC, CIViC, CGI
         literature_drugs: set[str] = set()
 
         tumor_type = self.context.tumor_type or "cancer"
 
-        # FDA approvals (strongest evidence)
+        # FDA approvals - now with cancer specificity
         for approval in self.fda_approvals:
-            # Prefer generic name for consistency
             drug = approval.generic_name or approval.brand_name or approval.drug_name
             if drug:
-                fda_drugs.add(drug.lower())
+                cancer_spec = self._get_fda_cancer_specificity(approval)
+                if cancer_spec == "cancer_specific":
+                    fda_matching_drugs.add(drug.lower())
+                elif cancer_spec == "pan_cancer":
+                    fda_matching_drugs.add(drug.lower())  # pan-cancer counts as matching
+                else:
+                    # FDA approved for a different cancer
+                    fda_other_drugs[drug.lower()] = cancer_spec
+
+        # All FDA drugs for deduplication
+        all_fda_drugs = fda_matching_drugs | set(fda_other_drugs.keys())
 
         # VICC sensitivity evidence
         for vicc in self.vicc_evidence:
             if vicc.is_sensitivity and vicc.drugs:
                 for drug in vicc.drugs:
                     drug_lower = drug.lower()
-                    if drug_lower not in fda_drugs:
+                    if drug_lower not in all_fda_drugs:
                         clinical_drugs.add(drug_lower)
 
         # CIViC sensitivity assertions
@@ -746,7 +884,7 @@ class Evidence(BaseModel):
             if assertion.is_sensitivity and assertion.therapies:
                 for therapy in assertion.therapies:
                     drug_lower = therapy.lower()
-                    if drug_lower not in fda_drugs:
+                    if drug_lower not in all_fda_drugs:
                         clinical_drugs.add(drug_lower)
 
         # CGI sensitivity biomarkers
@@ -754,7 +892,7 @@ class Evidence(BaseModel):
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
-                    if drug_lower not in fda_drugs:
+                    if drug_lower not in all_fda_drugs:
                         clinical_drugs.add(drug_lower)
 
         # Literature sensitivity signals
@@ -763,21 +901,29 @@ class Evidence(BaseModel):
                 drug = entry.get("drug", "")
                 if drug:
                     drug_lower = drug.lower()
-                    if drug_lower not in fda_drugs and drug_lower not in clinical_drugs:
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                         literature_drugs.add(drug_lower)
 
         # Build synthesized summary
         summaries = []
 
-        if fda_drugs:
-            drug_list = ", ".join(sorted(fda_drugs)[:5])
-            summaries.append(f"FDA-approved: {drug_list}")
+        # FDA approved for THIS tumor type
+        if fda_matching_drugs:
+            drug_list = ", ".join(sorted(fda_matching_drugs)[:5])
+            summaries.append(f"FDA-approved for {tumor_type}: {drug_list}")
+
+        # FDA approved for OTHER tumor types (IMPORTANT: LLM must know this is NOT for the queried tumor)
+        if fda_other_drugs:
+            other_parts = []
+            for drug, cancer in sorted(fda_other_drugs.items())[:3]:
+                other_parts.append(f"{drug} ({cancer})")
+            summaries.append(f"FDA-approved for OTHER cancers (NOT {tumor_type}): {', '.join(other_parts)}")
 
         if clinical_drugs:
             drug_list = ", ".join(sorted(clinical_drugs)[:5])
             summaries.append(f"Clinical evidence: {drug_list}")
 
-        if literature_drugs and not fda_drugs and not clinical_drugs:
+        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs:
             # Only show literature if no higher-tier evidence
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")

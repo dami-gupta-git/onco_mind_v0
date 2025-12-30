@@ -27,7 +27,13 @@ def is_ambiguous_variant(gene: str, variant: str) -> bool:
 
 
 Origin = Literal["kb", "trial", "inferred"]
-CancerSpecificity = Literal["cancer_specific", "pan_cancer"]
+
+# CancerSpecificity can be:
+# - "cancer_specific": evidence matches the user's queried tumor type
+# - "pan_cancer": evidence is tumor-agnostic or unknown tumor type
+# - Any other string: the specific cancer type the evidence applies to (e.g., "ovarian cancer")
+#   This is used when evidence doesn't match the queried tumor but we know what cancer it's for
+CancerSpecificity = str  # Relaxed from Literal to allow specific cancer names
 
 
 class EvidenceLevel(BaseModel):

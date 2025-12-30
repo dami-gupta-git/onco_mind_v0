@@ -58,6 +58,26 @@ EVIDENCE TAG VALIDATION (STRICT):
 
 Your narrative should read like a concise discussion section in a strong cancer paper: integrative, precise, and explicitly pointing to testable research questions, but strictly bounded by the provided evidence.
 
+=== MATCH SPECIFICITY RULES ===
+
+Evidence can match at different levels of specificity. Pay attention to these when reporting therapeutic landscape:
+
+VARIANT MATCH LEVELS:
+- VARIANT-LEVEL: Evidence specifically for this exact variant (e.g., EGFR L858R)
+- CODON-LEVEL: Evidence for the same codon position but different amino acid change
+- GENE-LEVEL: Evidence for any mutation in the gene (e.g., "EGFR mutations")
+
+CANCER TYPE MATCH:
+- CANCER-SPECIFIC: Evidence for THIS tumor type ({tumor_type})
+- OTHER CANCER: Evidence for a DIFFERENT cancer type (indicated by "FDA-approved for OTHER cancers (NOT {tumor_type})" in THERAPEUTIC SIGNALS)
+- PAN-CANCER: Evidence that applies across tumor types
+
+CRITICAL RULES:
+- If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type}): drugname (cancer)", that drug is NOT approved for {tumor_type}. Report it as "drugname (approved for [other cancer], not {tumor_type})" in therapeutic_landscape.fda_approved.
+- If all therapeutic evidence is gene-level (no variant-specific): State "Therapeutic evidence is gene-level; no variant-specific drug response data for {variant}."
+- Always indicate match specificity when citing drugs, e.g., "osimertinib (variant-specific, {tumor_type})" vs "erlotinib (gene-level)" vs "sotorasib (approved for NSCLC, not {tumor_type})"
+- Do NOT claim FDA approval for {tumor_type} if the drug is only approved for a different cancer
+
 === THERAPEUTIC SIGNALS HANDLING ===
 
 When the THERAPEUTIC SIGNALS section contains Sensitivity or Resistance data:
@@ -145,6 +165,7 @@ CALIBRATION RULES (MUST FOLLOW):
 - Do NOT assign oncogene/tumor-suppressor roles unless GENE ROLE section explicitly states it.
 - CRITICAL: If THERAPEUTIC SIGNALS section contains resistance data, you MUST include those resistance mechanisms in therapeutic_landscape.resistance_mechanisms.
 - CRITICAL: If THERAPEUTIC SIGNALS section contains sensitivity data, you MUST include those drugs in therapeutic_landscape.clinical_evidence or therapeutic_landscape.preclinical.
+- CRITICAL: Follow the MATCH SPECIFICITY RULES - always indicate when FDA approvals are for a different cancer type.
 
 CRITICAL: For biological_context, include the source citation ONCE at the end of all cBioPortal statistics. Look for "cite as: ([cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section and copy that markdown link.
 
@@ -153,8 +174,8 @@ Respond ONLY with valid JSON:
   "functional_summary": "IF overall_quality is 'limited'/'minimal': Generic gene function only (e.g., 'JAK1 encodes a tyrosine kinase involved in cytokine receptor signaling'). IF 'moderate'/'comprehensive': Variant-specific effects with citations.",
   "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {{tumor_type}}-specific data available.' Cite source ONCE at end.",
   "therapeutic_landscape": {{
-    "fda_approved": ["Drug - ONLY drugs explicitly listed in FDA APPROVALS. Empty array if none."],
-    "clinical_evidence": ["Drug - from CIViC/VICC or THERAPEUTIC SIGNALS. Empty array if none."],
+    "fda_approved": ["Drug with match specificity. If approved for {tumor_type}: 'drugname'. If approved for OTHER cancer: 'drugname (approved for X cancer, not {tumor_type})'. Empty array if none."],
+    "clinical_evidence": ["Drug - from CIViC/VICC or THERAPEUTIC SIGNALS. Include match level if gene-level only."],
     "preclinical": ["Drug - from DepMap or preclinical sources only."],
     "resistance_mechanisms": ["From THERAPEUTIC SIGNALS Resistance section."]
   }},
