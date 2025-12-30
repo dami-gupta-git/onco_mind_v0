@@ -681,14 +681,14 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                     # Only add tumor-specific entry (not the general one)
                     ctx.add_well_characterized(
                         f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
-                        "cBioPortal CCLE",
+                        "DepMap CCLE",
                         category=GapCategory.PRECLINICAL
                     )
                 else:
                     # No tumor-specific models found - add general entry + gap
                     ctx.add_well_characterized(
                         f"model cell lines ({len(mutant_models)} with mutation)",
-                        "cBioPortal CCLE",
+                        "DepMap CCLE",
                         category=GapCategory.PRECLINICAL
                     )
                     ctx.add_gap(
@@ -700,20 +700,20 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                             "Compare drug response vs other histologies",
                             f"Generate isogenic model in {ctx.tumor_type} background"
                         ],
-                        addressable_with=["cBioPortal CCLE", "Patient-derived organoids", "CRISPR knock-in"]
+                        addressable_with=["DepMap CCLE", "Patient-derived organoids", "CRISPR knock-in"]
                     )
                     ctx.add_poorly_characterized(f"{ctx.tumor_type}-specific preclinical models")
             else:
                 # No tumor type specified - add general entry
                 ctx.add_well_characterized(
                     f"model cell lines ({len(mutant_models)} with mutation)",
-                    "cBioPortal CCLE",
+                    "DepMap CCLE",
                     category=GapCategory.PRECLINICAL
                 )
         else:
             ctx.add_well_characterized(
                 f"model cell lines ({n_models} available)",
-                "cBioPortal CCLE",
+                "DepMap CCLE",
                 category=GapCategory.PRECLINICAL
             )
     else:
@@ -723,7 +723,7 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                 severity=GapSeverity.MINOR,
                 description=f"No cell line models identified for {ctx.gene} {ctx.variant}",
                 suggested_studies=["Identify cell lines with mutation", "Generate isogenic model"],
-                addressable_with=["cBioPortal CCLE", "Cellosaurus"]
+                addressable_with=["DepMap CCLE", "Cellosaurus"]
             )
             ctx.add_poorly_characterized("preclinical model systems")
 

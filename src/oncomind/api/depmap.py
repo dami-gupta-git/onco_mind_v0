@@ -79,10 +79,6 @@ class DepMapClient:
     MUTATIONS_FILE = "OmicsSomaticMutations.csv"
     MUTATIONS_RELEASE = "DepMap+Public+24Q4"
 
-    # PRISM drug sensitivity data (24Q2 release)
-    PRISM_SENSITIVITY_FILE = "Repurposing_Public_24Q2_Extended_Primary_Data_Matrix.csv"
-    PRISM_DRUGS_FILE = "Repurposing_Public_24Q2_Extended_Primary_Compound_List.csv"
-
     # CRISPR dependency data
     CRISPR_FILE = "CRISPRGeneEffect.csv"
     CRISPR_RELEASE = "DepMap+Public+24Q4"
