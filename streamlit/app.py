@@ -720,7 +720,7 @@ with tab1:
                             st.markdown("### Model Cell Lines")
                             mutant_lines = [cl for cl in cell_lines if cl.get('has_mutation')]
                             if mutant_lines:
-                                st.success(f"✅ {len(mutant_lines)} cell lines with {variant_display} mutation")
+                                st.success(f"✅ {len(mutant_lines)} cell lines with {gene_display} {variant_display} mutation")
                                 cl_rows = []
                                 for cl in mutant_lines:
                                     cl_rows.append({

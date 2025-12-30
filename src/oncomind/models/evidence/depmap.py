@@ -6,12 +6,15 @@ from oncomind.models.evidence.base import EvidenceItemBase
 
 
 class DrugSensitivity(BaseModel):
-    """Drug sensitivity data from PRISM or other screens."""
+    """Drug sensitivity data from PRISM screens.
+
+    Based on mean log2 fold change across cell lines with the mutation:
+    - log2fc <= -1.7: sensitive (drug kills cells)
+    - log2fc > -1.7: resistant (drug doesn't kill cells)
+    """
 
     drug_name: str = Field(..., description="Drug name")
-    ic50_nm: float | None = Field(None, description="IC50 in nanomolar")
-    auc: float | None = Field(None, description="Area under curve (lower = more sensitive)")
-    z_score: float | None = Field(None, description="Z-score vs wild-type (negative = more sensitive)")
+    mean_log2fc: float | None = Field(None, description="Mean log2 fold change across cell lines (more negative = more sensitive)")
     n_cell_lines: int = Field(0, description="Number of cell lines tested")
     sensitive_lines: list[str] = Field(default_factory=list, description="Names of sensitive cell lines")
 
@@ -107,13 +110,10 @@ class DepMapEvidence(EvidenceItemBase):
         return score is not None and score < threshold
 
     def get_top_sensitive_drugs(self, n: int = 5) -> list[DrugSensitivity]:
-        """Get top drugs by sensitivity (lowest AUC or IC50)."""
-        # Sort by AUC if available, then IC50
+        """Get top drugs by sensitivity (most negative log2fc = most effective)."""
         def sort_key(d: DrugSensitivity) -> float:
-            if d.auc is not None:
-                return d.auc
-            if d.ic50_nm is not None:
-                return d.ic50_nm / 1000  # Normalize to similar scale
+            if d.mean_log2fc is not None:
+                return d.mean_log2fc  # More negative = more sensitive
             return float('inf')
 
         return sorted(self.drug_sensitivities, key=sort_key)[:n]
@@ -163,12 +163,8 @@ class DepMapEvidence(EvidenceItemBase):
             lines.append(f"DRUG SENSITIVITIES in {self.gene}-mutant lines ({source_cite}):")
             for ds in self.get_top_sensitive_drugs(5):
                 parts = [f"  - {ds.drug_name}:"]
-                if ds.ic50_nm is not None:
-                    parts.append(f"IC50={ds.ic50_nm:.1f}nM")
-                if ds.auc is not None:
-                    parts.append(f"AUC={ds.auc:.3f}")
-                if ds.z_score is not None:
-                    parts.append(f"Z={ds.z_score:.2f}")
+                if ds.mean_log2fc is not None:
+                    parts.append(f"log2FC={ds.mean_log2fc:.2f}")
                 parts.append(f"(n={ds.n_cell_lines})")
                 lines.append(" ".join(parts))
             lines.append("")

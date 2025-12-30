@@ -78,7 +78,10 @@ class TestDepMapEvidence:
         """Test has_data returns True when drug sensitivities exist."""
         evidence = DepMapEvidence(
             gene="BRAF",
-            drug_sensitivities=[DrugSensitivity(drug_name="vemurafenib")],
+            drug_sensitivities=[DrugSensitivity(
+                drug_name="vemurafenib",
+                mean_log2fc=-2.5,
+            )],
         )
         assert evidence.has_data() is True
 
@@ -130,20 +133,20 @@ class TestDepMapEvidence:
         assert evidence.get_essential_score() is None
 
     def test_get_top_sensitive_drugs(self):
-        """Test get_top_sensitive_drugs returns sorted drugs."""
+        """Test get_top_sensitive_drugs returns sorted drugs by log2fc."""
         evidence = DepMapEvidence(
             gene="BRAF",
             drug_sensitivities=[
-                DrugSensitivity(drug_name="drugA", auc=0.5),
-                DrugSensitivity(drug_name="drugB", auc=0.2),
-                DrugSensitivity(drug_name="drugC", auc=0.8),
+                DrugSensitivity(drug_name="drugA", mean_log2fc=-2.0),
+                DrugSensitivity(drug_name="drugB", mean_log2fc=-3.5),
+                DrugSensitivity(drug_name="drugC", mean_log2fc=-1.0),
             ],
         )
 
         top_drugs = evidence.get_top_sensitive_drugs(2)
 
         assert len(top_drugs) == 2
-        assert top_drugs[0].drug_name == "drugB"  # Lowest AUC = most sensitive
+        assert top_drugs[0].drug_name == "drugB"  # Most negative log2fc = most sensitive
         assert top_drugs[1].drug_name == "drugA"
 
     def test_get_model_cell_lines(self):
@@ -199,28 +202,26 @@ class TestDrugSensitivity:
     """Tests for DrugSensitivity model."""
 
     def test_creation(self):
-        """Test creating a DrugSensitivity."""
+        """Test creating a DrugSensitivity with all fields."""
         sensitivity = DrugSensitivity(
             drug_name="vemurafenib",
-            ic50_nm=50.0,
-            auc=0.35,
-            z_score=-2.1,
+            mean_log2fc=-2.5,
             n_cell_lines=25,
             sensitive_lines=["A375", "SK-MEL-28"],
         )
 
         assert sensitivity.drug_name == "vemurafenib"
-        assert sensitivity.ic50_nm == 50.0
-        assert sensitivity.auc == 0.35
+        assert sensitivity.mean_log2fc == -2.5
+        assert sensitivity.n_cell_lines == 25
         assert len(sensitivity.sensitive_lines) == 2
 
     def test_defaults(self):
         """Test default values."""
-        sensitivity = DrugSensitivity(drug_name="test")
+        sensitivity = DrugSensitivity(
+            drug_name="test",
+        )
 
-        assert sensitivity.ic50_nm is None
-        assert sensitivity.auc is None
-        assert sensitivity.z_score is None
+        assert sensitivity.mean_log2fc is None
         assert sensitivity.n_cell_lines == 0
         assert sensitivity.sensitive_lines == []
 
