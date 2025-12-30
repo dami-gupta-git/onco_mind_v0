@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from oncomind.api.depmap import DepMapClient, DepMapData, DepMapError, DepMapRateLimitError
+from oncomind.api.depmap import DepMapClient, DepMapError, DepMapRateLimitError
 from oncomind.models.evidence.depmap import (
     DepMapEvidence,
     GeneDependency,
@@ -18,236 +18,12 @@ class TestDepMapClient:
     def test_init_default_timeout(self):
         """Test default timeout initialization."""
         client = DepMapClient()
-        assert client.timeout == 30.0
+        assert client.timeout == 60.0  # Updated default timeout
 
     def test_init_custom_timeout(self):
         """Test custom timeout initialization."""
-        client = DepMapClient(timeout=60.0)
-        assert client.timeout == 60.0
-
-    def test_fallback_constants_exist(self):
-        """Test that fallback constants exist in config."""
-        from oncomind.config.constants import (
-            DEPMAP_GENE_DEPENDENCIES_FALLBACK,
-            DEPMAP_DRUG_SENSITIVITIES_FALLBACK,
-        )
-
-        # Should have common cancer genes
-        assert "BRAF" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
-        assert "KRAS" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
-        assert "EGFR" in DEPMAP_GENE_DEPENDENCIES_FALLBACK
-
-    def test_fallback_constants_structure(self):
-        """Test the structure of fallback dependency data."""
-        from oncomind.config.constants import DEPMAP_GENE_DEPENDENCIES_FALLBACK
-
-        for gene, data in DEPMAP_GENE_DEPENDENCIES_FALLBACK.items():
-            assert "score" in data
-            assert "dependent_pct" in data
-            assert isinstance(data["score"], (int, float))
-            assert isinstance(data["dependent_pct"], (int, float))
-
-    def test_drug_sensitivities_fallback_exists(self):
-        """Test that drug sensitivity fallback data exists."""
-        from oncomind.config.constants import DEPMAP_DRUG_SENSITIVITIES_FALLBACK
-
-        # Should have drug data for key genes
-        assert "BRAF" in DEPMAP_DRUG_SENSITIVITIES_FALLBACK
-        assert "KRAS" in DEPMAP_DRUG_SENSITIVITIES_FALLBACK
-
-    def test_drug_sensitivities_fallback_structure(self):
-        """Test the structure of drug sensitivity fallback data."""
-        from oncomind.config.constants import DEPMAP_DRUG_SENSITIVITIES_FALLBACK
-
-        for gene, drugs in DEPMAP_DRUG_SENSITIVITIES_FALLBACK.items():
-            assert isinstance(drugs, list)
-            for drug in drugs:
-                assert "drug" in drug
-                assert "ic50_mutant" in drug
-                assert "target" in drug
-
-
-class TestDepMapClientFallback:
-    """Tests for DepMapClient fallback data."""
-
-    def test_get_fallback_data_known_gene(self):
-        """Test fallback data for known gene."""
-        client = DepMapClient()
-
-        result = client._get_fallback_data("BRAF", "V600E")
-
-        assert result is not None
-        assert result.gene == "BRAF"
-        assert result.variant == "V600E"
-        assert result.dependency_score is not None
-        assert result.dependency_score < 0  # BRAF is essential
-
-    def test_get_fallback_data_unknown_gene(self):
-        """Test fallback data returns None for unknown gene."""
-        client = DepMapClient()
-
-        result = client._get_fallback_data("UNKNOWNGENE", None)
-
-        assert result is None
-
-    def test_get_fallback_data_case_insensitive(self):
-        """Test gene lookup is case insensitive."""
-        client = DepMapClient()
-
-        result_upper = client._get_fallback_data("BRAF", None)
-        result_lower = client._get_fallback_data("braf", None)
-
-        assert result_upper is not None
-        assert result_lower is not None
-        assert result_upper.gene == result_lower.gene
-
-    def test_get_fallback_data_cell_lines_empty(self):
-        """Test fallback data has empty cell lines (cell lines come from cBioPortal now)."""
-        client = DepMapClient()
-
-        result = client._get_fallback_data("BRAF", "V600E")
-
-        assert result is not None
-        # Cell lines are now fetched from cBioPortal CCLE, not DepMap fallback
-        assert result.cell_lines == []
-
-    def test_get_fallback_data_includes_drugs(self):
-        """Test fallback data includes drug sensitivities."""
-        client = DepMapClient()
-
-        result = client._get_fallback_data("BRAF", "V600E")
-
-        assert result is not None
-        assert len(result.drug_sensitivities) > 0
-
-        drug_names = [ds["drug_name"] for ds in result.drug_sensitivities]
-        assert "vemurafenib" in drug_names
-
-    def test_get_fallback_data_version(self):
-        """Test fallback data has version indicator."""
-        client = DepMapClient()
-
-        result = client._get_fallback_data("BRAF", "V600E")
-
-        assert result is not None
-        assert result.data_version == "fallback_cache"
-
-
-class TestDepMapClientConversion:
-    """Tests for DepMapClient data conversion."""
-
-    def test_convert_fallback_data_basic(self):
-        """Test converting fallback data to evidence model."""
-        client = DepMapClient()
-
-        fallback = DepMapData(
-            gene="BRAF",
-            variant="V600E",
-            dependency_score=-0.8,
-            n_dependent_lines=450,
-            n_total_lines=1000,
-            top_dependent_lines=["A375", "SK-MEL-28"],
-            co_dependencies=[],
-            drug_sensitivities=[
-                {"drug_name": "vemurafenib", "ic50_nm": 50, "n_cell_lines": 10}
-            ],
-            cell_lines=[
-                {"name": "A375", "disease": "Melanoma", "has_mutation": True, "mutation": "V600E"}
-            ],
-            data_version="test",
-        )
-
-        result = client._convert_fallback_data(fallback)
-
-        assert isinstance(result, DepMapEvidence)
-        assert result.gene == "BRAF"
-        assert result.variant == "V600E"
-        assert result.gene_dependency is not None
-        assert result.gene_dependency.mean_dependency_score == -0.8
-
-    def test_convert_fallback_data_gene_dependency(self):
-        """Test gene dependency conversion."""
-        client = DepMapClient()
-
-        fallback = DepMapData(
-            gene="BRAF",
-            variant=None,
-            dependency_score=-0.8,
-            n_dependent_lines=450,
-            n_total_lines=1000,
-            top_dependent_lines=["A375"],
-            co_dependencies=[],
-            drug_sensitivities=[],
-            cell_lines=[],
-            data_version="test",
-        )
-
-        result = client._convert_fallback_data(fallback)
-
-        assert result.gene_dependency is not None
-        assert result.gene_dependency.gene == "BRAF"
-        assert result.gene_dependency.n_dependent_lines == 450
-        assert result.gene_dependency.n_total_lines == 1000
-        assert result.gene_dependency.dependency_pct == 45.0
-
-    def test_convert_fallback_data_drug_sensitivities(self):
-        """Test drug sensitivity conversion."""
-        client = DepMapClient()
-
-        fallback = DepMapData(
-            gene="BRAF",
-            variant=None,
-            dependency_score=-0.8,
-            n_dependent_lines=450,
-            n_total_lines=1000,
-            top_dependent_lines=[],
-            co_dependencies=[],
-            drug_sensitivities=[
-                {"drug_name": "vemurafenib", "ic50_nm": 50, "n_cell_lines": 10},
-                {"drug_name": "dabrafenib", "ic50_nm": 30, "n_cell_lines": 8},
-            ],
-            cell_lines=[],
-            data_version="test",
-        )
-
-        result = client._convert_fallback_data(fallback)
-
-        assert len(result.drug_sensitivities) == 2
-        assert result.drug_sensitivities[0].drug_name == "vemurafenib"
-        assert result.drug_sensitivities[0].ic50_nm == 50
-        assert result.drug_sensitivities[1].drug_name == "dabrafenib"
-
-    def test_convert_fallback_data_cell_lines(self):
-        """Test cell line conversion."""
-        client = DepMapClient()
-
-        fallback = DepMapData(
-            gene="BRAF",
-            variant="V600E",
-            dependency_score=-0.8,
-            n_dependent_lines=450,
-            n_total_lines=1000,
-            top_dependent_lines=[],
-            co_dependencies=[],
-            drug_sensitivities=[],
-            cell_lines=[
-                {
-                    "name": "A375",
-                    "disease": "Melanoma",
-                    "subtype": "Cutaneous",
-                    "has_mutation": True,
-                    "mutation": "V600E"
-                }
-            ],
-            data_version="test",
-        )
-
-        result = client._convert_fallback_data(fallback)
-
-        assert len(result.cell_line_models) == 1
-        assert result.cell_line_models[0].name == "A375"
-        assert result.cell_line_models[0].primary_disease == "Melanoma"
-        assert result.cell_line_models[0].has_mutation is True
+        client = DepMapClient(timeout=120.0)
+        assert client.timeout == 120.0
 
 
 class TestDepMapClientAsync:
@@ -275,25 +51,13 @@ class TestDepMapClientAsync:
         assert client._client is None
 
     @pytest.mark.asyncio
-    async def test_fetch_uses_fallback_when_api_unavailable(self):
-        """Test that fetch uses fallback data when API is unavailable."""
+    async def test_fetch_returns_none_when_no_data(self):
+        """Test that fetch returns None when API returns no data."""
         client = DepMapClient()
 
-        # Mock _try_api_query to return None (simulating API unavailable)
-        with patch.object(client, "_try_api_query", return_value=None):
-            result = await client.fetch_depmap_evidence("BRAF", "V600E")
-
-        assert result is not None
-        assert result.gene == "BRAF"
-        # Should have data from fallback
-        assert result.data_version == "fallback_cache"
-
-    @pytest.mark.asyncio
-    async def test_fetch_returns_none_for_unknown_gene(self):
-        """Test that fetch returns None for unknown gene without fallback."""
-        client = DepMapClient()
-
-        with patch.object(client, "_try_api_query", return_value=None):
+        # Mock fetch_gene_dependency and fetch_mutations to return no data
+        with patch.object(client, "fetch_gene_dependency", return_value=None), \
+             patch.object(client, "fetch_mutations", return_value=[]):
             result = await client.fetch_depmap_evidence("NOTAREALGENE")
 
         assert result is None

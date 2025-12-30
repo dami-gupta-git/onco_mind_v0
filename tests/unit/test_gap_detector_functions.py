@@ -55,6 +55,7 @@ def mock_evidence():
     evidence.functional.cadd_score = None
     evidence.functional.polyphen2_prediction = None
     evidence.functional.gnomad_exome_af = None
+    evidence.functional.gnomad_genome_af = None
     evidence.functional.snpeff_effect = None
 
     # Evidence lists (empty by default)
