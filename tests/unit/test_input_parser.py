@@ -137,8 +137,8 @@ class TestParseVariantInput:
 
     def test_gene_alias_resolution(self):
         """Test that gene aliases are resolved to canonical names."""
-        # HER2 should resolve to ERBB2
-        result = parse_variant_input("HER2 V777L")
+        # NEU should resolve to ERBB2
+        result = parse_variant_input("NEU V777L")
 
         assert result.gene == "ERBB2"
         assert result.variant == "V777L"
@@ -272,7 +272,7 @@ class TestParseVariantRow:
 
     def test_gene_alias_resolved(self):
         """Test that gene aliases are resolved in row parsing."""
-        row = {"gene": "HER2", "variant": "V777L"}
+        row = {"gene": "NEU", "variant": "V777L"}
         result = parse_variant_row(row)
 
         assert result.gene == "ERBB2"
