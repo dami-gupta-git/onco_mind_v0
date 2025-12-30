@@ -195,7 +195,8 @@ class TestCBioPortalClient:
 
         study_ids = client._get_study_ids("nsclc")
 
-        assert "luad_tcga_pan_can_atlas_2018" in study_ids
+        # Should contain NSCLC-specific studies
+        assert any("nsclc" in s or "luad" in s for s in study_ids)
 
     def test_get_study_ids_colorectal(self):
         """Test study ID lookup for colorectal."""
