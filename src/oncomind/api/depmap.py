@@ -240,12 +240,12 @@ class DepMapClient:
 
         return pd.DataFrame(results).sort_values('mean_diff')
 
-    async def fetch_mutations(
+    def fetch_mutations(
         self,
         gene: str,
         variant: str | None = None,
     ) -> list[dict]:
-        """Fetch mutation data for a gene/variant from CCLE.
+        """Fetch mutation data for a gene/variant from local CCLE file.
 
         Args:
             gene: Gene symbol (e.g., "BRAF")
@@ -254,31 +254,70 @@ class DepMapClient:
         Returns:
             List of mutation records with cell line info
         """
-        url = self._build_download_url(self.MUTATIONS_FILE, self.MUTATIONS_RELEASE)
+        # Path to local data files
+        data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
+        mutations_file = data_dir / self.MUTATIONS_FILE
+        sample_info_file = data_dir / "sample_info.csv"
+
+        if not mutations_file.exists():
+            logger.warning(f"Mutations file not found: {mutations_file}")
+            return []
 
         try:
-            # Fetch all mutations (large file - consider caching)
-            rows = await self._fetch_csv_data(url)
-
-            # Filter for gene
             gene_upper = gene.upper()
-            filtered = [
-                r for r in rows
-                if (r.get("HugoSymbol") or r.get("Hugo_Symbol", "")).upper() == gene_upper
-            ]
+
+            # Read mutations file, filtering by gene during read for efficiency
+            # Use chunked reading for the large file
+            chunks = pd.read_csv(
+                mutations_file,
+                usecols=["ModelID", "HugoSymbol", "ProteinChange", "VariantType", "DNAChange"],
+                chunksize=100000,
+            )
+
+            # Filter for gene in each chunk
+            gene_mutations = []
+            for chunk in chunks:
+                chunk_filtered = chunk[chunk["HugoSymbol"].str.upper() == gene_upper]
+                if not chunk_filtered.empty:
+                    gene_mutations.append(chunk_filtered)
+
+            if not gene_mutations:
+                logger.debug(f"No mutations found for {gene}")
+                return []
+
+            mutations_df = pd.concat(gene_mutations, ignore_index=True)
 
             # Filter for variant if specified
             if variant:
                 variant_upper = variant.upper()
-                filtered = [
-                    r for r in filtered
-                    if variant_upper in (r.get("ProteinChange") or r.get("HGVSp_Short") or "").upper()
+                mutations_df = mutations_df[
+                    mutations_df["ProteinChange"].fillna("").str.upper().str.contains(variant_upper)
                 ]
 
-            logger.debug(f"Found {len(filtered)} mutations for {gene} {variant or ''}")
-            return filtered
+            if mutations_df.empty:
+                logger.debug(f"No mutations found for {gene} {variant or ''}")
+                return []
 
-        except DepMapError:
+            # Join with sample_info for cell line metadata
+            if sample_info_file.exists():
+                sample_info = pd.read_csv(
+                    sample_info_file,
+                    usecols=["DepMap_ID", "cell_line_name", "CCLE_Name", "primary_disease", "Subtype"],
+                )
+                mutations_df = mutations_df.merge(
+                    sample_info,
+                    left_on="ModelID",
+                    right_on="DepMap_ID",
+                    how="left",
+                )
+
+            # Convert to list of dicts
+            result = mutations_df.to_dict("records")
+            logger.debug(f"Found {len(result)} mutations for {gene} {variant or ''}")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Error reading mutations file: {e}")
             return []
 
     async def fetch_gene_dependency(
@@ -390,23 +429,14 @@ class DepMapClient:
         gene_upper = gene.upper()
 
         try:
-            # Fetch gene dependency and mutations in parallel
-            dependency_task = self.fetch_gene_dependency(gene_upper)
-            mutations_task = self.fetch_mutations(gene_upper, variant)
+            # Fetch mutations from local file (synchronous)
+            mutations = self.fetch_mutations(gene_upper, variant)
 
-            dependency, mutations = await asyncio.gather(
-                dependency_task,
-                mutations_task,
-                return_exceptions=True,
-            )
-
-            # Handle exceptions
+            # Fetch gene dependency asynchronously
+            dependency = await self.fetch_gene_dependency(gene_upper)
             if isinstance(dependency, Exception):
                 logger.warning(f"Gene dependency fetch failed: {dependency}")
                 dependency = None
-            if isinstance(mutations, Exception):
-                logger.warning(f"Mutations fetch failed: {mutations}")
-                mutations = []
 
             # Build cell line models from mutations
             cell_line_models = []
@@ -415,13 +445,21 @@ class DepMapClient:
                 line_id = mut.get("ModelID") or mut.get("DepMap_ID")
                 if line_id and line_id not in seen_lines:
                     seen_lines.add(line_id)
+
+                    # Helper to convert pandas NaN to None
+                    def clean_val(val) -> str | None:
+                        if val is None or (isinstance(val, float) and pd.isna(val)):
+                            return None
+                        return str(val) if val else None
+
+                    cell_line_name = clean_val(mut.get("cell_line_name"))
                     cell_line_models.append(CellLineModel(
-                        name=line_id,
-                        ccle_name=mut.get("CellLineName") or mut.get("CCLE_Name"),
-                        primary_disease=mut.get("OncotreeLineage") or mut.get("primary_disease"),
-                        subtype=mut.get("OncotreePrimaryDisease") or mut.get("Subtype"),
+                        name=cell_line_name or line_id,
+                        ccle_name=clean_val(mut.get("CCLE_Name")),
+                        primary_disease=clean_val(mut.get("primary_disease")),
+                        subtype=clean_val(mut.get("Subtype")),
                         has_mutation=True,
-                        mutation_details=mut.get("ProteinChange") or mut.get("HGVSp_Short"),
+                        mutation_details=clean_val(mut.get("ProteinChange")),
                     ))
 
             # Return None if no data
