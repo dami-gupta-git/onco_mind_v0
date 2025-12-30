@@ -426,33 +426,35 @@ async def _apply_llm_enhancement(
                     paper_contents=paper_contents,
                 )
 
-                from oncomind.models.evidence.literature_knowledge import (
-                    LiteratureKnowledge, DrugResistance, DrugSensitivity
-                )
+                # Skip if extraction failed
+                if knowledge_data is not None:
+                    from oncomind.models.evidence.literature_knowledge import (
+                        LiteratureKnowledge, DrugResistance, DrugSensitivity
+                    )
 
-                resistant_to = []
-                for r in knowledge_data.get("resistant_to", []):
-                    if isinstance(r, dict):
-                        if "is_predictive" not in r:
-                            r["is_predictive"] = True
-                        resistant_to.append(DrugResistance(**r))
-                    else:
-                        resistant_to.append(DrugResistance(drug=str(r), is_predictive=True))
+                    resistant_to = []
+                    for r in knowledge_data.get("resistant_to", []):
+                        if isinstance(r, dict):
+                            if "is_predictive" not in r:
+                                r["is_predictive"] = True
+                            resistant_to.append(DrugResistance(**r))
+                        else:
+                            resistant_to.append(DrugResistance(drug=str(r), is_predictive=True))
 
-                evidence.literature_knowledge = LiteratureKnowledge(
-                    mutation_type=knowledge_data.get("mutation_type", "unknown"),
-                    is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
-                    resistant_to=resistant_to,
-                    sensitive_to=[
-                        DrugSensitivity(**s) if isinstance(s, dict) else DrugSensitivity(drug=str(s))
-                        for s in knowledge_data.get("sensitive_to", [])
-                    ],
-                    clinical_significance=knowledge_data.get("clinical_significance", ""),
-                    evidence_level=knowledge_data.get("evidence_level", "None"),
-                    references=knowledge_data.get("references", []),
-                    key_findings=knowledge_data.get("key_findings", []),
-                    confidence=knowledge_data.get("confidence", 0.0),
-                )
+                    evidence.literature_knowledge = LiteratureKnowledge(
+                        mutation_type=knowledge_data.get("mutation_type", "unknown"),
+                        is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
+                        resistant_to=resistant_to,
+                        sensitive_to=[
+                            DrugSensitivity(**s) if isinstance(s, dict) else DrugSensitivity(drug=str(s))
+                            for s in knowledge_data.get("sensitive_to", [])
+                        ],
+                        clinical_significance=knowledge_data.get("clinical_significance", ""),
+                        evidence_level=knowledge_data.get("evidence_level", "None"),
+                        references=knowledge_data.get("references", []),
+                        key_findings=knowledge_data.get("key_findings", []),
+                        confidence=knowledge_data.get("confidence", 0.0),
+                    )
             except Exception as e:
                 print(f"  Warning: Failed to extract literature knowledge: {str(e)}")
 

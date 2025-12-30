@@ -245,7 +245,8 @@ class CBioPortalClient:
         # Get study metadata (sample count and name)
         total_samples = await self._get_sample_count(study_id)
         if total_samples == 0:
-            total_samples = 500  # Fallback estimate
+            logger.warning(f"Could not get sample count for study {study_id}")
+            return None
         study_name = await self._get_study_name(study_id)
 
         # Build sample sets

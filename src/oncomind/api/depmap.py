@@ -11,7 +11,7 @@ DepMap provides cancer cell line data from the Broad Institute:
 Key Design:
 - Uses public DepMap download API at https://depmap.org/portal/download/api/
 - Downloads and caches data files locally for performance
-- Returns None if data is unavailable (no fabricated fallback data)
+- Returns None if data is unavailable
 - No API key required for public endpoints
 """
 
