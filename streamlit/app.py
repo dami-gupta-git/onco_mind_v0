@@ -1030,7 +1030,8 @@ with tab1:
                                "|--------|-------|-------------|-------------|"]
                     for row in wc_rows:
                         aspect = row.get("Aspect", "")
-                        basis = row.get("Basis", "")
+                        # Escape pipe characters in basis to prevent breaking markdown table
+                        basis = row.get("Basis", "").replace("|", ",")
                         locus = row.get("Locus Match", "")
                         tumor = row.get("Tumor Match", "")
                         md_rows.append(f"| {aspect} | {basis} | {locus} | {tumor} |")
