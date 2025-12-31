@@ -438,7 +438,7 @@ class EvidenceAggregator:
         functional_scores = FunctionalScores(
             alphamissense_score=getattr(evidence, 'alphamissense_score', None),
             alphamissense_prediction=getattr(evidence, 'alphamissense_prediction', None),
-            cadd_score=getattr(evidence, 'cadd_phred', None),
+            cadd_score=getattr(evidence, 'cadd_score', None),
             cadd_raw=getattr(evidence, 'cadd_raw', None),
             polyphen2_prediction=getattr(evidence, 'polyphen2_prediction', None),
             polyphen2_score=getattr(evidence, 'polyphen2_score', None),
