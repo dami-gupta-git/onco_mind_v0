@@ -697,7 +697,7 @@ with tab1:
                                 else:
                                     st.info(f"⚪ {gene_display} is not essential")
                             with dep_cols[1]:
-                                st.metric("CERES Score", f"{score:.2f}" if score else "N/A",
+                                st.metric("Gene CERES Score", f"{score:.2f}" if score else "N/A",
                                           f"{dep_pct:.0f}% of cell lines depend on {gene_display}")
                             st.caption(f"Based on CRISPR screens in {n_total} cancer cell lines. CERES < -0.5 indicates essentiality.")
 
@@ -723,13 +723,23 @@ with tab1:
                                 st.success(f"✅ {len(mutant_lines)} cell lines with {gene_display} {variant_display} mutation")
                                 cl_rows = []
                                 for cl in mutant_lines:
+                                    name = cl.get('name', '')
+                                    depmap_id = cl.get('depmap_id')
+                                    url = f"https://depmap.org/portal/cell_line/{depmap_id}" if depmap_id else None
                                     cl_rows.append({
-                                        "Cell Line": cl.get('name', ''),
+                                        "Cell Line": name,
+                                        "DepMap": url,
                                         "Disease": cl.get('primary_disease', ''),
                                         "Subtype": cl.get('subtype', ''),
                                         "Mutation": cl.get('mutation_details', variant_display),
                                     })
-                                st.dataframe(pd.DataFrame(cl_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(cl_rows) + 1)))
+                                st.dataframe(
+                                    pd.DataFrame(cl_rows),
+                                    width="stretch",
+                                    hide_index=True,
+                                    height=min(300, 35 * (len(cl_rows) + 1)),
+                                    column_config={"DepMap": st.column_config.LinkColumn("DepMap", display_text="🔗")},
+                                )
                             else:
                                 st.info(f"{len(cell_lines)} cell lines available (mutation status unknown)")
 
@@ -942,6 +952,29 @@ with tab1:
                     fda_match_parts.append(f"🧬 {fda_gene} gene")
                 fda_match_str = ", ".join(fda_match_parts) if fda_match_parts else ""
 
+                # Helper to convert matches_on value to icon string
+                def format_locus_match(matches_on: str) -> str:
+                    """Convert matches_on value like 'gene', 'variant', 'codon' to icon format."""
+                    if not matches_on:
+                        return ""
+
+                    # Check for format like "5 variant" (count + type)
+                    parts = matches_on.strip().split()
+                    if len(parts) == 2 and parts[0].isdigit():
+                        count = parts[0]
+                        match_type = parts[1].lower()
+                        icon = {"variant": "🎯", "codon": "📍", "gene": "🧬"}.get(match_type, "")
+                        return f"{icon} {count} {match_type}" if icon else matches_on
+
+                    # Check for simple type like "gene", "variant", "codon"
+                    match_type = matches_on.strip().lower()
+                    icon = {"variant": "🎯", "codon": "📍", "gene": "🧬"}.get(match_type, "")
+                    if icon:
+                        return f"{icon} {match_type}"
+
+                    # Already formatted or unknown - return as-is
+                    return matches_on
+
                 # Build rows from well_characterized_detailed
                 wc_rows = []
                 if well_characterized_detailed:
@@ -965,12 +998,22 @@ with tab1:
                             elif is_drug_row:
                                 locus_str = drug_match_str
 
-                        # Tumor match column - check for cancer mismatch
-                        cancer_mismatch = item.get('cancer_mismatch', '')
-                        if cancer_mismatch:
-                            tumor_str = "⚠️ Other"
+                        # Convert simple match types to icon format
+                        locus_str = format_locus_match(locus_str)
+
+                        # Tumor match column - only show for specific rows
+                        # Only prevalence/observed in samples and cell line models get tumor match indicator
+                        is_prevalence_row = 'observed in samples' in aspect.lower() or 'prevalence' in aspect.lower()
+                        is_cell_line_row = 'cell line' in aspect.lower()
+
+                        if is_prevalence_row or is_cell_line_row:
+                            cancer_mismatch = item.get('cancer_mismatch', '')
+                            if cancer_mismatch:
+                                tumor_str = "⚠️ Other"
+                            else:
+                                tumor_str = "✅ Yes"
                         else:
-                            tumor_str = "✅ Yes"
+                            tumor_str = ""  # No tumor match indicator for other rows
 
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
