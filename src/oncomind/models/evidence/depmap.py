@@ -38,6 +38,7 @@ class CellLineModel(BaseModel):
     """A cell line that can be used as a model system."""
 
     name: str = Field(..., description="Cell line name (e.g., A375)")
+    depmap_id: str | None = Field(None, description="DepMap ID (e.g., ACH-000001)")
     ccle_name: str | None = Field(None, description="CCLE formatted name")
     primary_disease: str | None = Field(None, description="Primary disease/cancer type")
     subtype: str | None = Field(None, description="Cancer subtype")

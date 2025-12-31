@@ -374,6 +374,7 @@ def _build_response(result) -> Dict[str, Any]:
             "cell_line_models": [
                 {
                     "name": cl.name,
+                    "depmap_id": cl.depmap_id,
                     "primary_disease": cl.primary_disease,
                     "subtype": cl.subtype,
                     "has_mutation": cl.has_mutation,

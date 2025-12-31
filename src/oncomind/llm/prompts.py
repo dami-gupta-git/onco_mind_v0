@@ -75,7 +75,7 @@ CANCER TYPE MATCH:
 CRITICAL RULES:
 - If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type}): drugname (cancer)", that drug is NOT approved for {tumor_type}. Report it as "drugname (approved for [other cancer], not {tumor_type})" in therapeutic_landscape.fda_approved.
 - If all therapeutic evidence is gene-level (no variant-specific): State "Therapeutic evidence is gene-level; no variant-specific drug response data for {variant}."
-- Always indicate match specificity when citing drugs, e.g., "osimertinib (variant-specific, {tumor_type})" vs "erlotinib (gene-level)" vs "sotorasib (approved for NSCLC, not {tumor_type})"
+- Always indicate match specificity when citing drugs, e.g., "osimertinib (including this variant, {tumor_type})" vs "erlotinib (gene-level)" vs "sotorasib (approved for NSCLC, not {tumor_type})"
 - Do NOT claim FDA approval for {tumor_type} if the drug is only approved for a different cancer
 
 === THERAPEUTIC SIGNALS HANDLING ===
@@ -167,14 +167,14 @@ CALIBRATION RULES (MUST FOLLOW):
 - CRITICAL: If THERAPEUTIC SIGNALS section contains sensitivity data, you MUST include those drugs in therapeutic_landscape.clinical_evidence or therapeutic_landscape.preclinical.
 - CRITICAL: Follow the MATCH SPECIFICITY RULES - always indicate when FDA approvals are for a different cancer type.
 
-CRITICAL: For biological_context, include the source citation ONCE at the end of all cBioPortal statistics. Look for "cite as: ([cBioPortal: ...](...)" in the BIOLOGICAL CONTEXT section and copy that markdown link.
+CRITICAL: For biological_context, START with the study source (e.g., "As per METABRIC - ..." or "As per TCGA - ..."), then describe the statistics. Include the markdown link to cBioPortal at the end.
 
 Respond ONLY with valid JSON:
 {{
   "functional_summary": "IF overall_quality is 'limited'/'minimal': Generic gene function only (e.g., 'JAK1 encodes a tyrosine kinase involved in cytokine receptor signaling'). IF 'moderate'/'comprehensive': Variant-specific effects with citations.",
-  "biological_context": "2–3 sentences. IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {{tumor_type}}-specific data available.' Cite source ONCE at end.",
+  "biological_context": "2–3 sentences. START with 'As per [STUDY_NAME] - ' (e.g., 'As per METABRIC - AKT1 E17K occurs in...'). IF has_tumor_specific_cbioportal_data is FALSE, state 'Pan-cancer data; no {{tumor_type}}-specific data available.' Cite source ONCE at end.",
   "therapeutic_landscape": {{
-    "fda_approved": ["Drug with match specificity. If approved for {tumor_type}: 'drugname'. If approved for OTHER cancer: 'drugname (approved for X cancer, not {tumor_type})'. Empty array if none."],
+    "fda_approved": ["Drug with match specificity. If includes this variant for {tumor_type}: 'drugname (including this variant, {tumor_type})'. If approved for OTHER cancer: 'drugname (approved for X cancer, not {tumor_type})'. Empty array if none."],
     "clinical_evidence": ["Drug - from CIViC/VICC or THERAPEUTIC SIGNALS. Include match level if gene-level only."],
     "preclinical": ["Drug - from DepMap or preclinical sources only."],
     "resistance_mechanisms": ["From THERAPEUTIC SIGNALS Resistance section."]

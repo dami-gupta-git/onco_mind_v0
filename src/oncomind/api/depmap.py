@@ -451,6 +451,7 @@ class DepMapClient:
                     cell_line_name = clean_val(mut.get("cell_line_name"))
                     cell_line_models.append(CellLineModel(
                         name=cell_line_name or line_id,
+                        depmap_id=line_id,
                         ccle_name=clean_val(mut.get("CCLE_Name")),
                         primary_disease=clean_val(mut.get("primary_disease")),
                         subtype=clean_val(mut.get("Subtype")),

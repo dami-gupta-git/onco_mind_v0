@@ -588,3 +588,149 @@ class TestCIViCIdentifiers:
                     assert "civic_url" in data, "civic_url should be in model dump"
                     assert data["aid"] == assertion.aid
                     assert data["civic_url"] == assertion.civic_url
+
+
+# =============================================================================
+# DEPMAP TUMOR-TYPE FILTERING TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestDepMapTumorTypeFiltering:
+    """Tests for DepMap data filtering by tumor type.
+
+    Verifies that DepMap cell lines and drug sensitivities are NOT added to
+    well_characterized when the cell lines don't match the queried tumor type.
+    """
+
+    @pytest.mark.asyncio
+    async def test_akt1_e17k_excludes_non_matching_tumor_cell_lines(self):
+        """AKT1 E17K has Breast/Endometrial cell lines - should NOT appear in NSCLC well_characterized.
+
+        AKT1 E17K is found in Breast and Endometrial cancer cell lines in DepMap.
+        When queried with NSCLC tumor type, these cell lines should NOT be added
+        to well_characterized.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="NSCLC")
+
+        # Verify we have DepMap data with cell lines
+        assert result.evidence.depmap_evidence is not None, "Should have DepMap evidence"
+        assert len(result.evidence.depmap_evidence.cell_line_models) > 0, \
+            "Should have cell line models from DepMap"
+
+        # Verify the cell lines are NOT from NSCLC (they should be Breast/Endometrial)
+        cell_line_diseases = [
+            cl.primary_disease for cl in result.evidence.depmap_evidence.cell_line_models
+            if cl.has_mutation and cl.primary_disease
+        ]
+        assert len(cell_line_diseases) > 0, "Should have cell lines with disease annotation"
+
+        # None of the cell lines should be NSCLC/Lung
+        nsclc_matches = [d for d in cell_line_diseases if "lung" in d.lower()]
+        assert len(nsclc_matches) == 0, \
+            f"AKT1 E17K should not have NSCLC cell lines, found: {nsclc_matches}"
+
+        # Get gaps
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # DepMap cell lines should NOT be in well_characterized since they don't match NSCLC
+        depmap_in_well_char = [
+            w for w in gaps.well_characterized
+            if "depmap" in w.lower() or "cell line" in w.lower() or "ccle" in w.lower()
+        ]
+
+        # Should not have NSCLC-specific cell line models in well_characterized
+        nsclc_cell_lines_in_well_char = [
+            w for w in gaps.well_characterized
+            if "nsclc" in w.lower() and "cell line" in w.lower()
+        ]
+        assert len(nsclc_cell_lines_in_well_char) == 0, \
+            f"Should NOT have NSCLC cell lines in well_characterized: {nsclc_cell_lines_in_well_char}"
+
+    @pytest.mark.asyncio
+    async def test_akt1_e17k_excludes_depmap_drug_sensitivity_for_non_matching_tumor(self):
+        """AKT1 E17K drug sensitivities should NOT be in well_characterized for NSCLC.
+
+        Even if AKT1 E17K has drug sensitivity data from DepMap, it should NOT
+        be added to well_characterized when queried with NSCLC because the
+        underlying cell lines are not from NSCLC.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="NSCLC")
+
+        # Get gaps
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # DepMap drug sensitivity should NOT be in well_characterized
+        depmap_drug_in_well_char = [
+            w for w in gaps.well_characterized
+            if "depmap" in w.lower() and "drug" in w.lower()
+        ]
+        assert len(depmap_drug_in_well_char) == 0, \
+            f"Should NOT have DepMap drug sensitivity in well_characterized for non-matching tumor: {depmap_drug_in_well_char}"
+
+        # Also check well_characterized_detailed
+        depmap_drug_detailed = [
+            item for item in gaps.well_characterized_detailed
+            if "depmap" in item.aspect.lower() and "drug" in item.aspect.lower()
+        ]
+        assert len(depmap_drug_detailed) == 0, \
+            f"Should NOT have DepMap drug sensitivity in well_characterized_detailed: {depmap_drug_detailed}"
+
+    @pytest.mark.asyncio
+    async def test_braf_v600e_includes_cell_lines_for_matching_tumor(self):
+        """BRAF V600E should include cell lines when queried with Melanoma.
+
+        BRAF V600E has many Skin Cancer (Melanoma) cell lines in DepMap, so when
+        queried with Melanoma, the cell lines SHOULD be in well_characterized.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        # Verify we have DepMap data
+        assert result.evidence.depmap_evidence is not None, "Should have DepMap evidence"
+
+        # Get gaps
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have Melanoma cell line models in well_characterized
+        melanoma_cell_lines = [
+            w for w in gaps.well_characterized
+            if "melanoma" in w.lower() and "cell line" in w.lower()
+        ]
+        assert len(melanoma_cell_lines) > 0, \
+            f"Should have Melanoma cell lines in well_characterized: {gaps.well_characterized}"
+
+    @pytest.mark.asyncio
+    async def test_non_matching_tumor_creates_preclinical_gap(self):
+        """When cell lines exist but don't match tumor type, a PRECLINICAL gap should be created."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have a PRECLINICAL gap about cross-histology
+        preclinical_gaps = gaps.get_gaps_by_category(GapCategory.PRECLINICAL)
+        cross_histology_gaps = [
+            g for g in preclinical_gaps
+            if "cross-histology" in g.description.lower() or "none in" in g.description.lower()
+        ]
+        assert len(cross_histology_gaps) > 0, \
+            f"Should have cross-histology preclinical gap, got: {[g.description for g in preclinical_gaps]}"
+
+        # Should mention that models exist but not in the queried tumor type
+        gap_desc = cross_histology_gaps[0].description.lower()
+        assert "nsclc" in gap_desc or "lung" in gap_desc, \
+            f"Gap should mention NSCLC: {cross_histology_gaps[0].description}"

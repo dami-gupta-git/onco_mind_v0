@@ -202,7 +202,8 @@ def _check_hotspot_context(evidence: "Evidence", ctx: GapDetectionContext) -> No
         ctx.add_well_characterized(
             "known cancer hotspot",
             f"Codon {_extract_codon_position(ctx.variant)} is in cancerhotspots.org",
-            category=GapCategory.FUNCTIONAL
+            category=GapCategory.FUNCTIONAL,
+            matches_on="codon"
         )
     elif is_adjacent and nearest_hotspot:
         # Rare variant near a hotspot - high research value
@@ -244,7 +245,8 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
         ctx.add_well_characterized(
             "computational pathogenicity",
             " | ".join(func_sources) if func_sources else "Predictions available",
-            category=GapCategory.FUNCTIONAL
+            category=GapCategory.FUNCTIONAL,
+            matches_on="variant"
         )
     else:
         ctx.add_gap(
@@ -280,21 +282,16 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
         role = evidence.context.gene_role or "unknown"
         pathway = evidence.context.pathway or ""
         basis = f"Role: {role}" + (f", Pathway: {pathway}" if pathway else "")
-        ctx.add_well_characterized("gene function", basis, category=GapCategory.FUNCTIONAL)
+        ctx.add_well_characterized("gene function", basis, category=GapCategory.FUNCTIONAL, matches_on="gene")
 
-    if has_depmap_essentiality:
+    # Only show gene essentiality if the gene IS essential (CERES < -0.5)
+    # Gene essentiality is pan-cancer data, so don't show non-essential scores
+    if has_depmap_essentiality and evidence.depmap_evidence.is_essential():
         dep = evidence.depmap_evidence.gene_dependency
         score = dep.mean_dependency_score if dep else None
-        score_str = f"CERES={score:.2f}" if score else "DepMap CRISPR data"
-        ctx.add_well_characterized("gene essentiality", score_str, category=GapCategory.FUNCTIONAL)
-
-        if evidence.depmap_evidence is not None and evidence.depmap_evidence.is_essential():
-            pct = dep.dependency_pct if dep else 0
-            ctx.add_well_characterized(
-                f"{ctx.gene} is essential",
-                f"{pct:.0f}% of cell lines depend on it",
-                category=GapCategory.FUNCTIONAL
-            )
+        pct = dep.dependency_pct if dep else 0
+        score_str = f"CERES={score:.2f}, {pct:.0f}% of cell lines depend on it"
+        ctx.add_well_characterized("gene essentiality", score_str, category=GapCategory.FUNCTIONAL, matches_on="gene")
 
     if not has_mechanism and not has_depmap_essentiality:
         ctx.add_gap(
@@ -404,15 +401,28 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
 
 def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for drug sensitivity/resistance data."""
-    has_depmap_drug_data = (
-        evidence.depmap_evidence is not None and
-        bool(evidence.depmap_evidence.drug_sensitivities)
-    )
+    # Check if DepMap has drug data AND tumor-matched cell lines
+    has_depmap_drug_data = False
+    has_tumor_matched_depmap = False
+    if evidence.depmap_evidence is not None and evidence.depmap_evidence.drug_sensitivities:
+        has_depmap_drug_data = True
+        # Only count as tumor-matched if we have cell lines matching the tumor type
+        if ctx.tumor_type and evidence.depmap_evidence.cell_line_models:
+            mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+            tumor_models = [
+                m for m in mutant_models
+                if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
+            ]
+            has_tumor_matched_depmap = bool(tumor_models)
+        elif not ctx.tumor_type:
+            # No tumor type specified, so all DepMap data is valid
+            has_tumor_matched_depmap = True
+
     ctx.has_drug_data = (
         bool(evidence.cgi_biomarkers) or
         bool(evidence.vicc_evidence) or
         bool(evidence.preclinical_biomarkers) or
-        has_depmap_drug_data
+        has_tumor_matched_depmap  # Only count tumor-matched DepMap data
     )
 
     if ctx.has_drug_data:
@@ -464,11 +474,12 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             category=GapCategory.DRUG_RESPONSE,
             matches_on=matches_on
         )
-        if has_depmap_drug_data:
+        # Only add DepMap drug sensitivity if tumor-matched
+        if has_tumor_matched_depmap:
             n_drugs = len(evidence.depmap_evidence.drug_sensitivities)
             ctx.add_well_characterized(
                 "preclinical drug sensitivity (DepMap)",
-                f"{n_drugs} drug IC50 values",
+                f"{n_drugs} drugs tested",
                 category=GapCategory.DRUG_RESPONSE
             )
     else:
@@ -614,16 +625,24 @@ def _check_discordant_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
 
 def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for prevalence/epidemiology data."""
-    has_prevalence = (
-        evidence.cbioportal_evidence is not None and
-        evidence.cbioportal_evidence.has_data()
+    cbio = evidence.cbioportal_evidence
+
+    # Only consider it "observed" if the variant was actually found in samples
+    has_variant_in_samples = (
+        cbio is not None and
+        cbio.has_data() and
+        cbio.samples_with_exact_variant > 0
     )
 
-    if has_prevalence:
-        cbio = evidence.cbioportal_evidence
+    if has_variant_in_samples:
         study = cbio.study_name if cbio else "cBioPortal"
         pct = cbio.variant_prevalence_pct if cbio else 0
-        ctx.add_well_characterized("prevalence", f"{pct:.1f}% in {study}", category=GapCategory.PREVALENCE)
+        ctx.add_well_characterized(
+            "observed in samples",
+            f"{pct:.1f}% in {study}",
+            category=GapCategory.PREVALENCE,
+            matches_on="variant"
+        )
     else:
         severity = GapSeverity.SIGNIFICANT if (ctx.is_cancer_gene and ctx.has_clinical) else GapSeverity.MINOR
         ctx.add_gap(
@@ -679,18 +698,15 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                 ]
                 if tumor_models:
                     # Only add tumor-specific entry (not the general one)
+                    # Cell lines have the exact variant (has_mutation=True), so match is "variant"
                     ctx.add_well_characterized(
                         f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
                         "DepMap CCLE",
-                        category=GapCategory.PRECLINICAL
+                        category=GapCategory.PRECLINICAL,
+                        matches_on=f"{len(tumor_models)} variant"
                     )
                 else:
-                    # No tumor-specific models found - add general entry + gap
-                    ctx.add_well_characterized(
-                        f"model cell lines ({len(mutant_models)} with mutation)",
-                        "DepMap CCLE",
-                        category=GapCategory.PRECLINICAL
-                    )
+                    # No tumor-specific models found - only add gap (not well_characterized)
                     ctx.add_gap(
                         category=GapCategory.PRECLINICAL,
                         severity=GapSeverity.SIGNIFICANT,
@@ -705,10 +721,12 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                     ctx.add_poorly_characterized(f"{ctx.tumor_type}-specific preclinical models")
             else:
                 # No tumor type specified - add general entry
+                # Cell lines have the exact variant (has_mutation=True), so match is "variant"
                 ctx.add_well_characterized(
                     f"model cell lines ({len(mutant_models)} with mutation)",
                     "DepMap CCLE",
-                    category=GapCategory.PRECLINICAL
+                    category=GapCategory.PRECLINICAL,
+                    matches_on=f"{len(mutant_models)} variant"
                 )
         else:
             ctx.add_well_characterized(
@@ -809,8 +827,8 @@ def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) ->
     # Get primary approved drug if available
     primary_drug = _get_primary_drug(evidence)
 
-    # Get top sensitive drugs from DepMap if available
-    top_sensitive_drugs = _get_top_sensitive_drugs(evidence)
+    # Get top sensitive drugs from DepMap if available (only if tumor-matched cell lines exist)
+    top_sensitive_drugs = _get_top_sensitive_drugs(evidence, tumor_type)
 
     # Get top co-occurring gene if available
     top_cooc_gene = _get_top_cooccurring_gene(evidence)
@@ -908,12 +926,28 @@ def _get_primary_drug(evidence: "Evidence") -> str | None:
     return None
 
 
-def _get_top_sensitive_drugs(evidence: "Evidence") -> list[str]:
-    """Get top sensitive drugs from DepMap data."""
-    if evidence.depmap_evidence and evidence.depmap_evidence.drug_sensitivities:
-        top_drugs = evidence.depmap_evidence.get_top_sensitive_drugs(5)
-        return [ds.drug_name for ds in top_drugs]
-    return []
+def _get_top_sensitive_drugs(evidence: "Evidence", tumor_type: str | None = None) -> list[str]:
+    """Get top sensitive drugs from DepMap data.
+
+    Only returns drugs if there are tumor-matched cell lines with the mutation,
+    since sensitivity data from unrelated tumor types is not applicable.
+    """
+    if not evidence.depmap_evidence or not evidence.depmap_evidence.drug_sensitivities:
+        return []
+
+    # Check for tumor-matched cell lines
+    if tumor_type and evidence.depmap_evidence.cell_line_models:
+        mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        tumor_matched = [
+            m for m in mutant_models
+            if m.primary_disease and _tumor_type_matches(tumor_type, m.primary_disease)
+        ]
+        if not tumor_matched:
+            # No tumor-matched cell lines - don't suggest drugs from unrelated tumor types
+            return []
+
+    top_drugs = evidence.depmap_evidence.get_top_sensitive_drugs(5)
+    return [ds.drug_name for ds in top_drugs]
 
 
 def _get_top_cooccurring_gene(evidence: "Evidence") -> str | None:

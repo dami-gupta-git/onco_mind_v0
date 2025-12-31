@@ -400,9 +400,15 @@ class TestCheckDrugResponse:
         assert base_context.has_drug_data is True
 
     def test_with_depmap_drug_sensitivities(self, mock_evidence, base_context):
-        """DepMap drug sensitivities should mark as well-characterized."""
+        """DepMap drug sensitivities should mark as well-characterized only with tumor-matched cell lines."""
+        # Create mock cell line matching the tumor type
+        mock_cell_line = MagicMock()
+        mock_cell_line.has_mutation = True
+        mock_cell_line.primary_disease = "Lung"  # Matches NSCLC
+
         mock_evidence.depmap_evidence = MagicMock()
         mock_evidence.depmap_evidence.drug_sensitivities = [MagicMock()]
+        mock_evidence.depmap_evidence.cell_line_models = [mock_cell_line]
 
         _check_drug_response(mock_evidence, base_context)
 
