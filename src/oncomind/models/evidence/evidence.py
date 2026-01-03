@@ -1113,6 +1113,25 @@ class Evidence(BaseModel):
             if civic_eid_drugs:
                 lines.append(f"CIViC Evidence: {'; '.join(civic_eid_drugs)}")
 
+        # VICC MetaKB evidence - compact (aggregated from CIViC, CGI, JAX, OncoKB, PMKB)
+        if self.vicc_evidence:
+            vicc_drugs = []
+            for v in self.vicc_evidence[:5]:
+                if v.drugs:
+                    drug_str = ", ".join(v.drugs[:2])
+                    sig = ""
+                    if v.is_resistance:
+                        sig = "res"
+                    elif v.is_sensitivity:
+                        sig = "sens"
+                    source = f", {v.source}" if v.source else ""
+                    if sig:
+                        vicc_drugs.append(f"{drug_str} ({sig}{source})")
+                    else:
+                        vicc_drugs.append(f"{drug_str}{source}")
+            if vicc_drugs:
+                lines.append(f"VICC MetaKB: {'; '.join(vicc_drugs)}")
+
         # ClinVar - one line
         if self.clinvar_significance:
             lines.append(f"ClinVar: {self.clinvar_significance}")
