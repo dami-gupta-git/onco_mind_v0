@@ -1148,7 +1148,7 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
         if drug:
             sensitive_drugs.setdefault(drug.lower(), set()).add("FDA")
 
-    # Check CGI biomarkers
+    # Check CGI biomarkers (FDA-approved)
     for cgi in evidence.cgi_biomarkers:
         if not cgi.drug:
             continue
@@ -1159,6 +1159,30 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
                 resistant_drugs.setdefault(drug, set()).add("CGI")
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI")
+
+    # Check CGI preclinical biomarkers
+    for cgi in evidence.preclinical_biomarkers:
+        if not cgi.drug:
+            continue
+        drug = cgi.drug.lower()
+        if cgi.association:
+            assoc_upper = cgi.association.upper()
+            if "RESIST" in assoc_upper:
+                resistant_drugs.setdefault(drug, set()).add("CGI (preclinical)")
+            elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
+                sensitive_drugs.setdefault(drug, set()).add("CGI (preclinical)")
+
+    # Check CGI early-phase biomarkers
+    for cgi in evidence.early_phase_biomarkers:
+        if not cgi.drug:
+            continue
+        drug = cgi.drug.lower()
+        if cgi.association:
+            assoc_upper = cgi.association.upper()
+            if "RESIST" in assoc_upper:
+                resistant_drugs.setdefault(drug, set()).add("CGI (early phase)")
+            elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
+                sensitive_drugs.setdefault(drug, set()).add("CGI (early phase)")
 
     # Check VICC evidence
     for vicc in evidence.vicc_evidence:

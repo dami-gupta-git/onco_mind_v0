@@ -530,6 +530,36 @@ class Evidence(BaseModel):
                             cancer_specificity=cancer_specificity,
                         ))
 
+            # Also include early-phase biomarkers (clinical trials, case reports)
+            for biomarker in self.early_phase_biomarkers:
+                if biomarker.drug and isinstance(biomarker.drug, str):
+                    drug_key = biomarker.drug.lower()
+                    if drug_key not in seen_drugs:
+                        seen_drugs.add(drug_key)
+
+                        response_type = None
+                        if biomarker.association:
+                            if "RESIST" in biomarker.association.upper():
+                                response_type = "Resistance"
+                            else:
+                                response_type = "Sensitivity"
+
+                        cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+
+                        evidence_list.append(TherapeuticEvidence(
+                            drug_name=biomarker.drug,
+                            evidence_level=biomarker.evidence_level or "Early Phase",
+                            approval_status="Investigational",
+                            clinical_context=biomarker.tumor_type,
+                            response_type=response_type,
+                            mechanism=None,
+                            tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
+                            source="CGI (early phase)",
+                            confidence="low",
+                            match_level=biomarker.match_level,
+                            cancer_specificity=cancer_specificity,
+                        ))
+
         # Sort by evidence tier
         evidence_list.sort(key=lambda x: x.get_evidence_tier())
 
@@ -772,7 +802,7 @@ class Evidence(BaseModel):
                             resistance_drugs[drug_lower] = set()
                         resistance_drugs[drug_lower].add("CIViC")
 
-        # CGI resistance biomarkers
+        # CGI resistance biomarkers (FDA-approved)
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and "RESIST" in biomarker.association.upper():
                 if biomarker.drug:
@@ -780,6 +810,24 @@ class Evidence(BaseModel):
                     if drug_lower not in resistance_drugs:
                         resistance_drugs[drug_lower] = set()
                     resistance_drugs[drug_lower].add("CGI")
+
+        # CGI preclinical resistance biomarkers
+        for biomarker in self.preclinical_biomarkers:
+            if biomarker.association and "RESIST" in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("CGI (preclinical)")
+
+        # CGI early-phase resistance biomarkers
+        for biomarker in self.early_phase_biomarkers:
+            if biomarker.association and "RESIST" in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add("CGI (early phase)")
 
         # Literature resistance signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.resistant_to:
@@ -917,8 +965,25 @@ class Evidence(BaseModel):
                             if drug_lower not in all_fda_drugs:
                                 clinical_drugs.add(drug_lower)
 
-        # CGI sensitivity biomarkers
+        # CGI sensitivity biomarkers (FDA-approved)
         for biomarker in self.cgi_biomarkers:
+            if biomarker.association and "RESIST" not in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in all_fda_drugs:
+                        clinical_drugs.add(drug_lower)
+
+        # CGI preclinical sensitivity biomarkers
+        cgi_preclinical_drugs: set[str] = set()
+        for biomarker in self.preclinical_biomarkers:
+            if biomarker.association and "RESIST" not in biomarker.association.upper():
+                if biomarker.drug:
+                    drug_lower = biomarker.drug.lower()
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                        cgi_preclinical_drugs.add(drug_lower)
+
+        # CGI early-phase sensitivity biomarkers (clinical trials, case reports)
+        for biomarker in self.early_phase_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
@@ -943,12 +1008,15 @@ class Evidence(BaseModel):
                         literature_drugs.add(drug_lower)
 
         # DepMap/PRISM drug sensitivities (preclinical)
-        preclinical_drugs: set[str] = set()
+        depmap_preclinical_drugs: set[str] = set()
         if self.depmap_evidence and self.depmap_evidence.drug_sensitivities:
             for ds in self.depmap_evidence.get_top_sensitive_drugs(5):
                 drug_lower = ds.drug_name.lower()
                 if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                    preclinical_drugs.add(drug_lower)
+                    depmap_preclinical_drugs.add(drug_lower)
+
+        # Combine all preclinical drugs
+        all_preclinical_drugs = cgi_preclinical_drugs | depmap_preclinical_drugs
 
         # Build synthesized summary
         summaries = []
@@ -969,11 +1037,11 @@ class Evidence(BaseModel):
             drug_list = ", ".join(sorted(clinical_drugs)[:5])
             summaries.append(f"Clinical evidence: {drug_list}")
 
-        if preclinical_drugs:
-            drug_list = ", ".join(sorted(preclinical_drugs)[:3])
-            summaries.append(f"Preclinical (DepMap): {drug_list}")
+        if all_preclinical_drugs:
+            drug_list = ", ".join(sorted(all_preclinical_drugs)[:3])
+            summaries.append(f"Preclinical: {drug_list}")
 
-        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not preclinical_drugs:
+        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not all_preclinical_drugs:
             # Only show literature if no higher-tier evidence
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")
