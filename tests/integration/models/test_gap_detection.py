@@ -204,8 +204,10 @@ class TestGapDetectionIntegration:
 
         # BRAF V600E is well-studied
         assert gaps.overall_evidence_quality in ("comprehensive", "moderate")
-        assert "known cancer hotspot" in gaps.well_characterized
-        assert "computational pathogenicity" in gaps.well_characterized
+        # Check case-insensitively
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "known cancer hotspot" in well_char_lower
+        assert "computational pathogenicity" in well_char_lower
 
     @pytest.mark.asyncio
     async def test_rare_variant_has_gaps(self):
@@ -734,3 +736,84 @@ class TestDepMapTumorTypeFiltering:
         gap_desc = cross_histology_gaps[0].description.lower()
         assert "nsclc" in gap_desc or "lung" in gap_desc, \
             f"Gap should mention NSCLC: {cross_histology_gaps[0].description}"
+
+
+# =============================================================================
+# AKT1 E17K BREAST CANCER INTEGRATION TEST
+# =============================================================================
+
+@pytest.mark.integration
+class TestAKT1E17KBreastCancer:
+    """Integration tests for AKT1 E17K in Breast Cancer - a well-characterized actionable variant."""
+
+    @pytest.mark.asyncio
+    async def test_akt1_e17k_breast_cancer_has_clinical_evidence(self):
+        """AKT1 E17K in Breast Cancer should have FDA approval and CIViC evidence.
+
+        AKT1 E17K is FDA-approved with Capivasertib + Fulvestrant for HR+/HER2- breast cancer.
+        This test verifies the full pipeline returns expected clinical evidence.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="Breast Cancer")
+
+        # Should have evidence
+        assert result.evidence is not None, "Should have evidence"
+
+        # Should have CIViC evidence items with Capivasertib
+        assert len(result.evidence.civic_evidence) > 0, "Should have CIViC evidence items"
+        drug_names = []
+        for e in result.evidence.civic_evidence:
+            drug_names.extend(e.drugs or [])
+        drug_names_lower = [d.lower() for d in drug_names]
+        assert any("capiva" in d for d in drug_names_lower), \
+            f"Should have Capivasertib in CIViC evidence, found: {drug_names}"
+
+        # Should have VICC evidence
+        assert len(result.evidence.vicc_evidence) > 0, "Should have VICC evidence"
+
+        # Get gaps
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have good evidence quality (comprehensive or moderate)
+        assert gaps.overall_evidence_quality in ("comprehensive", "moderate"), \
+            f"AKT1 E17K should have good evidence quality, got: {gaps.overall_evidence_quality}"
+
+    @pytest.mark.asyncio
+    async def test_akt1_e17k_breast_cancer_civic_eids_unique(self):
+        """CIViC evidence items for AKT1 E17K should have unique EIDs."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="Breast Cancer")
+
+        # Check for duplicate EIDs
+        evidence_ids = [e.evidence_id for e in result.evidence.civic_evidence if e.evidence_id]
+        unique_ids = set(evidence_ids)
+        assert len(evidence_ids) == len(unique_ids), \
+            f"Duplicate CIViC EIDs found: {evidence_ids}"
+
+    @pytest.mark.asyncio
+    async def test_akt1_e17k_has_depmap_data(self):
+        """AKT1 E17K should have DepMap cell line data.
+
+        Note: AKT1 E17K cell lines in DepMap are primarily from other tumor types
+        (e.g., Thyroid, Endometrial), so this test just verifies DepMap data exists.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("AKT1 E17K", tumor_type="Breast Cancer")
+
+        # Should have DepMap evidence
+        assert result.evidence.depmap_evidence is not None, "Should have DepMap evidence"
+        assert len(result.evidence.depmap_evidence.cell_line_models) > 0, \
+            "Should have cell line models"
+
+        # Verify cell lines have mutation data
+        cell_lines_with_mutation = [
+            cl for cl in result.evidence.depmap_evidence.cell_line_models
+            if cl.has_mutation
+        ]
+        assert len(cell_lines_with_mutation) > 0, \
+            "Should have cell lines with AKT1 E17K mutation"

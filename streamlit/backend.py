@@ -133,6 +133,39 @@ async def batch_get_variant_insights(
 # === Private helper functions ===
 
 
+def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
+    """Deduplicate CIViC evidence items by evidence_id.
+
+    Defensive measure to ensure no duplicate EIDs appear in the UI,
+    even if the API returns them.
+    """
+    seen_ids = set()
+    deduped = []
+    for e in civic_evidence_list:
+        if e.evidence_id in seen_ids:
+            continue
+        seen_ids.add(e.evidence_id)
+        deduped.append({
+            "evidence_id": e.evidence_id,
+            "eid": e.eid,  # Formatted ID (e.g., "EID5586")
+            "civic_url": e.civic_url,  # Direct link to CIViC
+            "evidence_type": e.evidence_type,
+            "evidence_level": e.evidence_level,
+            "clinical_significance": e.clinical_significance,
+            "disease": e.disease,
+            "drugs": e.drugs,
+            "description": e.description,
+            "pmid": e.pmid,
+            "source_url": e.source_url,
+            "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
+            # Match specificity tracking
+            "match_level": e.match_level,
+            "matched_profile": e.matched_profile,
+            "disease_match": e.disease_match,
+        })
+    return deduped
+
+
 def _build_response(result) -> Dict[str, Any]:
     """Build the standard response dict from a Result object.
 
@@ -230,27 +263,7 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for a in evidence.civic_assertions
         ],
-        "civic_evidence": [
-            {
-                "evidence_id": e.evidence_id,
-                "eid": e.eid,  # Formatted ID (e.g., "EID5586")
-                "civic_url": e.civic_url,  # Direct link to CIViC
-                "evidence_type": e.evidence_type,
-                "evidence_level": e.evidence_level,
-                "clinical_significance": e.clinical_significance,
-                "disease": e.disease,
-                "drugs": e.drugs,
-                "description": e.description,
-                "pmid": e.pmid,
-                "source_url": e.source_url,
-                "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
-                # Match specificity tracking
-                "match_level": e.match_level,
-                "matched_profile": e.matched_profile,
-                "disease_match": e.disease_match,
-            }
-            for e in evidence.civic_evidence
-        ],
+        "civic_evidence": _dedupe_civic_evidence(evidence.civic_evidence),
         "vicc_evidence": [
             {
                 "source": v.source,

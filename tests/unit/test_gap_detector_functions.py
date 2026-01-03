@@ -650,10 +650,11 @@ class TestCheckPrevalence:
         mock_evidence.cbioportal_evidence.has_data.return_value = True
         mock_evidence.cbioportal_evidence.study_name = "TCGA"
         mock_evidence.cbioportal_evidence.variant_prevalence_pct = 5.2
+        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 10
 
         _check_prevalence(mock_evidence, base_context)
 
-        assert any("prevalence" in w.lower() for w in base_context.well_characterized)
+        assert any("observed" in w.lower() for w in base_context.well_characterized)
 
     def test_no_prevalence_minor_gap(self, mock_evidence, base_context):
         """Missing prevalence for non-cancer gene should be MINOR gap."""

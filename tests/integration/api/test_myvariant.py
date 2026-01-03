@@ -17,7 +17,7 @@ class TestMyVariantBasic:
     async def test_fetch_braf_v600e(self):
         """BRAF V600E should return evidence with database identifiers."""
         async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("BRAF", "V600E")
+            evidence = await client.fetch_evidence("AKT1", "E17K")
 
             assert evidence is not None
             assert evidence.gene == "BRAF"

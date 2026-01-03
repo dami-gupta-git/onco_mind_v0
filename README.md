@@ -1,43 +1,58 @@
-# OncoMind
+**OncoMind**
 
 **Research intelligence for cancer variants. Find the gaps, not just the facts.**
 
-For BRAF V600E, databases have the answers. For the next 10,000 variants, the real question is **"what don't we know yet?"**
+For BRAF V600E, databases already agree. For the next 10,000 variants, the key question is **“what don’t we know yet?”**
 
-OncoMind aggregates evidence across 10+ sources, identifies knowledge gaps, and generates research hypotheses — turning variant annotation into **research intelligence**, not clinical advice.
+OncoMind aggregates evidence from 10+ public resources, scores knowledge gaps, and proposes testable hypotheses — turning variant annotation into **research intelligence** for discovery and translational work, not medical advice.
 
-> **Research only.** Not for clinical decision-making or patient care.
+> **Research use only.** Not for diagnosis, treatment selection, or any clinical decision-making.
 
----
+***
 
 ## Why OncoMind?
 
-Most tools tell you **what's known** about a variant. Researchers also need:
+Most platforms summarize **what’s known** about a variant. Researchers also need to see:
 
-- What's **well-characterized vs under-studied**?
-- Where do **databases disagree**?
-- Which **co-mutation patterns** suggest testable hypotheses?
-- What **functional / preclinical work** is missing?
+- Which areas are **well-characterized vs under-studied**  
+- Where **databases conflict** or leave holes  
+- Which **co-mutation patterns** hint at mechanism or resistance  
+- What **functional and preclinical experiments** are still missing  
 
-OncoMind has two layers:
+It is a **rapid hypothesis‑generation and gap‑spotting tool** around variants, not as a clinical decision support system.  
 
-1. A deterministic **annotation backbone** (KBs, trials, cBioPortal, DepMap, literature).
-2. An optional **LLM research layer** that surfaces gaps and proposes hypotheses, grounded in that evidence.
+OncoMind is built in two layers:
 
----
+1. A deterministic **annotation backbone** (knowledge bases, trials, cBioPortal, DepMap, literature).  
+2. An optional **LLM research layer** that highlights gaps and drafts hypotheses, constrained by that backbone.  
+
+OncoMind is designed for **translational teams and small biotechs** that need to decide *which variants are worth a project*, not how to treat an individual patient. It integrates public knowledge bases, clinical trials, prevalence data, and mechanistic literature into an interpretable, research‑grade summary plus gap analysis that a discovery team can act on.  
+
+Typical users include:
+
+- Small biotechs prioritizing targets, models, or combination strategies  
+- Academic labs planning functional studies or resistance screens  
+- Platform teams triaging large variant lists from NGS or CRISPR screens  
+
+
+Using 2–3 contrasted variants (for example, AKT1 E17K in breast cancer, IDH1 R132H in glioma, and ERBB2 S310F in   
+bladder cancer) makes it clear that OncoMind handles both rich‑evidence and sparse‑evidence settings and that its   
+differentiator is surfacing **where to push next in the biology**, rather than merely restating known facts.  
+
+***
 
 ## What Makes It Different
 
-| Feature                  | Typical Tools               | OncoMind                               |
-|--------------------------|-----------------------------|----------------------------------------|
-| Focus                    | "What is this variant?"     | "What don't we know (yet)?"           |
-| Knowledge gaps           | Not explicit                | First-class citizens                   |
-| Co-mutation patterns     | Raw data                    | Used to generate hypotheses            |
-| Source conflicts         | Often hidden                | Surfaced and explained                 |
-| Output                   | Static clinical annotations | Research-ready, gap-focused insights   |
-| Evidence quality         | Implicit                    | Explicit rating per variant            |
+| Feature                  | Typical tools                 | OncoMind                                       |
+|--------------------------|-------------------------------|------------------------------------------------|
+| Primary question         | “What is this variant?”       | “What don’t we know yet?”                      |
+| Knowledge gaps           | Rarely explicit               | First-class outputs                            |
+| Co-mutation patterns     | Raw prevalence tables         | Used to drive mechanistic hypotheses           |
+| Source conflicts         | Buried in details             | Detected, surfaced, and explained              |
+| Output                   | Static clinical-style notes   | Research-ready, gap-focused variant briefs     |
+| Evidence quality         | Implicit                      | Explicit per-variant grading and rationale     |
 
----
+***
 
 ## Quick Start
 
@@ -53,10 +68,11 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-> **Note:** All dependencies are managed in `pyproject.toml`. If you encounter `ModuleNotFoundError` after pulling updates, reinstall with:
-> ```bash
-> pip install -e . --force-reinstall
-> ```
+If you hit a `ModuleNotFoundError` after pulling updates, reinstall with:
+
+```bash
+pip install -e . --force-reinstall
+```
 
 ### Python API
 
@@ -65,12 +81,12 @@ import asyncio
 from oncomind import get_insight, InsightConfig
 
 async def main():
-    # Annotation mode: fast, deterministic evidence (~7s)
+    # Fast, deterministic evidence (~7s)
     result = await get_insight("BRAF V600E", tumor_type="Melanoma")
     print(result.get_summary())
     print(result.evidence.get_recommended_therapies())
 
-    # LLM mode: annotation backbone + literature + research insight (~25s)
+    # Evidence backbone + literature + LLM research layer (~25s)
     config = InsightConfig(enable_llm=True, llm_model="claude-sonnet-4-20250514")
     result = await get_insight("MAP2K1 P124L", tumor_type="Melanoma", config=config)
 
@@ -86,16 +102,16 @@ asyncio.run(main())
 ### CLI
 
 ```bash
-# Annotation mode (~7s)
+# Annotation backbone (~7s)
 mind insight BRAF V600E --tumor Melanoma
 
 # Literature search only (~15s)
 mind insight EGFR L858R -t NSCLC --lit
 
-# LLM research mode (~20s)
+# Research mode: backbone + LLM (~20s)
 mind insight MAP2K1 P124L -t Melanoma --llm
 
-# Full mode: literature + LLM (~25s)
+# Full: backbone + literature + LLM (~25s)
 mind insight KRAS G12D -t CRC --full
 
 # Save to JSON
@@ -105,117 +121,76 @@ mind insight EGFR L858R -t NSCLC --llm --output result.json
 mind insight BRAF V600E --log-level DEBUG
 ```
 
-**Modes:**
+**Modes**
 
-| Mode           | Flag     | Output                                           |
-|----------------|----------|--------------------------------------------------|
-| Annotation     | (none)   | Structured evidence from all databases          |
-| Literature     | `--lit`  | + PubMed/Semantic Scholar search                |
-| LLM Research   | `--llm`  | + LLM synthesis and research narrative          |
-| Full           | `--full` | Both `--lit` and `--llm`                        |
+| Mode       | Flag     | Output                                             |
+|------------|----------|----------------------------------------------------|
+| Annotation | (none)   | Structured evidence from all data sources          |
+| Literature | `--lit`  | + PubMed / Semantic Scholar hits                   |
+| LLM        | `--llm`  | + Research narrative and gap analysis              |
+| Full       | `--full` | Annotation + literature + LLM layer                |
 
-**Logging:**
-
-Set log level via CLI flag or environment variable:
+Logging can be set via CLI or environment:
 
 ```bash
-# CLI flag (DEBUG, INFO, WARN, ERROR)
 mind insight BRAF V600E --log-level DEBUG
 mind insight BRAF V600E -l DEBUG  # shorthand
 
-# Environment variable
 ONCOMIND_LOG_LEVEL=DEBUG mind insight BRAF V600E
-
-# Batch command also supports --log-level
 mind batch variants.json --log-level DEBUG
 ```
 
----
+***
 
 ## What You Get
 
-### 1) Evidence Backbone (Annotation)
+### 1) Evidence Backbone
 
-OncoMind builds a rich, structured evidence model:
+OncoMind constructs a structured, variant‑centric evidence model:
 
-- **Clinical / KB**: CIViC, VICC MetaKB, ClinVar, COSMIC, CGI, FDA labels
-- **Functional**: AlphaMissense, CADD, PolyPhen2, gnomAD
-- **Biological**: cBioPortal prevalence and co-mutation patterns
-- **Preclinical**: DepMap CRISPR essentiality, PRISM drug sensitivity
-- **Trials**: ClinicalTrials.gov
-- **Literature**: PubMed / Semantic Scholar entries in a structured `LiteratureEvidence` model
+- **Clinical / KB:** CIViC, VICC MetaKB, ClinVar, COSMIC, CGI, FDA labels  
+- **Functional:** AlphaMissense, CADD, PolyPhen2, gnomAD  
+- **Biological:** cBioPortal prevalence and co‑mutation structure  
+- **Preclinical:** DepMap CRISPR essentiality and PRISM drug response  
+- **Trials:** ClinicalTrials.gov  
+- **Literature:** PubMed / Semantic Scholar summarized in a `LiteratureEvidence` model  
 
-Example (BRAF V600E in melanoma):
+Match specificity is tracked so you can separate variant‑level from gene‑level signals:
 
-```
-Evidence Summary
-  COSMIC: COSM476
-  ClinVar: Pathogenic
-  Pathogenicity: AlphaMissense 0.99 (Pathogenic) | PolyPhen2: D
-  Gene Role: oncogene
-FDA Approved Drugs
-  Mekinist, BRAFTOVI, ZELBORAF, MEKTOVI, KEYTRUDA QLEX
-Clinical Evidence
-  CIViC: Trametinib, Dabrafenib → SENSITIVITY/RESPONSE
-  CGI: PLX4720, Vemurafenib → Responsive
-```
+| Match level | Meaning                            | Example                          |
+|------------|-------------------------------------|----------------------------------|
+| `variant`  | Exact amino-acid change            | BRAF V600E specific data         |
+| `codon`    | Same residue, different change     | BRAF V600K in “V600 variants”    |
+| `gene`     | Gene-level-only evidence           | “BRAF mutation” basket trials    |
 
-This backbone is available even when LLM is disabled and can be consumed directly via Python, CLI, or JSON.
-
-#### Match Specificity
-
-OncoMind tracks how precisely each piece of evidence matches your query:
-
-| Match Level | Meaning | Example |
-|-------------|---------|---------|
-| `variant` | Exact variant match | BRAF V600E → evidence specifically for V600E |
-| `codon` | Same position, different change | BRAF V600K → evidence for "V600 mutations" |
-| `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
-
-This helps distinguish targeted therapies (variant-specific) from broader biomarkers (gene-level).
-
-#### Evidence Gap Analysis
-
-OncoMind automatically identifies what's well-characterized vs under-studied:
+Gap analysis is available programmatically:
 
 ```python
 gaps = result.evidence.compute_evidence_gaps()
 
 gaps.overall_evidence_quality  # "comprehensive" | "moderate" | "limited" | "minimal"
-gaps.well_characterized        # ["FDA-approved therapies", "Functional impact"]
-gaps.poorly_characterized      # ["Resistance mechanisms", "Preclinical models"]
-gaps.gaps                      # Structured list with severity and suggested studies
+gaps.well_characterized        # e.g. ["FDA-approved therapies", "Functional impact"]
+gaps.poorly_characterized      # e.g. ["Resistance mechanisms", "Preclinical models"]
+gaps.gaps                      # structured list with severity + suggested work
 ```
 
----
+### 2) Research Insight (LLM Layer)
 
-### 2) Research Insight (LLM Mode)
+When enabled, OncoMind adds a research card on top of the evidence backbone:
 
-On top of the evidence backbone, OncoMind can generate a **research-focused card** for each variant, constrained to the evidence it sees.
+- `llm_summary` – concise synthesis of function, biology, and therapeutic landscape  
+- `evidence_quality` – comprehensive / moderate / limited / minimal  
+- `knowledge_gaps` / `well_characterized` – structured view of what’s missing vs solid  
+- `research_implications` – short, testable hypotheses  
+- `key_references` – PMIDs, trials, and KB IDs supporting the card  
 
-Example (MAP2K1 P124L in melanoma):
+Example (MAP2K1 P124L in melanoma) might include: gain‑of‑function MAPK activation, rarity and co‑mutation context, limited MEK‑inhibitor data, and hypotheses around resistance mechanisms or TP53‑stratified sensitivity.
 
-> **Insight Ready: MAP2K1 P124L in Melanoma**
-> Functional impact: gain-of-function MAP2K1 variant activating MAPK signaling.
-> Biological context: rare (~1%) but recurrent in melanoma, with frequent TP53 co-mutations in TCGA SKCM.
-> Therapeutic landscape: limited clinical data; case reports describe trametinib response and resistance.
-> Evidence quality: **moderate**.
-> Knowledge gaps: resistance mechanisms, MAP2K1-specific preclinical models.
-> Hypothesis: *Co-occurring MAP2K1 P124L and TP53 mutations may alter MEK-inhibitor sensitivity compared to MAP2K1 alone, motivating co-mutation–stratified studies in MAPK-driven melanoma.*
-
-Structured fields on `result.llm`:
-
-- `llm_summary` – human-readable synthesis
-- `evidence_quality` – `"comprehensive" | "moderate" | "limited" | "minimal"`
-- `knowledge_gaps` / `well_characterized` – what's missing vs solid
-- `research_implications` – 2–3 sentence, testable hypothesis
-- `key_references` – PMIDs, trials, and database IDs it relied on
-
----
+***
 
 ## LLM-Ready Context
 
-OncoMind can emit dense, grounded context strings for use in your own LLM workflows:
+OncoMind can emit compact, grounded context strings for use in your own LLM workflows:
 
 ```python
 context = panel.to_knowledge_header()
@@ -224,14 +199,14 @@ context = panel.to_knowledge_header()
 #  Resistance via NRAS, MEK1/2, BRAF amplification. Sources: CIViC, FDA, PMID:22735384."
 ```
 
----
+***
 
 ## Configuration
 
 Create a `.env` file:
 
 ```bash
-# Required for LLM research mode (Claude Sonnet 4 is the default)
+# Required for LLM research mode
 ANTHROPIC_API_KEY=your-anthropic-key
 
 # Optional: use OpenAI models instead
@@ -242,18 +217,19 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 ```
 
 **Supported LLM models:**
-- `claude-sonnet-4-20250514` (default, recommended)
-- `claude-3-5-haiku-20241022` (faster, lower cost)
-- `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
 
----
+- `claude-sonnet-4-20250514` (default, recommended)  
+- `claude-3-5-haiku-20241022` (faster, lower cost)  
+- `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`  
+
+***
 
 ## Result Model
 
 The top-level `Result` object contains:
 
-- `evidence`: all structured data (identifiers, KBs, functional, clinical, literature)
-- `llm`: optional `LLMInsight` with research narrative and gaps (only when `enable_llm=True`)
+- `evidence` – all structured data (identifiers, KBs, functional, clinical, literature)  
+- `llm` – optional `LLMInsight` with research narrative and gaps (only when `enable_llm=True`)  
 
 ```python
 result = await get_insight("BRAF V600E", tumor_type="Melanoma")
@@ -270,64 +246,67 @@ if result.llm:
     result.llm.research_implications
 ```
 
-See [docs/API_REFERENCE.md](docs/API_REFERENCE.md) for complete field documentation.
+See `docs/API_REFERENCE.md` for full field documentation.
 
----
+***
 
 ## Supported Variant Types
 
 Currently supports:
 
-- Missense (e.g., `V600E`, `L858R`)
-- Nonsense (e.g., `R248*`)
-- Small indels (e.g., `E746_A750del`)
-- Frameshift (e.g., `K132fs`)
+- Missense (e.g., `V600E`, `L858R`)  
+- Nonsense (e.g., `R248*`)  
+- Small indels (e.g., `E746_A750del`)  
+- Frameshift (e.g., `K132fs`)  
 
-Variants can be provided as simple protein changes (`V600E`, `p.V600E`) or in HGVS; MyVariant.info is used to normalize where needed.
+Variants can be provided as simple protein changes (`V600E`, `p.V600E`) or in HGVS notation; normalization is handled under the hood.
 
-Planned: fusions, amplifications, copy-number variants (see [docs/ROADMAP.md](docs/ROADMAP.md)).
+Planned: fusions, amplifications, and copy‑number variants (see `docs/ROADMAP.md`).
 
----
+***
 
 ## Data Sources
 
 ### Clinical & Therapeutic
+
 | Source | Data Type | Access |
 |--------|-----------|--------|
-| [CIViC](https://civicdb.org/) | Curated variant-drug associations | Free API |
-| [VICC MetaKB](https://search.cancervariants.org/) | Aggregated knowledgebases | Free API |
-| [ClinVar](https://www.ncbi.nlm.nih.gov/clinvar/) | Clinical significance | Via MyVariant.info |
-| [COSMIC](https://cancer.sanger.ac.uk/cosmic) | Somatic mutation catalog | Via MyVariant.info |
-| [CGI](https://www.cancergenomeinterpreter.org/) | Biomarker annotations | Local database |
-| [FDA](https://www.fda.gov/) | Drug approvals | OpenFDA API |
-| [ClinicalTrials.gov](https://clinicaltrials.gov/) | Active trials | Free API |
+| CIViC | Curated variant–drug associations | API / dump |
+| VICC MetaKB | Aggregated knowledge bases | API |
+| ClinVar | Clinical significance | Via aggregation layer |
+| COSMIC | Somatic mutation catalog | Via aggregation layer |
+| CGI | Biomarker annotations | Local DB |
+| FDA | Drug approvals | Public APIs / labels |
+| ClinicalTrials.gov | Active and historical trials | Public API |
 
 ### Functional & Biological
+
 | Source | Data Type | Access |
 |--------|-----------|--------|
-| [cBioPortal](https://www.cbioportal.org/) | Co-mutation patterns, prevalence | Free API |
-| [AlphaMissense](https://alphamissense.hegelab.org/) | Pathogenicity predictions | Via MyVariant.info |
-| [gnomAD](https://gnomad.broadinstitute.org/) | Population frequencies | Via MyVariant.info |
+| cBioPortal | Co-mutation patterns, prevalence | API |
+| AlphaMissense | Pathogenicity predictions | Precomputed scores |
+| gnomAD | Population frequencies | Via aggregation layer |
 
 ### Literature
+
 | Source | Data Type | Access |
 |--------|-----------|--------|
-| [Semantic Scholar](https://www.semanticscholar.org/) | AI-powered literature search | Free API |
-| [PubMed](https://pubmed.ncbi.nlm.nih.gov/) | Biomedical literature | Free E-utilities |
+| Semantic Scholar | AI-powered literature search | API |
+| PubMed | Biomedical literature | E-utilities |
 
 ### Preclinical Research
+
 | Source | Data Type | Access |
 |--------|-----------|--------|
-| [DepMap](https://depmap.org/) | Gene essentiality (CRISPR), drug sensitivity (PRISM), cell line models | Free API |
+| DepMap | Gene essentiality (CRISPR), drug sensitivity (PRISM), cell line models | API / downloads |
 
 ### Coming Soon
+
 | Source | Data Type | Status |
 |--------|-----------|--------|
-| [Reactome](https://reactome.org/) | Pathway context | Planned |
+| Reactome | Pathway context | Planned |
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development roadmap.
-
----
+***
 
 ## Development
 
@@ -336,7 +315,6 @@ pytest tests/unit/ -v
 pytest tests/unit/ --cov=src/oncomind --cov-report=html
 
 mypy src/oncomind
-
 ruff check src/oncomind
 ruff format src/oncomind
 ```
@@ -348,12 +326,20 @@ cd streamlit
 streamlit run app.py
 ```
 
----
+***
 
 ## License
 
-MIT License – see [LICENSE](LICENSE).
+MIT License – see `LICENSE`.
 
 ## Acknowledgments
 
-CIViC, VICC, MyVariant.info, DepMap, Semantic Scholar, and all the open-data projects that make this kind of research tooling possible.
+Built on the work of CIViC, VICC, MyVariant.info, DepMap, Semantic Scholar, cBioPortal, and the broader open‑data oncology community.
+
+[1](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/813a06e7-3022-4ad0-b979-01ad4311d148/image.jpg)
+[2](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/a7656279-d3ae-457f-b821-43bc10216bd9/image.jpg)
+[3](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/f16c56cc-f47f-4b88-baba-f3aa8c964980/image.jpg)
+[4](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/7ede33b8-62a5-4df4-8e6e-07f8593fabbd/image.jpg)
+[5](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/f68319f9-791b-4200-a419-4cdaf76e7ab0/image.jpg)
+[6](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/f689d40e-3225-40b6-a5e5-954dcfab3b03/image.jpg)
+[7](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/150567280/5c3f51a7-f556-4043-932e-8e135adf640d/image.jpg)

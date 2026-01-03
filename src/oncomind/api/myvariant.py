@@ -1,9 +1,10 @@
 """MyVariant.info API client for fetching variant evidence.
 
 ARCHITECTURE:
-    Gene + Variant → MyVariant.info API → Evidence (CIViC/ClinVar/COSMIC)
+    Gene + Variant → MyVariant.info API → Evidence (ClinVar/COSMIC/AlphaMissense/CADD/gnomAD)
 
 Aggregates variant information from multiple databases for LLM assessment.
+CIViC evidence is fetched separately via CIViCClient (GraphQL API).
 
 Key Design:
 - Async HTTP with connection pooling (httpx.AsyncClient)
@@ -24,7 +25,6 @@ from tenacity import (
 
 from oncomind.models.myvariant import MyVariantHit, MyVariantResponse
 
-from oncomind.models.evidence.civic import CIViCEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
@@ -79,17 +79,16 @@ def _convert_to_hgvs_p_three_letter(variant: str) -> str | None:
 
 
 class MyVariantClient:
-    """Client for MyVariant.info API with CIViC fallback.
+    """Client for MyVariant.info API.
 
     MyVariant.info aggregates variant annotations from multiple sources
-    including CIViC, ClinVar, COSMIC, and more.
+    including ClinVar, COSMIC, AlphaMissense, CADD, gnomAD and more.
 
-    When MyVariant returns no evidence, falls back to direct CIViC API
-    queries to handle fusions, amplifications, and poorly-indexed variants.
+    Note: CIViC evidence is fetched separately via CIViCClient (GraphQL API)
+    to get the most up-to-date clinical interpretations.
     """
 
     BASE_URL = "https://myvariant.info/v1"
-    CIVIC_API = "https://civicdb.org/api"
     DEFAULT_TIMEOUT = 30.0
 
     def __init__(
@@ -170,176 +169,6 @@ class MyVariantClient:
         response = await client.get(f"{self.BASE_URL}/variant/{variant_id}")
         response.raise_for_status()
         return response.json()
-
-    def _determine_match_level(
-        self,
-        molecular_profile: str | None,
-        gene: str | None,
-        variant: str | None,
-    ) -> str:
-        """Determine the match specificity level for a molecular profile.
-
-        Args:
-            molecular_profile: The molecular profile string (e.g., "EGFR L858R")
-            gene: The queried gene symbol
-            variant: The queried variant (e.g., "L858R")
-
-        Returns:
-            Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
-        """
-        import re
-
-        if not gene:
-            return "gene"
-
-        profile_upper = (molecular_profile or "").upper()
-        gene_upper = gene.upper()
-
-        # Check if gene is even in the profile
-        if gene_upper not in profile_upper:
-            return "gene"
-
-        if not variant:
-            return "gene"
-
-        # Clean variant for comparison
-        clean_variant = variant.replace("p.", "").upper()
-
-        # Exact variant match
-        if clean_variant in profile_upper:
-            return "variant"
-
-        # Check for codon-level match (same position, different amino acid change)
-        pos_match = re.search(r'[A-Z](\d+)', clean_variant)
-        if pos_match:
-            position = pos_match.group(1)
-            codon_pattern = rf'[A-Z]{position}[A-Z]?'
-            if re.search(codon_pattern, profile_upper):
-                return "codon"
-
-        return "gene"
-
-    def _parse_civic_evidence(
-        self,
-        civic_data: dict[str, Any] | list[Any],
-        gene: str | None = None,
-        variant: str | None = None,
-    ) -> list[CIViCEvidence]:
-        """Parse CIViC data into evidence objects.
-
-        Supports both old API format (evidence_items) and new API format (molecularProfiles).
-
-        Args:
-            civic_data: Raw CIViC data from API
-            gene: Queried gene symbol (for match level tracking)
-            variant: Queried variant (for match level tracking)
-
-        Returns:
-            List of CIViC evidence objects
-        """
-        evidence_list: list[CIViCEvidence] = []
-
-        # Handle both single dict and list of dicts
-        items = civic_data if isinstance(civic_data, list) else [civic_data]
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-
-            # NEW API FORMAT: molecularProfiles with nested evidenceItems
-            if "molecularProfiles" in item:
-                for mp in item.get("molecularProfiles", []):
-                    if not isinstance(mp, dict):
-                        continue
-                    mp_name = mp.get("name", "")
-                    for ev_item in mp.get("evidenceItems", []):
-                        # Extract disease name
-                        disease_data = ev_item.get("disease", {})
-                        disease = disease_data.get("name") if isinstance(disease_data, dict) else None
-
-                        # Extract therapies (new API uses "therapies" instead of "drugs")
-                        therapies = ev_item.get("therapies", [])
-                        drugs = [t.get("name", "") for t in therapies if isinstance(t, dict)]
-
-                        # Determine match level
-                        match_level = self._determine_match_level(mp_name, gene, variant)
-
-                        evidence_list.append(
-                            CIViCEvidence(
-                                evidence_id=ev_item.get("id"),  # CIViC evidence item ID
-                                evidence_type=ev_item.get("evidenceType"),  # camelCase in new API
-                                evidence_level=ev_item.get("evidenceLevel"),  # camelCase in new API
-                                evidence_direction=ev_item.get("evidenceDirection"),
-                                clinical_significance=ev_item.get("significance"),  # "significance" in new API
-                                disease=disease,
-                                drugs=drugs,
-                                description=ev_item.get("description"),
-                                source=ev_item.get("source", {}).get("name")
-                                if isinstance(ev_item.get("source"), dict)
-                                else None,
-                                rating=ev_item.get("rating"),
-                                match_level=match_level,
-                                matched_profile=mp_name or None,
-                            )
-                        )
-            # OLD API FORMAT: evidence_items
-            elif "evidence_items" in item:
-                # Try to extract molecular profile name from item context
-                item_gene = item.get("gene", {}).get("name", "") if isinstance(item.get("gene"), dict) else ""
-                item_variant = item.get("name", "")  # Old format often has variant name at top level
-                mp_name = f"{item_gene} {item_variant}".strip() if item_gene else item_variant
-
-                for ev_item in item.get("evidence_items", []):
-                    match_level = self._determine_match_level(mp_name, gene, variant)
-                    evidence_list.append(
-                        CIViCEvidence(
-                            evidence_id=ev_item.get("id"),  # CIViC evidence item ID
-                            evidence_type=ev_item.get("evidence_type"),
-                            evidence_level=ev_item.get("evidence_level"),
-                            evidence_direction=ev_item.get("evidence_direction"),
-                            clinical_significance=ev_item.get("clinical_significance"),
-                            disease=ev_item.get("disease", {}).get("name")
-                            if isinstance(ev_item.get("disease"), dict)
-                            else None,
-                            drugs=[
-                                drug.get("name", "")
-                                for drug in ev_item.get("drugs", [])
-                                if isinstance(drug, dict)
-                            ],
-                            description=ev_item.get("description"),
-                            source=ev_item.get("source", {}).get("name")
-                            if isinstance(ev_item.get("source"), dict)
-                            else None,
-                            rating=ev_item.get("rating"),
-                            match_level=match_level,
-                            matched_profile=mp_name or None,
-                        )
-                    )
-            else:
-                # Direct evidence object (legacy format)
-                # Construct best-guess molecular profile from available fields
-                item_gene = item.get("gene", "")
-                mp_name = f"{item_gene} {variant}".strip() if item_gene and variant else (gene or "")
-                match_level = self._determine_match_level(mp_name, gene, variant)
-
-                evidence_list.append(
-                    CIViCEvidence(
-                        evidence_id=item.get("id"),  # CIViC evidence item ID
-                        evidence_type=item.get("evidence_type"),
-                        evidence_level=item.get("evidence_level"),
-                        evidence_direction=item.get("evidence_direction"),
-                        clinical_significance=item.get("clinical_significance"),
-                        disease=item.get("disease"),
-                        drugs=item.get("drugs", []) if isinstance(item.get("drugs"), list) else [],
-                        description=item.get("description"),
-                        source=item.get("source"),
-                        rating=item.get("rating"),
-                        match_level=match_level,
-                        matched_profile=mp_name or None,
-                    )
-                )
-
-        return evidence_list
 
     def _parse_clinvar_evidence(
         self, clinvar_data: dict[str, Any] | list[Any]
@@ -607,11 +436,8 @@ class MyVariantClient:
                 else:
                     alphamissense_prediction = am.pred
 
-        # Parse evidence using existing parsers (CIViC, ClinVar, COSMIC)
-        civic_evidence = []
-        if hit.civic:
-            civic_evidence = self._parse_civic_evidence(hit.civic, gene=gene, variant=variant)
-
+        # Parse evidence using existing parsers (ClinVar, COSMIC)
+        # Note: CIViC evidence is fetched separately via CIViCClient (GraphQL API)
         clinvar_evidence = []
         if hit.clinvar:
             # Convert back to dict for existing parser
@@ -651,7 +477,7 @@ class MyVariantClient:
             alphamissense_prediction=alphamissense_prediction,
             transcript_id=transcript_id,
             transcript_consequence=transcript_consequence,
-            civic=civic_evidence,
+            civic=[],  # CIViC evidence is fetched separately via CIViCClient
             clinvar=clinvar_evidence,
             cosmic=cosmic_evidence,
             raw_data=hit.model_dump(by_alias=True),
@@ -794,142 +620,6 @@ class MyVariantClient:
         except Exception:
             return None
 
-    async def _fetch_civic_fallback(
-        self, gene: str, variant: str
-    ) -> list[CIViCEvidence]:
-        """
-        Fallback to direct CIViC GraphQL API when MyVariant returns no evidence.
-
-        Handles fusions, amplifications, and poorly-indexed variants using CIViC V2 GraphQL API.
-
-        Queries both specific variant profiles (e.g., "BRAF V600E") and gene-level profiles
-        (e.g., "BRAF MUTATION") to capture broader therapeutic evidence.
-
-        Args:
-            gene: Gene symbol (e.g., "ERBB2", "ALK")
-            variant: Variant notation (e.g., "amplification", "fusion", "R132H")
-
-        Returns:
-            List of CIViC evidence objects
-        """
-        gene = gene.upper()
-        variant_clean = variant.strip().upper()
-
-        # Detect variant type and construct molecular profile names to query
-        # We'll query both specific variant and gene-level MUTATION profiles
-        mp_names = []
-
-        if any(kw in variant_clean for kw in ["FUSION", "FUS", "REARRANGEMENT"]):
-            mp_names = [f"{gene} FUSION"]
-        elif any(kw in variant_clean for kw in ["AMP", "AMPLIFICATION", "OVEREXPRESSION"]):
-            mp_names = [f"{gene} AMPLIFICATION"]
-        else:
-            # For SNPs/indels: query specific variant, codon-level, AND gene-level MUTATION
-            # Example: ["NRAS Q61K", "NRAS Q61", "NRAS MUTATION"]
-            # CIViC often has evidence at codon level (e.g., Q61 covers Q61K/L/R/H)
-            mp_names = [
-                f"{gene} {variant_clean}",  # Specific variant (e.g., NRAS Q61K)
-            ]
-
-            # Extract codon-level variant (e.g., Q61K -> Q61, V600E -> V600)
-            # Pattern: letter + digits + optional letter(s) at end
-            codon_match = re.match(r'^([A-Z])(\d+)[A-Z]*$', variant_clean)
-            if codon_match:
-                codon_variant = f"{codon_match.group(1)}{codon_match.group(2)}"
-                if codon_variant != variant_clean:  # Only add if different
-                    mp_names.append(f"{gene} {codon_variant}")  # Codon level (e.g., NRAS Q61)
-
-            mp_names.append(f"{gene} MUTATION")  # Gene-level profile (often has FDA approvals)
-
-        client = self._get_client()
-        all_civic_evidence = []
-
-        # GraphQL query for molecular profiles and evidence
-        query = """
-        query($name: String!) {
-          molecularProfiles(name: $name) {
-            nodes {
-              id
-              name
-              evidenceItems {
-                nodes {
-                  id
-                  evidenceType
-                  evidenceLevel
-                  evidenceDirection
-                  significance
-                  description
-                  disease {
-                    name
-                  }
-                  therapies {
-                    id
-                    name
-                  }
-                  source {
-                    sourceType
-                  }
-                }
-              }
-            }
-          }
-        }
-        """
-
-        try:
-            # Query all molecular profile names (specific + gene-level)
-            for mp_name in mp_names:
-                response = await client.post(
-                    f"{self.CIVIC_API}/graphql",
-                    json={"query": query, "variables": {"name": mp_name}},
-                )
-
-                if response.status_code != 200:
-                    continue
-
-                data = response.json()
-                profiles = data.get("data", {}).get("molecularProfiles", {}).get("nodes", [])
-
-                if not profiles:
-                    continue
-
-                # Parse evidence items from all matching profiles
-                for profile in profiles:
-                    evidence_items = profile.get("evidenceItems", {}).get("nodes", [])
-
-                    for item in evidence_items:
-                        # Extract disease name
-                        disease_data = item.get("disease", {})
-                        disease = disease_data.get("name") if disease_data else None
-
-                        # Extract therapies
-                        therapies = item.get("therapies", [])
-                        drugs = [t.get("name", "") for t in therapies if isinstance(t, dict)]
-
-                        # Map GraphQL field names to Evidence model fields
-                        all_civic_evidence.append(
-                            CIViCEvidence(
-                                evidence_id=item.get("id"),  # CIViC evidence item ID
-                                evidence_type=item.get("evidenceType"),  # camelCase in GraphQL
-                                evidence_level=item.get("evidenceLevel"),
-                                evidence_direction=item.get("evidenceDirection"),
-                                clinical_significance=item.get("significance"),
-                                disease=disease,
-                                drugs=drugs,
-                                description=item.get("description"),
-                                source=item.get("source", {}).get("sourceType")
-                                if isinstance(item.get("source"), dict)
-                                else None,
-                                rating=None,  # Rating not in V2 API
-                            )
-                        )
-
-            return all_civic_evidence
-
-        except Exception as e:
-            # Log error but don't fail - return empty evidence
-            return []
-
     async def fetch_evidence(self, gene: str, variant: str) -> MyVariantEvidence:
         """Fetch evidence for a variant from multiple sources.
 
@@ -943,9 +633,9 @@ class MyVariantClient:
         Raises:
             MyVariantAPIError: If the API request fails
         """
-        # Request specific fields from CIViC, ClinVar, COSMIC, and identifiers
+        # Request specific fields from ClinVar, COSMIC, and other annotation sources
+        # Note: CIViC evidence is fetched separately via CIViCClient (GraphQL API)
         fields = [
-            "civic",
             "clinvar",
             "cosmic",
             "dbsnp",
@@ -1012,8 +702,8 @@ class MyVariantClient:
             parsed_response = MyVariantResponse(**result)
 
             if not parsed_response.hits:
-                # No data found in MyVariant - try CIViC and ClinVar fallbacks
-                civic_fallback = await self._fetch_civic_fallback(gene, variant)
+                # No data found in MyVariant - try ClinVar fallback
+                # Note: CIViC evidence is fetched separately via CIViCClient
                 clinvar_fallback = await self._fetch_clinvar_fallback(gene, variant)
 
                 # Extract ClinVar data from fallback
@@ -1025,7 +715,7 @@ class MyVariantClient:
                     clinvar_significance = clinvar_fallback.get("clinical_significance")
                     clinvar_accession = clinvar_fallback.get("accession")
 
-                # Use VEP predictions if available (from Strategy 4)
+                # Use VEP predictions if available (from Strategy 5)
                 vep_hgvs_genomic = None
                 vep_hgvs_transcript = None
                 vep_polyphen = None
@@ -1040,7 +730,8 @@ class MyVariantClient:
                     vep_alphamissense_score = vep_annotation.alphamissense_score
                     vep_alphamissense_pred = vep_annotation.alphamissense_prediction
 
-                # Return evidence with fallback data (CIViC, ClinVar, and VEP predictions)
+                # Return evidence with fallback data (ClinVar and VEP predictions)
+                # CIViC evidence should be fetched separately via CIViCClient
                 return MyVariantEvidence(
                     variant_id=f"{gene}:{variant}",
                     gene=gene,
@@ -1062,7 +753,7 @@ class MyVariantClient:
                     alphamissense_prediction=vep_alphamissense_pred,
                     transcript_id=None,
                     transcript_consequence=None,
-                    civic=civic_fallback,  # Use CIViC fallback evidence
+                    civic=[],  # CIViC evidence is fetched separately via CIViCClient
                     clinvar=[],
                     cosmic=[],
                     raw_data=result,
@@ -1072,14 +763,8 @@ class MyVariantClient:
             first_hit = parsed_response.hits[0]
             evidence = self._extract_from_hit(first_hit, gene, variant)
 
-            # If MyVariant returned no CIViC evidence, try CIViC fallback
-            if not evidence.civic:
-                civic_fallback = await self._fetch_civic_fallback(gene, variant)
-                if civic_fallback:
-                    # Update evidence with CIViC fallback data
-                    evidence.civic = civic_fallback
-
             # If MyVariant returned no ClinVar data, try ClinVar fallback
+            # Note: CIViC evidence is fetched separately via CIViCClient
             if not evidence.clinvar_id and not evidence.clinvar_clinical_significance:
                 clinvar_fallback = await self._fetch_clinvar_fallback(gene, variant)
                 if clinvar_fallback:
