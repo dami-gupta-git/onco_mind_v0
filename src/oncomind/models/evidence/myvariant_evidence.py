@@ -42,6 +42,9 @@ class MyVariantEvidence(BaseModel):
     # Functional annotations
     snpeff_effect: str | None = None
     polyphen2_prediction: str | None = None
+    polyphen2_score: float | None = None
+    sift_prediction: str | None = None
+    sift_score: float | None = None
     cadd_score: float | None = None
     gnomad_exome_af: float | None = None
     alphamissense_score: float | None = None

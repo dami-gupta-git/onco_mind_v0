@@ -231,7 +231,8 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
     has_functional = (
         evidence.functional.alphamissense_score is not None or
         evidence.functional.cadd_score is not None or
-        evidence.functional.polyphen2_prediction is not None
+        evidence.functional.polyphen2_prediction is not None or
+        evidence.functional.sift_prediction is not None
     )
 
     if has_functional:
@@ -242,6 +243,8 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
             func_sources.append(f"CADD={evidence.functional.cadd_score:.1f}")
         if evidence.functional.polyphen2_prediction:
             func_sources.append(f"PolyPhen2={evidence.functional.polyphen2_prediction}")
+        if evidence.functional.sift_prediction:
+            func_sources.append(f"SIFT={evidence.functional.sift_prediction}")
         ctx.add_well_characterized(
             "computational pathogenicity",
             " | ".join(func_sources) if func_sources else "Predictions available",
@@ -253,7 +256,7 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
             category=GapCategory.FUNCTIONAL,
             severity=GapSeverity.SIGNIFICANT,
             description=f"No computational pathogenicity predictions for {ctx.gene} {ctx.variant}",
-            suggested_studies=["Run AlphaMissense, CADD, PolyPhen2"],
+            suggested_studies=["Run AlphaMissense, CADD, PolyPhen2, SIFT"],
             addressable_with=["MyVariant.info", "VEP"]
         )
         ctx.add_poorly_characterized("pathogenicity predictions")
@@ -1050,6 +1053,7 @@ def _has_pathogenic_signal(evidence: "Evidence") -> bool:
     - AlphaMissense predicts pathogenic (P or likely_pathogenic)
     - CADD score >= 20 (predicted deleterious)
     - PolyPhen2 predicts damaging (D or probably_damaging)
+    - SIFT predicts deleterious (D)
     - Has any clinical assertions or FDA approvals
     - Has any ClinVar pathogenic/likely pathogenic entries
     - Is a truncating variant (nonsense, frameshift)
@@ -1069,6 +1073,12 @@ def _has_pathogenic_signal(evidence: "Evidence") -> bool:
     # PolyPhen2 damaging prediction
     if func.polyphen2_prediction and func.polyphen2_prediction.lower() in (
         "d", "damaging", "probably_damaging", "possibly_damaging"
+    ):
+        return True
+
+    # SIFT deleterious prediction (D = deleterious, T = tolerated)
+    if func.sift_prediction and func.sift_prediction.lower() in (
+        "d", "deleterious"
     ):
         return True
 

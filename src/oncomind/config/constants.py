@@ -241,12 +241,12 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
 # MSK-IMPACT and institutional studies provide additional depth
 
 CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
-    # Lung / NSCLC - Prioritize GENIE BPC (multi-institutional real-world) and recent LUAD studies
-    "nsclc": ["nsclc_genie_bpc_public", "nsclc_ctdx_msk_2022", "luad_cptac_gdc", "luad_mskcc_2023_met_organotropism"],
-    "lung": ["nsclc_genie_bpc_public", "luad_cptac_gdc", "luad_tcga_pan_can_atlas_2018"],
-    "luad": ["nsclc_genie_bpc_public", "luad_cptac_gdc", "luad_tcga_pan_can_atlas_2018"],
+    # Lung / NSCLC - Use TCGA PanCancer Atlas studies (verified working)
+    "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
+    "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
+    "luad": ["luad_tcga_pan_can_atlas_2018"],
     "lusc": ["lusc_tcga_pan_can_atlas_2018"],
-    "sclc": ["sclc_ucologne_2015", "asclc_msk_2024"],  # Added recent atypical SCLC
+    "sclc": ["sclc_ucologne_2015"],
 
     # Melanoma
     "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018", "mel_ucla_2016"],
