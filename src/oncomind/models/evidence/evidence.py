@@ -942,6 +942,14 @@ class Evidence(BaseModel):
                     if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                         literature_drugs.add(drug_lower)
 
+        # DepMap/PRISM drug sensitivities (preclinical)
+        preclinical_drugs: set[str] = set()
+        if self.depmap_evidence and self.depmap_evidence.drug_sensitivities:
+            for ds in self.depmap_evidence.get_top_sensitive_drugs(5):
+                drug_lower = ds.drug_name.lower()
+                if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                    preclinical_drugs.add(drug_lower)
+
         # Build synthesized summary
         summaries = []
 
@@ -961,7 +969,11 @@ class Evidence(BaseModel):
             drug_list = ", ".join(sorted(clinical_drugs)[:5])
             summaries.append(f"Clinical evidence: {drug_list}")
 
-        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs:
+        if preclinical_drugs:
+            drug_list = ", ".join(sorted(preclinical_drugs)[:3])
+            summaries.append(f"Preclinical (DepMap): {drug_list}")
+
+        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not preclinical_drugs:
             # Only show literature if no higher-tier evidence
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")

@@ -1142,6 +1142,12 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
     sensitive_drugs: dict[str, set[str]] = {}
     resistant_drugs: dict[str, set[str]] = {}
 
+    # Check FDA approvals (always sensitivity)
+    for approval in evidence.fda_approvals:
+        drug = approval.generic_name or approval.brand_name or approval.drug_name
+        if drug:
+            sensitive_drugs.setdefault(drug.lower(), set()).add("FDA")
+
     # Check CGI biomarkers
     for cgi in evidence.cgi_biomarkers:
         if not cgi.drug:
@@ -1167,7 +1173,18 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             elif "SENS" in resp_upper or "RESPON" in resp_upper:
                 sensitive_drugs.setdefault(drug_lower, set()).add(source_name)
 
-    # Check CIViC evidence
+    # Check CIViC assertions
+    for assertion in evidence.civic_assertions:
+        if not assertion.therapies:
+            continue
+        for therapy in assertion.therapies:
+            drug_lower = therapy.lower()
+            if assertion.is_resistance:
+                resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
+            elif assertion.is_sensitivity:
+                sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
+
+    # Check CIViC evidence items
     for civic in evidence.civic_evidence:
         if not civic.drugs or len(civic.drugs) > 1:  # Skip combinations
             continue
