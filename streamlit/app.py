@@ -596,7 +596,9 @@ with tab1:
                 # Research tab
                 if preclinical or early_phase:
                     with tabs[tab_idx]:
-                        st.warning("⚠️ Preclinical/investigational data - not FDA-approved")
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.warning("⚠️ [CGI](https://www.cancergenomeinterpreter.org/) biomarker entries that are NOT FDA-approved and are from early clinical trials, late trials, case reports, or preclinical studies.")
                         if preclinical:
                             st.markdown("**Preclinical (Cell Line/Animal Models):**")
                             for b in preclinical:

@@ -287,9 +287,14 @@ class CGIClient:
                 if any(name in tumor_lower for name in full_names):
                     return True
 
-        # Direct substring match
-        if cgi_lower and cgi_lower in tumor_lower:
-            return True
+        # Direct substring match - check if user's tumor type contains CGI type
+        # or if CGI type equals user's tumor type (but avoid false positives
+        # from short abbreviations like "ma" in "melanoma")
+        if cgi_lower and len(cgi_lower) >= 3:
+            # Only do substring matching for longer CGI types to avoid
+            # false positives (e.g., "ma" matching "melanoma")
+            if cgi_lower in tumor_lower or tumor_lower in cgi_lower:
+                return True
 
         return False
 
@@ -326,12 +331,24 @@ class CGIClient:
             ):
                 continue
 
+            # Get drug name, falling back to drug family if Drug is empty/placeholder
+            drug = row.get("Drug", "")
+            if not drug or drug == "[]":
+                # Use drug family as fallback, removing brackets if present
+                drug_family = row.get("Drug family", "")
+                if drug_family:
+                    # Clean up brackets: "[EGFR TK inhibitor]" -> "EGFR TK inhibitor"
+                    drug = drug_family.strip("[]")
+                else:
+                    # Skip entries with no drug information
+                    continue
+
             # Create biomarker object
             matches.append(
                 CGIBiomarker(
                     gene=row.get("Gene", ""),
                     alteration=alteration,
-                    drug=row.get("Drug", ""),
+                    drug=drug,
                     drug_status=row.get("Drug status", ""),
                     association=row.get("Association", ""),
                     evidence_level=row.get("Evidence level", ""),

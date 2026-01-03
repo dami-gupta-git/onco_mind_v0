@@ -1023,12 +1023,13 @@ class Evidence(BaseModel):
                         cgi_preclinical_drugs.add(drug_lower)
 
         # CGI early-phase sensitivity biomarkers (clinical trials, case reports)
+        early_phase_drugs: set[str] = set()
         for biomarker in self.early_phase_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
-                    if drug_lower not in all_fda_drugs:
-                        clinical_drugs.add(drug_lower)
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                        early_phase_drugs.add(drug_lower)
 
         # Literature sensitivity signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.sensitive_to:
@@ -1077,11 +1078,15 @@ class Evidence(BaseModel):
             drug_list = ", ".join(sorted(clinical_drugs)[:5])
             summaries.append(f"Clinical evidence: {drug_list}")
 
+        if early_phase_drugs:
+            drug_list = ", ".join(sorted(early_phase_drugs)[:3])
+            summaries.append(f"Early phase trials: {drug_list}")
+
         if all_preclinical_drugs:
             drug_list = ", ".join(sorted(all_preclinical_drugs)[:3])
             summaries.append(f"Preclinical: {drug_list}")
 
-        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not all_preclinical_drugs:
+        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not early_phase_drugs and not all_preclinical_drugs:
             # Only show literature if no higher-tier evidence
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")

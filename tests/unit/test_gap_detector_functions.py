@@ -68,6 +68,7 @@ def mock_evidence():
     evidence.vicc_evidence = []
     evidence.cgi_biomarkers = []
     evidence.preclinical_biomarkers = []
+    evidence.early_phase_biomarkers = []
     evidence.pubmed_articles = []
     evidence.clinical_trials = []
     evidence.clinvar_entries = []

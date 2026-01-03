@@ -668,16 +668,14 @@ class TestDepMapEvidenceFields:
         """Test creating DrugSensitivity model."""
         sensitivity = DrugSensitivity(
             drug_name="Vemurafenib",
-            ic50_nm=50.5,
-            auc=0.35,
-            z_score=-2.1,
+            mean_log2fc=-2.1,
             n_cell_lines=25,
             sensitive_lines=["A375", "SK-MEL-28"],
         )
 
         assert sensitivity.drug_name == "Vemurafenib"
-        assert sensitivity.ic50_nm == 50.5
-        assert sensitivity.auc == 0.35
+        assert sensitivity.mean_log2fc == -2.1
+        assert sensitivity.n_cell_lines == 25
 
     def test_cell_line_model_creation(self):
         """Test creating CellLineModel."""

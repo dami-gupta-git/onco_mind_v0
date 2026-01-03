@@ -191,50 +191,110 @@ class DepMapClient:
         logger.info(f"Loaded PRISM data: {sensitivity.shape[0]} cell lines, {sensitivity.shape[1]} drugs")
         return sensitivity, drugs
 
-    def get_drug_response(
+    def fetch_drug_sensitivities(
         self,
-        gene: str,
-        protein_change: str,
-        mutations_df: pd.DataFrame,
-        sensitivity_df: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """Find drugs that cell lines with a specific variant are sensitive to.
+        variant_cell_lines: list[str],
+        sensitivity_threshold: float = -1.7,
+        min_cell_lines: int = 3,
+        top_n: int = 10,
+    ) -> list[DrugSensitivity]:
+        """Find drugs that cell lines with a specific mutation are sensitive to.
+
+        Uses locally cached PRISM data files.
 
         Args:
-            gene: Gene symbol (e.g., "BRAF")
-            protein_change: Protein change (e.g., "V600E")
-            mutations_df: DataFrame with mutations (from fetch_mutations as DataFrame)
-            sensitivity_df: DataFrame with drug sensitivity (from fetch_prism)
+            variant_cell_lines: List of DepMap IDs for cell lines with the variant
+            sensitivity_threshold: Log2FC threshold for sensitivity (default -1.7)
+            min_cell_lines: Minimum cell lines required for a drug to be included
+            top_n: Maximum number of drugs to return
 
         Returns:
-            DataFrame with columns: drug_id, mean_diff, n_variant_lines
-            Sorted by mean_diff (negative = variant more sensitive)
+            List of DrugSensitivity objects, sorted by mean_log2fc (most sensitive first)
         """
-        # Get cell lines with the variant
-        variant_lines = mutations_df[
-            (mutations_df['HugoSymbol'] == gene) &
-            (mutations_df['ProteinChange'].str.contains(protein_change, na=False))
-        ]['ModelID'].unique()
+        if not variant_cell_lines:
+            return []
 
-        # Filter sensitivity matrix to those cell lines
-        variant_sensitivity = sensitivity_df.loc[sensitivity_df.index.isin(variant_lines)]
-        wt_sensitivity = sensitivity_df.loc[~sensitivity_df.index.isin(variant_lines)]
+        data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
+        sensitivity_file = data_dir / "primary-screen-replicate-collapsed-logfold-change.csv"
+        treatment_file = data_dir / "primary-screen-replicate-collapsed-treatment-info.csv"
 
-        # Find drugs with differential sensitivity
-        results = []
-        for drug in sensitivity_df.columns:
-            mut_response = variant_sensitivity[drug].dropna()
-            wt_response = wt_sensitivity[drug].dropna()
+        if not sensitivity_file.exists() or not treatment_file.exists():
+            logger.warning("PRISM data files not found")
+            return []
 
-            if len(mut_response) >= 3 and len(wt_response) >= 3:
-                diff = mut_response.mean() - wt_response.mean()
-                results.append({
-                    'drug_id': drug,
-                    'mean_diff': diff,  # negative = variant more sensitive
-                    'n_variant_lines': len(mut_response)
-                })
+        try:
+            # Load treatment info to get drug names
+            treatment_df = pd.read_csv(treatment_file)
+            # Create mapping from column_name to drug name
+            # The column names in sensitivity file are like "BRD-A00077618-236-07-6::2.5::HTS"
+            drug_name_map = {}
+            for _, row in treatment_df.iterrows():
+                col_name = row.get("column_name")
+                drug_name = row.get("name")
+                if col_name and drug_name:
+                    drug_name_map[col_name] = drug_name
 
-        return pd.DataFrame(results).sort_values('mean_diff')
+            # Load sensitivity data (cell lines as rows, drugs as columns)
+            sensitivity_df = pd.read_csv(sensitivity_file, index_col=0)
+
+            # Get cell lines that are in our variant set AND in the sensitivity data
+            variant_lines_set = set(variant_cell_lines)
+            available_variant_lines = [
+                line for line in sensitivity_df.index if line in variant_lines_set
+            ]
+
+            if len(available_variant_lines) < min_cell_lines:
+                logger.debug(f"Only {len(available_variant_lines)} variant lines in PRISM data")
+                return []
+
+            # Calculate mean response for variant cell lines for each drug
+            variant_df = sensitivity_df.loc[available_variant_lines]
+            sensitivities = []
+
+            for drug_col in variant_df.columns:
+                responses = variant_df[drug_col].dropna()
+                if len(responses) < min_cell_lines:
+                    continue
+
+                mean_log2fc = responses.mean()
+
+                # Only include if mean response is below threshold (sensitive)
+                if mean_log2fc <= sensitivity_threshold:
+                    # Get drug name from mapping, or extract from column name
+                    drug_name = drug_name_map.get(drug_col)
+                    if not drug_name:
+                        # Try to match by broad_id prefix
+                        broad_id = drug_col.split("::")[0] if "::" in drug_col else drug_col
+                        matches = treatment_df[treatment_df["broad_id"] == broad_id]
+                        if not matches.empty:
+                            drug_name = matches.iloc[0].get("name")
+
+                    if not drug_name:
+                        drug_name = drug_col.split("::")[0]  # Use broad_id as fallback
+
+                    # Get list of sensitive cell lines
+                    sensitive_lines = [
+                        line for line in available_variant_lines
+                        if pd.notna(variant_df.loc[line, drug_col])
+                        and variant_df.loc[line, drug_col] <= sensitivity_threshold
+                    ]
+
+                    sensitivities.append(DrugSensitivity(
+                        drug_name=drug_name,
+                        mean_log2fc=round(mean_log2fc, 3),
+                        n_cell_lines=len(responses),
+                        sensitive_lines=sensitive_lines[:5],  # Top 5 for display
+                    ))
+
+            # Sort by mean_log2fc (most negative = most sensitive)
+            sensitivities.sort(key=lambda x: x.mean_log2fc if x.mean_log2fc is not None else 0)
+
+            logger.debug(f"Found {len(sensitivities)} sensitive drugs for variant")
+            return sensitivities[:top_n]
+
+        except Exception as e:
+            logger.warning(f"Error calculating drug sensitivities: {e}")
+            return []
 
     def fetch_mutations(
         self,
@@ -436,17 +496,20 @@ class DepMapClient:
 
             # Build cell line models from mutations
             cell_line_models = []
+            variant_cell_line_ids = []
             seen_lines = set()
+
+            # Helper to convert pandas NaN to None
+            def clean_val(val) -> str | None:
+                if val is None or (isinstance(val, float) and pd.isna(val)):
+                    return None
+                return str(val) if val else None
+
             for mut in mutations:
                 line_id = mut.get("ModelID") or mut.get("DepMap_ID")
                 if line_id and line_id not in seen_lines:
                     seen_lines.add(line_id)
-
-                    # Helper to convert pandas NaN to None
-                    def clean_val(val) -> str | None:
-                        if val is None or (isinstance(val, float) and pd.isna(val)):
-                            return None
-                        return str(val) if val else None
+                    variant_cell_line_ids.append(line_id)
 
                     cell_line_name = clean_val(mut.get("cell_line_name"))
                     cell_line_models.append(CellLineModel(
@@ -459,6 +522,9 @@ class DepMapClient:
                         mutation_details=clean_val(mut.get("ProteinChange")),
                     ))
 
+            # Fetch drug sensitivities for variant cell lines
+            drug_sensitivities = self.fetch_drug_sensitivities(variant_cell_line_ids)
+
             # Return None if no data
             if not dependency and not cell_line_models:
                 return None
@@ -467,6 +533,7 @@ class DepMapClient:
                 gene=gene_upper,
                 variant=variant,
                 gene_dependency=dependency,
+                drug_sensitivities=drug_sensitivities,
                 cell_line_models=cell_line_models,
                 data_version="DepMap Public 24Q4",
                 n_cell_lines_screened=dependency.n_total_lines if dependency else 0,
