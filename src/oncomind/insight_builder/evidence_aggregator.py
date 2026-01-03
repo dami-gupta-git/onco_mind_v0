@@ -49,6 +49,7 @@ from oncomind.models.evidence import (
     CoMutationEntry,
     CGIBiomarkerEvidence,
     CIViCAssertionEvidence,
+    CIViCEvidence,
     ClinicalTrialEvidence,
     FDAApproval,
     PubMedEvidence,
@@ -95,7 +96,7 @@ class EvidenceAggregatorConfig:
 
     # Result limits
     max_vicc_results: int = 50
-    max_civic_assertions: int = 20
+    max_civic_assertions: int = 50
     max_clinical_trials: int = 10
     max_literature_results: int = 4
 
@@ -543,10 +544,18 @@ class EvidenceAggregator:
                 )
             return []
 
-        async def fetch_civic():
+        async def fetch_civic_assertions():
             if self.civic_client:
                 tracker.sources_queried.append("CIViC")
                 return await self.civic_client.fetch_assertion_evidence(
+                    gene=gene, variant=variant, tumor_type=tumor_type,
+                    max_results=self.config.max_civic_assertions,
+                )
+            return []
+
+        async def fetch_civic_evidence():
+            if self.civic_client:
+                return await self.civic_client.fetch_evidence_items(
                     gene=gene, variant=variant, tumor_type=tumor_type,
                     max_results=self.config.max_civic_assertions,
                 )
@@ -602,7 +611,8 @@ class EvidenceAggregator:
             self.fda_client.fetch_approval_evidence(gene=gene, variant=variant),
             asyncio.to_thread(self.cgi_client.fetch_biomarker_evidence, gene, variant, tumor_type),
             fetch_vicc(),
-            fetch_civic(),
+            fetch_civic_assertions(),
+            fetch_civic_evidence(),
             fetch_trials(),
             fetch_literature(),
             fetch_cbioportal(),
@@ -622,8 +632,9 @@ class EvidenceAggregator:
     ) -> Evidence:
         """Assemble Evidence from fetch results."""
         (
-            myvariant_result, fda_result, cgi_result, vicc_result, civic_result,
-            trials_result, literature_result, cbioportal_result, cell_lines_result, depmap_result,
+            myvariant_result, fda_result, cgi_result, vicc_result, civic_assertions_result,
+            civic_evidence_result, trials_result, literature_result, cbioportal_result,
+            cell_lines_result, depmap_result,
         ) = results
 
         gene = variant.gene
@@ -633,7 +644,8 @@ class EvidenceAggregator:
         fda_approvals_raw: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
         all_cgi: list[CGIBiomarkerEvidence] = tracker.handle_result(cgi_result, "CGI") or []
         vicc_evidence: list[VICCEvidence] = tracker.handle_result(vicc_result, "VICC") or []
-        civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_result, "CIViC") or []
+        civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_assertions_result, "CIViC") or []
+        civic_evidence: list[CIViCEvidence] = tracker.handle_result(civic_evidence_result, "CIViC Evidence") or []
         clinical_trials: list[ClinicalTrialEvidence] = tracker.handle_result(trials_result, "ClinicalTrials.gov") or []
         pubmed_articles: list[PubMedEvidence] = tracker.handle_result(literature_result, "Literature") or []
 
@@ -647,10 +659,10 @@ class EvidenceAggregator:
             depmap_result, cell_line_models, gene, normalized_variant, tracker
         )
 
-        # Extract MyVariant data
+        # Extract MyVariant data (CIViC evidence now comes from CIViC client directly)
         (
             functional_scores, identifiers_data, clinvar_significance,
-            clinvar_entries, cosmic_entries, civic_entries
+            clinvar_entries, cosmic_entries, _civic_entries_unused
         ) = self._extract_myvariant_data(myvariant_evidence, variant, normalized_variant)
 
         # Check if variant is not actionable (benign polymorphism)
@@ -686,7 +698,7 @@ class EvidenceAggregator:
             ),
             fda_approvals=fda_approvals,
             civic_assertions=civic_assertions,
-            civic_evidence=civic_entries,
+            civic_evidence=civic_evidence,  # Now from CIViC GraphQL API
             vicc_evidence=vicc_evidence,
             cgi_biomarkers=cgi_biomarkers,
             clinvar_entries=clinvar_entries,

@@ -305,8 +305,8 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 
 
 def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for FDA approvals and CIViC assertions."""
-    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.fda_approvals)
+    """Check for FDA approvals, CIViC assertions, and CIViC evidence items."""
+    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or bool(evidence.fda_approvals)
 
     if ctx.has_clinical:
         n_assertions = len(evidence.civic_assertions)
@@ -1013,6 +1013,12 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> boo
     # Check CIViC assertions
     for assertion in evidence.civic_assertions:
         if assertion.disease and tumor_lower in assertion.disease.lower():
+            return True
+
+    # Check CIViC evidence items
+    for civic in evidence.civic_evidence:
+        if civic.disease and civic.disease_match:
+            # disease_match is True when disease matches the queried tumor type
             return True
 
     # Check FDA approvals

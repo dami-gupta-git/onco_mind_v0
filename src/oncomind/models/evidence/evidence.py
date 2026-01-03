@@ -762,6 +762,16 @@ class Evidence(BaseModel):
                         resistance_drugs[drug_lower] = set()
                     resistance_drugs[drug_lower].add("CIViC")
 
+        # CIViC resistance evidence items
+        for evidence in self.civic_evidence:
+            if evidence.clinical_significance and "RESIST" in evidence.clinical_significance.upper():
+                if evidence.drugs:
+                    for drug in evidence.drugs:
+                        drug_lower = drug.lower()
+                        if drug_lower not in resistance_drugs:
+                            resistance_drugs[drug_lower] = set()
+                        resistance_drugs[drug_lower].add("CIViC")
+
         # CGI resistance biomarkers
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and "RESIST" in biomarker.association.upper():
@@ -887,6 +897,17 @@ class Evidence(BaseModel):
                     if drug_lower not in all_fda_drugs:
                         clinical_drugs.add(drug_lower)
 
+        # CIViC sensitivity evidence items
+        for evidence in self.civic_evidence:
+            if evidence.clinical_significance:
+                sig_upper = evidence.clinical_significance.upper()
+                if ("SENS" in sig_upper or "RESPON" in sig_upper) and "RESIST" not in sig_upper:
+                    if evidence.drugs:
+                        for drug in evidence.drugs:
+                            drug_lower = drug.lower()
+                            if drug_lower not in all_fda_drugs:
+                                clinical_drugs.add(drug_lower)
+
         # CGI sensitivity biomarkers
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
@@ -973,7 +994,27 @@ class Evidence(BaseModel):
                     if therapies:
                         civic_drugs.append(f"{therapies} ({sig})")
                 if civic_drugs:
-                    lines.append(f"CIViC: {'; '.join(civic_drugs)}")
+                    lines.append(f"CIViC Assertions: {'; '.join(civic_drugs)}")
+
+        # CIViC Evidence Items - compact (includes per-publication drug response data)
+        if self.civic_evidence:
+            civic_eid_drugs = []
+            for e in self.civic_evidence[:5]:
+                if e.drugs:
+                    drug_str = ", ".join(e.drugs[:2])
+                    sig = ""
+                    if e.clinical_significance:
+                        sig_upper = e.clinical_significance.upper()
+                        if "RESIST" in sig_upper:
+                            sig = "res"
+                        elif "SENS" in sig_upper or "RESPON" in sig_upper:
+                            sig = "sens"
+                    if sig:
+                        civic_eid_drugs.append(f"{drug_str} ({sig})")
+                    else:
+                        civic_eid_drugs.append(drug_str)
+            if civic_eid_drugs:
+                lines.append(f"CIViC Evidence: {'; '.join(civic_eid_drugs)}")
 
         # ClinVar - one line
         if self.clinvar_significance:

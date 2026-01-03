@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from oncomind.api.myvariant import MyVariantAPIError, MyVariantClient
 from oncomind.api.fda import FDAAPIError, FDAClient
-from oncomind.models.evidence import CIViCEvidence, ClinVarEvidence
+from oncomind.models.evidence import ClinVarEvidence
 
 
 class TestMyVariantClient:
@@ -37,10 +37,55 @@ class TestMyVariantClient:
         await client.close()
 
     @pytest.mark.asyncio
-    async def test_fetch_evidence_with_civic(self):
-        """Test fetching evidence with CIViC data."""
+    async def test_fetch_evidence_with_clinvar(self):
+        """Test fetching evidence with ClinVar data.
+
+        Note: CIViC evidence is now fetched separately via CIViCClient.
+        MyVariant is used for ClinVar, COSMIC, AlphaMissense, CADD, gnomAD.
+        """
         client = MyVariantClient()
 
+        mock_response = {
+            "hits": [
+                {
+                    "_id": "test123",
+                    "clinvar": {
+                        "variant_id": 13961,
+                        "rcv": [
+                            {
+                                "clinical_significance": "Pathogenic",
+                                "review_status": "reviewed by expert panel",
+                                "accession": "RCV000013961",
+                            }
+                        ],
+                    },
+                }
+            ]
+        }
+
+        with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
+            mock_query.return_value = mock_response
+
+            evidence = await client.fetch_evidence("BRAF", "V600E")
+
+            assert evidence.has_evidence()
+            assert evidence.clinvar_id == "13961"
+            assert evidence.clinvar_clinical_significance == "Pathogenic"
+            # CIViC should be empty (fetched separately via CIViCClient)
+            assert evidence.civic == []
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_civic_not_parsed_from_myvariant(self):
+        """Test that CIViC data is not parsed from MyVariant (fetched separately).
+
+        CIViC evidence is now fetched directly from the CIViC GraphQL API
+        via CIViCClient, not from MyVariant.info.
+        """
+        client = MyVariantClient()
+
+        # Even if MyVariant returns CIViC data, we ignore it
         mock_response = {
             "hits": [
                 {
@@ -50,10 +95,6 @@ class TestMyVariantClient:
                             {
                                 "evidence_type": "Predictive",
                                 "evidence_level": "A",
-                                "clinical_significance": "Sensitivity/Response",
-                                "disease": {"name": "Melanoma"},
-                                "drugs": [{"name": "Vemurafenib"}],
-                                "description": "Test description",
                             }
                         ]
                     },
@@ -66,36 +107,10 @@ class TestMyVariantClient:
 
             evidence = await client.fetch_evidence("BRAF", "V600E")
 
-            assert evidence.has_evidence()
-            assert len(evidence.civic) == 1
-            assert evidence.civic[0].evidence_type == "Predictive"
-            assert "Vemurafenib" in evidence.civic[0].drugs
+            # CIViC should be empty even if MyVariant returned data
+            assert evidence.civic == []
 
         await client.close()
-
-    @pytest.mark.asyncio
-    async def test_parse_civic_evidence(self):
-        """Test parsing CIViC evidence."""
-        client = MyVariantClient()
-
-        civic_data = {
-            "evidence_items": [
-                {
-                    "evidence_type": "Predictive",
-                    "evidence_level": "A",
-                    "disease": {"name": "Melanoma"},
-                    "drugs": [{"name": "Drug1"}, {"name": "Drug2"}],
-                }
-            ]
-        }
-
-        parsed = client._parse_civic_evidence(civic_data, gene="BRAF", variant="V600E")
-
-        assert len(parsed) == 1
-        assert parsed[0].evidence_type == "Predictive"
-        assert len(parsed[0].drugs) == 2
-        # Check match_level is set (gene-level since no molecular profile in test data)
-        assert parsed[0].match_level is not None
 
     @pytest.mark.asyncio
     async def test_parse_clinvar_evidence(self):
