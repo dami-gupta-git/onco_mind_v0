@@ -84,7 +84,8 @@ class TestClinicalTrialsEvidenceLevelIntegration:
             assert trial.variant_level.origin == "trial"
 
             if trial.variant_level.level == "variant":
-                assert trial.variant_level.scope == "specific"
+                # Scope can be "specific" (exact match) or "ambiguous" (codon-level match)
+                assert trial.variant_level.scope in ("specific", "ambiguous")
             else:
                 assert trial.variant_level.scope == "unspecified"
 
@@ -222,7 +223,7 @@ class TestClinicalTrialsEvidenceLevelIntegration:
     async def test_evidence_level_scope_consistency(self):
         """Test that scope is consistent with level.
 
-        - variant + specific
+        - variant + specific/ambiguous (ambiguous for codon-level matches)
         - gene + unspecified
         - cancer_specific + specific
         - pan_cancer + unspecified
@@ -240,7 +241,8 @@ class TestClinicalTrialsEvidenceLevelIntegration:
             # Check variant_level consistency
             if trial.variant_level:
                 if trial.variant_level.level == "variant":
-                    assert trial.variant_level.scope == "specific"
+                    # Scope can be "specific" (exact match) or "ambiguous" (codon-level match)
+                    assert trial.variant_level.scope in ("specific", "ambiguous")
                 elif trial.variant_level.level == "gene":
                     assert trial.variant_level.scope == "unspecified"
 

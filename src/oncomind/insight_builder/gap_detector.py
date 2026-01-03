@@ -167,6 +167,7 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     _check_clinical_trials(evidence, ctx)
     _check_preclinical_models(evidence, ctx)
     _check_literature_depth(evidence, ctx)
+    _check_literature_database_integration(evidence, ctx)
     _check_validation_gap(evidence, ctx)
 
     # Enrich gaps with dynamic, context-aware suggestions based on actual evidence
@@ -425,6 +426,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         bool(evidence.cgi_biomarkers) or
         bool(evidence.vicc_evidence) or
         bool(evidence.preclinical_biomarkers) or
+        bool(evidence.early_phase_biomarkers) or
         has_tumor_matched_depmap  # Only count tumor-matched DepMap data
     )
 
@@ -432,6 +434,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         n_cgi = len(evidence.cgi_biomarkers)
         n_vicc = len(evidence.vicc_evidence)
         n_preclin = len(evidence.preclinical_biomarkers)
+        n_early = len(evidence.early_phase_biomarkers)
         drug_sources = []
         if n_cgi:
             drug_sources.append(f"{n_cgi} CGI")
@@ -439,6 +442,8 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             drug_sources.append(f"{n_vicc} VICC")
         if n_preclin:
             drug_sources.append(f"{n_preclin} preclinical")
+        if n_early:
+            drug_sources.append(f"{n_early} early phase")
 
         # Compute match level breakdown for drug response data
         variant_count = 0
@@ -773,6 +778,87 @@ def _check_literature_depth(evidence: "Evidence", ctx: GapDetectionContext) -> N
             "published literature",
             f"{pub_count} PubMed articles",
             category=GapCategory.FUNCTIONAL
+        )
+
+
+def _check_literature_database_integration(evidence: "Evidence", ctx: GapDetectionContext) -> None:
+    """Check for literature evidence not integrated into curated databases.
+
+    Identifies when PubMed articles mention drug sensitivity/resistance signals
+    that aren't represented in CIViC, CGI, VICC, or FDA databases.
+    This is an "integration gap" - evidence exists but hasn't been curated.
+    """
+    if not evidence.literature_searched or not evidence.pubmed_articles:
+        return
+
+    # Collect drugs mentioned in literature with sensitivity/resistance signals
+    literature_drugs: set[str] = set()
+    for article in evidence.pubmed_articles:
+        if article.drugs_mentioned:
+            if article.is_sensitivity_evidence() or article.is_resistance_evidence():
+                for drug in article.drugs_mentioned:
+                    literature_drugs.add(drug.lower())
+
+    if not literature_drugs:
+        return
+
+    # Collect drugs in curated databases
+    curated_drugs: set[str] = set()
+
+    # FDA approvals
+    for approval in evidence.fda_approvals:
+        drug = approval.generic_name or approval.brand_name or approval.drug_name
+        if drug:
+            curated_drugs.add(drug.lower())
+
+    # CIViC assertions
+    for assertion in evidence.civic_assertions:
+        if assertion.therapies:
+            for therapy in assertion.therapies:
+                curated_drugs.add(therapy.lower())
+
+    # CIViC evidence
+    for civic_ev in evidence.civic_evidence:
+        if civic_ev.drugs:
+            for drug in civic_ev.drugs:
+                curated_drugs.add(drug.lower())
+
+    # CGI biomarkers (all tiers)
+    for biomarker in evidence.cgi_biomarkers:
+        if biomarker.drug:
+            curated_drugs.add(biomarker.drug.lower())
+    for biomarker in evidence.preclinical_biomarkers:
+        if biomarker.drug:
+            curated_drugs.add(biomarker.drug.lower())
+    for biomarker in evidence.early_phase_biomarkers:
+        if biomarker.drug:
+            curated_drugs.add(biomarker.drug.lower())
+
+    # VICC evidence
+    for vicc in evidence.vicc_evidence:
+        if vicc.drugs:
+            for drug in vicc.drugs:
+                curated_drugs.add(drug.lower())
+
+    # Find drugs in literature but NOT in curated databases
+    uncurated_drugs = literature_drugs - curated_drugs
+
+    if uncurated_drugs:
+        # This is an integration gap - evidence exists but not in databases
+        drug_list = ", ".join(sorted(uncurated_drugs)[:3])
+        more_count = len(uncurated_drugs) - 3 if len(uncurated_drugs) > 3 else 0
+        more_str = f" (+{more_count} more)" if more_count > 0 else ""
+
+        ctx.add_gap(
+            category=GapCategory.FUNCTIONAL,
+            severity=GapSeverity.MINOR,
+            description=f"Literature mentions drug signals not in curated databases: {drug_list}{more_str}",
+            suggested_studies=[
+                "Submit to CIViC for curation",
+                "Validate findings in independent cohort",
+                "Cross-reference with clinical trial results"
+            ],
+            addressable_with=["CIViC submission", "Literature review"]
         )
 
 

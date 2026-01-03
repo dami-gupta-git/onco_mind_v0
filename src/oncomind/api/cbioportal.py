@@ -14,8 +14,10 @@ Key Design:
 - Calculates co-occurrence/mutual exclusivity from sample-level mutation data
 """
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
 import httpx
 
 from oncomind.config.constants import (
@@ -24,6 +26,8 @@ from oncomind.config.constants import (
     CBIOPORTAL_DEFAULT_STUDY,
     CANCER_GENES_CO_OCCURRENCE,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CBioPortalError(Exception):

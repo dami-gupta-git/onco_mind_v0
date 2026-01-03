@@ -59,6 +59,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
 
     # Melanoma
     "mel": ["melanoma", "mel", "cutaneous melanoma", "skin melanoma"],
+    "cm": ["cutaneous melanoma", "cm", "melanoma", "skin melanoma"],  # CGI uses CM
     "skcm": ["skin cutaneous melanoma", "skcm", "cutaneous melanoma"],
     "uvm": ["uveal melanoma", "uvm", "ocular melanoma"],
 
@@ -253,8 +254,8 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "skcm": ["skcm_tcga_pan_can_atlas_2018"],
 
     # Colorectal
-    "colorectal": ["crc_msk_2022", "crc_eo_2020", "crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
-    "crc": ["crc_msk_2022", "crc_eo_2020", "crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
+    "colorectal": ["crc_msk_2017", "crc_eo_2020", "coadread_tcga_pan_can_atlas_2018"],
+    "crc": ["crc_msk_2017", "crc_eo_2020", "coadread_tcga_pan_can_atlas_2018"],
     "colon": ["coadread_tcga_pan_can_atlas_2018"],
     "coad": ["coadread_tcga_pan_can_atlas_2018"],
     "rectal": ["coadread_tcga_pan_can_atlas_2018"],
@@ -336,8 +337,8 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "sarc": ["sarc_tcga_pan_can_atlas_2018"],
 
     # GIST
-    "gist": ["gist_mskcc"],
-    "gastrointestinal stromal": ["gist_mskcc"],
+    "gist": ["gist_msk_2023"],
+    "gastrointestinal stromal": ["gist_msk_2023"],
 
     # Mesothelioma
     "mesothelioma": ["meso_tcga_pan_can_atlas_2018"],
