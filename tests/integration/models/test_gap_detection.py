@@ -483,6 +483,72 @@ class TestDiscordantEvidenceDetection:
         # Should NOT flag conflict - different contexts (mono vs combo)
         assert len(conflicts) == 0, f"Combo therapy should not create conflict: {conflicts}"
 
+    def test_clinvar_benign_vs_civic_actionable_conflict(self):
+        """ClinVar benign + CIViC actionable evidence should flag conflict."""
+        from oncomind.models.evidence import Evidence
+        from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
+        from oncomind.models.evidence.clinvar import ClinVarEvidence
+        from oncomind.models.evidence.evidence import VariantIdentifiers
+
+        evidence = Evidence(
+            identifiers=VariantIdentifiers(
+                variant_id="TEST:V123M",
+                gene="TEST",
+                variant="V123M"
+            ),
+            clinvar_entries=[
+                ClinVarEvidence(clinical_significance="Benign"),
+            ],
+            clinvar_significance="Benign",
+            civic_assertions=[
+                CIViCAssertionEvidence(
+                    assertion_type="PREDICTIVE",
+                    therapies=["Erlotinib"],
+                    is_sensitivity=True,
+                ),
+            ]
+        )
+
+        conflicts = _detect_discordant_evidence_internal(evidence)
+
+        # Should flag ClinVar benign vs CIViC actionable conflict
+        assert len(conflicts) >= 1, "Should flag ClinVar benign vs CIViC actionable conflict"
+        assert any("benign" in c.lower() and "civic" in c.lower() for c in conflicts), \
+            f"Should mention ClinVar benign vs CIViC conflict: {conflicts}"
+
+    def test_clinvar_pathogenic_no_civic_conflict(self):
+        """ClinVar pathogenic should NOT conflict with CIViC actionable."""
+        from oncomind.models.evidence import Evidence
+        from oncomind.models.evidence.civic import CIViCEvidence
+        from oncomind.models.evidence.clinvar import ClinVarEvidence
+        from oncomind.models.evidence.evidence import VariantIdentifiers
+
+        evidence = Evidence(
+            identifiers=VariantIdentifiers(
+                variant_id="TEST:V123M",
+                gene="TEST",
+                variant="V123M"
+            ),
+            clinvar_entries=[
+                ClinVarEvidence(clinical_significance="Pathogenic"),
+            ],
+            clinvar_significance="Pathogenic",
+            civic_evidence=[
+                CIViCEvidence(
+                    evidence_type="PREDICTIVE",
+                    drugs=["Erlotinib"],
+                    clinical_significance="Sensitivity",
+                ),
+            ]
+        )
+
+        conflicts = _detect_discordant_evidence_internal(evidence)
+
+        # Should NOT flag conflict - both agree variant is significant
+        clinvar_civic_conflicts = [c for c in conflicts if "benign" in c.lower() and "civic" in c.lower()]
+        assert len(clinvar_civic_conflicts) == 0, \
+            f"Pathogenic ClinVar should not conflict with CIViC: {conflicts}"
+
 
 # =============================================================================
 # CANCER HOTSPOTS DATA TESTS

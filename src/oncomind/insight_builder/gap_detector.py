@@ -1239,7 +1239,7 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
                 f"resistant ({', '.join(sorted(resist_sources))})"
             )
 
-    # Check ClinVar significance conflicts
+    # Check ClinVar significance conflicts (internal)
     clinvar_sigs = set()
     for entry in evidence.clinvar_entries:
         if entry.clinical_significance:
@@ -1253,6 +1253,50 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
         conflicts.append(
             "ClinVar has conflicting interpretations: both pathogenic and benign submissions"
         )
+
+    # Check ClinVar vs CIViC pathogenicity conflicts (cross-source)
+    # ClinVar benign but CIViC has actionable/oncogenic evidence = conflict
+    clinvar_is_benign = "benign" in clinvar_sigs and "pathogenic" not in clinvar_sigs
+    if evidence.clinvar_significance:
+        sig_lower = evidence.clinvar_significance.lower()
+        if "benign" in sig_lower and "pathogenic" not in sig_lower:
+            clinvar_is_benign = True
+
+    if clinvar_is_benign:
+        civic_actionable_sources: list[str] = []
+
+        # Check CIViC assertions for ONCOGENIC type or actionable evidence
+        for assertion in evidence.civic_assertions:
+            if assertion.assertion_type and assertion.assertion_type.upper() == "ONCOGENIC":
+                civic_actionable_sources.append("CIViC assertion (oncogenic)")
+                break
+            if assertion.significance and "ONCOGENIC" in assertion.significance.upper():
+                civic_actionable_sources.append("CIViC assertion (oncogenic)")
+                break
+            # Predictive assertions with therapies suggest actionability
+            if assertion.assertion_type and assertion.assertion_type.upper() == "PREDICTIVE":
+                if assertion.therapies:
+                    civic_actionable_sources.append("CIViC assertion (predictive)")
+                    break
+
+        # Check CIViC evidence items for PREDISPOSING/ONCOGENIC types
+        for evi in evidence.civic_evidence:
+            if evi.evidence_type:
+                etype = evi.evidence_type.upper()
+                if etype in ("PREDISPOSING", "ONCOGENIC"):
+                    civic_actionable_sources.append(f"CIViC evidence ({etype.lower()})")
+                    break
+            # Predictive evidence with drugs suggests actionability
+            if evi.evidence_type and evi.evidence_type.upper() == "PREDICTIVE":
+                if evi.drugs:
+                    civic_actionable_sources.append("CIViC evidence (predictive)")
+                    break
+
+        if civic_actionable_sources:
+            source_str = civic_actionable_sources[0]
+            conflicts.append(
+                f"ClinVar classifies as benign but {source_str} suggests clinical relevance"
+            )
 
     return conflicts
 
