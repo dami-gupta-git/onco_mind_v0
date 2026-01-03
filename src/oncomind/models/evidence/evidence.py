@@ -781,7 +781,7 @@ class Evidence(BaseModel):
                         resistance_drugs[drug_lower] = set()
                     resistance_drugs[drug_lower].add("CGI")
 
-        # Literature resistance signals
+        # Literature resistance signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.resistant_to:
             for entry in self.literature_knowledge.resistant_to:
                 drug = entry.get("drug", "")
@@ -790,6 +790,15 @@ class Evidence(BaseModel):
                     if drug_lower not in resistance_drugs:
                         resistance_drugs[drug_lower] = set()
                     resistance_drugs[drug_lower].add("Literature")
+
+        # PubMed articles with resistance evidence
+        for article in self.pubmed_articles:
+            if article.is_resistance_evidence() and article.drugs_mentioned:
+                for drug in article.drugs_mentioned:
+                    drug_lower = drug.lower()
+                    if drug_lower not in resistance_drugs:
+                        resistance_drugs[drug_lower] = set()
+                    resistance_drugs[drug_lower].add(f"PubMed:{article.pmid}")
 
         if not resistance_drugs:
             return ""
@@ -916,11 +925,19 @@ class Evidence(BaseModel):
                     if drug_lower not in all_fda_drugs:
                         clinical_drugs.add(drug_lower)
 
-        # Literature sensitivity signals
+        # Literature sensitivity signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.sensitive_to:
             for entry in self.literature_knowledge.sensitive_to:
                 drug = entry.get("drug", "")
                 if drug:
+                    drug_lower = drug.lower()
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                        literature_drugs.add(drug_lower)
+
+        # PubMed articles with sensitivity evidence
+        for article in self.pubmed_articles:
+            if article.is_sensitivity_evidence() and article.drugs_mentioned:
+                for drug in article.drugs_mentioned:
                     drug_lower = drug.lower()
                     if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                         literature_drugs.add(drug_lower)
