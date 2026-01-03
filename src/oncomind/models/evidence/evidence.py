@@ -560,6 +560,46 @@ class Evidence(BaseModel):
                             cancer_specificity=cancer_specificity,
                         ))
 
+            # Include drugs from active clinical trials
+            for trial in self.clinical_trials:
+                if not trial.is_phase2_or_later():
+                    continue  # Only include Phase 2+ trials for therapeutic evidence
+                drugs = trial.get_drug_names()
+                for drug in drugs:
+                    drug_key = drug.lower()
+                    if drug_key not in seen_drugs:
+                        seen_drugs.add(drug_key)
+
+                        # Determine evidence level from trial phase
+                        if trial.phase and "PHASE3" in trial.phase.upper().replace(" ", ""):
+                            evidence_level = "Phase 3"
+                        else:
+                            evidence_level = "Phase 2"
+
+                        # Determine cancer specificity from trial conditions
+                        cancer_specificity = "pan_cancer"
+                        if trial.conditions and self.context.tumor_type:
+                            tumor_lower = self.context.tumor_type.lower()
+                            for condition in trial.conditions:
+                                if tumor_lower in condition.lower() or condition.lower() in tumor_lower:
+                                    cancer_specificity = "cancer_specific"
+                                    break
+
+                        evidence_list.append(TherapeuticEvidence(
+                            drug_name=drug,
+                            evidence_level=evidence_level,
+                            approval_status="Clinical Trial",
+                            clinical_context=", ".join(trial.conditions[:2]) if trial.conditions else None,
+                            response_type=None,  # Trials don't specify response type
+                            mechanism=None,
+                            tumor_types_tested=trial.conditions,
+                            source=f"ClinicalTrials.gov ({trial.nct_id})",
+                            source_url=trial.url,
+                            confidence="low",  # Trial data, not yet published results
+                            match_level=getattr(trial, 'match_scope', None),
+                            cancer_specificity=cancer_specificity,
+                        ))
+
         # Sort by evidence tier
         evidence_list.sort(key=lambda x: x.get_evidence_tier())
 
@@ -1135,6 +1175,23 @@ class Evidence(BaseModel):
         # ClinVar - one line
         if self.clinvar_significance:
             lines.append(f"ClinVar: {self.clinvar_significance}")
+
+        # Clinical Trials - compact
+        if self.clinical_trials:
+            recruiting = [t for t in self.clinical_trials if t.status == "RECRUITING"]
+            if recruiting:
+                trial_drugs = []
+                for trial in recruiting[:5]:
+                    drugs = trial.get_drug_names()
+                    if drugs:
+                        phase_str = f" ({trial.phase})" if trial.phase else ""
+                        trial_drugs.append(f"{drugs[0]}{phase_str}")
+                if trial_drugs:
+                    lines.append(f"Active Trials: {'; '.join(trial_drugs)}")
+                else:
+                    lines.append(f"Active Trials: {len(recruiting)} recruiting")
+            else:
+                lines.append(f"Clinical Trials: {len(self.clinical_trials)} found (not recruiting)")
 
         # PubMed Literature - compact
         if self.pubmed_articles:
