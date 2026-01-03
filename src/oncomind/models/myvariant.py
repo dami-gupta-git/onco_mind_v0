@@ -72,12 +72,20 @@ class PolyPhen2Hdiv(BaseModel):
     """PolyPhen2 HDIV data structure."""
 
     pred: str | list[str] | None = None
+    score: float | list[float] | None = None
 
 
 class PolyPhen2Data(BaseModel):
     """PolyPhen2 data structure."""
 
     hdiv: PolyPhen2Hdiv | None = None
+
+
+class SiftData(BaseModel):
+    """SIFT data structure."""
+
+    pred: str | list[str] | None = None  # "D"=deleterious, "T"=tolerated
+    score: float | list[float] | None = None  # Lower = more deleterious (0-1)
 
 
 class CaddData(BaseModel):
@@ -98,6 +106,7 @@ class DbNSFPData(BaseModel):
     """dbNSFP data structure."""
 
     polyphen2: PolyPhen2Data | None = None
+    sift: SiftData | None = None
     cadd: CaddData | None = None
     alphamissense: AlphaMissenseData | None = None
 

@@ -54,6 +54,9 @@ def mock_evidence():
     evidence.functional.alphamissense_prediction = None
     evidence.functional.cadd_score = None
     evidence.functional.polyphen2_prediction = None
+    evidence.functional.polyphen2_score = None
+    evidence.functional.sift_prediction = None
+    evidence.functional.sift_score = None
     evidence.functional.gnomad_exome_af = None
     evidence.functional.gnomad_genome_af = None
     evidence.functional.snpeff_effect = None

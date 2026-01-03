@@ -122,8 +122,14 @@ class CBioPortalClient:
             return CBIOPORTAL_STUDY_MAPPINGS[tumor_lower]
 
         # Check tumor type aliases (e.g., "nsclc" -> "lung")
+        # Match if: tumor_lower equals abbrev, OR tumor_lower contains any alias, OR any alias contains tumor_lower
         for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
-            if tumor_lower == abbrev or any(tumor_lower in name for name in full_names):
+            matches = (
+                tumor_lower == abbrev or
+                any(tumor_lower in name for name in full_names) or
+                any(name in tumor_lower for name in full_names)
+            )
+            if matches:
                 if abbrev in CBIOPORTAL_STUDY_MAPPINGS:
                     return CBIOPORTAL_STUDY_MAPPINGS[abbrev]
 

@@ -387,13 +387,45 @@ class MyVariantClient:
                 transcript_consequence = first_ann.effect
 
         polyphen2_prediction = None
+        polyphen2_score = None
         if hit.dbnsfp and hit.dbnsfp.polyphen2 and hit.dbnsfp.polyphen2.hdiv:
-            pred = hit.dbnsfp.polyphen2.hdiv.pred
+            hdiv = hit.dbnsfp.polyphen2.hdiv
             # Handle both string and list[str] from API
-            if isinstance(pred, list):
-                polyphen2_prediction = pred[0] if pred else None
-            else:
-                polyphen2_prediction = pred
+            if hdiv.pred is not None:
+                if isinstance(hdiv.pred, list):
+                    polyphen2_prediction = hdiv.pred[0] if hdiv.pred else None
+                else:
+                    polyphen2_prediction = hdiv.pred
+            # Extract score
+            if hdiv.score is not None:
+                try:
+                    if isinstance(hdiv.score, list):
+                        polyphen2_score = float(hdiv.score[0]) if hdiv.score else None
+                    else:
+                        polyphen2_score = float(hdiv.score)
+                except (ValueError, TypeError):
+                    pass
+
+        # Extract SIFT prediction
+        sift_prediction = None
+        sift_score = None
+        if hit.dbnsfp and hit.dbnsfp.sift:
+            sift = hit.dbnsfp.sift
+            # Handle both string and list[str] from API
+            if sift.pred is not None:
+                if isinstance(sift.pred, list):
+                    sift_prediction = sift.pred[0] if sift.pred else None
+                else:
+                    sift_prediction = sift.pred
+            # Extract score (lower = more deleterious)
+            if sift.score is not None:
+                try:
+                    if isinstance(sift.score, list):
+                        sift_score = float(sift.score[0]) if sift.score else None
+                    else:
+                        sift_score = float(sift.score)
+                except (ValueError, TypeError):
+                    pass
 
         cadd_score = None
         # Try dbnsfp first, then top-level cadd
@@ -471,6 +503,9 @@ class MyVariantClient:
             hgvs_protein=hgvs_protein,
             snpeff_effect=snpeff_effect,
             polyphen2_prediction=polyphen2_prediction,
+            polyphen2_score=polyphen2_score,
+            sift_prediction=sift_prediction,
+            sift_score=sift_score,
             cadd_score=cadd_score,
             gnomad_exome_af=gnomad_exome_af,
             alphamissense_score=alphamissense_score,
@@ -648,6 +683,9 @@ class MyVariantClient:
             "hgvs",  # HGVS notations (genomic, protein, transcript)
             "snpeff",  # SnpEff effect prediction
             "dbnsfp.polyphen2.hdiv.pred",  # PolyPhen2 prediction
+            "dbnsfp.polyphen2.hdiv.score",  # PolyPhen2 score
+            "dbnsfp.sift.pred",  # SIFT prediction
+            "dbnsfp.sift.score",  # SIFT score
             "dbnsfp.cadd.phred",  # CADD phred score
             "dbnsfp.alphamissense",  # AlphaMissense pathogenicity prediction
             "gnomad_exome.af.af",  # gnomAD exome allele frequency
