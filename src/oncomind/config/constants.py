@@ -47,6 +47,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
         "lung adenocarcinoma", "lung squamous", "lung adenosquamous"
     ],
     "lung": ["lung", "lung cancer", "lung carcinoma"],
+    "l": ["lung", "lung cancer", "lung carcinoma"],  # CGI uses single-letter "L"
     "sclc": ["small cell lung", "sclc", "small cell lung cancer", "small cell lung carcinoma"],
     "luad": ["lung adenocarcinoma", "luad", "adenocarcinoma of lung"],
     "lusc": ["lung squamous", "lusc", "squamous cell lung", "squamous cell carcinoma of lung"],
@@ -242,7 +243,7 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
 # MSK-IMPACT and institutional studies provide additional depth
 
 CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
-    # Lung / NSCLC - Use TCGA PanCancer Atlas studies (verified working)
+    # Lung / NSCLC – keep TCGA PanCan; consider adding msk_impact_2017 for pan‑solid prevalence if you want
     "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
     "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
     "luad": ["luad_tcga_pan_can_atlas_2018"],
@@ -250,21 +251,21 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "sclc": ["sclc_ucologne_2015"],
 
     # Melanoma
-    "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018", "mel_ucla_2016"],
+    "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018"],
     "skcm": ["skcm_tcga_pan_can_atlas_2018"],
 
     # Colorectal
-    "colorectal": ["crc_msk_2017", "crc_eo_2020", "coadread_tcga_pan_can_atlas_2018"],
-    "crc": ["crc_msk_2017", "crc_eo_2020", "coadread_tcga_pan_can_atlas_2018"],
+    "colorectal": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
+    "crc": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
     "colon": ["coadread_tcga_pan_can_atlas_2018"],
     "coad": ["coadread_tcga_pan_can_atlas_2018"],
     "rectal": ["coadread_tcga_pan_can_atlas_2018"],
 
-    # Breast - Use latest MSK if available; METABRIC often used in aggregates
-    "breast": ["brca_metabric", "breast_msk_2018", "brca_tcga_pan_can_atlas_2018"],
-    "brca": ["brca_metabric", "brca_tcga_pan_can_atlas_2018"],
+    # Breast – updated
+    "breast": ["breast_msk_2025", "brca_metabric", "brca_tcga_pan_can_atlas_2018"],
+    "brca": ["breast_msk_2025", "brca_tcga_pan_can_atlas_2018"],
 
-    # Pancreatic - Large 2024 MSK cohort first
+    # Pancreatic – keep 2024 MSK cohorts
     "pancreatic": ["pdac_msk_2024", "pancreas_msk_2024", "paad_qcmg_uq_2016"],
     "paad": ["pdac_msk_2024", "pancreas_msk_2024"],
     "pancreas": ["pdac_msk_2024", "pancreas_msk_2024"],
@@ -279,8 +280,8 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "ovarian": ["ov_tcga_pan_can_atlas_2018"],
     "ov": ["ov_tcga_pan_can_atlas_2018"],
 
-    # Prostate
-    "prostate": ["prostate_msk_2024", "prad_mskcc_2017", "prad_tcga_pan_can_atlas_2018"],
+    # Prostate – keep 2024 MSK cohort
+    "prostate": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
     "prad": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
 
     # Bladder
@@ -336,7 +337,7 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "sarcoma": ["sarc_tcga_pan_can_atlas_2018"],
     "sarc": ["sarc_tcga_pan_can_atlas_2018"],
 
-    # GIST
+    # GIST – keep MSK GIST cohort
     "gist": ["gist_msk_2023"],
     "gastrointestinal stromal": ["gist_msk_2023"],
 
@@ -373,139 +374,6 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "dlbcl": ["dlbc_tcga_pan_can_atlas_2018"],
     "dlbc": ["dlbc_tcga_pan_can_atlas_2018"],
 }
-
-# CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
-#     # Lung / NSCLC
-#     "nsclc": ["genie_bpc_nsclc", "nsclc_ctdx_msk_2022", "luad_mskcc_2023_or_later_if_available"],
-#     "lung": ["genie_bpc_nsclc", "luad_tcga_pan_can_atlas_2018"],
-#     "luad": ["genie_bpc_nsclc_luad_subset_or_multi_study_luad"],
-#     "lusc": ["lusc_tcga_pan_can_atlas_2018"],
-#     "sclc": ["sclc_ucologne_2015"],
-#
-#     # Melanoma
-#     "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018", "mel_ucla_2016", "skcm_mskcc_2014"],
-#     "skcm": ["skcm_tcga_pan_can_atlas_2018"],
-#
-#     # Colorectal
-#     "colorectal": ["crc_eo_2020", "crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
-#     "crc": ["crc_eo_2020", "crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
-#     "colon": ["coadread_tcga_pan_can_atlas_2018"],
-#     "coad": ["coadread_tcga_pan_can_atlas_2018"],
-#     "rectal": ["coadread_tcga_pan_can_atlas_2018"],
-#
-#     # Breast
-#     "breast": ["breast_msk_2025", "breast_msk_2018", "brca_tcga_pan_can_atlas_2018"],
-#     "brca": ["brca_tcga_pan_can_atlas_2018"],
-#
-#     # Pancreatic - Updated with latest large cohorts (as of late 2025)
-#     "pancreatic": ["pdac_msk_2024", "pancreas_msk_2024", "paad_qcmg_uq_2016"],
-#     "paad": ["pdac_msk_2024", "pancreas_msk_2024"],
-#     "pancreas": ["pdac_msk_2024", "pancreas_msk_2024"],
-#
-#     # Brain
-#     "glioblastoma": ["gbm_tcga_pan_can_atlas_2018"],
-#     "gbm": ["gbm_tcga_pan_can_atlas_2018"],
-#     "glioma": ["lgg_tcga_pan_can_atlas_2018", "gbm_tcga_pan_can_atlas_2018"],
-#     "lgg": ["lgg_tcga_pan_can_atlas_2018"],
-#
-#     # Ovarian
-#     "ovarian": ["ov_tcga_pan_can_atlas_2018"],
-#     "ov": ["ov_tcga_pan_can_atlas_2018"],
-#
-#     # Prostate
-#     "prostate": ["prostate_msk_2024", "prad_mskcc_2017", "prad_tcga_pan_can_atlas_2018"],
-#     "prad": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
-#
-#     # Bladder
-#     "bladder": ["blca_tcga_pan_can_atlas_2018"],
-#     "blca": ["blca_tcga_pan_can_atlas_2018"],
-#     "urothelial": ["blca_tcga_pan_can_atlas_2018"],
-#
-#     # Kidney
-#     "kidney": ["kirc_tcga_pan_can_atlas_2018", "kirp_tcga_pan_can_atlas_2018"],
-#     "renal": ["kirc_tcga_pan_can_atlas_2018"],
-#     "rcc": ["kirc_tcga_pan_can_atlas_2018"],
-#     "kirc": ["kirc_tcga_pan_can_atlas_2018"],
-#     "kirp": ["kirp_tcga_pan_can_atlas_2018"],
-#
-#     # Thyroid
-#     "thyroid": ["thca_tcga_pan_can_atlas_2018"],
-#     "thca": ["thca_tcga_pan_can_atlas_2018"],
-#
-#     # Head and Neck
-#     "head and neck": ["hnsc_tcga_pan_can_atlas_2018"],
-#     "hnsc": ["hnsc_tcga_pan_can_atlas_2018"],
-#
-#     # Liver
-#     "liver": ["lihc_tcga_pan_can_atlas_2018"],
-#     "lihc": ["lihc_tcga_pan_can_atlas_2018"],
-#     "hepatocellular": ["lihc_tcga_pan_can_atlas_2018"],
-#     "hcc": ["lihc_tcga_pan_can_atlas_2018"],
-#
-#     # Gastric/Stomach
-#     "gastric": ["stad_tcga_pan_can_atlas_2018"],
-#     "stomach": ["stad_tcga_pan_can_atlas_2018"],
-#     "stad": ["stad_tcga_pan_can_atlas_2018"],
-#
-#     # Esophageal
-#     "esophageal": ["esca_tcga_pan_can_atlas_2018"],
-#     "esca": ["esca_tcga_pan_can_atlas_2018"],
-#
-#     # Uterine/Endometrial
-#     "uterine": ["ucec_tcga_pan_can_atlas_2018"],
-#     "endometrial": ["ucec_tcga_pan_can_atlas_2018"],
-#     "ucec": ["ucec_tcga_pan_can_atlas_2018"],
-#
-#     # Cervical
-#     "cervical": ["cesc_tcga_pan_can_atlas_2018"],
-#     "cesc": ["cesc_tcga_pan_can_atlas_2018"],
-#
-#     # Cholangiocarcinoma
-#     "cholangiocarcinoma": ["chol_tcga_pan_can_atlas_2018"],
-#     "chol": ["chol_tcga_pan_can_atlas_2018"],
-#     "bile duct": ["chol_tcga_pan_can_atlas_2018"],
-#
-#     # Sarcoma
-#     "sarcoma": ["sarc_tcga_pan_can_atlas_2018"],
-#     "sarc": ["sarc_tcga_pan_can_atlas_2018"],
-#
-#     # GIST
-#     "gist": ["gist_mskcc"],
-#     "gastrointestinal stromal": ["gist_mskcc"],
-#
-#     # Mesothelioma
-#     "mesothelioma": ["meso_tcga_pan_can_atlas_2018"],
-#     "meso": ["meso_tcga_pan_can_atlas_2018"],
-#
-#     # Adrenocortical
-#     "adrenocortical": ["acc_tcga_pan_can_atlas_2018"],
-#     "acc": ["acc_tcga_pan_can_atlas_2018"],
-#
-#     # Pheochromocytoma
-#     "pheochromocytoma": ["pcpg_tcga_pan_can_atlas_2018"],
-#     "pcpg": ["pcpg_tcga_pan_can_atlas_2018"],
-#
-#     # Testicular
-#     "testicular": ["tgct_tcga_pan_can_atlas_2018"],
-#     "tgct": ["tgct_tcga_pan_can_atlas_2018"],
-#
-#     # Thymoma
-#     "thymoma": ["thym_tcga_pan_can_atlas_2018"],
-#     "thym": ["thym_tcga_pan_can_atlas_2018"],
-#
-#     # Uveal Melanoma
-#     "uveal melanoma": ["uvm_tcga_pan_can_atlas_2018"],
-#     "uvm": ["uvm_tcga_pan_can_atlas_2018"],
-#
-#     # AML
-#     "aml": ["laml_tcga_pan_can_atlas_2018"],
-#     "laml": ["laml_tcga_pan_can_atlas_2018"],
-#     "acute myeloid leukemia": ["laml_tcga_pan_can_atlas_2018"],
-#
-#     # Diffuse Large B-Cell Lymphoma
-#     "dlbcl": ["dlbc_tcga_pan_can_atlas_2018"],
-#     "dlbc": ["dlbc_tcga_pan_can_atlas_2018"],
-# }
 
 # Default pan-cancer study when no tumor-specific study is found
 CBIOPORTAL_DEFAULT_STUDY = "msk_impact_2017"
@@ -634,6 +502,27 @@ LITERATURE_SENSITIVITY_TERMS = [
     'sensitivity', 'sensitive', 'response',
     'efficacy', 'effective', 'benefit',
 ]
+
+
+# =============================================================================
+# GAP DETECTION THRESHOLDS
+# =============================================================================
+# Magic numbers used in gap_detector.py for evidence quality assessment
+
+# gnomAD allele frequency threshold (0.01%) - variants above this are
+# considered "observed in general population"
+GNOMAD_COMMON_AF_THRESHOLD = 0.0001
+
+# Minimum number of publications to be considered "well characterized"
+# 0 pubs = gap, 1-4 pubs = poorly characterized, 5+ = well characterized
+LITERATURE_WELL_CHARACTERIZED_THRESHOLD = 5
+
+# Co-occurrence percentage threshold for "strong" co-mutation signal
+COOCCURRENCE_STRONG_THRESHOLD_PCT = 20.0
+
+# Hotspot adjacency window (codons) - variants within this distance
+# of a known hotspot are flagged as "near hotspot"
+HOTSPOT_ADJACENCY_WINDOW = 5
 
 
 # =============================================================================
