@@ -427,6 +427,131 @@ class TestCheckDrugResponse:
         assert len(drug_gaps) >= 1
         assert drug_gaps[0].severity == GapSeverity.SIGNIFICANT
 
+    def test_drug_response_counts_sources_correctly(self, mock_evidence, base_context):
+        """Drug response should count CGI, VICC, and FDA sources correctly."""
+        # Create 2 CGI biomarkers
+        cgi1 = MagicMock()
+        cgi1.variant_level = None
+        cgi1.tumor_type = "Lung Cancer"
+        cgi2 = MagicMock()
+        cgi2.variant_level = None
+        cgi2.tumor_type = "Melanoma"
+        mock_evidence.cgi_biomarkers = [cgi1, cgi2]
+
+        # Create 3 VICC evidence items
+        mock_evidence.vicc_evidence = [MagicMock(), MagicMock(), MagicMock()]
+        for v in mock_evidence.vicc_evidence:
+            v.variant_level = None
+            v.disease = "Other Cancer"
+
+        # Create 1 FDA approval
+        fda = MagicMock()
+        fda.variant_level = None
+        fda.match_level = "variant"
+        fda.indication = "Melanoma"
+        fda.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": False})
+        mock_evidence.fda_approvals = [fda]
+
+        _check_drug_response(mock_evidence, base_context)
+
+        # Check the basis string contains correct counts
+        drug_resp = [w for w in base_context.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        assert len(drug_resp) == 1
+        basis = drug_resp[0].basis
+        assert "2 CGI" in basis
+        assert "3 VICC" in basis
+        assert "1 FDA" in basis
+
+    def test_drug_response_tumor_match_counting(self, mock_evidence):
+        """Drug response should track tumor matches vs others."""
+        # Create CGI biomarkers - 1 matching NSCLC, 1 not
+        cgi_match = MagicMock()
+        cgi_match.variant_level = None
+        cgi_match.tumor_type = "Non-Small Cell Lung Cancer"
+        cgi_no_match = MagicMock()
+        cgi_no_match.variant_level = None
+        cgi_no_match.tumor_type = "Melanoma"
+        mock_evidence.cgi_biomarkers = [cgi_match, cgi_no_match]
+
+        # Create VICC evidence - 2 matching
+        vicc1 = MagicMock()
+        vicc1.variant_level = None
+        vicc1.disease = "NSCLC"
+        vicc2 = MagicMock()
+        vicc2.variant_level = None
+        vicc2.disease = "Lung cancer"
+        mock_evidence.vicc_evidence = [vicc1, vicc2]
+
+        ctx = GapDetectionContext(
+            gene="EGFR",
+            variant="L858R",
+            tumor_type="NSCLC",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+        )
+
+        _check_drug_response(mock_evidence, ctx)
+
+        # Check tumor_match field
+        drug_resp = [w for w in ctx.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        assert len(drug_resp) == 1
+        tumor_match = drug_resp[0].tumor_match
+        assert tumor_match is not None
+        # Should have 3 tumor matches (1 CGI + 2 VICC) and 1 other
+        assert "3 tumor" in tumor_match
+        assert "1 other" in tumor_match
+
+    def test_drug_response_locus_match_levels(self, mock_evidence, base_context):
+        """Drug response should track match levels (variant, codon, gene)."""
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        # Create CGI biomarker with variant-level match
+        cgi_variant = MagicMock()
+        cgi_variant.variant_level = EvidenceLevel(level="variant", scope="specific")
+        cgi_variant.tumor_type = None
+        mock_evidence.cgi_biomarkers = [cgi_variant]
+
+        # Create VICC evidence with gene-level match
+        vicc_gene = MagicMock()
+        vicc_gene.variant_level = EvidenceLevel(level="gene", scope="unspecified")
+        vicc_gene.disease = None
+        mock_evidence.vicc_evidence = [vicc_gene]
+
+        # Create FDA approval with codon-level match
+        fda_codon = MagicMock()
+        fda_codon.variant_level = EvidenceLevel(level="codon", scope="specific")
+        fda_codon.match_level = None  # Will fall back to variant_level
+        fda_codon.indication = None
+        mock_evidence.fda_approvals = [fda_codon]
+
+        _check_drug_response(mock_evidence, base_context)
+
+        # Check matches_on field
+        drug_resp = [w for w in base_context.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        assert len(drug_resp) == 1
+        matches_on = drug_resp[0].matches_on
+        assert matches_on is not None
+        assert "1 variant" in matches_on
+        assert "1 codon" in matches_on
+        assert "1 gene" in matches_on
+
+    def test_drug_response_excludes_preclinical_biomarkers(self, mock_evidence, base_context):
+        """Drug response should NOT include preclinical or early phase biomarkers."""
+        # Set up preclinical biomarkers (should be excluded from Drug Response)
+        mock_evidence.preclinical_biomarkers = [MagicMock(), MagicMock()]
+        mock_evidence.early_phase_biomarkers = [MagicMock()]
+
+        _check_drug_response(mock_evidence, base_context)
+
+        # Drug response should NOT be well-characterized (no FDA-tier evidence)
+        assert "drug response" in base_context.poorly_characterized
+        # But preclinical row should exist
+        preclin = [w for w in base_context.well_characterized_detailed
+                   if "preclinical" in w.aspect.lower()]
+        assert len(preclin) == 1
+        assert "2 preclinical" in preclin[0].basis
+        assert "1 early phase" in preclin[0].basis
+
 
 # =============================================================================
 # TEST _check_resistance_mechanisms

@@ -696,13 +696,17 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     - VICC evidence with resistance response types
     - LLM-extracted literature knowledge mentioning resistance
     """
+    tumor_lower = ctx.tumor_type.lower() if ctx.tumor_type else None
+
     # Collect resistance signals from all sources
     resistance_sources: list[str] = []
 
-    # Track match levels for all resistance data
+    # Track match levels and tumor matches for all resistance data
     variant_count = 0
     codon_count = 0
     gene_count = 0
+    tumor_count = 0
+    total_count = 0
 
     # 1. PubMed articles with resistance evidence
     resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
@@ -710,6 +714,8 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
         resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
         # PubMed articles don't have match_level, count as gene-level
         gene_count += len(resistance_articles)
+        total_count += len(resistance_articles)
+        # PubMed articles don't have tumor type info, can't count tumor matches
 
     # 2. CGI biomarkers with resistance association
     cgi_resistance = [
@@ -719,26 +725,32 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     if cgi_resistance:
         resistance_sources.append(f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}")
         for b in cgi_resistance:
-            level = getattr(b, 'match_level', 'gene') or 'gene'
+            level = _get_match_level(b)
             if level == 'variant':
                 variant_count += 1
             elif level == 'codon':
                 codon_count += 1
             else:
                 gene_count += 1
+            if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
+                tumor_count += 1
+            total_count += 1
 
     # 3. CIViC assertions with is_resistance=True
     civic_resistance = [a for a in evidence.civic_assertions if a.is_resistance]
     if civic_resistance:
         resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
         for a in civic_resistance:
-            level = getattr(a, 'match_level', 'gene') or 'gene'
+            level = _get_match_level(a)
             if level == 'variant':
                 variant_count += 1
             elif level == 'codon':
                 codon_count += 1
             else:
                 gene_count += 1
+            if tumor_lower and a.disease and tumor_lower in a.disease.lower():
+                tumor_count += 1
+            total_count += 1
 
     # 4. VICC evidence with resistance response types
     vicc_resistance = [
@@ -748,13 +760,16 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     if vicc_resistance:
         resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
         for v in vicc_resistance:
-            level = getattr(v, 'match_level', 'gene') or 'gene'
+            level = _get_match_level(v)
             if level == 'variant':
                 variant_count += 1
             elif level == 'codon':
                 codon_count += 1
             else:
                 gene_count += 1
+            if tumor_lower and v.disease and tumor_lower in v.disease.lower():
+                tumor_count += 1
+            total_count += 1
 
     # 5. LLM-extracted literature knowledge with resistance signals
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
@@ -763,13 +778,15 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
             resistance_sources.append(f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})")
             # Count match levels from literature resistance entries
             for entry in evidence.literature_knowledge.resistant_to:
-                level = getattr(entry, 'match_level', 'gene') or 'gene'
+                level = _get_match_level(entry)
                 if level == 'variant':
                     variant_count += 1
                 elif level == 'codon':
                     codon_count += 1
                 else:
                     gene_count += 1
+                total_count += 1
+                # Literature entries don't typically have tumor type info
 
     has_resistance_data = bool(resistance_sources)
 
@@ -784,11 +801,21 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
             match_parts.append(f"{gene_count} gene")
         matches_on = ", ".join(match_parts) if match_parts else None
 
+        # Build tumor_match string (show both tumor matches and others)
+        other_count = total_count - tumor_count
+        tumor_parts = []
+        if tumor_count > 0:
+            tumor_parts.append(f"{tumor_count} tumor")
+        if other_count > 0:
+            tumor_parts.append(f"{other_count} other")
+        tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+
         ctx.add_well_characterized(
             "resistance mechanisms",
             " + ".join(resistance_sources),
             category=GapCategory.RESISTANCE,
-            matches_on=matches_on
+            matches_on=matches_on,
+            tumor_match=tumor_match
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
