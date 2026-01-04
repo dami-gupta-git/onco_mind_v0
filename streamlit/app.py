@@ -1107,6 +1107,10 @@ with tab1:
                     if not tumor_match:
                         return ""
 
+                    # Handle special "Yes" value (e.g., from cBioPortal prevalence data)
+                    if tumor_match.strip().lower() == "yes":
+                        return "✅ Yes"
+
                     # Parse format like "2 tumor, 1 pan_cancer, 1 other" or "1 tumor"
                     formatted_parts = []
                     for part in tumor_match.split(","):

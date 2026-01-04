@@ -285,7 +285,9 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
 
     # Compute overall assessments
     overall_quality = _compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
-    research_priority = _compute_research_priority(evidence, ctx.gaps, overall_quality)
+    research_priority = _compute_research_priority(
+        evidence, ctx.gaps, overall_quality, ctx.is_cancer_gene, ctx.has_pathogenic_signal
+    )
 
     # Sort well_characterized_detailed by category for grouped display
     sorted_well_characterized = _sort_characterized_by_category(ctx.well_characterized_detailed)
@@ -801,10 +803,11 @@ def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
         study = cbio.study_name if cbio else "cBioPortal"
         pct = cbio.variant_prevalence_pct if cbio else 0
         ctx.add_well_characterized(
-            "observed in samples",
-            f"{pct:.1f}% in {study}",
+            f"observed in sample from study '{study}'",
+            f"{pct:.1f}%",
             category=GapCategory.PREVALENCE,
-            matches_on="variant"
+            matches_on="variant",
+            tumor_match="Yes"  # cBioPortal data is already tumor-specific
         )
     else:
         severity = GapSeverity.SIGNIFICANT if (ctx.is_cancer_gene and ctx.has_clinical) else GapSeverity.MINOR
@@ -896,11 +899,17 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                 if tumor_models:
                     # Only add tumor-specific entry (not the general one)
                     # Cell lines have the exact variant (has_mutation=True), so match is "variant"
+                    # tumor_match shows how many are tumor-matched vs other histologies
+                    n_other = len(mutant_models) - len(tumor_models)
+                    tumor_match_str = f"{len(tumor_models)} tumor"
+                    if n_other > 0:
+                        tumor_match_str += f", {n_other} other"
                     ctx.add_well_characterized(
                         f"{ctx.tumor_type} cell line models ({len(tumor_models)} available)",
                         "DepMap CCLE",
                         category=GapCategory.PRECLINICAL,
-                        matches_on=f"{len(tumor_models)} variant"
+                        matches_on=f"{len(tumor_models)} variant",
+                        tumor_match=tumor_match_str
                     )
                 else:
                     # No tumor-specific models found - only add gap (not well_characterized)
@@ -1709,6 +1718,8 @@ def _compute_research_priority(
     evidence: "Evidence",
     gaps: list[EvidenceGap],
     overall_quality: str,
+    is_cancer_gene: bool,
+    has_pathogenic_signal: bool,
 ) -> str:
     """Compute research priority based on gene importance and gap profile.
 
@@ -1716,6 +1727,8 @@ def _compute_research_priority(
         evidence: The aggregated evidence
         gaps: List of identified gaps
         overall_quality: The computed overall quality ("comprehensive", "moderate", etc.)
+        is_cancer_gene: Whether the gene is a known cancer gene (from ctx.is_cancer_gene)
+        has_pathogenic_signal: Whether evidence shows pathogenic signals (from ctx.has_pathogenic_signal)
 
     Returns: "very_high" | "high" | "medium" | "low"
     """
@@ -1731,12 +1744,8 @@ def _compute_research_priority(
     gene = evidence.identifiers.gene
     variant = evidence.identifiers.variant
 
-    is_cancer_gene = evidence.context.gene_role in (
-        "oncogene", "TSG", "tumor_suppressor", "ddr", "tsg_pathway_actionable"
-    )
-
     has_strong_oncogenic_signal = (
-        _has_pathogenic_signal(evidence) and
+        has_pathogenic_signal and
         evidence.depmap_evidence is not None and
         evidence.depmap_evidence.is_essential()
     )
@@ -1753,7 +1762,7 @@ def _compute_research_priority(
         return "very_high"
 
     # Very high: hotspot-adjacent variant with pathogenic signal
-    if is_adjacent and _has_pathogenic_signal(evidence) and has_biological_gaps:
+    if is_adjacent and has_pathogenic_signal and has_biological_gaps:
         return "very_high"
 
     # High: cancer gene with critical gaps
