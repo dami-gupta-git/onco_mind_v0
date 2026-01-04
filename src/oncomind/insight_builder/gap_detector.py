@@ -465,67 +465,78 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
 
 
 def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for drug sensitivity/resistance data."""
-    # Check if DepMap has drug data AND tumor-matched cell lines
-    has_depmap_drug_data = False
-    has_tumor_matched_depmap = False
-    if evidence.depmap_evidence is not None and evidence.depmap_evidence.drug_sensitivities:
-        has_depmap_drug_data = True
-        # Only count as tumor-matched if we have cell lines matching the tumor type
-        if ctx.tumor_type and evidence.depmap_evidence.cell_line_models:
-            mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
-            tumor_models = [
-                m for m in mutant_models
-                if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
-            ]
-            has_tumor_matched_depmap = bool(tumor_models)
-        elif not ctx.tumor_type:
-            # No tumor type specified, so all DepMap data is valid
-            has_tumor_matched_depmap = True
+    """Check for drug sensitivity/resistance data.
 
-    ctx.has_drug_data = (
-        bool(evidence.cgi_biomarkers) or
-        bool(evidence.vicc_evidence) or
-        bool(evidence.preclinical_biomarkers) or
-        bool(evidence.early_phase_biomarkers) or
-        has_tumor_matched_depmap  # Only count tumor-matched DepMap data
+    Drug Response includes only FDA-approved tier evidence:
+    - CGI biomarkers (FDA-approved)
+    - VICC evidence
+    - FDA approvals
+
+    Preclinical/early phase biomarkers are handled separately.
+    """
+    tumor_lower = ctx.tumor_type.lower() if ctx.tumor_type else None
+
+    # Helper to count match levels and tumor matches
+    def count_items(items, tumor_check_fn=None):
+        """Count items, their match levels, and tumor matches."""
+        variant = codon = gene = tumor = 0
+        for item in items:
+            level = _get_match_level(item)
+            if level == 'variant':
+                variant += 1
+            elif level == 'codon':
+                codon += 1
+            else:
+                gene += 1
+            if tumor_check_fn and tumor_check_fn(item):
+                tumor += 1
+        return len(items), variant, codon, gene, tumor
+
+    # Count FDA-approved tier evidence only
+    n_cgi, cgi_var, cgi_codon, cgi_gene, cgi_tumor = count_items(
+        evidence.cgi_biomarkers,
+        lambda b: tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower()
+    )
+    n_vicc, vicc_var, vicc_codon, vicc_gene, vicc_tumor = count_items(
+        evidence.vicc_evidence,
+        lambda v: tumor_lower and v.disease and tumor_lower in v.disease.lower()
     )
 
+    # FDA approvals - use parse_indication_for_tumor for tumor matching
+    fda_var = fda_codon = fda_gene = fda_tumor = 0
+    for approval in evidence.fda_approvals:
+        level = _get_match_level(approval)
+        if level == 'variant':
+            fda_var += 1
+        elif level == 'codon':
+            fda_codon += 1
+        else:
+            fda_gene += 1
+        if ctx.tumor_type and approval.indication:
+            parsed = approval.parse_indication_for_tumor(ctx.tumor_type)
+            if parsed.get('tumor_match', False):
+                fda_tumor += 1
+    n_fda = len(evidence.fda_approvals)
+
+    # Aggregate counts
+    total_count = n_cgi + n_vicc + n_fda
+    variant_count = cgi_var + vicc_var + fda_var
+    codon_count = cgi_codon + vicc_codon + fda_codon
+    gene_count = cgi_gene + vicc_gene + fda_gene
+    tumor_count = cgi_tumor + vicc_tumor + fda_tumor
+
+    # Set context flag for approved drug data
+    ctx.has_drug_data = total_count > 0
+
     if ctx.has_drug_data:
-        n_cgi = len(evidence.cgi_biomarkers)
-        n_vicc = len(evidence.vicc_evidence)
-        n_preclin = len(evidence.preclinical_biomarkers)
-        n_early = len(evidence.early_phase_biomarkers)
+        # Build source string
         drug_sources = []
         if n_cgi:
             drug_sources.append(f"{n_cgi} CGI")
         if n_vicc:
             drug_sources.append(f"{n_vicc} VICC")
-        if n_preclin:
-            drug_sources.append(f"{n_preclin} preclinical")
-        if n_early:
-            drug_sources.append(f"{n_early} early phase")
-
-        # Compute match level breakdown for drug response data
-        variant_count = 0
-        codon_count = 0
-        gene_count = 0
-        for b in evidence.cgi_biomarkers:
-            level = getattr(b, 'match_level', 'gene') or 'gene'
-            if level == 'variant':
-                variant_count += 1
-            elif level == 'codon':
-                codon_count += 1
-            else:
-                gene_count += 1
-        for v in evidence.vicc_evidence:
-            level = getattr(v, 'match_level', 'gene') or 'gene'
-            if level == 'variant':
-                variant_count += 1
-            elif level == 'codon':
-                codon_count += 1
-            else:
-                gene_count += 1
+        if n_fda:
+            drug_sources.append(f"{n_fda} FDA")
 
         # Build matches_on string
         match_parts = []
@@ -537,20 +548,22 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             match_parts.append(f"{gene_count} gene")
         matches_on = ", ".join(match_parts) if match_parts else None
 
+        # Build tumor_match string (show both tumor matches and others)
+        other_count = total_count - tumor_count
+        tumor_parts = []
+        if tumor_count > 0:
+            tumor_parts.append(f"{tumor_count} tumor")
+        if other_count > 0:
+            tumor_parts.append(f"{other_count} other")
+        tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+
         ctx.add_well_characterized(
             "drug response",
-            " + ".join(drug_sources) if drug_sources else "Drug data available",
+            " + ".join(drug_sources),
             category=GapCategory.DRUG_RESPONSE,
-            matches_on=matches_on
+            matches_on=matches_on,
+            tumor_match=tumor_match
         )
-        # Only add DepMap drug sensitivity if tumor-matched
-        if has_tumor_matched_depmap:
-            n_drugs = len(evidence.depmap_evidence.drug_sensitivities)
-            ctx.add_well_characterized(
-                "preclinical drug sensitivity (DepMap)",
-                f"{n_drugs} drugs tested",
-                category=GapCategory.DRUG_RESPONSE
-            )
     else:
         ctx.add_gap(
             category=GapCategory.DRUG_RESPONSE,
@@ -560,6 +573,117 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             addressable_with=["GDSC", "CTRP", "DepMap"]
         )
         ctx.add_poorly_characterized("drug response")
+
+    # Handle preclinical/early phase biomarkers separately
+    _check_preclinical_biomarkers(evidence, ctx, tumor_lower)
+
+    # Handle DepMap drug sensitivity separately
+    _check_depmap_drug_sensitivity(evidence, ctx)
+
+
+def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext, tumor_lower: str | None) -> None:
+    """Check for preclinical and early phase biomarker data.
+
+    These are lower evidence tier than FDA-approved biomarkers:
+    - Preclinical: cell line studies, xenografts
+    - Early phase: Phase I/II trials, case reports
+    """
+    n_preclin = len(evidence.preclinical_biomarkers)
+    n_early = len(evidence.early_phase_biomarkers)
+
+    if not n_preclin and not n_early:
+        return
+
+    # Count match levels and tumor matches
+    variant_count = codon_count = gene_count = tumor_count = 0
+
+    for b in evidence.preclinical_biomarkers:
+        level = _get_match_level(b)
+        if level == 'variant':
+            variant_count += 1
+        elif level == 'codon':
+            codon_count += 1
+        else:
+            gene_count += 1
+        if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
+            tumor_count += 1
+
+    for b in evidence.early_phase_biomarkers:
+        level = _get_match_level(b)
+        if level == 'variant':
+            variant_count += 1
+        elif level == 'codon':
+            codon_count += 1
+        else:
+            gene_count += 1
+        if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
+            tumor_count += 1
+
+    # Build source string
+    sources = []
+    if n_preclin:
+        sources.append(f"{n_preclin} preclinical")
+    if n_early:
+        sources.append(f"{n_early} early phase")
+
+    # Build matches_on string
+    match_parts = []
+    if variant_count > 0:
+        match_parts.append(f"{variant_count} variant")
+    if codon_count > 0:
+        match_parts.append(f"{codon_count} codon")
+    if gene_count > 0:
+        match_parts.append(f"{gene_count} gene")
+    matches_on = ", ".join(match_parts) if match_parts else None
+
+    # Build tumor_match string (show both tumor matches and others)
+    total_count = n_preclin + n_early
+    other_count = total_count - tumor_count
+    tumor_parts = []
+    if tumor_count > 0:
+        tumor_parts.append(f"{tumor_count} tumor")
+    if other_count > 0:
+        tumor_parts.append(f"{other_count} other")
+    tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+
+    ctx.add_well_characterized(
+        "preclinical/early phase biomarkers",
+        " + ".join(sources),
+        category=GapCategory.PRECLINICAL,
+        matches_on=matches_on,
+        tumor_match=tumor_match
+    )
+
+
+def _check_depmap_drug_sensitivity(evidence: "Evidence", ctx: GapDetectionContext) -> None:
+    """Check for DepMap drug sensitivity data.
+
+    Only adds if tumor-matched cell lines exist (or no tumor type specified).
+    """
+    if not evidence.depmap_evidence or not evidence.depmap_evidence.drug_sensitivities:
+        return
+
+    has_tumor_matched = False
+    if ctx.tumor_type and evidence.depmap_evidence.cell_line_models:
+        mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        tumor_models = [
+            m for m in mutant_models
+            if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
+        ]
+        has_tumor_matched = bool(tumor_models)
+    elif not ctx.tumor_type:
+        # No tumor type specified, so all DepMap data is valid
+        has_tumor_matched = True
+
+    if has_tumor_matched:
+        n_drugs = len(evidence.depmap_evidence.drug_sensitivities)
+        # DepMap drug sensitivity is variant-level (cell lines have the exact mutation)
+        ctx.add_well_characterized(
+            "preclinical drug sensitivity (DepMap)",
+            f"{n_drugs} drugs tested",
+            category=GapCategory.PRECLINICAL,
+            matches_on=f"{n_drugs} variant"
+        )
 
 
 def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext) -> None:
