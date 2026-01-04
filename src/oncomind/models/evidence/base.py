@@ -48,7 +48,7 @@ class EvidenceLevel(BaseModel):
     )
     scope: Scope | None = Field(
         default=None,
-        description="Scope: 'specific' (exact match) or 'unspecified' (broad category) or ambiguous"
+        description="Scope: 'specific' (exact match) or 'unspecified' or 'ambiguous'"
     )
     origin: Origin | None = Field(
         default=None,
