@@ -598,3 +598,50 @@ UI_MAX_REFERENCES = 5
 # Functional prediction thresholds
 CADD_DELETERIOUS_THRESHOLD = 20  # CADD score > 20 considered deleterious
 GNOMAD_RARE_THRESHOLD = 0.01  # gnomAD AF < 0.01 considered rare
+
+
+# =============================================================================
+# DEPMAP CONSTANTS
+# =============================================================================
+# Configuration for DepMap API and data access
+
+# API endpoints
+DEPMAP_DOWNLOAD_API = "https://depmap.org/portal/download/api/download"
+DEPMAP_CUSTOM_DOWNLOAD_API = "https://depmap.org/portal/api/download/custom"
+DEPMAP_TASK_STATUS_API = "https://depmap.org/portal/api/task"
+
+# PRISM drug sensitivity data URLs (24Q2 release)
+DEPMAP_PRISM_SENSITIVITY_URL = (
+    "https://depmap.org/portal/download/api/download?"
+    "file_name=Repurposing_Public_24Q2_Extended_Primary_Data_Matrix.csv"
+)
+DEPMAP_PRISM_DRUG_INFO_URL = (
+    "https://depmap.org/portal/download/api/download?"
+    "file_name=Repurposing_Public_24Q2_Extended_Primary_Compound_List.csv"
+)
+
+# Data file names for local cache
+DEPMAP_MUTATIONS_FILE = "OmicsSomaticMutations.csv"
+DEPMAP_CRISPR_FILE = "CRISPRGeneEffect.csv"
+
+# DepMap release version
+DEPMAP_RELEASE = "DepMap+Public+24Q4"
+DEPMAP_DATA_VERSION = "DepMap Public 24Q4"
+
+# Timeout for DepMap requests (seconds)
+DEPMAP_DEFAULT_TIMEOUT = 60.0
+DEPMAP_TASK_POLL_TIMEOUT = 10.0
+DEPMAP_DOWNLOAD_TIMEOUT = 30.0
+
+# Task polling configuration
+DEPMAP_MAX_TASK_POLL_ATTEMPTS = 10
+DEPMAP_TASK_POLL_INTERVAL = 1  # seconds
+
+# Drug sensitivity thresholds
+DEPMAP_SENSITIVITY_THRESHOLD = -1.7  # Log2FC threshold for sensitivity
+DEPMAP_MIN_CELL_LINES = 3  # Minimum cell lines required for drug inclusion
+DEPMAP_TOP_DRUGS_LIMIT = 10  # Maximum number of drugs to return
+DEPMAP_SENSITIVE_LINES_DISPLAY = 5  # Max sensitive cell lines to display per drug
+
+# Gene dependency threshold
+DEPMAP_DEPENDENCY_THRESHOLD = -0.5  # Score below this = dependent
