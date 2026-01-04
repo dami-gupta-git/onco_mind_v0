@@ -167,7 +167,7 @@ class TestGapDetectionIntegration:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        assert "known cancer hotspot" in gaps.well_characterized
+        assert "Known Cancer Hotspot" in gaps.well_characterized
 
     @pytest.mark.asyncio
     async def test_kras_g12d_no_discordant_noise(self):

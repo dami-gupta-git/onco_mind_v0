@@ -8,7 +8,13 @@ from oncomind.models.evidence.evidence_gaps import (
     EvidenceGaps, EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
 )
 from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent, _extract_codon_position
-from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.config.constants import (
+    TUMOR_TYPE_MAPPINGS,
+    GNOMAD_COMMON_AF_THRESHOLD,
+    LITERATURE_WELL_CHARACTERIZED_THRESHOLD,
+    COOCCURRENCE_STRONG_THRESHOLD_PCT,
+    HOTSPOT_ADJACENCY_WINDOW,
+)
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
@@ -197,7 +203,7 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
 def _check_hotspot_context(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check if variant is at or near a known cancer hotspot."""
     is_hotspot = is_hotspot_variant(ctx.gene, ctx.variant)
-    is_adjacent, nearest_hotspot = is_hotspot_adjacent(ctx.gene, ctx.variant, window=5)
+    is_adjacent, nearest_hotspot = is_hotspot_adjacent(ctx.gene, ctx.variant, window=HOTSPOT_ADJACENCY_WINDOW)
 
     if is_hotspot:
         ctx.add_well_characterized(
@@ -210,7 +216,7 @@ def _check_hotspot_context(evidence: "Evidence", ctx: GapDetectionContext) -> No
         # Rare variant near a hotspot - high research value
         ctx.add_well_characterized(
             f"near hotspot codon {nearest_hotspot}",
-            f"Within 5 codons of known hotspot — structural similarity likely",
+            f"Within {HOTSPOT_ADJACENCY_WINDOW} codons of known hotspot — structural similarity likely",
             category=GapCategory.FUNCTIONAL
         )
         ctx.add_gap(
@@ -265,7 +271,7 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
     # Check for gnomAD population frequency data (informational, not a penalty)
     # If gnomAD AF > 0.01% (0.0001), note that the variant is observed in the general population
     gnomad_af = evidence.functional.gnomad_exome_af or evidence.functional.gnomad_genome_af
-    if gnomad_af is not None and gnomad_af > 0.0001:  # > 0.01%
+    if gnomad_af is not None and gnomad_af > GNOMAD_COMMON_AF_THRESHOLD:
         af_pct = gnomad_af * 100
         ctx.add_well_characterized(
             "population frequency",
@@ -737,11 +743,16 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                     matches_on=f"{len(mutant_models)} variant"
                 )
         else:
-            ctx.add_well_characterized(
-                f"model cell lines ({n_models} available)",
-                "DepMap CCLE",
-                category=GapCategory.PRECLINICAL
-            )
+            # No cell lines have the mutation - this is a gap, not well-characterized
+            if ctx.has_drug_data or ctx.has_clinical or evidence.context.gene_role:
+                ctx.add_gap(
+                    category=GapCategory.PRECLINICAL,
+                    severity=GapSeverity.MINOR,
+                    description=f"DepMap has {n_models} cell lines for {ctx.gene} but none with {ctx.variant}",
+                    suggested_studies=["Generate isogenic model with mutation", "CRISPR knock-in"],
+                    addressable_with=["DepMap CCLE", "CRISPR screens"]
+                )
+                ctx.add_poorly_characterized("variant-specific cell models")
     else:
         if ctx.has_drug_data or ctx.has_clinical or evidence.context.gene_role:
             ctx.add_gap(
@@ -771,7 +782,7 @@ def _check_literature_depth(evidence: "Evidence", ctx: GapDetectionContext) -> N
             addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"]
         )
         ctx.add_poorly_characterized("published literature")
-    elif pub_count < 5:
+    elif pub_count < LITERATURE_WELL_CHARACTERIZED_THRESHOLD:
         ctx.add_poorly_characterized("literature depth (limited publications)")
     else:
         ctx.add_well_characterized(
@@ -1046,7 +1057,7 @@ def _get_top_cooccurring_gene(evidence: "Evidence") -> str | None:
     return None
 
 
-def _has_strong_cooccurrence(evidence: "Evidence", threshold_pct: float = 20.0) -> bool:
+def _has_strong_cooccurrence(evidence: "Evidence", threshold_pct: float = COOCCURRENCE_STRONG_THRESHOLD_PCT) -> bool:
     """Check if there's a strong co-occurrence signal (>threshold% co-mutation rate)."""
     if evidence.cbioportal_evidence and evidence.cbioportal_evidence.co_occurring:
         top_cooc = evidence.cbioportal_evidence.co_occurring[0]
@@ -1122,8 +1133,16 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> boo
         if vicc.disease and tumor_lower in vicc.disease.lower():
             return True
 
-    # Check CGI biomarkers
+    # Check CGI biomarkers (all tiers)
     for cgi in evidence.cgi_biomarkers:
+        if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
+            return True
+
+    for cgi in evidence.preclinical_biomarkers:
+        if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
+            return True
+
+    for cgi in evidence.early_phase_biomarkers:
         if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
             return True
 
@@ -1490,7 +1509,7 @@ def _compute_research_priority(
         for g in gaps
     )
 
-    is_adjacent, _ = is_hotspot_adjacent(gene, variant, window=5)
+    is_adjacent, _ = is_hotspot_adjacent(gene, variant, window=HOTSPOT_ADJACENCY_WINDOW)
 
     # Very high: strong oncogenic signal + biological gaps = prime research target
     if has_strong_oncogenic_signal and has_biological_gaps:
