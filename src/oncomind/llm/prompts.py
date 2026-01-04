@@ -74,6 +74,9 @@ has_civic_assertions: {has_civic_assertions}
 has_fda_approvals: {has_fda_approvals}
 has_vicc_evidence: {has_vicc_evidence}
 
+## MATCH LEVEL SUMMARY
+{match_level_text}
+
 ## BIOLOGICAL CONTEXT
 {biological_context}
 
@@ -214,7 +217,16 @@ def create_synthesis_prompt(
     if data_availability is None:
         data_availability = {}
 
-    _ = match_level_summary  # Reserved for future use
+    # Build match level text for LLM context
+    if match_level_summary:
+        match_level_text = match_level_summary.get("summary_text", "No match level data available.")
+        # Add detail about what's variant-specific vs gene-level
+        if match_level_summary.get("is_all_gene_level"):
+            match_level_text += " CAUTION: No variant-specific evidence found - use gene-level inferences carefully."
+        elif not match_level_summary.get("has_variant_specific"):
+            match_level_text += " WARNING: Limited variant-specific data."
+    else:
+        match_level_text = "No match level data available."
 
     user_content = SYNTHESIS_USER_PROMPT.format(
         gene=gene,
@@ -224,6 +236,7 @@ def create_synthesis_prompt(
         has_civic_assertions=str(data_availability.get("has_civic_assertions", False)).upper(),
         has_fda_approvals=str(data_availability.get("has_fda_approvals", False)).upper(),
         has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
+        match_level_text=match_level_text,
         biological_context=biological_context or "No cBioPortal data available.",
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
