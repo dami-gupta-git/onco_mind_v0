@@ -31,6 +31,27 @@ from oncomind.models.evidence.depmap import (
     CellLineModel,
 )
 from oncomind.config.debug import get_logger
+from oncomind.config.constants import (
+    DEPMAP_DOWNLOAD_API,
+    DEPMAP_CUSTOM_DOWNLOAD_API,
+    DEPMAP_TASK_STATUS_API,
+    DEPMAP_PRISM_SENSITIVITY_URL,
+    DEPMAP_PRISM_DRUG_INFO_URL,
+    DEPMAP_MUTATIONS_FILE,
+    DEPMAP_CRISPR_FILE,
+    DEPMAP_RELEASE,
+    DEPMAP_DATA_VERSION,
+    DEPMAP_DEFAULT_TIMEOUT,
+    DEPMAP_TASK_POLL_TIMEOUT,
+    DEPMAP_DOWNLOAD_TIMEOUT,
+    DEPMAP_MAX_TASK_POLL_ATTEMPTS,
+    DEPMAP_TASK_POLL_INTERVAL,
+    DEPMAP_SENSITIVITY_THRESHOLD,
+    DEPMAP_MIN_CELL_LINES,
+    DEPMAP_TOP_DRUGS_LIMIT,
+    DEPMAP_SENSITIVE_LINES_DISPLAY,
+    DEPMAP_DEPENDENCY_THRESHOLD,
+)
 
 logger = get_logger(__name__)
 
@@ -72,20 +93,7 @@ class DepMapClient:
     Data is accessed via direct download URLs from the DepMap portal.
     """
 
-    # DepMap download API base
-    DOWNLOAD_API = "https://depmap.org/portal/download/api/download"
-
-    # Data file URLs (DepMap Public 24Q4 release)
-    MUTATIONS_FILE = "OmicsSomaticMutations.csv"
-    MUTATIONS_RELEASE = "DepMap+Public+24Q4"
-
-    # CRISPR dependency data
-    CRISPR_FILE = "CRISPRGeneEffect.csv"
-    CRISPR_RELEASE = "DepMap+Public+24Q4"
-
-    DEFAULT_TIMEOUT = 60.0  # Longer timeout for large file downloads
-
-    def __init__(self, timeout: float = DEFAULT_TIMEOUT, cache_dir: Path | None = None):
+    def __init__(self, timeout: float = DEPMAP_DEFAULT_TIMEOUT, cache_dir: Path | None = None):
         """Initialize the DepMap client.
 
         Args:
@@ -125,7 +133,7 @@ class DepMapClient:
 
     def _build_download_url(self, file_name: str, release: str | None = None) -> str:
         """Build a DepMap download URL."""
-        url = f"{self.DOWNLOAD_API}?file_name={file_name}"
+        url = f"{DEPMAP_DOWNLOAD_API}?file_name={file_name}"
         if release:
             url += f"&release={release}"
         return url
@@ -181,12 +189,10 @@ class DepMapClient:
             - drugs_df: DataFrame with drug metadata (name, target, MOA, etc.)
         """
         # Primary screen — log-fold change values (lower = more sensitive)
-        prism_url = "https://depmap.org/portal/download/api/download?file_name=Repurposing_Public_24Q2_Extended_Primary_Data_Matrix.csv"
-        sensitivity = pd.read_csv(prism_url, index_col=0)
+        sensitivity = pd.read_csv(DEPMAP_PRISM_SENSITIVITY_URL, index_col=0)
 
         # Drug metadata — maps column IDs to drug names, targets, MOA
-        drug_info_url = "https://depmap.org/portal/download/api/download?file_name=Repurposing_Public_24Q2_Extended_Primary_Compound_List.csv"
-        drugs = pd.read_csv(drug_info_url)
+        drugs = pd.read_csv(DEPMAP_PRISM_DRUG_INFO_URL)
 
         logger.info(f"Loaded PRISM data: {sensitivity.shape[0]} cell lines, {sensitivity.shape[1]} drugs")
         return sensitivity, drugs
@@ -194,9 +200,9 @@ class DepMapClient:
     def fetch_drug_sensitivities(
         self,
         variant_cell_lines: list[str],
-        sensitivity_threshold: float = -1.7,
-        min_cell_lines: int = 3,
-        top_n: int = 10,
+        sensitivity_threshold: float = DEPMAP_SENSITIVITY_THRESHOLD,
+        min_cell_lines: int = DEPMAP_MIN_CELL_LINES,
+        top_n: int = DEPMAP_TOP_DRUGS_LIMIT,
     ) -> list[DrugSensitivity]:
         """Find drugs that cell lines with a specific mutation are sensitive to.
 
@@ -283,7 +289,7 @@ class DepMapClient:
                         drug_name=drug_name,
                         mean_log2fc=round(mean_log2fc, 3),
                         n_cell_lines=len(responses),
-                        sensitive_lines=sensitive_lines[:5],  # Top 5 for display
+                        sensitive_lines=sensitive_lines[:DEPMAP_SENSITIVE_LINES_DISPLAY],
                     ))
 
             # Sort by mean_log2fc (most negative = most sensitive)
@@ -312,7 +318,7 @@ class DepMapClient:
         """
         # Path to local data files
         data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
-        mutations_file = data_dir / self.MUTATIONS_FILE
+        mutations_file = data_dir / DEPMAP_MUTATIONS_FILE
         sample_info_file = data_dir / "sample_info.csv"
 
         if not mutations_file.exists():
@@ -395,13 +401,13 @@ class DepMapClient:
         try:
             # Use the custom download endpoint with gene filter
             response = await client.post(
-                "https://depmap.org/portal/api/download/custom",
+                DEPMAP_CUSTOM_DOWNLOAD_API,
                 json={
                     "datasetId": "Chronos_Combined",
                     "featureLabels": [gene.upper()],
                     "dropEmpty": True,
                 },
-                timeout=30.0,
+                timeout=DEPMAP_DOWNLOAD_TIMEOUT,
             )
             response.raise_for_status()
             task_info = response.json()
@@ -412,12 +418,12 @@ class DepMapClient:
                 return None
 
             # Poll for task completion
-            for _ in range(10):  # Max 10 attempts
-                await asyncio.sleep(1)
+            for _ in range(DEPMAP_MAX_TASK_POLL_ATTEMPTS):
+                await asyncio.sleep(DEPMAP_TASK_POLL_INTERVAL)
 
                 status_response = await client.get(
-                    f"https://depmap.org/portal/api/task/{task_id}",
-                    timeout=10.0,
+                    f"{DEPMAP_TASK_STATUS_API}/{task_id}",
+                    timeout=DEPMAP_TASK_POLL_TIMEOUT,
                 )
                 status = status_response.json()
 
@@ -425,7 +431,7 @@ class DepMapClient:
                     download_url = status.get("result", {}).get("downloadUrl")
                     if download_url:
                         # Fetch the CSV data
-                        data_response = await client.get(download_url, timeout=30.0)
+                        data_response = await client.get(download_url, timeout=DEPMAP_DOWNLOAD_TIMEOUT)
                         data_response.raise_for_status()
 
                         # Parse CSV - first column is cell line ID, second is gene score
@@ -443,8 +449,8 @@ class DepMapClient:
 
                         if scores:
                             mean_score = sum(scores) / len(scores)
-                            # Count dependent lines (score < -0.5)
-                            n_dependent = sum(1 for s in scores if s < -0.5)
+                            # Count dependent lines (score below threshold)
+                            n_dependent = sum(1 for s in scores if s < DEPMAP_DEPENDENCY_THRESHOLD)
 
                             return GeneDependency(
                                 gene=gene.upper(),
@@ -535,7 +541,7 @@ class DepMapClient:
                 gene_dependency=dependency,
                 drug_sensitivities=drug_sensitivities,
                 cell_line_models=cell_line_models,
-                data_version="DepMap Public 24Q4",
+                data_version=DEPMAP_DATA_VERSION,
                 n_cell_lines_screened=dependency.n_total_lines if dependency else 0,
             )
 
