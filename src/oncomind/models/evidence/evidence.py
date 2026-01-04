@@ -918,7 +918,7 @@ class Evidence(BaseModel):
         # Literature resistance signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.resistant_to:
             for entry in self.literature_knowledge.resistant_to:
-                drug = entry.get("drug", "")
+                drug = entry.drug
                 if drug:
                     drug_lower = drug.lower()
                     if drug_lower not in resistance_drugs:
@@ -1080,7 +1080,7 @@ class Evidence(BaseModel):
         # Literature sensitivity signals from LLM extraction
         if self.literature_knowledge and self.literature_knowledge.sensitive_to:
             for entry in self.literature_knowledge.sensitive_to:
-                drug = entry.get("drug", "")
+                drug = entry.drug
                 if drug:
                     drug_lower = drug.lower()
                     if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
