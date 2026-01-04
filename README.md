@@ -78,23 +78,25 @@ pip install -e . --force-reinstall
 
 ```python
 import asyncio
-from oncomind import get_insight, InsightConfig
+from oncomind import Conductor, ConductorConfig
 
 async def main():
     # Fast, deterministic evidence (~7s)
-    result = await get_insight("BRAF V600E", tumor_type="Melanoma")
-    print(result.get_summary())
-    print(result.evidence.get_therapeutic_evidence())
+    async with Conductor() as conductor:
+        result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+        print(result.get_summary())
+        print(result.evidence.get_therapeutic_evidence())
 
     # Evidence backbone + literature + LLM research layer (~25s)
-    config = InsightConfig(enable_llm=True, llm_model="claude-sonnet-4-20250514")
-    result = await get_insight("MAP2K1 P124L", tumor_type="Melanoma", config=config)
+    config = ConductorConfig(enable_llm=True, llm_model="claude-sonnet-4-20250514")
+    async with Conductor(config) as conductor:
+        result = await conductor.run("MAP2K1 P124L", tumor_type="Melanoma")
 
-    if result.llm:
-        print(result.llm.llm_summary)
-        print("Evidence quality:", result.llm.evidence_quality)
-        print("Knowledge gaps:", result.llm.knowledge_gaps)
-        print("Research implications:", result.llm.research_implications)
+        if result.llm:
+            print(result.llm.llm_summary)
+            print("Evidence quality:", result.llm.evidence_quality)
+            print("Knowledge gaps:", result.llm.knowledge_gaps)
+            print("Research implications:", result.llm.research_implications)
 
 asyncio.run(main())
 ```
@@ -232,7 +234,8 @@ The top-level `Result` object contains:
 - `llm` – optional `LLMInsight` with research narrative and gaps (only when `enable_llm=True`)  
 
 ```python
-result = await get_insight("BRAF V600E", tumor_type="Melanoma")
+async with Conductor() as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 
 result.identifiers.gene                 # "BRAF"
 result.kb.civic_assertions              # CIViC drug–variant assertions
@@ -246,7 +249,7 @@ if result.llm:
     result.llm.research_implications
 ```
 
-See `docs/API_REFERENCE.md` for full field documentation.
+See the `Evidence` and `Result` models in `src/oncomind/models/` for full field documentation.
 
 ***
 

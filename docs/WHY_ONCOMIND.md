@@ -338,9 +338,10 @@ For everything else, we do the literature search you'd do manually — and show 
 ## Try It
 
 ```python
-from oncomind import get_insight
+from oncomind import Conductor
 
-result = await get_insight("EGFR T790M", tumor_type="NSCLC")
+async with Conductor() as conductor:
+    result = await conductor.run("EGFR T790M", tumor_type="NSCLC")
 
 # What do the databases say?
 print(result.evidence.civic_assertions)
