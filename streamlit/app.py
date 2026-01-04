@@ -420,7 +420,7 @@ with tab1:
                                 amp = a.get('amp_level', '')
                                 # Match level indicator with label
                                 match = a.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 disease_match = a.get('disease_match', True)
                                 tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
@@ -446,7 +446,7 @@ with tab1:
                                 etype = e.get('evidence_type', '')
                                 # Match level indicator
                                 match = e.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 disease_match = e.get('disease_match', True)
                                 tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
@@ -468,7 +468,7 @@ with tab1:
     - **4/D**: Preclinical or computational evidence
     - **R1/R2**: Resistance evidence (strong/emerging)
 
-    **Match Level:** 🎯 = variant-specific, 🔢 = codon-level, 🧬 = gene-level
+    **Match Level:** 🎯 = variant-specific, 📍 = codon-level, 🧬 = gene-level
     """)
                         # Use markdown table for clickable source links
                         rows = ["| Source | Locus Match | Drugs | Response | Disease | Level |",
@@ -481,7 +481,7 @@ with tab1:
                                 pub_url = pub_url[0]
                             source_link = f"[{source}]({pub_url})" if pub_url else source
                             match_level = v.get('match_level', '')
-                            match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match_level, "")
+                            match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match_level, "")
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
                             response = v.get('response_type', 'Unknown')
@@ -619,7 +619,7 @@ with tab1:
                                 cgi_tumor = b.get('tumor_type', '') or ''
                                 # Locus match
                                 match = b.get('match_level', '')
-                                locus_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "-")
+                                locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
                                 # Tumor match
                                 cgi_tumor_lower = cgi_tumor.lower()
                                 tumor_lower = (tumor_display or '').lower() if tumor_display else ''
@@ -643,7 +643,7 @@ with tab1:
                                 cgi_tumor = b.get('tumor_type', '') or ''
                                 # Locus match
                                 match = b.get('match_level', '')
-                                locus_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "-")
+                                locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
                                 # Tumor match
                                 cgi_tumor_lower = cgi_tumor.lower()
                                 tumor_lower = (tumor_display or '').lower() if tumor_display else ''
