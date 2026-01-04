@@ -19,11 +19,43 @@ class FDAApproval(EvidenceItemBase):
     companion_diagnostic: str | None = None
     black_box_warning: str | None = None
     dosing_for_variant: str | None = None
-    # Match specificity tracking
-    match_level: str | None = Field(
-        default=None,
-        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
-    )
+    @property
+    def match_level(self) -> str:
+        """Get the locus match level: 'variant', 'codon', or 'gene'.
+
+        Uses variant_level.level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence.
+        """
+        if self.variant_level and self.variant_level.level:
+            return self.variant_level.level
+        return "gene"
+
+    @property
+    def is_tumor_match(self) -> bool | None:
+        """Check if approval matches the queried tumor type.
+
+        Uses cancer_type_level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence.
+
+        Returns:
+            True if cancer_specific, False if not, None if unknown.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return None
+
+    @property
+    def cancer_specificity(self) -> str | None:
+        """Get the cancer specificity level.
+
+        Returns:
+            'cancer_specific' if matches queried tumor,
+            'pan_cancer' if tumor-agnostic,
+            or the specific cancer name if different tumor type.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level
+        return None
 
     def parse_indication_for_tumor(self, tumor_type: str) -> dict:
         """Parse FDA indication text to extract line-of-therapy and approval type for a specific tumor."""

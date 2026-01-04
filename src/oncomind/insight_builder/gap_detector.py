@@ -728,13 +728,28 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
     if has_trials:
         n_trials = len(evidence.clinical_trials)
 
-        # Count by tumor match using cancer_type_level
+        # Count by locus match and tumor match using properties
+        match_counts: dict[str, int] = {"variant": 0, "gene": 0}
         tumor_match_counts: dict[str, int] = {"tumor": 0, "other": 0}
+
         for trial in evidence.clinical_trials:
-            if trial.cancer_type_level and trial.cancer_type_level.level == "cancer_specific":
+            # Count locus match using match_level property
+            level = trial.match_level
+            if level in match_counts:
+                match_counts[level] += 1
+
+            # Count tumor match using is_tumor_match property
+            if trial.is_tumor_match is True:
                 tumor_match_counts["tumor"] += 1
             else:
                 tumor_match_counts["other"] += 1
+
+        # Build matches_on string (e.g., "2 variant, 1 gene")
+        matches_on_parts = []
+        for level in ["variant", "gene"]:
+            if match_counts[level] > 0:
+                matches_on_parts.append(f"{match_counts[level]} {level}")
+        matches_on_str = ", ".join(matches_on_parts) if matches_on_parts else None
 
         # Build tumor match string
         tumor_match_parts = []
@@ -748,6 +763,7 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
             "clinical trial options",
             f"{n_trials} active trial{'s' if n_trials != 1 else ''}",
             category=GapCategory.CLINICAL,
+            matches_on=matches_on_str,
             tumor_match=tumor_match_str
         )
     elif ctx.has_clinical or ctx.has_drug_data:

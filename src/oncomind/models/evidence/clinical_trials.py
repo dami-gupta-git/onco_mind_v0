@@ -46,3 +46,34 @@ class ClinicalTrialEvidence(EvidenceItemBase):
                 continue
             drugs.append(intervention)
         return drugs
+
+    @property
+    def match_level(self) -> str:
+        """Get the locus match level: 'variant' or 'gene'.
+
+        Uses variant_level.level from EvidenceItemBase.
+        """
+        if self.variant_level and self.variant_level.level:
+            return self.variant_level.level
+        return "gene"
+
+    @property
+    def match_scope(self) -> str | None:
+        """Get the match scope: 'specific', 'ambiguous', or 'unspecified'.
+
+        Uses variant_level.scope from EvidenceItemBase.
+        """
+        if self.variant_level:
+            return self.variant_level.scope
+        return None
+
+    @property
+    def is_tumor_match(self) -> bool | None:
+        """Check if trial matches the queried tumor type.
+
+        Returns:
+            True if cancer_specific, False if not, None if unknown.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return None
