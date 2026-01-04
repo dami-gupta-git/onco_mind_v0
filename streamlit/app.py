@@ -133,7 +133,7 @@ with tab1:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_literature = st.toggle(
             "Literature",
-            value=True,
+            value=False,
             help="Search recent literature via Semantic Scholar (with citations). Falls back to PubMed if rate limited."
         )
         # Semantic Scholar by default, PubMed is automatic fallback on rate limit
@@ -709,11 +709,11 @@ with tab1:
                             st.markdown("### Drug Sensitivities")
                             drug_rows = []
                             for ds in drug_sens:
-                                ic50 = ds.get('ic50_nm')
-                                ic50_str = f"{ic50:.0f} nM" if ic50 else "N/A"
+                                log2fc = ds.get('mean_log2fc')
+                                log2fc_str = f"{log2fc:.2f}" if log2fc is not None else "N/A"
                                 drug_rows.append({
                                     "Drug": ds.get('drug_name', ''),
-                                    "IC50": ic50_str,
+                                    "Log2FC": log2fc_str,
                                     "Cell Lines": ds.get('n_cell_lines', 0),
                                 })
                             st.dataframe(pd.DataFrame(drug_rows), width="stretch", hide_index=True, height=min(300, 35 * (len(drug_rows) + 1)))
