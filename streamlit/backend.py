@@ -161,7 +161,7 @@ def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
             # Match specificity tracking
             "match_level": e.match_level,
             "matched_profile": e.matched_profile,
-            "disease_match": e.disease_match,
+            "tumor_match": e.is_tumor_match,
         })
     return deduped
 
@@ -259,7 +259,7 @@ def _build_response(result) -> Dict[str, Any]:
                 # Match specificity tracking
                 "match_level": a.match_level,
                 "matched_profile": a.matched_profile,
-                "disease_match": a.disease_match,
+                "tumor_match": a.is_tumor_match,
             }
             for a in evidence.civic_assertions
         ],
@@ -322,7 +322,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "variant_specific": t.match_level == "variant",
                 "matched_biomarker": t.matched_biomarker,
                 "match_scope": t.match_scope,
-                "disease_match": t.is_tumor_match,
+                "tumor_match": t.is_tumor_match,
             }
             for t in evidence.clinical_trials
         ],
@@ -333,6 +333,9 @@ def _build_response(result) -> Dict[str, Any]:
                 "year": a.year,
                 "journal": a.journal,
                 "signal_type": a.signal_type,
+                "url": a.url,
+                "match_level": a.match_level,
+                "cancer_specificity": a.cancer_specificity,
             }
             for a in evidence.pubmed_articles
         ],
@@ -342,6 +345,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "drug": b.drug,
                 "association": b.association,
                 "evidence_level": b.evidence_level,
+                "tumor_type": b.tumor_type,
+                "match_level": b.match_level,
             }
             for b in evidence.preclinical_biomarkers
         ],
@@ -350,6 +355,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "drug": b.drug,
                 "association": b.association,
                 "evidence_level": b.evidence_level,
+                "tumor_type": b.tumor_type,
+                "match_level": b.match_level,
             }
             for b in evidence.early_phase_biomarkers
         ],

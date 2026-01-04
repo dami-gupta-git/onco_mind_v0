@@ -56,8 +56,30 @@ st.markdown("""
         font-size: 0.8rem !important;
         padding: 4px 8px !important;
     }
+    /* Scrollable table container for evidence tables */
+    .scrollable-table {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        padding: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .scrollable-table table {
+        font-size: 0.85rem !important;
+    }
+    .scrollable-table th, .scrollable-table td {
+        padding: 6px 10px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
+
+def scrollable_table(markdown_content: str) -> None:
+    """Render a markdown table inside a scrollable container."""
+    st.markdown(
+        f'<div class="scrollable-table">\n\n{markdown_content}\n\n</div>',
+        unsafe_allow_html=True
+    )
 
 st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Variant Insight</h1>", unsafe_allow_html=True)
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
@@ -422,10 +444,10 @@ with tab1:
                                 match = a.get('match_level', '')
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
-                                disease_match = a.get('disease_match', True)
-                                tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
+                                tumor_match = a.get('tumor_match')
+                                tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
                                 rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {therapies_str} | {sig} | {disease} | {amp} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
 
                         if civic_evidence:
                             if civic_assertions:
@@ -448,10 +470,10 @@ with tab1:
                                 match = e.get('match_level', '')
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
-                                disease_match = e.get('disease_match', True)
-                                tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
+                                tumor_match = e.get('tumor_match')
+                                tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
                                 rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # VICC tab
@@ -488,7 +510,7 @@ with tab1:
                             disease = (v.get('disease', '') or '')[:25]
                             level = v.get('evidence_level', '')
                             rows.append(f"| {source_link} | {match_display} | {drugs} | {response} | {disease} | {level} |")
-                        st.markdown("\n".join(rows))
+                        scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # CGI tab
@@ -507,7 +529,7 @@ with tab1:
                             tumor = (b.get('tumor_type', '') or '')[:25]
                             level = b.get('evidence_level', '')
                             rows.append(f"| {drug_link} | {association} | {tumor} | {level} |")
-                        st.markdown("\n".join(rows))
+                        scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # ClinVar tab
@@ -528,7 +550,7 @@ with tab1:
                                 conds_str = ', '.join(conds)[:30] if conds else 'N/A'
                                 review = entry.get('review_status', '')
                                 rows.append(f"| {var_link} | {sig} | {conds_str} | {review} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
                         elif not clinvar_sig:
                             st.info("No ClinVar entries found")
                     tab_idx += 1
@@ -579,10 +601,10 @@ with tab1:
                                 match_display = f"🧬 {matched_biomarker}" if matched_biomarker else "🧬 Gene"
 
                             # Tumor match display
-                            disease_match = t.get('disease_match')
-                            if disease_match is True:
+                            tumor_match = t.get('tumor_match')
+                            if tumor_match is True:
                                 tumor_match_display = "✅ Yes"
-                            elif disease_match is False:
+                            elif tumor_match is False:
                                 tumor_match_display = "⚠️ Other"
                             else:
                                 tumor_match_display = "-"
@@ -594,24 +616,25 @@ with tab1:
                             status = t.get('status', '')
                             title = (t.get('title', '') or '')[:50] + "..."
                             rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title} |")
-                        st.markdown("\n".join(rows))
+                        scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # Literature tab
                 if articles:
                     with tabs[tab_idx]:
                         # Use markdown table for clickable PMIDs
-                        rows = ["| PMID | Year | Journal | Title |",
-                                "|------|------|---------|-------|"]
+                        rows = ["| PMID | Year | Journal | Signal | Title |",
+                                "|------|------|---------|--------|-------|"]
                         for a in articles:
                             pmid = a.get('pmid', '')
                             url = a.get('url') or f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ''
                             pmid_link = f"[{pmid}]({url})" if pmid and url else pmid
                             year = a.get('year', '')
                             journal = (a.get('journal', '') or '')[:20]
-                            title = (a.get('title', '') or '')[:50] + "..."
-                            rows.append(f"| {pmid_link} | {year} | {journal} | {title} |")
-                        st.markdown("\n".join(rows))
+                            signal = a.get('signal_type', '') or '-'
+                            title = (a.get('title', '') or '')[:80] + "..."
+                            rows.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")
+                        scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # Research tab
@@ -639,7 +662,7 @@ with tab1:
                                 else:
                                     tumor_match_cell = "-"
                                 rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
                         if early_phase:
                             if preclinical:
                                 st.markdown("---")
@@ -663,7 +686,7 @@ with tab1:
                                 else:
                                     tumor_match_cell = "-"
                                 rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # cBioPortal tab
@@ -875,7 +898,7 @@ with tab1:
                                     tumor_match_cell = "-"
 
                                 rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
 
                         if clinical:
                             if fda_approved:
@@ -905,7 +928,7 @@ with tab1:
                                     tumor_match_cell = "-"
 
                                 rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {level} | {response} | {source} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
 
                         if preclinical_therapies:
                             if fda_approved or clinical:
@@ -935,7 +958,7 @@ with tab1:
                                     tumor_match_cell = "-"
 
                                 rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
-                            st.markdown("\n".join(rows))
+                            scrollable_table("\n".join(rows))
                     tab_idx += 1
             else:
                 st.info("No evidence found from any source")
@@ -1166,9 +1189,9 @@ with tab1:
                         .wc-table th {{ background-color: #f8f9fa; font-weight: 600; }}
                         .wc-table td {{ word-wrap: break-word; }}
                         .wc-table th:nth-child(1), .wc-table td:nth-child(1) {{ width: 25%; }}
-                        .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 30%; }}
+                        .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 25%; }}
                         .wc-table th:nth-child(3), .wc-table td:nth-child(3) {{ width: 25%; }}
-                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 20%; }}
+                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 25%; }}
                     </style>
                     <table class="wc-table">
                         <thead><tr><th>Aspect</th><th>Basis</th><th>Locus Match</th><th>Tumor Match</th></tr></thead>
@@ -1206,8 +1229,8 @@ with tab1:
                             "Matches On": trial_match_str if is_trial_gap else "",
                         })
 
+                st.markdown("**❓ Evidence Gaps** — _what we don't know_")
                 if gaps_data:
-                    st.markdown("**❓ Evidence Gaps** — _what we don't know_")
                     # Use HTML table for column width control
                     html_rows = []
                     for row in gaps_data:
@@ -1232,6 +1255,8 @@ with tab1:
                     </table>
                     """
                     st.markdown(html_table, unsafe_allow_html=True)
+                else:
+                    st.success("✅ No significant evidence gaps identified for this well-characterized variant.")
 
             # Suggested studies (collapsible) - full width below tables
             gaps = evidence_gaps.get('gaps', [])
