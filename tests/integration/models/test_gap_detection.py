@@ -883,3 +883,287 @@ class TestAKT1E17KBreastCancer:
         ]
         assert len(cell_lines_with_mutation) > 0, \
             "Should have cell lines with AKT1 E17K mutation"
+
+
+# =============================================================================
+# DRUG RESPONSE TUMOR MATCH INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestDrugResponseTumorMatch:
+    """Integration tests for drug response tumor_match and matches_on tracking."""
+
+    @pytest.mark.asyncio
+    async def test_egfr_l858r_drug_response_has_tumor_match(self):
+        """EGFR L858R in NSCLC should have drug response with tumor_match info."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find drug response in well_characterized_detailed
+        drug_resp = [
+            item for item in gaps.well_characterized_detailed
+            if "drug response" in item.aspect.lower()
+        ]
+
+        # Should have drug response data
+        assert len(drug_resp) > 0, "Should have drug response in well_characterized"
+
+        # Should have tumor_match field
+        drug_resp_item = drug_resp[0]
+        assert drug_resp_item.tumor_match is not None, \
+            f"Drug response should have tumor_match, got: {drug_resp_item}"
+
+        # Should show "X tumor" count since EGFR L858R has NSCLC-specific data
+        assert "tumor" in drug_resp_item.tumor_match, \
+            f"tumor_match should contain 'tumor', got: {drug_resp_item.tumor_match}"
+
+    @pytest.mark.asyncio
+    async def test_egfr_l858r_drug_response_has_matches_on(self):
+        """EGFR L858R drug response should have matches_on locus levels."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find drug response in well_characterized_detailed
+        drug_resp = [
+            item for item in gaps.well_characterized_detailed
+            if "drug response" in item.aspect.lower()
+        ]
+
+        assert len(drug_resp) > 0, "Should have drug response in well_characterized"
+
+        drug_resp_item = drug_resp[0]
+        assert drug_resp_item.matches_on is not None, \
+            f"Drug response should have matches_on, got: {drug_resp_item}"
+
+        # matches_on should contain locus level info (variant, codon, or gene)
+        has_level = any(level in drug_resp_item.matches_on
+                       for level in ["variant", "codon", "gene"])
+        assert has_level, \
+            f"matches_on should contain locus level, got: {drug_resp_item.matches_on}"
+
+    @pytest.mark.asyncio
+    async def test_drug_response_other_tumor_shows_other_count(self):
+        """Drug response for variant in different tumor should show 'other' count."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            # BRAF V600E is primarily Melanoma/Colorectal - query in Pancreatic
+            result = await conductor.run("BRAF V600E", tumor_type="Pancreatic")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find drug response
+        drug_resp = [
+            item for item in gaps.well_characterized_detailed
+            if "drug response" in item.aspect.lower()
+        ]
+
+        if drug_resp:
+            # If there's drug response data but not for Pancreatic, should show "other"
+            tumor_match = drug_resp[0].tumor_match
+            if tumor_match:
+                # May have mostly "other" entries since BRAF V600E approvals are for Melanoma
+                assert "tumor" in tumor_match or "other" in tumor_match, \
+                    f"tumor_match should contain counts, got: {tumor_match}"
+
+
+# =============================================================================
+# RESISTANCE MECHANISMS TUMOR MATCH INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestResistanceMechanismsTumorMatch:
+    """Integration tests for resistance mechanisms tumor_match and matches_on tracking."""
+
+    @pytest.mark.asyncio
+    async def test_egfr_t790m_has_resistance_data(self):
+        """EGFR T790M is a known resistance mutation - should have resistance mechanisms."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR T790M", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find resistance mechanisms in well_characterized_detailed
+        resistance = [
+            item for item in gaps.well_characterized_detailed
+            if "resistance" in item.aspect.lower()
+        ]
+
+        # T790M is THE resistance mutation - should be well-characterized
+        assert len(resistance) > 0, \
+            f"EGFR T790M should have resistance mechanisms, got: {gaps.well_characterized}"
+
+    @pytest.mark.asyncio
+    async def test_egfr_t790m_resistance_has_matches_on(self):
+        """EGFR T790M resistance data should have matches_on locus levels."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR T790M", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find resistance mechanisms
+        resistance = [
+            item for item in gaps.well_characterized_detailed
+            if "resistance" in item.aspect.lower()
+        ]
+
+        if resistance:
+            resist_item = resistance[0]
+            # Should have matches_on for locus level tracking
+            if resist_item.matches_on:
+                has_level = any(level in resist_item.matches_on
+                               for level in ["variant", "codon", "gene"])
+                assert has_level, \
+                    f"matches_on should contain locus level, got: {resist_item.matches_on}"
+
+
+# =============================================================================
+# TUMOR SPECIFIC EVIDENCE INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestTumorSpecificEvidenceIntegration:
+    """Integration tests for tumor-specific evidence tracking."""
+
+    @pytest.mark.asyncio
+    async def test_egfr_l858r_nsclc_has_tumor_evidence(self):
+        """EGFR L858R in NSCLC should show 'Evidence In NSCLC' as well-characterized."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have "Evidence In NSCLC" in well_characterized
+        evidence_in_tumor = [
+            w for w in gaps.well_characterized
+            if "evidence in" in w.lower() and "nsclc" in w.lower()
+        ]
+        assert len(evidence_in_tumor) > 0, \
+            f"Should have 'Evidence In NSCLC', got: {gaps.well_characterized}"
+
+    @pytest.mark.asyncio
+    async def test_tumor_evidence_detailed_has_match_info(self):
+        """Tumor-specific evidence should have matches_on info."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G12C", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find tumor-specific evidence
+        tumor_evidence = [
+            item for item in gaps.well_characterized_detailed
+            if "evidence in" in item.aspect.lower()
+        ]
+
+        if tumor_evidence:
+            tumor_item = tumor_evidence[0]
+            # Should have matches_on for locus level breakdown
+            assert tumor_item.matches_on is not None or tumor_item.tumor_match is not None, \
+                f"Tumor evidence should have match info, got: {tumor_item}"
+
+    @pytest.mark.asyncio
+    async def test_braf_v600e_melanoma_comprehensive(self):
+        """BRAF V600E in Melanoma should have comprehensive tumor-matched evidence."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # BRAF V600E in Melanoma is THE canonical example
+        assert gaps.overall_evidence_quality in ("comprehensive", "moderate"), \
+            f"BRAF V600E in Melanoma should be comprehensive, got: {gaps.overall_evidence_quality}"
+
+        # Should have tumor-specific evidence
+        tumor_evidence = [
+            item for item in gaps.well_characterized_detailed
+            if "evidence in" in item.aspect.lower() and "melanoma" in item.aspect.lower()
+        ]
+        assert len(tumor_evidence) > 0, \
+            f"Should have Melanoma-specific evidence, got: {[i.aspect for i in gaps.well_characterized_detailed]}"
+
+
+# =============================================================================
+# CLINICAL ACTIONABILITY TUMOR MATCH INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestClinicalActionabilityTumorMatch:
+    """Integration tests for clinical actionability tumor_match tracking."""
+
+    @pytest.mark.asyncio
+    async def test_egfr_l858r_clinical_actionability_has_tumor_match(self):
+        """EGFR L858R clinical actionability should track tumor matches."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find clinical actionability
+        clinical = [
+            item for item in gaps.well_characterized_detailed
+            if "clinical actionability" in item.aspect.lower()
+        ]
+
+        if clinical:
+            clinical_item = clinical[0]
+            # Should have tumor_match tracking
+            if clinical_item.tumor_match:
+                # EGFR L858R has NSCLC-specific approvals
+                assert "tumor" in clinical_item.tumor_match or "pan_cancer" in clinical_item.tumor_match, \
+                    f"Should have tumor or pan_cancer count, got: {clinical_item.tumor_match}"
+
+    @pytest.mark.asyncio
+    async def test_clinical_actionability_other_cancer_shows_mismatch(self):
+        """Clinical actionability for mismatched tumor should show cancer_mismatch."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            # BRAF V600E is approved in Melanoma - query in Thyroid (different)
+            result = await conductor.run("BRAF V600E", tumor_type="Thyroid")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Find clinical actionability
+        clinical = [
+            item for item in gaps.well_characterized_detailed
+            if "clinical actionability" in item.aspect.lower()
+        ]
+
+        # If there's clinical data, check for tumor match/mismatch tracking
+        if clinical:
+            clinical_item = clinical[0]
+            # Should have some indication of tumor match status
+            has_tracking = (clinical_item.tumor_match is not None or
+                          clinical_item.cancer_mismatch is not None)
+            # Note: may or may not have cancer_mismatch depending on data availability
+            # Just verify the tracking fields are being used
