@@ -74,13 +74,13 @@ class TestOncoTreeCodeLookup:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_crc_code(self):
-        """CRC code should return Colorectal Cancer."""
+    async def test_coadread_code(self):
+        """COADREAD code should return Colorectal Adenocarcinoma."""
         async with OncoTreeClient() as client:
-            tumor_type = await client.get_tumor_type_by_code("CRC")
+            tumor_type = await client.get_tumor_type_by_code("COADREAD")
 
         assert tumor_type is not None
-        assert tumor_type["code"].upper() == "CRC"
+        assert tumor_type["code"].upper() == "COADREAD"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -216,13 +216,13 @@ class TestOncoTreeCommonCancerTypes:
         common_codes = [
             "NSCLC", "LUAD", "LUSC",  # Lung
             "BRCA", "IDC", "ILC",  # Breast
-            "CRC", "COAD", "READ",  # Colorectal
+            "COADREAD", "COAD", "READ",  # Colorectal
             "MEL", "SKCM",  # Melanoma
             "PAAD",  # Pancreatic
-            "GBM", "LGG",  # Brain
+            "GB", "DIFG",  # Brain (GB=Glioblastoma, DIFG=Diffuse Glioma)
             "PRAD",  # Prostate
-            "OV",  # Ovarian
-            "AML", "ALL",  # Leukemia
+            "HGSOC", "SOC",  # Ovarian (High-Grade/Serous Ovarian Cancer)
+            "AML", "BLL",  # Leukemia (BLL = B-Lymphoblastic Leukemia)
         ]
 
         async with OncoTreeClient() as client:

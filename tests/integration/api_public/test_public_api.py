@@ -29,7 +29,7 @@ class TestGetInsightFastMode:
         assert panel.identifiers.gene == "BRAF"
         assert panel.identifiers.variant == "V600E"
         # Literature should be empty in fast mode
-        assert len(panel.literature.pubmed_articles) == 0
+        assert len(panel.evidence.pubmed_articles) == 0
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -85,8 +85,8 @@ class TestGetInsightFullMode:
         assert panel.identifiers.gene == "BRAF"
         # Full mode should attempt literature search
         # (may or may not find articles depending on API availability)
-        # In the new model, literature is stored in panel.literature
-        assert hasattr(panel, 'literature')
+        # Literature is accessed via panel.evidence.pubmed_articles
+        assert hasattr(panel.evidence, 'pubmed_articles')
 
 
 class TestGetInsightLLMOptions:
@@ -179,7 +179,7 @@ class TestGetInsights:
         assert len(panels) == 2
         # All panels should have empty literature in fast mode
         for panel in panels:
-            assert len(panel.literature.pubmed_articles) == 0
+            assert len(panel.evidence.pubmed_articles) == 0
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -199,7 +199,7 @@ class TestGetInsights:
         assert len(panels) == 2
         # Tumor type should be applied
         for panel in panels:
-            assert panel.clinical.tumor_type == "NSCLC"
+            assert panel.context.tumor_type == "NSCLC"
 
 
 class TestInsightConfig:
@@ -253,13 +253,14 @@ class TestInsightOutput:
 
         panel = await get_insight("BRAF V600E", config=config)
 
-        # Check all sections exist (via Result's property shortcuts)
+        # Check all sections exist via Result's evidence field
+        assert hasattr(panel, 'evidence')
+        assert hasattr(panel.evidence, 'identifiers')
+        assert hasattr(panel.evidence, 'functional')
+        assert hasattr(panel.evidence, 'pubmed_articles')
+        # Result also has property shortcuts
         assert hasattr(panel, 'identifiers')
-        assert hasattr(panel, 'kb')
         assert hasattr(panel, 'functional')
-        assert hasattr(panel, 'clinical')
-        assert hasattr(panel, 'literature')
-        assert hasattr(panel, 'evidence')  # Result has evidence field
 
     @pytest.mark.integration
     @pytest.mark.asyncio
