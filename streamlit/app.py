@@ -110,6 +110,7 @@ EXAMPLE_VARIANTS = {
     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
     "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
+    "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
     "PIK3CA H1047R - Breast Cancer": ("PIK3CA", "H1047R", "Breast Cancer"),
     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
     "TP53 R248W - Multiple": ("TP53", "R248W", ""),

@@ -616,10 +616,11 @@ class InsightConfig:
     llm_model: str = "claude-sonnet-4-20250514"  # Default: Claude Sonnet 4
     llm_temperature: float = 0.1
 
-    # Limits
-    max_vicc_results: int = 15
-    max_clinical_trials: int = 10
-    max_literature_results: int = 6
+    # Limits (from config/constants.py)
+    max_vicc_results: int = 500
+    max_civic_assertions: int = 500
+    max_clinical_trials: int = 500
+    max_literature_results: int = 30
 
     # Validation
     validate_variant_type: bool = True
@@ -636,11 +637,11 @@ class EvidenceBuilderConfig:
     enable_clinical_trials: bool = True
     enable_literature: bool = True
 
-    # Result limits
-    max_vicc_results: int = 15
-    max_civic_assertions: int = 20
-    max_clinical_trials: int = 10
-    max_literature_results: int = 6
+    # Result limits (from config/constants.py)
+    max_vicc_results: int = 500
+    max_civic_assertions: int = 500
+    max_clinical_trials: int = 500
+    max_literature_results: int = 30
 
     # API keys
     semantic_scholar_api_key: str | None = None

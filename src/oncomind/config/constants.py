@@ -579,6 +579,15 @@ LLM_PAPER_RELEVANCE_THRESHOLD = 0.6
 LLM_DEFAULT_TEMPERATURE = 0.1
 
 # =============================================================================
+# EVIDENCE AGGREGATOR CONSTANTS
+# =============================================================================
+# Result limits for evidence fetching
+MAX_VICC_RESULTS = 500
+MAX_CIVIC_ASSERTIONS = 500
+MAX_CLINICAL_TRIALS = 500
+MAX_LITERATURE_RESULTS = 30
+
+# =============================================================================
 # UI DISPLAY CONSTANTS
 # =============================================================================
 # Row limits for evidence display tables
