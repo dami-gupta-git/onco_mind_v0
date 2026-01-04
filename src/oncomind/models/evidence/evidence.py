@@ -1144,20 +1144,37 @@ class Evidence(BaseModel):
         lines = []
         tumor_type = self.context.tumor_type
 
-        # FDA Approvals - very compact
+        # FDA Approvals - include match level for LLM accuracy
         if self.fda_approvals:
             fda_drugs = []
             for approval in self.fda_approvals[:4]:
                 drug = approval.generic_name or approval.brand_name or approval.drug_name
+                match_level = approval.match_level  # "variant", "codon", or "gene"
+
+                # Build annotation parts
+                parts = []
                 if tumor_type:
                     parsed = approval.parse_indication_for_tumor(tumor_type)
                     if parsed['tumor_match']:
-                        line_info = parsed['line_of_therapy']
-                        fda_drugs.append(f"{drug} ({line_info})")
+                        parts.append(parsed['line_of_therapy'])
                     else:
-                        fda_drugs.append(f"{drug} (other indication)")
+                        parts.append("other indication")
+
+                # Add match level - critical for LLM to know if this is variant-specific
+                # For gene-level matches, also show what variant the drug is approved for
+                if match_level == "variant":
+                    parts.append("variant-level")
                 else:
-                    fda_drugs.append(drug)
+                    # Try to extract what variant the drug is actually approved for
+                    approved_variant = approval.extract_approved_variant()
+                    if approved_variant and approved_variant != "any mutation":
+                        parts.append(f"{match_level}-level, approved for {approved_variant}")
+                    elif approved_variant == "any mutation":
+                        parts.append(f"{match_level}-level, approved for any {approval.gene} mutation")
+                    else:
+                        parts.append(f"{match_level}-level")
+
+                fda_drugs.append(f"{drug} ({', '.join(parts)})")
             lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
 
         # CGI Biomarkers - compact
