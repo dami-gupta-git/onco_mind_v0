@@ -681,12 +681,20 @@ class Evidence(BaseModel):
     def _get_fda_cancer_specificity(self, approval) -> str:
         """Determine cancer_specificity for an FDA approval.
 
+        Uses the cancer_specificity property from FDAApproval, which reads from
+        cancer_type_level set during evidence aggregation. This ensures consistency
+        with how ClinicalTrialEvidence handles tumor matching.
+
         Returns:
             - "cancer_specific": if the FDA indication matches the queried tumor type
-            - The actual cancer type (e.g., "ovarian cancer"): if no match but we know the cancer
             - "pan_cancer": if tumor-agnostic or unknown
+            - The actual cancer type (e.g., "ovarian cancer"): if no match but we know the cancer
         """
-        # First check if there's a tumor type match
+        # Use the property from FDAApproval (reads from cancer_type_level)
+        if approval.cancer_specificity:
+            return approval.cancer_specificity
+
+        # Fallback for approvals without cancer_type_level set (legacy data)
         if self.context.tumor_type and approval.indication:
             parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
             if parsed.get('tumor_match'):
@@ -695,12 +703,10 @@ class Evidence(BaseModel):
         # No match - extract what cancer the drug IS approved for
         indication_cancer = approval.extract_indication_cancer_type()
         if indication_cancer:
-            # Check if it's a pan-cancer approval
             if "pan-cancer" in indication_cancer.lower():
                 return "pan_cancer"
             return indication_cancer
 
-        # Unknown
         return "pan_cancer"
 
     def _get_cancer_specificity_from_disease(self, disease: str | None) -> str:

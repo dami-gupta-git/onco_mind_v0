@@ -56,6 +56,7 @@ from oncomind.models.evidence import (
     VICCEvidence,
 )
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
+from oncomind.models.evidence.base import EvidenceLevel
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -509,6 +510,57 @@ class EvidenceAggregator:
 
         return gene_role, gene_class, pathway
 
+    def _enrich_fda_with_tumor_match(
+        self,
+        approvals: list[FDAApproval],
+        tumor_type: str | None,
+    ) -> list[FDAApproval]:
+        """Enrich FDA approvals with cancer_type_level based on tumor type.
+
+        Uses parse_indication_for_tumor() to determine if the approval
+        matches the queried tumor type, then sets cancer_type_level
+        for consistency with ClinicalTrialEvidence.
+
+        Args:
+            approvals: List of FDAApproval objects
+            tumor_type: The queried tumor type (may be None)
+
+        Returns:
+            Same list with cancer_type_level populated
+        """
+        if not tumor_type:
+            # No tumor type to match against - leave cancer_type_level as None
+            return approvals
+
+        for approval in approvals:
+            # Use existing parse_indication_for_tumor method
+            parsed = approval.parse_indication_for_tumor(tumor_type)
+            tumor_match = parsed.get('tumor_match', False)
+
+            # Check for pan-cancer / tumor-agnostic approvals (MSI-H, NTRK, etc.)
+            indication_lower = (approval.indication or "").lower()
+            is_pan_cancer = any(p in indication_lower for p in [
+                'solid tumor', 'msi-h', 'dmmr', 'tumor-agnostic', 'ntrk'
+            ])
+
+            if tumor_match:
+                if is_pan_cancer:
+                    level = "pan_cancer"
+                else:
+                    level = "cancer_specific"
+            else:
+                # Not a match - extract what cancer it IS for
+                extracted_cancer = approval.extract_indication_cancer_type()
+                level = extracted_cancer if extracted_cancer else "pan_cancer"
+
+            approval.cancer_type_level = EvidenceLevel(
+                level=level,
+                scope="specific" if tumor_match else "unspecified",
+                origin="kb",
+            )
+
+        return approvals
+
     # -------------------------------------------------------------------------
     # Main Build Method
     # -------------------------------------------------------------------------
@@ -704,7 +756,8 @@ class EvidenceAggregator:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
             fda_approvals: list[FDAApproval] = []
         else:
-            fda_approvals = fda_approvals_raw
+            # Enrich FDA approvals with cancer_type_level based on tumor type
+            fda_approvals = self._enrich_fda_with_tumor_match(fda_approvals_raw, tumor)
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
