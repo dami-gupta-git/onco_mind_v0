@@ -184,10 +184,10 @@ class EvidenceAggregator:
 
     def _get_all_clients(self) -> list[Any]:
         """Get list of all active clients for context management."""
+        # Note: cgi_client is synchronous, not an async context manager
         clients = [
             self.myvariant_client,
             self.fda_client,
-            self.cgi_client,
             self.oncotree_client,
             self.cbioportal_client,
             self.depmap_client,
