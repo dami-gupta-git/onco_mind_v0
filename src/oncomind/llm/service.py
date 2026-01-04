@@ -8,13 +8,60 @@ Two-stage pipeline:
 import json
 import re
 import time
+from dataclasses import dataclass
+
 from litellm import acompletion
-from oncomind.llm.prompts import create_synthesis_prompt, create_hypothesis_prompt
+
+from oncomind.config.constants import (
+    LLM_DEFAULT_MODEL,
+    LLM_FAST_MODEL,
+    LLM_MAX_PAPERS_FOR_EXTRACTION,
+    LLM_MAX_TOKENS_HYPOTHESIS,
+    LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION,
+    LLM_MAX_TOKENS_PAPER_SCORING,
+    LLM_MAX_TOKENS_SYNTHESIS,
+    LLM_PAPER_ABSTRACT_TRUNCATION,
+    LLM_PAPER_CONTENT_TRUNCATION,
+    LLM_PAPER_RELEVANCE_THRESHOLD,
+    LLM_TIMEOUT_CLAUDE,
+    LLM_TIMEOUT_DEFAULT,
+)
+from oncomind.config.debug import get_logger
+from oncomind.llm.prompts import create_hypothesis_prompt, create_synthesis_prompt
 from oncomind.models.llm_insight import LLMInsight
 
-from oncomind.config.debug import get_logger
-
 logger = get_logger(__name__)
+
+
+@dataclass
+class LLMInsightInput:
+    """Input data for LLM insight generation."""
+
+    gene: str
+    variant: str
+    tumor_type: str | None
+    evidence_summary: str
+    biological_context: str = ""
+    evidence_assessment: dict | None = None
+    literature_summary: str = ""
+    has_clinical_trials: bool = False
+    data_availability: dict | None = None
+    resistance_summary: str = ""
+    sensitivity_summary: str = ""
+    match_level_summary: dict | None = None
+    generate_hypotheses: bool = True
+
+
+def _empty_paper_scoring_result(key_finding: str = "", confidence: float = 0.0) -> dict:
+    """Return empty/error result for paper scoring."""
+    return {
+        "relevance_score": 0.0,
+        "is_relevant": False,
+        "signal_type": "unclear",
+        "drugs_mentioned": [],
+        "key_finding": key_finding,
+        "confidence": confidence,
+    }
 
 
 class LLMService:
@@ -28,12 +75,12 @@ class LLMService:
     2. Hypothesis: synthesis + gaps → research hypotheses
     """
 
-    def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.0):
+    def __init__(self, model: str = LLM_DEFAULT_MODEL, temperature: float = 0.0):
         self.model = model
         self.temperature = temperature
         logger.debug(f"LLMService initialized with model={model}, temperature={temperature}")
 
-    async def _call_llm(self, messages: list[dict], max_tokens: int = 1500) -> dict | None:
+    async def _call_llm(self, messages: list[dict], max_tokens: int = LLM_MAX_TOKENS_SYNTHESIS) -> dict | None:
         """Make LLM API call and parse JSON response.
 
         Args:
@@ -43,7 +90,7 @@ class LLMService:
         Returns:
             Parsed JSON dict or None on error
         """
-        timeout = 120 if "claude" in self.model.lower() else 60
+        timeout = LLM_TIMEOUT_CLAUDE if "claude" in self.model.lower() else LLM_TIMEOUT_DEFAULT
 
         completion_kwargs = {
             "model": self.model,
@@ -196,7 +243,7 @@ class LLMService:
             match_level_summary=match_level_summary,
         )
 
-        synthesis_data = await self._call_llm(synthesis_messages, max_tokens=1500)
+        synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
 
         if synthesis_data is None:
             logger.error("Stage 1 synthesis failed")
@@ -237,7 +284,7 @@ class LLMService:
                 therapeutic_signals=therapeutic_signals,
             )
 
-            hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=800)
+            hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS)
 
             if hypothesis_data:
                 research_hypotheses = hypothesis_data.get("research_hypotheses", [])
@@ -317,14 +364,7 @@ class LLMService:
         # Use the best available text
         text_content = tldr or abstract or ""
         if not text_content:
-            return {
-                "relevance_score": 0.0,
-                "is_relevant": False,
-                "signal_type": "unclear",
-                "drugs_mentioned": [],
-                "key_finding": "No abstract or summary available",
-                "confidence": 0.0,
-            }
+            return _empty_paper_scoring_result("No abstract or summary available")
 
         tumor_context = tumor_type or "cancer (unspecified)"
 
@@ -350,7 +390,7 @@ Return valid JSON only, no markdown."""
 
 TITLE: {title}
 
-CONTENT: {text_content[:1500]}
+CONTENT: {text_content[:LLM_PAPER_CONTENT_TRUNCATION]}
 
 Return JSON with these exact fields:
 {{
@@ -367,30 +407,27 @@ Return JSON with these exact fields:
         ]
 
         try:
+            # Use fast/cheap model for paper scoring (high volume operation)
             response = await acompletion(
-                model="gpt-4o-mini",
+                model=LLM_FAST_MODEL,
                 messages=messages,
                 temperature=0.0,
-                max_tokens=500,
+                max_tokens=LLM_MAX_TOKENS_PAPER_SCORING,
                 response_format={"type": "json_object"},
             )
 
             content = response.choices[0].message.content.strip()
+            data = self._parse_json_response(content)
 
-            if content.startswith("```"):
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else parts[0]
-                if content.lower().startswith("json"):
-                    content = content[4:].lstrip()
-
-            data = json.loads(content)
+            if data is None:
+                return _empty_paper_scoring_result("Failed to parse LLM response")
 
             relevance_score = float(data.get("relevance_score", 0.0))
             relevance_score = max(0.0, min(1.0, relevance_score))
 
             return {
                 "relevance_score": relevance_score,
-                "is_relevant": relevance_score >= 0.6,
+                "is_relevant": relevance_score >= LLM_PAPER_RELEVANCE_THRESHOLD,
                 "signal_type": data.get("signal_type", "unclear"),
                 "drugs_mentioned": data.get("drugs_mentioned", []),
                 "key_finding": data.get("key_finding", ""),
@@ -399,14 +436,7 @@ Return JSON with these exact fields:
 
         except Exception as e:
             logger.error(f"Paper relevance scoring error: {e}")
-            return {
-                "relevance_score": None,
-                "is_relevant": False,
-                "signal_type": "unclear",
-                "drugs_mentioned": [],
-                "key_finding": f"Error during analysis: {str(e)[:100]}",
-                "confidence": 0.0,
-            }
+            return _empty_paper_scoring_result(f"Error during analysis: {str(e)[:100]}")
 
     async def extract_variant_knowledge(
         self,
@@ -434,14 +464,14 @@ Return JSON with these exact fields:
 
         # Format paper contents for the prompt
         papers_text = []
-        for i, paper in enumerate(paper_contents[:5], 1):
+        for i, paper in enumerate(paper_contents[:LLM_MAX_PAPERS_FOR_EXTRACTION], 1):
             content = paper.get("tldr") or paper.get("abstract") or ""
             pmid = paper.get("pmid", "Unknown")
             title = paper.get("title", "Untitled")
             papers_text.append(f"""
 Paper {i} (PMID: {pmid}):
 Title: {title}
-Content: {content[:1000]}
+Content: {content[:LLM_PAPER_ABSTRACT_TRUNCATION]}
 """)
 
         papers_combined = "\n".join(papers_text)
@@ -495,23 +525,21 @@ Return JSON with these exact fields:
         ]
 
         try:
+            # Use fast/cheap model for knowledge extraction (high volume operation)
             response = await acompletion(
-                model="gpt-4o-mini",
+                model=LLM_FAST_MODEL,
                 messages=messages,
                 temperature=0.0,
-                max_tokens=1500,
+                max_tokens=LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION,
                 response_format={"type": "json_object"},
             )
 
             content = response.choices[0].message.content.strip()
+            data = self._parse_json_response(content)
 
-            if content.startswith("```"):
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else parts[0]
-                if content.lower().startswith("json"):
-                    content = content[4:].lstrip()
-
-            data = json.loads(content)
+            if data is None:
+                logger.error("Failed to parse variant knowledge extraction response")
+                return None
 
             return {
                 "mutation_type": data.get("mutation_type", "unknown"),

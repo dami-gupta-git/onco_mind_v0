@@ -542,3 +542,35 @@ BROAD_VARIANTS: set[tuple[str, str]] = {
     ("KRAS", "Q61"), ("NRAS", "Q61"), ("HRAS", "Q61"),
     ("PIK3CA", "hotspot"), ("MET", "exon 14 skipping"),
 }
+
+
+# =============================================================================
+# LLM SERVICE CONSTANTS
+# =============================================================================
+# Configuration for LLM-based evidence synthesis and paper scoring
+
+# Default model for LLM calls
+LLM_DEFAULT_MODEL = "claude-sonnet-4-20250514"
+
+# Fast/cheap model for high-volume operations (paper scoring, knowledge extraction)
+LLM_FAST_MODEL = "gpt-4o-mini"
+
+# Timeout settings (seconds)
+LLM_TIMEOUT_DEFAULT = 60
+LLM_TIMEOUT_CLAUDE = 120
+
+# Token limits for different LLM tasks
+LLM_MAX_TOKENS_SYNTHESIS = 1500
+LLM_MAX_TOKENS_HYPOTHESIS = 800
+LLM_MAX_TOKENS_PAPER_SCORING = 500
+LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION = 1500
+
+# Content truncation limits (characters)
+LLM_PAPER_CONTENT_TRUNCATION = 1500
+LLM_PAPER_ABSTRACT_TRUNCATION = 1000
+
+# Paper processing limits
+LLM_MAX_PAPERS_FOR_EXTRACTION = 5
+
+# Relevance score threshold for paper filtering
+LLM_PAPER_RELEVANCE_THRESHOLD = 0.6
