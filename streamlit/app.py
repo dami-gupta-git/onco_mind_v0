@@ -7,6 +7,14 @@ import re
 import os
 from backend import get_variant_insight, batch_get_variant_insights
 from pdb_images import get_pdb_image_url, get_pdb_page_url
+from oncomind.config.constants import (
+    LLM_DEFAULT_TEMPERATURE,
+    UI_MAX_CIVIC_EVIDENCE_ROWS,
+    UI_MAX_RESEARCH_HYPOTHESES,
+    UI_MAX_REFERENCES,
+    CADD_DELETERIOUS_THRESHOLD,
+    GNOMAD_RARE_THRESHOLD,
+)
 
 # Initialize logging from environment variable (ONCOMIND_LOG_LEVEL=DEBUG|INFO|WARN|ERROR)
 # This import triggers the logger initialization which reads from env
@@ -187,10 +195,10 @@ with tab1:
             with llm_cols[0]:
                 model_name = st.selectbox("Model", list(MODELS.keys()))
             with llm_cols[1]:
-                temperature = st.slider("Temperature", 0.0, 1.0, 0.1, 0.05)
+                temperature = st.slider("Temperature", 0.0, 1.0, LLM_DEFAULT_TEMPERATURE, 0.05)
     else:
         model_name = list(MODELS.keys())[0]
-        temperature = 0.1
+        temperature = LLM_DEFAULT_TEMPERATURE
 
     # ==============================================
     # PROCESS REQUEST
@@ -362,13 +370,13 @@ with tab1:
                                 pred = annotations.get('alphamissense_prediction') or '-'
                                 rows.append(f"| AlphaMissense | {annotations['alphamissense_score']:.3f} | {pred} |")
                             if annotations.get('cadd_score') is not None:
-                                rows.append(f"| CADD | {annotations['cadd_score']:.1f} | {'Deleterious' if annotations['cadd_score'] > 20 else 'Benign'} |")
+                                rows.append(f"| CADD | {annotations['cadd_score']:.1f} | {'Deleterious' if annotations['cadd_score'] > CADD_DELETERIOUS_THRESHOLD else 'Benign'} |")
                             if annotations.get('polyphen2_prediction'):
                                 rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
                             if annotations.get('gnomad_exome_af') is not None:
                                 af = annotations['gnomad_exome_af']
-                                freq = f"{af:.2e}" if af < 0.01 else f"{af:.4f}"
-                                rows.append(f"| gnomAD AF | {freq} | {'Rare' if af < 0.01 else 'Common'} |")
+                                freq = f"{af:.2e}" if af < GNOMAD_RARE_THRESHOLD else f"{af:.4f}"
+                                rows.append(f"| gnomAD AF | {freq} | {'Rare' if af < GNOMAD_RARE_THRESHOLD else 'Common'} |")
                             if annotations.get('snpeff_effect'):
                                 rows.append(f"| SnpEff | - | {annotations['snpeff_effect']} |")
                             if rows:
@@ -456,7 +464,7 @@ with tab1:
                             # Use markdown table so IDs are clickable
                             rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Disease | Level | Type |",
                                     "|----|-------------|-------------|-------|--------------|---------|-------|------|"]
-                            for e in civic_evidence[:15]:  # Limit to 15 rows
+                            for e in civic_evidence[:UI_MAX_CIVIC_EVIDENCE_ROWS]:
                                 drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
                                 drugs_str = drugs_str[:25] if len(drugs_str) > 25 else drugs_str
                                 eid = e.get('eid') or ''
@@ -1324,13 +1332,13 @@ with tab1:
                 research_hypotheses = result['insight'].get('research_hypotheses', [])
                 if research_hypotheses:
                     st.markdown("**💡 Emerging Research Hypotheses:**")
-                    for i, hypothesis in enumerate(research_hypotheses[:3], 1):
+                    for i, hypothesis in enumerate(research_hypotheses[:UI_MAX_RESEARCH_HYPOTHESES], 1):
                         st.markdown(f"  {i}. {hypothesis}")
 
                 references = result['insight'].get('references', [])
                 if references:
                     clickable_refs = []
-                    for ref in references[:5]:
+                    for ref in references[:UI_MAX_REFERENCES]:
                         ref_str = str(ref).strip()
                         if ref_str.startswith("PMID"):
                             pmid = ref_str.replace("PMID", "").replace(":", "").strip()
@@ -1419,7 +1427,7 @@ with tab2:
                     enable_literature=enable_literature_batch,
                     literature_source=literature_source_value_batch,
                     model=MODELS[model_name_batch],
-                    temperature=0.1,
+                    temperature=LLM_DEFAULT_TEMPERATURE,
                     progress_callback=lambda i, t: (progress_bar.progress(i/t), status_text.text(f"Processing {i}/{t}..."))
                 ))
                 status_text.text("✅ Batch processing complete!")
