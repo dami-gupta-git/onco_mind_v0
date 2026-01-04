@@ -629,6 +629,106 @@ class Evidence(BaseModel):
         all_evidence = self.get_therapeutic_evidence(include_preclinical=True)
         return [e for e in all_evidence if e.is_sensitivity()]
 
+    def get_fda_approved_therapies(self) -> list[TherapeuticEvidence]:
+        """Get all FDA-approved therapies with no limit.
+
+        Sources:
+        - FDA approvals (direct)
+        - CIViC assertions: Tier I with fda_companion_test=True
+        - CGI biomarkers: fda_approved=True
+
+        This is the single source of truth for FDA-approved drug counting.
+        Used by both the Therapies tab and Gap Analysis.
+
+        Returns:
+            List of TherapeuticEvidence with evidence_level="FDA-approved"
+        """
+        evidence_list: list[TherapeuticEvidence] = []
+        seen_drugs: set[str] = set()
+
+        # From FDA approvals
+        for approval in self.fda_approvals:
+            drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
+            if drug_key and drug_key not in seen_drugs:
+                seen_drugs.add(drug_key)
+
+                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
+                if approval.generic_name and approval.brand_name:
+                    drug_name = f"{approval.generic_name} ({approval.brand_name})"
+
+                cancer_specificity = self._get_fda_cancer_specificity(approval)
+
+                evidence_list.append(TherapeuticEvidence(
+                    drug_name=drug_name,
+                    evidence_level="FDA-approved",
+                    approval_status="Approved in indication" if approval.variant_in_indications else "Approved",
+                    clinical_context=self._extract_line_of_therapy(approval),
+                    response_type="Sensitivity",
+                    mechanism=None,
+                    tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
+                    source="FDA",
+                    confidence="high",
+                    match_level=approval.match_level,
+                    cancer_specificity=cancer_specificity,
+                ))
+
+        # From CIViC assertions - only Tier I with fda_companion_test
+        for assertion in self.civic_assertions:
+            if assertion.amp_tier == "Tier I" and assertion.fda_companion_test and assertion.therapies:
+                for therapy in assertion.therapies:
+                    drug_key = therapy.lower()
+                    if drug_key not in seen_drugs:
+                        seen_drugs.add(drug_key)
+
+                        cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
+
+                        evidence_list.append(TherapeuticEvidence(
+                            drug_name=therapy,
+                            evidence_level="FDA-approved",
+                            approval_status="FDA Approved (CIViC)",
+                            clinical_context=assertion.disease,
+                            response_type="Sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "Resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None,
+                            mechanism=None,
+                            tumor_types_tested=[assertion.disease] if assertion.disease else [],
+                            source="CIViC",
+                            source_url=assertion.civic_url,
+                            confidence="high",
+                            match_level=assertion.match_level,
+                            cancer_specificity=cancer_specificity,
+                        ))
+
+        # From CGI biomarkers - fda_approved=True
+        for biomarker in self.cgi_biomarkers:
+            if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
+                drug_key = biomarker.drug.lower()
+                if drug_key not in seen_drugs:
+                    seen_drugs.add(drug_key)
+
+                    response_type = None
+                    if biomarker.association:
+                        if "RESIST" in biomarker.association.upper():
+                            response_type = "Resistance"
+                        else:
+                            response_type = "Sensitivity"
+
+                    cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+
+                    evidence_list.append(TherapeuticEvidence(
+                        drug_name=biomarker.drug,
+                        evidence_level="FDA-approved",
+                        approval_status="FDA Approved (CGI)",
+                        clinical_context=biomarker.tumor_type,
+                        response_type=response_type,
+                        mechanism=None,
+                        tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
+                        source="CGI",
+                        confidence="high",
+                        match_level=biomarker.match_level,
+                        cancer_specificity=cancer_specificity,
+                    ))
+
+        return evidence_list
+
     # Helper methods for get_therapeutic_evidence
     def _extract_line_of_therapy(self, approval) -> str | None:
         """Extract line of therapy from FDA approval."""

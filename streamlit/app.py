@@ -824,8 +824,20 @@ with tab1:
                             therapy_match_parts.append(tumor_filter_note) if tumor_filter_note else None
                             st.caption(" &nbsp;|&nbsp; ".join([p for p in therapy_match_parts if p]))
 
-                        fda_approved = [t for t in therapies if t.get('evidence_level', '').lower() == 'fda-approved']
-                        clinical = [t for t in therapies if t.get('evidence_level', '').lower() in ('phase 3', 'phase 2', 'phase 1', 'case report')]
+                        # Only include therapies that are truly FDA-approved
+                        # Sources: FDA (direct), CGI (curated), CIViC (Tier I with fda_companion_test)
+                        # Exclude VICC "level A" which may include non-FDA sources like PMKB
+                        fda_approved = [
+                            t for t in therapies
+                            if t.get('evidence_level', '').lower() == 'fda-approved'
+                            and t.get('source', '').upper() in ('FDA', 'CGI', 'CIVIC')
+                        ]
+                        # Clinical evidence includes Phase trials, case reports, AND VICC level A (which is clinical but not necessarily FDA)
+                        clinical = [
+                            t for t in therapies
+                            if t.get('evidence_level', '').lower() in ('phase 3', 'phase 2', 'phase 1', 'case report')
+                            or (t.get('evidence_level', '').lower() == 'fda-approved' and t.get('source', '').upper() not in ('FDA', 'CGI', 'CIVIC'))
+                        ]
                         preclinical_therapies = [t for t in therapies if t.get('evidence_level', '').lower() in ('preclinical', 'in vitro')]
 
                         if fda_approved:
@@ -1013,9 +1025,24 @@ with tab1:
 
                 # Helper to convert matches_on value to icon string
                 def format_locus_match(matches_on: str) -> str:
-                    """Convert matches_on value like 'gene', 'variant', 'codon' to icon format."""
+                    """Convert matches_on value like 'gene', 'variant', 'codon' or '1 codon, 2 gene' to icon format."""
                     if not matches_on:
                         return ""
+
+                    # Check if it contains commas (multiple match types like "1 codon, 2 gene")
+                    if "," in matches_on:
+                        formatted_parts = []
+                        for part in matches_on.split(","):
+                            part = part.strip()
+                            parts = part.split()
+                            if len(parts) == 2 and parts[0].isdigit():
+                                count = parts[0]
+                                match_type = parts[1].lower()
+                                icon = {"variant": "🎯", "codon": "📍", "gene": "🧬"}.get(match_type, "")
+                                formatted_parts.append(f"{icon} {count} {match_type}" if icon else part)
+                            else:
+                                formatted_parts.append(part)
+                        return ", ".join(formatted_parts) if formatted_parts else matches_on
 
                     # Check for format like "5 variant" (count + type)
                     parts = matches_on.strip().split()
@@ -1033,6 +1060,29 @@ with tab1:
 
                     # Already formatted or unknown - return as-is
                     return matches_on
+
+                def format_tumor_match(tumor_match: str) -> str:
+                    """Convert tumor_match value like '2 tumor, 1 pan_cancer, 1 other' to icon format."""
+                    if not tumor_match:
+                        return ""
+
+                    # Parse format like "2 tumor, 1 pan_cancer, 1 other" or "1 tumor"
+                    formatted_parts = []
+                    for part in tumor_match.split(","):
+                        part = part.strip()
+                        parts = part.split()
+                        if len(parts) == 2 and parts[0].isdigit():
+                            count = parts[0]
+                            match_type = parts[1].lower()
+                            # Match icons from Therapies tab: tumor=✅, pan_cancer=🌐, other=⚠️
+                            icon = {"tumor": "✅", "pan_cancer": "🌐", "other": "⚠️"}.get(match_type, "")
+                            # Display "pan_cancer" as "pan-cancer" for readability
+                            display_type = "pan-cancer" if match_type == "pan_cancer" else match_type
+                            formatted_parts.append(f"{icon} {count} {display_type}" if icon else part)
+                        else:
+                            formatted_parts.append(part)
+
+                    return ", ".join(formatted_parts) if formatted_parts else tumor_match
 
                 # Build rows from well_characterized_detailed
                 wc_rows = []
@@ -1060,20 +1110,26 @@ with tab1:
                         # Convert simple match types to icon format
                         locus_str = format_locus_match(locus_str)
 
-                        # Tumor match column - only show for specific rows
-                        # Prevalence, cell line models, and drug response get tumor match indicator
-                        is_prevalence_row = 'observed in samples' in aspect.lower() or 'prevalence' in aspect.lower()
-                        is_cell_line_row = 'cell line' in aspect.lower()
-                        is_drug_response_row = 'drug response' in aspect.lower()
-
-                        if is_prevalence_row or is_cell_line_row or is_drug_response_row:
-                            cancer_mismatch = item.get('cancer_mismatch', '')
-                            if cancer_mismatch:
-                                tumor_str = "⚠️ Other"
-                            else:
-                                tumor_str = "✅ Yes"
+                        # Tumor match column - first check if data has tumor_match field
+                        tumor_match_data = item.get('tumor_match', '')
+                        if tumor_match_data:
+                            # Use the new structured tumor_match field (e.g., "2 tumor, 1 other")
+                            tumor_str = format_tumor_match(tumor_match_data)
                         else:
-                            tumor_str = ""  # No tumor match indicator for other rows
+                            # Fall back to old logic for rows that don't have tumor_match
+                            # Prevalence, cell line models, drug response get tumor match indicator
+                            is_prevalence_row = 'observed in samples' in aspect.lower() or 'prevalence' in aspect.lower()
+                            is_cell_line_row = 'cell line' in aspect.lower()
+                            is_drug_response_row = 'drug response' in aspect.lower()
+
+                            if is_prevalence_row or is_cell_line_row or is_drug_response_row:
+                                cancer_mismatch = item.get('cancer_mismatch', '')
+                                if cancer_mismatch:
+                                    tumor_str = "⚠️ Other"
+                                else:
+                                    tumor_str = "✅ Yes"
+                            else:
+                                tumor_str = ""  # No tumor match indicator for other rows
 
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),
@@ -1102,8 +1158,8 @@ with tab1:
                         .wc-table td {{ word-wrap: break-word; }}
                         .wc-table th:nth-child(1), .wc-table td:nth-child(1) {{ width: 25%; }}
                         .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 35%; }}
-                        .wc-table th:nth-child(3), .wc-table td:nth-child(3) {{ width: 30%; }}
-                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 10%; }}
+                        .wc-table th:nth-child(3), .wc-table td:nth-child(3) {{ width: 25%; }}
+                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 15%; }}
                     </style>
                     <table class="wc-table">
                         <thead><tr><th>Aspect</th><th>Basis</th><th>Locus Match</th><th>Tumor Match</th></tr></thead>
