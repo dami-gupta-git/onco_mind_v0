@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from oncomind.models.evidence import Evidence
 
 
-def _tumor_type_matches(tumor_type: str, tissue: str) -> bool:
+def _tumor_type_matches(tumor_type: str | None, tissue: str | None) -> bool:
     """Check if a tissue/disease matches the expected tumor type.
 
     Uses TUMOR_TYPE_MAPPINGS to handle aliases like:
@@ -37,7 +37,10 @@ def _tumor_type_matches(tumor_type: str, tissue: str) -> bool:
     Returns:
         True if there's a match
     """
-    if not tumor_type or not tissue:
+    # Ensure both are non-empty strings
+    if not isinstance(tumor_type, str) or not tumor_type:
+        return False
+    if not isinstance(tissue, str) or not tissue:
         return False
 
     tumor_lower = tumor_type.lower()
@@ -64,6 +67,94 @@ def _tumor_type_matches(tumor_type: str, tissue: str) -> bool:
             return True
 
     return False
+
+
+# =============================================================================
+# MATCH COUNTING HELPERS
+# =============================================================================
+
+@dataclass
+class MatchCounts:
+    """Counts of evidence items by match level and tumor match.
+
+    Reduces code duplication across gap detection functions that need to
+    track variant/codon/gene match levels and tumor-specific counts.
+    """
+    total: int = 0
+    variant: int = 0
+    codon: int = 0
+    gene: int = 0
+    tumor: int = 0
+
+    @property
+    def matches_on_str(self) -> str:
+        """Build matches_on string (e.g., '2 variant, 1 codon, 3 gene')."""
+        return f"{self.variant} variant, {self.codon} codon, {self.gene} gene"
+
+    @property
+    def tumor_match_str(self) -> str:
+        """Build tumor_match string (e.g., '2 tumor, 4 other')."""
+        other = self.total - self.tumor
+        parts = [f"{self.tumor} tumor"]
+        if other > 0:
+            parts.append(f"{other} other")
+        return ", ".join(parts)
+
+    def add(self, other: "MatchCounts") -> "MatchCounts":
+        """Add counts from another MatchCounts and return self (for chaining)."""
+        self.total += other.total
+        self.variant += other.variant
+        self.codon += other.codon
+        self.gene += other.gene
+        self.tumor += other.tumor
+        return self
+
+
+def count_with_levels(
+    items: list,
+    tumor_type: str | None = None,
+    tumor_check_fn: callable = None
+) -> MatchCounts:
+    """Count items with match level breakdown and tumor matching.
+
+    Args:
+        items: List of evidence items (must have match_level attribute or be passable to _get_match_level)
+        tumor_type: The tumor type to match against (optional)
+        tumor_check_fn: Function(item) -> bool to check tumor match. If None, uses
+            _tumor_type_matches with item.tumor_type or item.disease attribute.
+
+    Returns:
+        MatchCounts with all counts populated
+    """
+    counts = MatchCounts()
+
+    for item in items:
+        counts.total += 1
+        level = _get_match_level(item)
+        if level == 'variant':
+            counts.variant += 1
+        elif level == 'codon':
+            counts.codon += 1
+        else:
+            counts.gene += 1
+
+        # Tumor matching
+        if tumor_type:
+            if tumor_check_fn:
+                if tumor_check_fn(item):
+                    counts.tumor += 1
+            else:
+                # Default: try item.tumor_type, then item.disease
+                # Check for non-empty strings (handles MagicMock in tests)
+                tumor_attr = getattr(item, 'tumor_type', None)
+                disease_attr = getattr(item, 'disease', None)
+                tissue = (tumor_attr if isinstance(tumor_attr, str) and tumor_attr
+                          else disease_attr if isinstance(disease_attr, str) and disease_attr
+                          else None)
+                if _tumor_type_matches(tumor_type, tissue):
+                    counts.tumor += 1
+
+    return counts
 
 
 # =============================================================================
@@ -474,87 +565,41 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
 
     Preclinical/early phase biomarkers are handled separately.
     """
-    tumor_lower = ctx.tumor_type.lower() if ctx.tumor_type else None
-
-    # Helper to count match levels and tumor matches
-    def count_items(items, tumor_check_fn=None):
-        """Count items, their match levels, and tumor matches."""
-        variant = codon = gene = tumor = 0
-        for item in items:
-            level = _get_match_level(item)
-            if level == 'variant':
-                variant += 1
-            elif level == 'codon':
-                codon += 1
-            else:
-                gene += 1
-            if tumor_check_fn and tumor_check_fn(item):
-                tumor += 1
-        return len(items), variant, codon, gene, tumor
-
-    # Count FDA-approved tier evidence only
-    n_cgi, cgi_var, cgi_codon, cgi_gene, cgi_tumor = count_items(
-        evidence.cgi_biomarkers,
-        lambda b: tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower()
-    )
-    n_vicc, vicc_var, vicc_codon, vicc_gene, vicc_tumor = count_items(
-        evidence.vicc_evidence,
-        lambda v: tumor_lower and v.disease and tumor_lower in v.disease.lower()
-    )
+    # Count FDA-approved tier evidence
+    cgi_counts = count_with_levels(evidence.cgi_biomarkers, ctx.tumor_type)
+    vicc_counts = count_with_levels(evidence.vicc_evidence, ctx.tumor_type)
 
     # FDA approvals - use parse_indication_for_tumor for tumor matching
-    fda_var = fda_codon = fda_gene = fda_tumor = 0
-    for approval in evidence.fda_approvals:
-        level = _get_match_level(approval)
-        if level == 'variant':
-            fda_var += 1
-        elif level == 'codon':
-            fda_codon += 1
-        else:
-            fda_gene += 1
+    def fda_tumor_check(approval):
         if ctx.tumor_type and approval.indication:
             parsed = approval.parse_indication_for_tumor(ctx.tumor_type)
-            if parsed.get('tumor_match', False):
-                fda_tumor += 1
-    n_fda = len(evidence.fda_approvals)
+            return parsed.get('tumor_match', False)
+        return False
+
+    fda_counts = count_with_levels(evidence.fda_approvals, ctx.tumor_type, fda_tumor_check)
 
     # Aggregate counts
-    total_count = n_cgi + n_vicc + n_fda
-    variant_count = cgi_var + vicc_var + fda_var
-    codon_count = cgi_codon + vicc_codon + fda_codon
-    gene_count = cgi_gene + vicc_gene + fda_gene
-    tumor_count = cgi_tumor + vicc_tumor + fda_tumor
+    counts = MatchCounts().add(cgi_counts).add(vicc_counts).add(fda_counts)
 
     # Set context flag for approved drug data
-    ctx.has_drug_data = total_count > 0
+    ctx.has_drug_data = counts.total > 0
 
     if ctx.has_drug_data:
         # Build source string
         drug_sources = []
-        if n_cgi:
-            drug_sources.append(f"{n_cgi} CGI")
-        if n_vicc:
-            drug_sources.append(f"{n_vicc} VICC")
-        if n_fda:
-            drug_sources.append(f"{n_fda} FDA")
-
-        # Build matches_on string - always show all levels
-        match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
-        matches_on = ", ".join(match_parts)
-
-        # Build tumor_match string - always show tumor count (even 0)
-        other_count = total_count - tumor_count
-        tumor_parts = [f"{tumor_count} tumor"]
-        if other_count > 0:
-            tumor_parts.append(f"{other_count} other")
-        tumor_match = ", ".join(tumor_parts)
+        if cgi_counts.total:
+            drug_sources.append(f"{cgi_counts.total} CGI")
+        if vicc_counts.total:
+            drug_sources.append(f"{vicc_counts.total} VICC")
+        if fda_counts.total:
+            drug_sources.append(f"{fda_counts.total} FDA")
 
         ctx.add_well_characterized(
             "drug response",
             " + ".join(drug_sources),
             category=GapCategory.DRUG_RESPONSE,
-            matches_on=matches_on,
-            tumor_match=tumor_match
+            matches_on=counts.matches_on_str,
+            tumor_match=counts.tumor_match_str
         )
     else:
         ctx.add_gap(
@@ -567,75 +612,41 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         ctx.add_poorly_characterized("drug response")
 
     # Handle preclinical/early phase biomarkers separately
-    _check_preclinical_biomarkers(evidence, ctx, tumor_lower)
+    _check_preclinical_biomarkers(evidence, ctx)
 
     # Handle DepMap drug sensitivity separately
     _check_depmap_drug_sensitivity(evidence, ctx)
 
 
-def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext, tumor_lower: str | None) -> None:
+def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for preclinical and early phase biomarker data.
 
     These are lower evidence tier than FDA-approved biomarkers:
     - Preclinical: cell line studies, xenografts
     - Early phase: Phase I/II trials, case reports
     """
-    n_preclin = len(evidence.preclinical_biomarkers)
-    n_early = len(evidence.early_phase_biomarkers)
+    preclin_counts = count_with_levels(evidence.preclinical_biomarkers, ctx.tumor_type)
+    early_counts = count_with_levels(evidence.early_phase_biomarkers, ctx.tumor_type)
 
-    if not n_preclin and not n_early:
+    if not preclin_counts.total and not early_counts.total:
         return
 
-    # Count match levels and tumor matches
-    variant_count = codon_count = gene_count = tumor_count = 0
-
-    for b in evidence.preclinical_biomarkers:
-        level = _get_match_level(b)
-        if level == 'variant':
-            variant_count += 1
-        elif level == 'codon':
-            codon_count += 1
-        else:
-            gene_count += 1
-        if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
-            tumor_count += 1
-
-    for b in evidence.early_phase_biomarkers:
-        level = _get_match_level(b)
-        if level == 'variant':
-            variant_count += 1
-        elif level == 'codon':
-            codon_count += 1
-        else:
-            gene_count += 1
-        if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
-            tumor_count += 1
+    # Aggregate counts
+    counts = MatchCounts().add(preclin_counts).add(early_counts)
 
     # Build source string
     sources = []
-    if n_preclin:
-        sources.append(f"{n_preclin} preclinical")
-    if n_early:
-        sources.append(f"{n_early} early phase")
-
-    # Build matches_on string - always show all levels
-    match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
-    matches_on = ", ".join(match_parts)
-
-    # Build tumor_match string - always show tumor count (even 0)
-    total_count = n_preclin + n_early
-    other_count = total_count - tumor_count
-    tumor_parts = [f"{tumor_count} tumor"]
-    if other_count > 0:
-        tumor_parts.append(f"{other_count} other")
-    tumor_match = ", ".join(tumor_parts)
+    if preclin_counts.total:
+        sources.append(f"{preclin_counts.total} preclinical")
+    if early_counts.total:
+        sources.append(f"{early_counts.total} early phase")
 
     ctx.add_well_characterized(
         "preclinical/early phase biomarkers",
         " + ".join(sources),
         category=GapCategory.PRECLINICAL,
-        matches_on=matches_on,
-        tumor_match=tumor_match
+        matches_on=counts.matches_on_str,
+        tumor_match=counts.tumor_match_str
     )
 
 
@@ -680,26 +691,17 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     - VICC evidence with resistance response types
     - LLM-extracted literature knowledge mentioning resistance
     """
-    tumor_lower = ctx.tumor_type.lower() if ctx.tumor_type else None
-
     # Collect resistance signals from all sources
     resistance_sources: list[str] = []
-
-    # Track match levels and tumor matches for all resistance data
-    variant_count = 0
-    codon_count = 0
-    gene_count = 0
-    tumor_count = 0
-    total_count = 0
+    counts = MatchCounts()
 
     # 1. PubMed articles with resistance evidence
+    # PubMed articles don't have match_level (count as gene-level) or tumor type info
     resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
     if resistance_articles:
         resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
-        # PubMed articles don't have match_level, count as gene-level
-        gene_count += len(resistance_articles)
-        total_count += len(resistance_articles)
-        # PubMed articles don't have tumor type info, can't count tumor matches
+        counts.total += len(resistance_articles)
+        counts.gene += len(resistance_articles)
 
     # 2. CGI biomarkers with resistance association
     cgi_resistance = [
@@ -708,33 +710,13 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     ]
     if cgi_resistance:
         resistance_sources.append(f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}")
-        for b in cgi_resistance:
-            level = _get_match_level(b)
-            if level == 'variant':
-                variant_count += 1
-            elif level == 'codon':
-                codon_count += 1
-            else:
-                gene_count += 1
-            if tumor_lower and b.tumor_type and tumor_lower in b.tumor_type.lower():
-                tumor_count += 1
-            total_count += 1
+        counts.add(count_with_levels(cgi_resistance, ctx.tumor_type))
 
     # 3. CIViC assertions with is_resistance=True
     civic_resistance = [a for a in evidence.civic_assertions if a.is_resistance]
     if civic_resistance:
         resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
-        for a in civic_resistance:
-            level = _get_match_level(a)
-            if level == 'variant':
-                variant_count += 1
-            elif level == 'codon':
-                codon_count += 1
-            else:
-                gene_count += 1
-            if tumor_lower and a.disease and tumor_lower in a.disease.lower():
-                tumor_count += 1
-            total_count += 1
+        counts.add(count_with_levels(civic_resistance, ctx.tumor_type))
 
     # 4. VICC evidence with resistance response types
     vicc_resistance = [
@@ -743,55 +725,30 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     ]
     if vicc_resistance:
         resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
-        for v in vicc_resistance:
-            level = _get_match_level(v)
-            if level == 'variant':
-                variant_count += 1
-            elif level == 'codon':
-                codon_count += 1
-            else:
-                gene_count += 1
-            if tumor_lower and v.disease and tumor_lower in v.disease.lower():
-                tumor_count += 1
-            total_count += 1
+        counts.add(count_with_levels(vicc_resistance, ctx.tumor_type))
 
     # 5. LLM-extracted literature knowledge with resistance signals
+    # Literature entries don't have tumor type info
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
         drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)
         if drugs:
             resistance_sources.append(f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})")
-            # Count match levels from literature resistance entries
-            for entry in evidence.literature_knowledge.resistant_to:
-                level = _get_match_level(entry)
-                if level == 'variant':
-                    variant_count += 1
-                elif level == 'codon':
-                    codon_count += 1
-                else:
-                    gene_count += 1
-                total_count += 1
-                # Literature entries don't typically have tumor type info
+            # Count without tumor matching (literature entries don't have tumor type)
+            lit_counts = count_with_levels(evidence.literature_knowledge.resistant_to)
+            counts.total += lit_counts.total
+            counts.variant += lit_counts.variant
+            counts.codon += lit_counts.codon
+            counts.gene += lit_counts.gene
 
     has_resistance_data = bool(resistance_sources)
 
     if has_resistance_data:
-        # Build matches_on string - always show all levels
-        match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
-        matches_on = ", ".join(match_parts)
-
-        # Build tumor_match string - always show tumor count (even 0)
-        other_count = total_count - tumor_count
-        tumor_parts = [f"{tumor_count} tumor"]
-        if other_count > 0:
-            tumor_parts.append(f"{other_count} other")
-        tumor_match = ", ".join(tumor_parts)
-
         ctx.add_well_characterized(
             "resistance mechanisms",
             " + ".join(resistance_sources),
             category=GapCategory.RESISTANCE,
-            matches_on=matches_on,
-            tumor_match=tumor_match
+            matches_on=counts.matches_on_str,
+            tumor_match=counts.tumor_match_str
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
@@ -1350,7 +1307,6 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     Returns:
         TumorEvidenceMatch with aggregated match info
     """
-    tumor_lower = tumor_type.lower()
     result = TumorEvidenceMatch(tumor_type=tumor_type)
 
     def count_matches(items, tumor_check_fn) -> tuple[int, int, int, int]:
@@ -1374,7 +1330,7 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     # CIViC assertions
     counts = count_matches(
         evidence.civic_assertions,
-        lambda a: a.disease and tumor_lower in a.disease.lower()
+        lambda a: _tumor_type_matches(tumor_type, a.disease)
     )
     if counts[0] > 0:
         result.add_source_match("CIViC Assertions", *counts)
@@ -1401,13 +1357,13 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     # VICC evidence
     counts = count_matches(
         evidence.vicc_evidence,
-        lambda v: v.disease and tumor_lower in v.disease.lower()
+        lambda v: _tumor_type_matches(tumor_type, v.disease)
     )
     if counts[0] > 0:
         result.add_source_match("VICC", *counts)
 
     # CGI biomarkers (all tiers combined)
-    cgi_tumor_check = lambda c: c.tumor_type and tumor_lower in c.tumor_type.lower()
+    cgi_tumor_check = lambda c: _tumor_type_matches(tumor_type, c.tumor_type)
     all_cgi = (
         list(evidence.cgi_biomarkers) +
         list(evidence.preclinical_biomarkers) +
