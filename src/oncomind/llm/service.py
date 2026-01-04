@@ -1,10 +1,15 @@
-"""LLM service for variant insight generation."""
+"""LLM service for variant insight generation.
+
+Two-stage pipeline:
+1. Synthesis - integrates evidence into structured summary
+2. Hypothesis - generates testable research questions (optional, based on synthesis)
+"""
 
 import json
 import re
 import time
 from litellm import acompletion
-from oncomind.llm.prompts import create_research_prompt
+from oncomind.llm.prompts import create_synthesis_prompt, create_hypothesis_prompt
 from oncomind.models.llm_insight import LLMInsight
 
 from oncomind.config.debug import get_logger
@@ -17,12 +22,103 @@ class LLMService:
 
     The LLM synthesizes evidence from multiple databases into a clear,
     human-readable summary of the variant's clinical significance.
+
+    Uses a two-stage pipeline:
+    1. Synthesis: evidence → structured summary (functional, biological, therapeutic)
+    2. Hypothesis: synthesis + gaps → research hypotheses
     """
 
     def __init__(self, model: str = "gpt-4o-mini", temperature: float = 0.0):
         self.model = model
         self.temperature = temperature
         logger.debug(f"LLMService initialized with model={model}, temperature={temperature}")
+
+    async def _call_llm(self, messages: list[dict], max_tokens: int = 1500) -> dict | None:
+        """Make LLM API call and parse JSON response.
+
+        Args:
+            messages: List of message dicts with role/content
+            max_tokens: Maximum tokens for response
+
+        Returns:
+            Parsed JSON dict or None on error
+        """
+        timeout = 120 if "claude" in self.model.lower() else 60
+
+        completion_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature,
+            "max_tokens": max_tokens,
+            "timeout": timeout,
+        }
+
+        # Use JSON mode for OpenAI models
+        if "gpt" in self.model.lower():
+            completion_kwargs["response_format"] = {"type": "json_object"}
+
+        input_chars = sum(len(m.get("content", "")) for m in messages)
+        logger.debug(f"LLM request: model={self.model}, payload={input_chars} chars")
+
+        try:
+            t0 = time.time()
+            response = await acompletion(**completion_kwargs)
+            llm_time = time.time() - t0
+            logger.info(f"LLM call completed in {llm_time:.2f}s")
+
+            raw_content = response.choices[0].message.content.strip()
+            finish_reason = response.choices[0].finish_reason
+
+            if finish_reason == "length":
+                logger.warning("LLM response truncated (finish_reason=length)")
+
+            logger.debug(f"LLM raw response (finish_reason={finish_reason}):\n{raw_content[:500]}...")
+
+            # Parse JSON response
+            return self._parse_json_response(raw_content)
+
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            return None
+
+    def _parse_json_response(self, content: str) -> dict | None:
+        """Parse JSON from LLM response, handling common formatting issues."""
+        # Strip markdown code blocks if present
+        if "```" in content:
+            parts = content.split("```")
+            for part in parts:
+                stripped = part.strip()
+                if stripped.lower().startswith("json"):
+                    stripped = stripped[4:].lstrip()
+                if stripped.startswith("{"):
+                    content = stripped
+                    break
+
+        # Find JSON object if not at start
+        if not content.strip().startswith("{"):
+            start_idx = content.find("{")
+            end_idx = content.rfind("}")
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                content = content[start_idx:end_idx + 1]
+
+        content = content.strip()
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse failed: {e}. Attempting repair...")
+
+            # Common fixes
+            repaired = content
+            repaired = repaired.replace("\\'", "'")
+            repaired = re.sub(r'(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)', '\\n', repaired)
+            repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                logger.error("JSON repair failed")
+                return None
 
     async def get_llm_insight(
         self,
@@ -38,8 +134,12 @@ class LLMService:
         resistance_summary: str = "",
         sensitivity_summary: str = "",
         match_level_summary: dict | None = None,
+        generate_hypotheses: bool = True,
     ) -> LLMInsight:
-        """Generate variant insight by synthesizing evidence with LLM.
+        """Generate variant insight using two-stage LLM pipeline.
+
+        Stage 1: Synthesis - integrates evidence into structured summary
+        Stage 2: Hypothesis - generates research questions (if generate_hypotheses=True)
 
         Args:
             gene: Gene symbol (e.g., BRAF)
@@ -48,30 +148,27 @@ class LLMService:
             evidence_summary: Compact text summary of evidence
             biological_context: cBioPortal prevalence/co-mutation data
             evidence_assessment: Dict with keys: overall_quality, well_characterized,
-                knowledge_gaps, conflicting_evidence, critical_gaps, significant_gaps
-            literature_summary: PubMed literature findings (for full mode)
+                knowledge_gaps, conflicting_evidence
+            literature_summary: PubMed literature findings
             has_clinical_trials: Whether clinical trials are available
             data_availability: Dict with boolean flags for data presence
-                (has_tumor_specific_cbioportal, has_civic_assertions, has_fda_approvals, has_vicc_evidence)
             resistance_summary: Concise summary of resistance evidence
             sensitivity_summary: Concise summary of sensitivity evidence
-            match_level_summary: Dict with match specificity info (variant/codon/gene counts)
+            match_level_summary: Dict with match specificity info
+            generate_hypotheses: Whether to run stage 2 (default True)
 
         Returns:
-            LLMInsight with LLM-generated research-focused narrative
+            LLMInsight with synthesized narrative and research hypotheses
         """
-        # Default empty evidence assessment if not provided
+        # Default empty dicts if not provided
         if evidence_assessment is None:
             evidence_assessment = {
                 "overall_quality": "unknown",
                 "well_characterized": [],
                 "knowledge_gaps": [],
                 "conflicting_evidence": [],
-                "critical_gaps": [],
-                "significant_gaps": [],
             }
 
-        # Default empty data availability if not provided
         if data_availability is None:
             data_availability = {
                 "has_tumor_specific_cbioportal": False,
@@ -80,20 +177,12 @@ class LLMService:
                 "has_vicc_evidence": False,
             }
 
-        # Default empty match level summary if not provided
-        if match_level_summary is None:
-            match_level_summary = {
-                "variant_count": 0,
-                "codon_count": 0,
-                "gene_count": 0,
-                "total": 0,
-                "summary_text": "Match specificity not computed.",
-                "has_variant_specific": False,
-                "is_all_gene_level": False,
-            }
+        # =====================================================================
+        # STAGE 1: SYNTHESIS
+        # =====================================================================
+        logger.info(f"Stage 1: Synthesizing evidence for {gene} {variant}")
 
-        # Create research-focused prompt
-        messages = create_research_prompt(
+        synthesis_messages = create_synthesis_prompt(
             gene=gene,
             variant=variant,
             tumor_type=tumor_type,
@@ -107,171 +196,92 @@ class LLMService:
             match_level_summary=match_level_summary,
         )
 
-        # Call LLM for narrative generation
-        # Set timeout based on model - Claude models need longer
-        timeout = 120 if "claude" in self.model.lower() else 60
+        synthesis_data = await self._call_llm(synthesis_messages, max_tokens=1500)
 
-        completion_kwargs = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "max_tokens": 2000,  # Increased from 1000 to avoid truncation
-            "timeout": timeout,
-        }
-
-        # Use JSON mode for OpenAI models
-        if "gpt" in self.model.lower():
-            completion_kwargs["response_format"] = {"type": "json_object"}
-
-        # Log payload length at INFO level
-        input_chars = sum(len(m.get("content", "")) for m in messages)
-
-        logger.debug(f"LLM request: model={self.model}, payload={input_chars} chars")
-        logger.debug(
-            f"LLM params: temperature={self.temperature}, max_tokens={completion_kwargs.get('max_tokens')}, timeout={completion_kwargs.get('timeout')}")
-
-        # Debug logging for full LLM payload
-        logger.debug("++++++++++++++++++++++++++LLM payload++++++++++++++++++++++++++++++++++++++++")
-        for i, msg in enumerate(messages):
-            role = msg.get('role', 'unknown')
-            content = msg.get('content', '')
-            logger.debug(f"Message[{i}] role={role}:\n{content}")
-        logger.debug("+++++++++++++++++++++++++LLM payload+++++++++++++++++++++++++++++++++++++++++")
-        try:
-            # Time the LLM API call
-            t0 = time.time()
-            response = await acompletion(**completion_kwargs)
-            llm_time = time.time() - t0
-
-            # Log timing at INFO level
-            logger.info(f"LLM call completed in {llm_time:.2f}s")
-
-            raw_content = response.choices[0].message.content.strip()
-
-            # Check for truncation (finish_reason != 'stop' means incomplete)
-            finish_reason = response.choices[0].finish_reason
-            if finish_reason == "length":
-                logger.warning(f"LLM response was truncated (finish_reason=length). Response may be incomplete.")
-
-            # Log raw LLM response
-            logger.debug("************************************************************")
-            logger.debug(f"LLM raw response (finish_reason={finish_reason}):\n{raw_content}")
-            logger.debug("************************************************************")
-
-            # Parse JSON response - handle various LLM output formats
-            content = raw_content
-
-            # Strip markdown code blocks if present
-            if "```" in content:
-                # Find JSON block between ``` markers
-                parts = content.split("```")
-                for part in parts:
-                    stripped = part.strip()
-                    if stripped.lower().startswith("json"):
-                        stripped = stripped[4:].lstrip()
-                    if stripped.startswith("{"):
-                        content = stripped
-                        break
-
-            # If still not starting with {, try to find JSON object
-            if not content.strip().startswith("{"):
-                # Look for first { and last }
-                start_idx = content.find("{")
-                end_idx = content.rfind("}")
-                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                    content = content[start_idx:end_idx + 1]
-
-            content = content.strip()
-            logger.debug(f"Parsing JSON content (first 500 chars): {content[:500]}")
-
-            # Try to parse JSON, with fallback repair attempts
-            try:
-                data = json.loads(content)
-            except json.JSONDecodeError as e:
-                logger.warning(f"Initial JSON parse failed: {e}. Attempting repair...")
-                # Log the problematic area
-                error_pos = e.pos if hasattr(e, 'pos') else 0
-                logger.debug(f"JSON error near position {error_pos}: ...{content[max(0,error_pos-50):error_pos+50]}...")
-
-                # Common fixes for LLM JSON output
-                repaired = content
-                # Fix escaped single quotes (Claude often does \' which is invalid in JSON)
-                repaired = repaired.replace("\\'", "'")
-                # Fix unescaped newlines in strings (common issue)
-                # Replace literal newlines inside strings with \n
-                repaired = re.sub(r'(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)', '\\n', repaired)
-                # Fix trailing commas before } or ]
-                repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
-                # Try parsing again
-                try:
-                    data = json.loads(repaired)
-                    logger.info("JSON repair successful")
-                except json.JSONDecodeError as e2:
-                    logger.error(f"JSON repair failed: {e2}")
-                    # Re-raise original error
-                    raise e
-
-            # Extract research-focused LLM response components (raw data, no formatting)
-            functional_summary = data.get("functional_summary", "")
-            biological_context_text = data.get("biological_context", "")
-            research_implications = data.get("research_implications", "")
-            therapeutic = data.get("therapeutic_landscape", {})
-
-            # Build plain text summary (no markdown - UI layer handles formatting)
-            summary_parts = []
-            if functional_summary:
-                summary_parts.append(functional_summary)
-            if biological_context_text:
-                summary_parts.append(biological_context_text)
-            if research_implications:
-                summary_parts.append(research_implications)
-
-            llm_summary = " ".join(summary_parts) if summary_parts else "No summary available"
-
-            # Extract evidence assessment
-            evidence_assessment = data.get("evidence_assessment", {})
-            evidence_quality = evidence_assessment.get("overall_quality")
-            knowledge_gaps = evidence_assessment.get("knowledge_gaps", [])
-            well_characterized = evidence_assessment.get("well_characterized", [])
-            conflicting_evidence = evidence_assessment.get("conflicting_evidence", [])
-
-            # Extract evidence tags for transparency
-            evidence_tags = data.get("evidence_tags", [])
-
-            # Extract research hypotheses
-            research_hypotheses = data.get("research_hypotheses", [])
-
-            # Build insight with research-focused narrative and raw component data
-            return LLMInsight(
-                llm_summary=llm_summary,
-                rationale=research_implications,
-                clinical_trials_available=has_clinical_trials,
-                therapeutic_evidence=[],  # Therapeutic evidence comes from Evidence.get_therapeutic_evidence()
-                references=data.get("key_references", []),
-                # Raw component data for UI formatting
-                functional_summary=functional_summary or None,
-                biological_context=biological_context_text or None,
-                therapeutic_landscape=therapeutic or None,
-                # Research assessment fields
-                evidence_quality=evidence_quality,
-                knowledge_gaps=knowledge_gaps,
-                well_characterized=well_characterized,
-                conflicting_evidence=conflicting_evidence,
-                research_implications=research_implications,
-                evidence_tags=evidence_tags,
-                research_hypotheses=research_hypotheses,
-            )
-
-        except Exception as e:
-            # Log error and return insight with basic error message
-            logger.error(f"LLM narrative generation failed for {gene} {variant}: {str(e)}")
+        if synthesis_data is None:
+            logger.error("Stage 1 synthesis failed")
             return LLMInsight(
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
-                rationale=f"LLM narrative generation failed: {str(e)}",
+                rationale="LLM synthesis failed",
                 clinical_trials_available=has_clinical_trials,
                 therapeutic_evidence=[],
                 references=[],
             )
+
+        # Extract synthesis components
+        functional_summary = synthesis_data.get("functional_summary", "")
+        biological_context_text = synthesis_data.get("biological_context", "")
+        therapeutic = synthesis_data.get("therapeutic_landscape", {})
+        evidence_assess = synthesis_data.get("evidence_assessment", {})
+        evidence_tags = synthesis_data.get("evidence_tags", [])
+        key_references = synthesis_data.get("key_references", [])
+
+        # =====================================================================
+        # STAGE 2: HYPOTHESIS GENERATION (optional)
+        # =====================================================================
+        research_hypotheses = []
+        research_implications = ""
+
+        if generate_hypotheses and evidence_assessment.get("knowledge_gaps"):
+            logger.info(f"Stage 2: Generating hypotheses for {gene} {variant}")
+
+            # Build therapeutic signals summary for hypothesis context
+            therapeutic_signals = f"Sensitivity: {sensitivity_summary}\nResistance: {resistance_summary}"
+
+            hypothesis_messages = create_hypothesis_prompt(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                synthesis_result=synthesis_data,
+                evidence_assessment=evidence_assessment,
+                therapeutic_signals=therapeutic_signals,
+            )
+
+            hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=800)
+
+            if hypothesis_data:
+                research_hypotheses = hypothesis_data.get("research_hypotheses", [])
+                research_implications = hypothesis_data.get("research_implications", "")
+                logger.info(f"Generated {len(research_hypotheses)} hypotheses")
+            else:
+                logger.warning("Stage 2 hypothesis generation failed")
+        else:
+            logger.debug("Skipping hypothesis generation (no knowledge gaps or disabled)")
+
+        # =====================================================================
+        # BUILD FINAL INSIGHT
+        # =====================================================================
+
+        # Build plain text summary
+        summary_parts = []
+        if functional_summary:
+            summary_parts.append(functional_summary)
+        if biological_context_text:
+            summary_parts.append(biological_context_text)
+        if research_implications:
+            summary_parts.append(research_implications)
+
+        llm_summary = " ".join(summary_parts) if summary_parts else "No summary available"
+
+        return LLMInsight(
+            llm_summary=llm_summary,
+            rationale=research_implications,
+            clinical_trials_available=has_clinical_trials,
+            therapeutic_evidence=[],
+            references=key_references,
+            # Raw component data for UI formatting
+            functional_summary=functional_summary or None,
+            biological_context=biological_context_text or None,
+            therapeutic_landscape=therapeutic or None,
+            # Research assessment fields
+            evidence_quality=evidence_assess.get("overall_quality"),
+            knowledge_gaps=evidence_assess.get("knowledge_gaps", []),
+            well_characterized=evidence_assess.get("well_characterized", []),
+            conflicting_evidence=evidence_assess.get("conflicting_evidence", []),
+            research_implications=research_implications,
+            evidence_tags=evidence_tags,
+            research_hypotheses=research_hypotheses,
+        )
 
     async def score_paper_relevance(
         self,
