@@ -88,8 +88,18 @@ class MatchCounts:
 
     @property
     def matches_on_str(self) -> str:
-        """Build matches_on string (e.g., '2 variant, 1 codon, 3 gene')."""
-        return f"{self.variant} variant, {self.codon} codon, {self.gene} gene"
+        """Build matches_on string (e.g., '2 variant, 1 codon, 3 gene').
+
+        Only includes non-zero counts.
+        """
+        parts = []
+        if self.variant > 0:
+            parts.append(f"{self.variant} variant")
+        if self.codon > 0:
+            parts.append(f"{self.codon} codon")
+        if self.gene > 0:
+            parts.append(f"{self.gene} gene")
+        return ", ".join(parts) if parts else "0 matches"
 
     @property
     def tumor_match_str(self) -> str:
