@@ -1,43 +1,30 @@
 """OncoMind - AI-powered cancer variant insight and evidence synthesis.
 
 Public API:
-    >>> from oncomind import get_insight, get_insights
-    >>> result = await get_insight("BRAF V600E", tumor_type="Melanoma")
-    >>> results = await get_insights(["BRAF V600E", "EGFR L858R"])
-
-For synchronous usage:
-    >>> from oncomind import get_insight_sync
-    >>> result = get_insight_sync("BRAF V600E")
+    >>> from oncomind.insight_builder import Conductor, ConductorConfig
+    >>> conductor = Conductor(ConductorConfig(enable_llm=True))
+    >>> result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 """
 
 __version__ = "0.1.0"
-
-# Public API
-from oncomind.api_public.insight import (
-    get_insight,
-    get_insights,
-    get_insight_sync,
-    get_insights_sync,
-    InsightConfig,
-)
 
 # Core models
 from oncomind.models.evidence import Evidence
 from oncomind.models.result import Result
 from oncomind.normalization import ParsedVariant, parse_variant_input
 
+# Conductor API (primary entry point)
+from oncomind.insight_builder import Conductor, ConductorConfig
+
 __all__ = [
     # Version
     "__version__",
-    # Public API
-    "get_insight",
-    "get_insights",
-    "get_insight_sync",
-    "get_insights_sync",
-    "InsightConfig",
     # Core models
     "Evidence",
     "Result",
     "ParsedVariant",
     "parse_variant_input",
+    # Conductor API
+    "Conductor",
+    "ConductorConfig",
 ]

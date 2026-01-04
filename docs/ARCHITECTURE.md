@@ -11,18 +11,18 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │                       User Interfaces                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────────┐  │
 │  │    CLI      │  │  Streamlit  │  │      Python API           │  │
-│  │   (mind)    │  │    App      │  │   (get_insight)           │  │
+│  │   (mind)    │  │    App      │  │   (Conductor)             │  │
 │  └──────┬──────┘  └──────┬──────┘  └─────────────┬─────────────┘  │
 └─────────┼────────────────┼───────────────────────┼────────────────┘
           │                │                       │
           ▼                ▼                       ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│                      Public API Layer                             │
+│                      Conductor Layer                              │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  api_public/insight.py                                      │  │
-│  │  - get_insight(variant_str, tumor_type, config) → Result    │  │
-│  │  - get_insights(variants, tumor_type, config) → [Result]    │  │
-│  │  - InsightConfig                                            │  │
+│  │  insight_builder/conductor.py                               │  │
+│  │  - Conductor.run(variant, tumor_type) → Result              │  │
+│  │  - Conductor.run_batch(variants, tumor_type) → [Result]     │  │
+│  │  - ConductorConfig                                          │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
           │
@@ -123,13 +123,15 @@ The core annotation pipeline is deterministic. LLM can be enabled for research n
 
 ```python
 # Annotation mode: structured evidence only (~7s)
-config = InsightConfig(enable_llm=False)
-result = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
+config = ConductorConfig(enable_llm=False)
+async with Conductor(config) as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 print(result.llm)  # None
 
 # LLM mode: + literature search + research narrative (~25s)
-config = InsightConfig(enable_llm=True)
-result = await get_insight("BRAF V600E", tumor_type="Melanoma", config=config)
+config = ConductorConfig(enable_llm=True)
+async with Conductor(config) as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 print(result.llm.llm_summary)  # LLM narrative with gaps and hypotheses
 ```
 
@@ -213,22 +215,29 @@ Gap categories:
 
 ## Module Details
 
-### Public API (`api_public/insight.py`)
+### Conductor (`insight_builder/conductor.py`)
 
 The single entry point for users:
 
 ```python
-async def get_insight(
-    variant_str: str,              # "BRAF V600E" or "EGFR L858R in NSCLC"
-    tumor_type: str | None = None, # Optional tumor context
-    config: InsightConfig | None = None,
-) -> Result:
+class Conductor:
+    async def run(
+        self,
+        variant: str,                  # "BRAF V600E" or "EGFR L858R in NSCLC"
+        tumor_type: str | None = None, # Optional tumor context
+    ) -> Result:
+
+    async def run_batch(
+        self,
+        variants: list[str],
+        tumor_type: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[Result]:
 ```
 
 **Responsibilities:**
 - Parse variant input
-- Validate variant type (SNP/indel only)
-- Orchestrate evidence building
+- Orchestrate evidence building via EvidenceAggregator
 - Apply optional LLM enhancement
 - Return strongly-typed Result
 
@@ -600,11 +609,11 @@ User Input: ["BRAF V600E", "EGFR L858R", "KRAS G12C"]
 
 ## Configuration
 
-### InsightConfig
+### ConductorConfig
 
 ```python
 @dataclass
-class InsightConfig:
+class ConductorConfig:
     # Evidence sources
     enable_vicc: bool = True
     enable_civic_assertions: bool = True
@@ -622,15 +631,19 @@ class InsightConfig:
     max_clinical_trials: int = 500
     max_literature_results: int = 30
 
-    # Validation
-    validate_variant_type: bool = True
+    # Literature source: "none", "pubmed", or "semantic_scholar"
+    literature_source: str = "pubmed"
+
+    # Performance options
+    enable_timing: bool = False
+    batch_concurrency: int = 3
 ```
 
-### EvidenceBuilderConfig
+### EvidenceAggregatorConfig
 
 ```python
 @dataclass
-class EvidenceBuilderConfig:
+class EvidenceAggregatorConfig:
     # Source toggles
     enable_vicc: bool = True
     enable_civic_assertions: bool = True

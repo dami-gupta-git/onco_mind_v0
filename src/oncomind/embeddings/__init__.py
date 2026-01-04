@@ -11,9 +11,11 @@ This is a placeholder for future implementation.
 
 Example (future):
     >>> from oncomind.embeddings import extract_features, create_embedding
-    >>> panel = await get_insight("BRAF V600E")
-    >>> features = extract_features(panel)  # dict of numeric features
-    >>> embedding = create_embedding(panel)  # dense vector
+    >>> from oncomind import Conductor
+    >>> async with Conductor() as conductor:
+    ...     result = await conductor.run("BRAF V600E")
+    >>> features = extract_features(result.evidence)  # dict of numeric features
+    >>> embedding = create_embedding(result.evidence)  # dense vector
 """
 
 from oncomind.embeddings.features import (

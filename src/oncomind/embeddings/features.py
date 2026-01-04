@@ -59,8 +59,10 @@ def extract_features(
         Dictionary of feature name → value mappings.
 
     Example:
-        >>> panel = await get_insight("BRAF V600E")
-        >>> features = extract_features(panel)
+        >>> from oncomind import Conductor
+        >>> async with Conductor() as conductor:
+        ...     result = await conductor.run("BRAF V600E")
+        >>> features = extract_features(result.evidence)
         >>> print(features["alphamissense_score"])
         0.98
         >>> print(features["civic_evidence_count"])

@@ -342,7 +342,7 @@ class ClinicalQAAgent:
 
     async def fetch_variant_evidence(self, variant: str, tumor: str) -> Result:
         """Get OncoMind Result for the variant."""
-        # Uses existing get_insight()
+        # Uses Conductor.run()
         ...
 
     async def fetch_drug_evidence(self, drug: str, variant: str) -> list[dict]:

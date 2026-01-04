@@ -4,70 +4,74 @@ Complete reference for OncoMind's public API and data structures.
 
 ## Public API
 
-### `get_insight()`
+### `Conductor`
 
-Primary async function for variant analysis.
+Primary async class for variant analysis.
 
 ```python
-from oncomind import get_insight, InsightConfig, Result
+from oncomind import Conductor, ConductorConfig, Result
 
-result = await get_insight(
-    variant="BRAF V600E",           # Required: gene + variant string
-    tumor_type="Melanoma",          # Optional: tumor context
-    config=InsightConfig(...)       # Optional: configuration
-)
+async with Conductor(ConductorConfig(...)) as conductor:
+    result = await conductor.run(
+        variant="BRAF V600E",           # Required: gene + variant string
+        tumor_type="Melanoma",          # Optional: tumor context
+    )
 ```
 
-**Parameters:**
+**Methods:**
+
+#### `Conductor.run()`
+
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `variant` | `str` | Required | Variant string (e.g., "BRAF V600E", "EGFR L858R") |
 | `tumor_type` | `str \| None` | `None` | Tumor type for context-specific evidence |
-| `config` | `InsightConfig` | Default | Configuration options |
 
 **Returns:** `Result`
 
-### `get_insights()`
+#### `Conductor.run_batch()`
 
 Batch processing for multiple variants.
 
 ```python
-panels = await get_insights(
-    variants=["BRAF V600E", "KRAS G12D", "EGFR L858R"],
-    tumor_type="NSCLC",
-    config=InsightConfig(...)
-)
+async with Conductor(ConductorConfig(...)) as conductor:
+    results = await conductor.run_batch(
+        variants=["BRAF V600E", "KRAS G12D", "EGFR L858R"],
+        tumor_type="NSCLC",
+        progress_callback=lambda i, t: print(f"{i}/{t}"),
+    )
 ```
 
-**Parameters:**
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `variants` | `list[str]` | Required | List of variant strings |
 | `tumor_type` | `str \| None` | `None` | Tumor type (applied to all) |
-| `config` | `InsightConfig` | Default | Configuration options |
+| `progress_callback` | `Callable[[int, int], None] \| None` | `None` | Progress callback |
 
 **Returns:** `list[Result]`
 
-### `get_insight_sync()` / `get_insights_sync()`
-
-Synchronous wrappers for non-async contexts.
+### Convenience Functions
 
 ```python
-from oncomind import get_insight_sync
+from oncomind.insight_builder import conduct, conduct_batch
 
-panel = get_insight_sync("BRAF V600E", tumor_type="Melanoma")
+# Single variant
+result = await conduct("BRAF V600E", tumor_type="Melanoma")
+
+# Batch
+results = await conduct_batch(["BRAF V600E", "EGFR L858R"], tumor_type="NSCLC")
 ```
 
 ---
 
-## InsightConfig
+## ConductorConfig
 
 Configuration options for insight generation.
 
 ```python
-from oncomind import InsightConfig
+from oncomind import ConductorConfig
 
-config = InsightConfig(
+config = ConductorConfig(
     enable_llm=True,
     enable_literature=True,
     llm_model="gpt-4o-mini",
@@ -86,6 +90,8 @@ config = InsightConfig(
 | `max_literature_results` | `int` | `10` | Max papers to retrieve |
 | `max_clinical_trials` | `int` | `5` | Max trials to retrieve |
 | `max_civic_assertions` | `int` | `20` | Max CIViC assertions |
+| `literature_source` | `str` | `"pubmed"` | "pubmed" or "semantic_scholar" |
+| `batch_concurrency` | `int` | `3` | Max concurrent variants in batch |
 
 ---
 
@@ -94,7 +100,8 @@ config = InsightConfig(
 The `Result` is the core output model containing structured evidence and optional LLM insight.
 
 ```python
-result = await get_insight("BRAF V600E", tumor_type="Melanoma")
+async with Conductor() as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 
 # Result contains:
 # - evidence: Evidence (structured data from databases)
@@ -527,24 +534,25 @@ json_str = result.model_dump_json(indent=2)
 OncoMind accepts flexible variant notation:
 
 ```python
-# Standard formats
-await get_insight("BRAF V600E")           # Gene + protein change
-await get_insight("BRAF p.V600E")         # With p. prefix
-await get_insight("BRAF p.Val600Glu")     # Three-letter amino acids
+async with Conductor() as conductor:
+    # Standard formats
+    await conductor.run("BRAF V600E")           # Gene + protein change
+    await conductor.run("BRAF p.V600E")         # With p. prefix
+    await conductor.run("BRAF p.Val600Glu")     # Three-letter amino acids
 
-# HGVS notation
-await get_insight("BRAF c.1799T>A")       # Coding DNA
-await get_insight("NM_004333.4:c.1799T>A")  # With transcript
+    # HGVS notation
+    await conductor.run("BRAF c.1799T>A")       # Coding DNA
+    await conductor.run("NM_004333.4:c.1799T>A")  # With transcript
 
-# Deletions/insertions
-await get_insight("EGFR E746_A750del")    # Deletion
-await get_insight("EGFR T790M")           # Point mutation
-await get_insight("ERBB2 A775_G776insYVMA")  # Insertion
+    # Deletions/insertions
+    await conductor.run("EGFR E746_A750del")    # Deletion
+    await conductor.run("EGFR T790M")           # Point mutation
+    await conductor.run("ERBB2 A775_G776insYVMA")  # Insertion
 
-# Frameshift/nonsense
-await get_insight("TP53 R248*")           # Nonsense (stop)
-await get_insight("TP53 R248X")           # Nonsense (X notation)
-await get_insight("APC K1462fs")          # Frameshift
+    # Frameshift/nonsense
+    await conductor.run("TP53 R248*")           # Nonsense (stop)
+    await conductor.run("TP53 R248X")           # Nonsense (X notation)
+    await conductor.run("APC K1462fs")          # Frameshift
 ```
 
 ---
@@ -552,14 +560,14 @@ await get_insight("APC K1462fs")          # Frameshift
 ## Error Handling
 
 ```python
-from oncomind import get_insight
-from oncomind.exceptions import VariantParseError, APIError
+from oncomind import Conductor
 
 try:
-    result = await get_insight("INVALID_INPUT")
-except VariantParseError as e:
+    async with Conductor() as conductor:
+        result = await conductor.run("INVALID_INPUT")
+except ValueError as e:
     print(f"Could not parse variant: {e}")
-except APIError as e:
+except Exception as e:
     print(f"API error: {e}")
 ```
 

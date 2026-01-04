@@ -26,7 +26,6 @@ import typer
 from dotenv import load_dotenv
 
 
-from oncomind import get_insight, InsightConfig
 from oncomind.config.debug import set_log_level, get_logger
 from oncomind.config.constants import LLM_DEFAULT_MODEL, LLM_DEFAULT_TEMPERATURE
 
@@ -410,7 +409,7 @@ def batch(
         raise typer.Exit(1)
 
     async def run_batch() -> None:
-        from oncomind import get_insights, InsightConfig
+        from oncomind.insight_builder import Conductor, ConductorConfig
 
         with open(input_file, "r") as f:
             data = json.load(f)
@@ -436,7 +435,7 @@ def batch(
         print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
         print(f"  Mode: {mode_str}")
 
-        config = InsightConfig(
+        config = ConductorConfig(
             enable_llm=enable_llm_mode,
             llm_model=model,
             llm_temperature=temperature,
@@ -447,14 +446,15 @@ def batch(
             logger.info(f"Processing {current}/{total}...")
             print(f"  Processing {current}/{total}...", end='\r')
 
-        results = await get_insights(variant_strs, config=config, progress_callback=progress_callback)
+        async with Conductor(config) as conductor:
+            results = await conductor.run_batch(variant_strs, progress_callback=progress_callback)
         print()  # Clear progress line
 
         # Apply tumor types and build output, tracking LLM errors
         output_data = []
         llm_errors = []
         for i, result in enumerate(results):
-            if tumor_types[i]:
+            if i < len(tumor_types) and tumor_types[i]:
                 result.context.tumor_type = tumor_types[i]
             output_data.append(result.model_dump(mode="json"))
             # Track LLM errors
