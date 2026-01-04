@@ -63,11 +63,18 @@ Gap categories are weighted by research value (biological gaps > clinical gaps):
 | **CLINICAL** | 1.0 | Lower weight for research context |
 | **PROGNOSTIC** | 1.0 | Prognostic impact unknown |
 
-**Overall Quality** is computed from weighted gap scores:
-- `comprehensive`: score < 5
-- `moderate`: score 5-10
-- `limited`: score 10-15
-- `minimal`: score ≥ 15
+**Overall Quality** uses net scoring (gap penalty minus well-characterized credit):
+
+```
+net_score = gap_score - (well_characterized_count × 1.5)
+```
+
+| Net Score | Quality |
+|-----------|---------|
+| < 0 | `comprehensive` |
+| 0–6 | `moderate` |
+| 6–12 | `limited` |
+| ≥ 12 | `minimal` |
 
 ---
 
@@ -78,7 +85,9 @@ Gap categories are weighted by research value (biological gaps > clinical gaps):
 | **very_high** | Strong oncogenic signal (pathogenic + essential gene) + biological gaps; OR hotspot-adjacent + pathogenic + biological gaps | 🔥 |
 | **high** | Cancer gene with critical gaps; OR hotspot-adjacent in cancer gene | 🔴 |
 | **medium** | Any critical gaps; OR cancer gene with significant gaps | 🟡 |
-| **low** | Only minor gaps, well-characterized variants | 🟢 |
+| **low** | Comprehensive evidence quality AND no critical/significant gaps | 🟢 |
+
+**Biological gaps** = gaps in VALIDATION, FUNCTIONAL, or PRECLINICAL categories.
 
 ---
 
@@ -219,9 +228,15 @@ gaps = detect_evidence_gaps(evidence)
 print(gaps.overall_evidence_quality)  # "limited"
 print(gaps.research_priority)          # "very_high"
 
-# What's known vs unknown
-print(gaps.well_characterized)         # ["near hotspot codon 12", ...]
+# What's known vs unknown (simple strings)
+print(gaps.well_characterized)         # ["Near Hotspot Codon 12", "Drug Response", ...]
 print(gaps.poorly_characterized)       # ["clinical evidence", ...]
+
+# Detailed well-characterized with basis, match levels, and tumor tracking
+for aspect in gaps.well_characterized_detailed:
+    print(f"{aspect.aspect}: {aspect.basis}")
+    print(f"  Locus levels: {aspect.matches_on}")  # "3 variant, 0 codon, 2 gene"
+    print(f"  Tumor match: {aspect.tumor_match}")  # "4 tumor, 1 other"
 
 # Individual gaps with actionable recommendations
 for gap in gaps.gaps:
@@ -250,11 +265,11 @@ is_hotspot_adjacent("BRAF", "V598E", window=5)     # (True, 600)
 |----------|------------|--------------|--------|
 | `FUNCTIONAL` | Pathogenicity predictions, protein impact, hotspot context | MyVariant, VEP, DepMap, Hotspot DB | 3.0 |
 | `CLINICAL` | Clinical assertions, FDA approvals | CIViC, FDA, CGI | 1.0 |
-| `TUMOR_TYPE` | Tumor-specific evidence | CIViC, VICC, CGI, FDA | 1.5 |
-| `DRUG_RESPONSE` | Sensitivity/resistance data | CGI, VICC, DepMap PRISM | 1.5 |
-| `RESISTANCE` | Known resistance mechanisms | Literature, CGI, CIViC | 2.0 |
-| `PRECLINICAL` | Cell line models (tumor-specific) | DepMap, CCLE | 2.5 |
-| `PREVALENCE` | Mutation frequency | cBioPortal, COSMIC | 1.0 |
+| `TUMOR_TYPE` | Tumor-specific evidence | CIViC, VICC, CGI (all tiers), FDA | 1.5 |
+| `DRUG_RESPONSE` | Sensitivity/resistance data | CGI (FDA tier), VICC, FDA | 1.5 |
+| `RESISTANCE` | Known resistance mechanisms | PubMed, CGI, CIViC, VICC | 2.0 |
+| `PRECLINICAL` | Cell line models (tumor-specific) + CGI preclinical/early phase | DepMap, CGI | 2.5 |
+| `PREVALENCE` | Mutation frequency | cBioPortal | 1.0 |
 | `PROGNOSTIC` | Survival/outcome data | CIViC, Literature | 1.0 |
 | `DISCORDANT` | Conflicting drug response, ClinVar conflicts | Cross-source comparison | 2.0 |
 | `VALIDATION` | Strong oncogenic signal, limited therapeutic validation | DepMap essentiality + pathogenicity | 3.5 |
@@ -274,10 +289,146 @@ is_hotspot_adjacent("BRAF", "V598E", window=5)     # (True, 600)
 
 ---
 
+## Match Level and Tumor Match Tracking
+
+Each `CharacterizedAspect` in `well_characterized_detailed` includes granular tracking fields for transparency:
+
+### CharacterizedAspect Fields
+
+```python
+class CharacterizedAspect(BaseModel):
+    aspect: str           # "drug response", "resistance mechanisms", etc.
+    basis: str            # "2 CGI + 3 VICC + 1 FDA"
+    category: GapCategory # For grouping (DRUG_RESPONSE, RESISTANCE, etc.)
+    matches_on: str | None    # "3 variant, 0 codon, 2 gene"
+    tumor_match: str | None   # "4 tumor, 1 other"
+    cancer_mismatch: str | None  # "Melanoma" (if FDA approval is for different cancer)
+```
+
+### matches_on: Locus Level Tracking
+
+Shows how precisely each evidence item matches the query variant:
+
+| Level | Meaning | Example |
+|-------|---------|---------|
+| `variant` | Exact variant match | BRAF V600E → evidence for V600E specifically |
+| `codon` | Same position, different AA | BRAF V600K → evidence for "V600 mutations" |
+| `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
+
+**Format**: Always shows all three levels, even when 0:
+```
+"3 variant, 0 codon, 2 gene"
+```
+
+### tumor_match: Tumor Type Matching
+
+Shows how many evidence items match the queried tumor type:
+
+| Field | Meaning |
+|-------|---------|
+| `X tumor` | Items matching the queried tumor type (substring match) |
+| `Y other` | Items for different tumor types |
+
+**Format**: Always shows tumor count (even 0), shows "other" only if > 0:
+```
+"4 tumor, 1 other"  # 4 match queried tumor, 1 for different tumor
+"0 tumor, 5 other"  # No matches for queried tumor
+"3 tumor"           # All 3 match queried tumor
+```
+
+**Tumor matching logic**: Uses substring matching (`tumor_lower in disease.lower()`), so "Lung" matches "Lung Cancer", "Lung adenocarcinoma", etc.
+
+---
+
+## Data Sources by Well-Characterized Row
+
+### Drug Response
+**Sources counted**: CGI biomarkers (FDA-approved tier only), VICC evidence, FDA approvals
+
+| Source | Field Checked |
+|--------|---------------|
+| CGI | `cgi_biomarkers` |
+| VICC | `vicc_evidence` |
+| FDA | `fda_approvals` |
+
+**Excludes**: `preclinical_biomarkers`, `early_phase_biomarkers` (tracked separately)
+
+### Preclinical/Early Phase Biomarkers
+**Sources counted**: CGI preclinical and early phase tiers
+
+| Source | Field Checked |
+|--------|---------------|
+| Preclinical | `preclinical_biomarkers` |
+| Early Phase | `early_phase_biomarkers` |
+
+### Resistance Mechanisms
+**Sources counted**: Literature, CGI, CIViC, VICC
+
+| Source | Resistance Check |
+|--------|-----------------|
+| PubMed | `article.is_resistance_evidence()` |
+| CGI | `biomarker.association == "Resistance"` |
+| CIViC | `assertion.is_resistance` |
+| VICC | `evidence.response_type == "RESISTANCE"` |
+
+### Evidence In [Tumor]
+**Sources counted**: All tumor-specific evidence across sources
+
+| Source | Evidence Type |
+|--------|---------------|
+| CIViC Assertions | `civic_assertions` with matching disease |
+| CIViC Evidence | `civic_evidence` with matching disease |
+| FDA Approvals | `fda_approvals` with matching indication |
+| VICC | `vicc_evidence` with matching disease |
+| CGI (all tiers) | `cgi_biomarkers` + `preclinical_biomarkers` + `early_phase_biomarkers` with matching tumor_type |
+
+**Note**: "Evidence In [Tumor]" includes ALL CGI tiers (FDA-approved, preclinical, and early phase) because all represent tumor-specific evidence, even if at different validation levels.
+
+### Clinical Actionability
+**Sources counted**: FDA approvals, CIViC assertions
+
+Tracks `tumor_match` and `cancer_mismatch` to show when FDA approval exists but for a different cancer than queried.
+
+---
+
+## Example Output
+
+For EGFR L858R in NSCLC:
+
+```python
+well_characterized_detailed = [
+    CharacterizedAspect(
+        aspect="Drug Response",
+        basis="5 CGI + 8 VICC + 3 FDA",
+        category=GapCategory.DRUG_RESPONSE,
+        matches_on="12 variant, 2 codon, 2 gene",
+        tumor_match="14 tumor, 2 other"
+    ),
+    CharacterizedAspect(
+        aspect="Resistance Mechanisms",
+        basis="2 PubMed + 3 CGI + 1 CIViC + 4 VICC",
+        category=GapCategory.RESISTANCE,
+        matches_on="8 variant, 0 codon, 2 gene",
+        tumor_match="7 tumor, 3 other"
+    ),
+    CharacterizedAspect(
+        aspect="Evidence In NSCLC",
+        basis="3 CIViC Assertions, 2 FDA, 5 VICC, 2 CGI",
+        category=GapCategory.TUMOR_TYPE,
+        matches_on="10 variant, 1 codon, 1 gene",
+        tumor_match="12 tumor"
+    ),
+]
+```
+
+---
+
 ## Code References
 
 - **Gap detector**: [gap_detector.py](../src/oncomind/insight_builder/gap_detector.py)
 - **EvidenceGaps model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py)
+- **CharacterizedAspect model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py) — `CharacterizedAspect` class
+- **TumorEvidenceMatch model**: [tumor_evidence.py](../src/oncomind/models/evidence/tumor_evidence.py) — aggregates tumor-specific evidence
 - **Hotspot detection**: [gene_context.py](../src/oncomind/models/gene_context.py) — `is_hotspot_variant()`, `is_hotspot_adjacent()`
 - **LLM integration**: [prompts.py](../src/oncomind/llm/prompts.py) — gaps and hypotheses in LLM context
 - **LLMInsight model**: [llm_insight.py](../src/oncomind/models/llm_insight.py) — `research_hypotheses` field
