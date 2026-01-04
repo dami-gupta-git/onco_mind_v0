@@ -84,7 +84,7 @@ async def main():
     # Fast, deterministic evidence (~7s)
     result = await get_insight("BRAF V600E", tumor_type="Melanoma")
     print(result.get_summary())
-    print(result.evidence.get_recommended_therapies())
+    print(result.evidence.get_therapeutic_evidence())
 
     # Evidence backbone + literature + LLM research layer (~25s)
     config = InsightConfig(enable_llm=True, llm_model="claude-sonnet-4-20250514")
@@ -237,7 +237,7 @@ result = await get_insight("BRAF V600E", tumor_type="Melanoma")
 result.identifiers.gene                 # "BRAF"
 result.kb.civic_assertions              # CIViC drug–variant assertions
 result.clinical.fda_approvals           # FDA therapies
-result.evidence.get_recommended_therapies()
+result.evidence.get_therapeutic_evidence()
 
 if result.llm:
     result.llm.llm_summary

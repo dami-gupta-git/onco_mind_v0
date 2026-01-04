@@ -348,62 +348,34 @@ class Evidence(BaseModel):
             "has_evidence": self.has_evidence(),
         }
 
-    def get_recommended_therapies(self, max_results: int = 10) -> list[TherapeuticEvidence]:
-        """Backwards-compatible alias for get_therapeutic_evidence.
-
-        DEPRECATED: Use get_therapeutic_evidence() instead.
-        """
-        return self.get_therapeutic_evidence(include_preclinical=False, max_results=max_results)
-
     def get_therapeutic_evidence(
         self,
         include_preclinical: bool = True,
-        max_results: int = 20
     ) -> list[TherapeuticEvidence]:
         """Get all therapeutic evidence at all evidence levels.
 
         This replaces get_recommended_therapies() with a research-focused method
         that includes preclinical and investigational evidence.
 
+        Uses get_fda_approved_therapies() as the single source of truth for
+        FDA-approved drugs, then adds non-FDA sources.
+
         Args:
             include_preclinical: Include preclinical/in vitro evidence (default True)
-            max_results: Maximum results to return
 
         Returns:
             List of TherapeuticEvidence sorted by evidence tier
         """
-        evidence_list: list[TherapeuticEvidence] = []
-        seen_drugs: set[str] = set()
+        # Start with FDA-approved therapies (single source of truth)
+        evidence_list: list[TherapeuticEvidence] = list(self.get_fda_approved_therapies())
+        seen_drugs: set[str] = {e.drug_name.lower() for e in evidence_list}
 
-        # From FDA approvals (Tier 1)
-        for approval in self.fda_approvals:
-            drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
-            if drug_key and drug_key not in seen_drugs:
-                seen_drugs.add(drug_key)
-
-                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
-                if approval.generic_name and approval.brand_name:
-                    drug_name = f"{approval.generic_name} ({approval.brand_name})"
-
-                # Determine cancer_specificity based on tumor type match
-                cancer_specificity = self._get_fda_cancer_specificity(approval)
-
-                evidence_list.append(TherapeuticEvidence(
-                    drug_name=drug_name,
-                    evidence_level="FDA-approved",
-                    approval_status="Approved in indication" if approval.variant_in_indications else "Approved",
-                    clinical_context=self._extract_line_of_therapy(approval),
-                    response_type="Sensitivity",
-                    mechanism=None,
-                    tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
-                    source="FDA",
-                    confidence="high",
-                    match_level=approval.match_level,
-                    cancer_specificity=cancer_specificity,
-                ))
-
-        # From CIViC assertions (Tier 1-2)
+        # From CIViC assertions - non-FDA (Tier I without fda_companion_test, Tier II+)
         for assertion in self.civic_assertions:
+            # Skip Tier I with fda_companion_test (already in FDA-approved)
+            if assertion.amp_tier == "Tier I" and assertion.fda_companion_test:
+                continue
+
             if assertion.therapies:
                 for therapy in assertion.therapies:
                     drug_key = therapy.lower()
@@ -412,7 +384,7 @@ class Evidence(BaseModel):
 
                         # Determine evidence level from AMP tier
                         if assertion.amp_tier == "Tier I":
-                            evidence_level = "FDA-approved" if assertion.fda_companion_test else "Phase 3"
+                            evidence_level = "Phase 3"
                         elif assertion.amp_tier == "Tier II":
                             evidence_level = "Phase 2"
                         else:
@@ -435,38 +407,6 @@ class Evidence(BaseModel):
                             match_level=assertion.match_level,
                             cancer_specificity=cancer_specificity,
                         ))
-
-        # From CGI biomarkers - FDA approved
-        for biomarker in self.cgi_biomarkers:
-            # Ensure drug is a non-empty string (not a list or empty)
-            if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
-                drug_key = biomarker.drug.lower()
-                if drug_key not in seen_drugs:
-                    seen_drugs.add(drug_key)
-
-                    response_type = None
-                    if biomarker.association:
-                        if "RESIST" in biomarker.association.upper():
-                            response_type = "Resistance"
-                        else:
-                            response_type = "Sensitivity"
-
-                    # Determine cancer specificity
-                    cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
-
-                    evidence_list.append(TherapeuticEvidence(
-                        drug_name=biomarker.drug,
-                        evidence_level="FDA-approved",
-                        approval_status="FDA Approved (CGI)",
-                        clinical_context=biomarker.tumor_type,
-                        response_type=response_type,
-                        mechanism=None,
-                        tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
-                        source="CGI",
-                        confidence="high",
-                        match_level=biomarker.match_level,
-                        cancer_specificity=cancer_specificity,
-                    ))
 
         # From VICC evidence
         for vicc in self.vicc_evidence:
@@ -603,7 +543,7 @@ class Evidence(BaseModel):
         # Sort by evidence tier
         evidence_list.sort(key=lambda x: x.get_evidence_tier())
 
-        return evidence_list[:max_results]
+        return evidence_list
 
     def get_therapeutic_evidence_by_level(self) -> dict[str, list[TherapeuticEvidence]]:
         """Group therapeutic evidence by evidence level.

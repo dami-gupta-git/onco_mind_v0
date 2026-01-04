@@ -132,7 +132,7 @@ def insight(
             variant_title += f" [dim]in[/dim] {tumor}"
 
         # Build metrics line
-        therapies_count = len(result.llm.recommended_therapies if result.llm else result.evidence.get_recommended_therapies())
+        therapies_count = len(result.llm.recommended_therapies if result.llm else result.evidence.get_therapeutic_evidence())
         clinvar_sig = result.evidence.clinvar_significance or "N/A"
         am_score = result.functional.alphamissense_score
         am_display = f"{am_score:.2f}" if am_score else "N/A"
