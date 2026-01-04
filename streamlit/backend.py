@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.config.debug import get_logger
+from oncomind.config.constants import LLM_DEFAULT_MODEL, LLM_DEFAULT_TEMPERATURE
 
 logger = get_logger(__name__)
 
@@ -29,8 +30,8 @@ async def get_variant_insight(
     enable_llm: bool = False,
     enable_literature: bool = False,
     literature_source: str = "pubmed",
-    model: str = "claude-sonnet-4-20250514",
-    temperature: float = 0.1
+    model: str = LLM_DEFAULT_MODEL,
+    temperature: float = LLM_DEFAULT_TEMPERATURE,
 ) -> Dict[str, Any]:
     """
     Generate insight for a single variant.
@@ -79,8 +80,8 @@ async def batch_get_variant_insights(
     enable_llm: bool = False,
     enable_literature: bool = False,
     literature_source: str = "pubmed",
-    model: str = "claude-sonnet-4-20250514",
-    temperature: float = 0.1,
+    model: str = LLM_DEFAULT_MODEL,
+    temperature: float = LLM_DEFAULT_TEMPERATURE,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> List[Dict[str, Any]]:
     """

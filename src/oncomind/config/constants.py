@@ -574,3 +574,18 @@ LLM_MAX_PAPERS_FOR_EXTRACTION = 5
 
 # Relevance score threshold for paper filtering
 LLM_PAPER_RELEVANCE_THRESHOLD = 0.6
+
+# Default temperature for LLM calls
+LLM_DEFAULT_TEMPERATURE = 0.1
+
+# =============================================================================
+# UI DISPLAY CONSTANTS
+# =============================================================================
+# Row limits for evidence display tables
+UI_MAX_CIVIC_EVIDENCE_ROWS = 50
+UI_MAX_RESEARCH_HYPOTHESES = 3
+UI_MAX_REFERENCES = 5
+
+# Functional prediction thresholds
+CADD_DELETERIOUS_THRESHOLD = 20  # CADD score > 20 considered deleterious
+GNOMAD_RARE_THRESHOLD = 0.01  # gnomAD AF < 0.01 considered rare

@@ -28,6 +28,7 @@ from dotenv import load_dotenv
 
 from oncomind import get_insight, InsightConfig
 from oncomind.config.debug import set_log_level, get_logger
+from oncomind.config.constants import LLM_DEFAULT_MODEL, LLM_DEFAULT_TEMPERATURE
 
 # Suppress litellm's async cleanup warnings (harmless internal warnings)
 warnings.filterwarnings("ignore", message=".*async_success_handler.*")
@@ -50,7 +51,7 @@ def insight(
     lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
     llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
-    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
+    model: str = typer.Option(LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
     log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
 ) -> None:
@@ -381,8 +382,8 @@ def batch(
     lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
     llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
-    model: str = typer.Option("gpt-4o-mini", "--model", "-m", help="LLM model (only used with --llm)"),
-    temperature: float = typer.Option(0.1, "--temperature", help="LLM temperature (0.0-1.0)"),
+    model: str = typer.Option(LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"),
+    temperature: float = typer.Option(LLM_DEFAULT_TEMPERATURE, "--temperature", help="LLM temperature (0.0-1.0)"),
     log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
 ) -> None:
     """Batch process multiple variants.

@@ -187,6 +187,7 @@ class EvidenceAggregator:
         clients = [
             self.myvariant_client,
             self.fda_client,
+            self.cgi_client,
             self.oncotree_client,
             self.cbioportal_client,
             self.depmap_client,
@@ -653,8 +654,7 @@ class EvidenceAggregator:
         async def fetch_literature():
             if self.config.enable_literature:
                 tracker.sources_queried.append("Literature")
-                x = await self._fetch_literature(gene, variant, tumor_type)
-                return x
+                return await self._fetch_literature(gene, variant, tumor_type)
             return []
 
         async def fetch_cbioportal():
@@ -671,7 +671,8 @@ class EvidenceAggregator:
                     return await self.cbioportal_client.fetch_cell_lines_with_mutation(
                         gene=gene, variant=variant,
                     )
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Cell line fetch failed for {gene} {variant}: {e}")
                     return []
             return []
 
