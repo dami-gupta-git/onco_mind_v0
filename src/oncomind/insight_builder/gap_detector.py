@@ -1080,7 +1080,7 @@ def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) ->
                 new_suggestions.append(
                     f"Kinase activity assay for {gene} {variant} vs wild-type"
                 )
-            elif evidence.context.gene_role in ("TSG", "tumor_suppressor"):
+            elif evidence.context.gene_role in ("TSG", "tumor_suppressor", "tsg_pathway_actionable"):
                 new_suggestions.append(
                     f"LOF assay: assess {gene} {variant} impact on tumor suppressor function"
                 )
@@ -1147,7 +1147,7 @@ def _has_strong_cooccurrence(evidence: "Evidence", threshold_pct: float = COOCCU
     """Check if there's a strong co-occurrence signal (>threshold% co-mutation rate)."""
     if evidence.cbioportal_evidence and evidence.cbioportal_evidence.co_occurring:
         top_cooc = evidence.cbioportal_evidence.co_occurring[0]
-        return top_cooc.pct >= threshold_pct
+        return top_cooc.pct is not None and top_cooc.pct >= threshold_pct
     return False
 
 
