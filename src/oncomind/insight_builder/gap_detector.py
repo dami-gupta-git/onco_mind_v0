@@ -538,24 +538,16 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         if n_fda:
             drug_sources.append(f"{n_fda} FDA")
 
-        # Build matches_on string
-        match_parts = []
-        if variant_count > 0:
-            match_parts.append(f"{variant_count} variant")
-        if codon_count > 0:
-            match_parts.append(f"{codon_count} codon")
-        if gene_count > 0:
-            match_parts.append(f"{gene_count} gene")
-        matches_on = ", ".join(match_parts) if match_parts else None
+        # Build matches_on string - always show all levels
+        match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
+        matches_on = ", ".join(match_parts)
 
-        # Build tumor_match string (show both tumor matches and others)
+        # Build tumor_match string - always show tumor count (even 0)
         other_count = total_count - tumor_count
-        tumor_parts = []
-        if tumor_count > 0:
-            tumor_parts.append(f"{tumor_count} tumor")
+        tumor_parts = [f"{tumor_count} tumor"]
         if other_count > 0:
             tumor_parts.append(f"{other_count} other")
-        tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+        tumor_match = ", ".join(tumor_parts)
 
         ctx.add_well_characterized(
             "drug response",
@@ -626,25 +618,17 @@ def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext
     if n_early:
         sources.append(f"{n_early} early phase")
 
-    # Build matches_on string
-    match_parts = []
-    if variant_count > 0:
-        match_parts.append(f"{variant_count} variant")
-    if codon_count > 0:
-        match_parts.append(f"{codon_count} codon")
-    if gene_count > 0:
-        match_parts.append(f"{gene_count} gene")
-    matches_on = ", ".join(match_parts) if match_parts else None
+    # Build matches_on string - always show all levels
+    match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
+    matches_on = ", ".join(match_parts)
 
-    # Build tumor_match string (show both tumor matches and others)
+    # Build tumor_match string - always show tumor count (even 0)
     total_count = n_preclin + n_early
     other_count = total_count - tumor_count
-    tumor_parts = []
-    if tumor_count > 0:
-        tumor_parts.append(f"{tumor_count} tumor")
+    tumor_parts = [f"{tumor_count} tumor"]
     if other_count > 0:
         tumor_parts.append(f"{other_count} other")
-    tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+    tumor_match = ", ".join(tumor_parts)
 
     ctx.add_well_characterized(
         "preclinical/early phase biomarkers",
@@ -791,24 +775,16 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     has_resistance_data = bool(resistance_sources)
 
     if has_resistance_data:
-        # Build matches_on string
-        match_parts = []
-        if variant_count > 0:
-            match_parts.append(f"{variant_count} variant")
-        if codon_count > 0:
-            match_parts.append(f"{codon_count} codon")
-        if gene_count > 0:
-            match_parts.append(f"{gene_count} gene")
-        matches_on = ", ".join(match_parts) if match_parts else None
+        # Build matches_on string - always show all levels
+        match_parts = [f"{variant_count} variant", f"{codon_count} codon", f"{gene_count} gene"]
+        matches_on = ", ".join(match_parts)
 
-        # Build tumor_match string (show both tumor matches and others)
+        # Build tumor_match string - always show tumor count (even 0)
         other_count = total_count - tumor_count
-        tumor_parts = []
-        if tumor_count > 0:
-            tumor_parts.append(f"{tumor_count} tumor")
+        tumor_parts = [f"{tumor_count} tumor"]
         if other_count > 0:
             tumor_parts.append(f"{other_count} other")
-        tumor_match = ", ".join(tumor_parts) if tumor_parts else None
+        tumor_match = ", ".join(tumor_parts)
 
         ctx.add_well_characterized(
             "resistance mechanisms",
