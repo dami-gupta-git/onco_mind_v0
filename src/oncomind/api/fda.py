@@ -183,16 +183,17 @@ class FDAClient:
                                 seen_drugs.add(drug_id)
                                 approvals.append(r)
 
-            # Strategy 2: If no results with variant, search for just gene in indications
-            if not approvals:
-                for search_gene in genes_to_search:
-                    gene_search = f'indications_and_usage:{search_gene}'
-                    result = await self._query_drugsfda(gene_search, limit=15)
-                    for r in result.get("results", []):
-                        drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
-                        if drug_id and drug_id not in seen_drugs:
-                            seen_drugs.add(drug_id)
-                            approvals.append(r)
+            # Strategy 2: Always search for gene-level approvals in indications
+            # This finds drugs approved for ANY mutation in the gene (e.g., "EGFR mutation-positive")
+            # even when we already found variant-specific approvals above
+            for search_gene in genes_to_search:
+                gene_search = f'indications_and_usage:{search_gene}'
+                result = await self._query_drugsfda(gene_search, limit=15)
+                for r in result.get("results", []):
+                    drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
+                    if drug_id and drug_id not in seen_drugs:
+                        seen_drugs.add(drug_id)
+                        approvals.append(r)
 
             # Strategy 3: For KIT variants, also search for GIST-specific approvals
             # FDA labels for GIST often don't explicitly mention KIT but imply it
@@ -248,7 +249,7 @@ class FDAClient:
                             seen_drugs.add(drug_id)
                             approvals.append(r)
 
-            return approvals[:10]  # Return top 10 most relevant
+            return approvals  # Return all unique approvals
 
         except Exception as e:
             # Return empty list on error, don't fail the whole pipeline

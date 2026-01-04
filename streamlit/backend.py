@@ -445,6 +445,7 @@ def _build_evidence_gaps(evidence) -> dict:
                 "aspect": wc.aspect,
                 "basis": wc.basis,
                 "matches_on": wc.matches_on,
+                "tumor_match": wc.tumor_match,
                 "cancer_mismatch": wc.cancer_mismatch,
             }
             for wc in gaps.well_characterized_detailed

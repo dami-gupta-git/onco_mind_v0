@@ -98,6 +98,7 @@ class GapDetectionContext:
         basis: str,
         category: GapCategory | None = None,
         matches_on: str | None = None,
+        tumor_match: str | None = None,
         cancer_mismatch: str | None = None
     ) -> None:
         """Add a well-characterized aspect with its basis and category."""
@@ -110,6 +111,7 @@ class GapDetectionContext:
                 basis=basis,
                 category=category,
                 matches_on=matches_on,
+                tumor_match=tumor_match,
                 cancer_mismatch=cancer_mismatch
             )
         )
@@ -315,52 +317,102 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 
 
 def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for FDA approvals, CIViC assertions, and CIViC evidence items."""
+    """Check for FDA-approved therapies using the single source of truth.
+
+    Uses evidence.get_fda_approved_therapies() which handles:
+    - FDA approvals (direct)
+    - CIViC assertions: Tier I with fda_companion_test=True
+    - CGI biomarkers: fda_approved=True
+
+    This ensures the gap detector shows the exact same data as the Therapies tab.
+    """
     ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or bool(evidence.fda_approvals)
 
-    if ctx.has_clinical:
-        n_assertions = len(evidence.civic_assertions)
-        n_fda = len(evidence.fda_approvals)
-        parts = []
+    # Get FDA-approved therapies using the single source of truth
+    fda_therapies = evidence.get_fda_approved_therapies()
 
-        # Check if FDA approvals match the queried tumor type
-        fda_matching = 0
-        fda_other_cancers: list[str] = []  # List of cancer types that DON'T match
+    if fda_therapies:
+        tumor_type = evidence.context.tumor_type
 
-        if n_fda:
-            tumor_type = evidence.context.tumor_type
-            for approval in evidence.fda_approvals:
-                if tumor_type and approval.indication:
-                    parsed = approval.parse_indication_for_tumor(tumor_type)
-                    if parsed.get('tumor_match'):
-                        fda_matching += 1
-                    else:
-                        # Extract what cancer it IS approved for
-                        indication_cancer = approval.extract_indication_cancer_type()
-                        if indication_cancer and "pan-cancer" not in indication_cancer.lower():
-                            if indication_cancer not in fda_other_cancers:
-                                fda_other_cancers.append(indication_cancer)
-                        else:
-                            fda_matching += 1  # pan-cancer counts as matching
+        # Track match levels and tumor match counts
+        match_counts: dict[str, int] = {"variant": 0, "codon": 0, "gene": 0}
+        tumor_match_counts: dict[str, int] = {"tumor": 0, "pan_cancer": 0, "other": 0}
+        other_cancers: list[str] = []
+
+        # Count by source for the basis string
+        source_counts: dict[str, int] = {"FDA": 0, "CIViC": 0, "CGI": 0}
+
+        for therapy in fda_therapies:
+            # Count by source
+            source = therapy.source or "FDA"
+            if source in source_counts:
+                source_counts[source] += 1
+
+            # Count match level
+            level = therapy.match_level or "gene"
+            if level in match_counts:
+                match_counts[level] += 1
+
+            # Count tumor match using cancer_specificity from TherapeuticEvidence
+            if tumor_type:
+                cancer_spec = therapy.cancer_specificity
+                if cancer_spec == "cancer_specific":
+                    tumor_match_counts["tumor"] += 1
+                elif cancer_spec == "pan_cancer":
+                    tumor_match_counts["pan_cancer"] += 1
                 else:
-                    fda_matching += 1  # No tumor type specified, count as matching
+                    # cancer_spec is the actual cancer name (e.g., "breast cancer")
+                    tumor_match_counts["other"] += 1
+                    if cancer_spec and cancer_spec not in other_cancers:
+                        other_cancers.append(cancer_spec)
 
-            parts.append(f"{n_fda} FDA approval{'s' if n_fda > 1 else ''}")
+        # Build basis string (e.g., "3 FDA approvals + 1 CIViC assertion")
+        parts = []
+        if source_counts["FDA"] > 0:
+            parts.append(f"{source_counts['FDA']} FDA approval{'s' if source_counts['FDA'] > 1 else ''}")
+        if source_counts["CIViC"] > 0:
+            parts.append(f"{source_counts['CIViC']} CIViC assertion{'s' if source_counts['CIViC'] > 1 else ''}")
+        if source_counts["CGI"] > 0:
+            parts.append(f"{source_counts['CGI']} CGI biomarker{'s' if source_counts['CGI'] > 1 else ''}")
 
-        if n_assertions:
-            parts.append(f"{n_assertions} CIViC assertion{'s' if n_assertions > 1 else ''}")
+        # Build matches_on string (e.g., "1 codon" or "2 variant, 1 gene")
+        matches_on_parts = []
+        for level in ["variant", "codon", "gene"]:
+            if match_counts[level] > 0:
+                matches_on_parts.append(f"{match_counts[level]} {level}")
+        matches_on = ", ".join(matches_on_parts) if matches_on_parts else None
+
+        # Build tumor_match string (e.g., "1 tumor, 1 pan_cancer, 2 other")
+        tumor_match_str = None
+        if tumor_type:
+            tumor_parts = []
+            if tumor_match_counts["tumor"] > 0:
+                tumor_parts.append(f"{tumor_match_counts['tumor']} tumor")
+            if tumor_match_counts["pan_cancer"] > 0:
+                tumor_parts.append(f"{tumor_match_counts['pan_cancer']} pan_cancer")
+            if tumor_match_counts["other"] > 0:
+                tumor_parts.append(f"{tumor_match_counts['other']} other")
+            tumor_match_str = ", ".join(tumor_parts) if tumor_parts else None
 
         # Determine cancer_mismatch value
         cancer_mismatch = None
-        if fda_other_cancers and fda_matching == 0:
-            # ALL FDA approvals are for different cancers
-            cancer_mismatch = ", ".join(fda_other_cancers[:2])  # Show first 2
+        if other_cancers and tumor_match_counts["tumor"] == 0 and tumor_match_counts["pan_cancer"] == 0:
+            cancer_mismatch = ", ".join(other_cancers[:2])
 
         ctx.add_well_characterized(
             "clinical actionability",
             " + ".join(parts) if parts else "Clinical evidence exists",
             category=GapCategory.CLINICAL,
+            matches_on=matches_on,
+            tumor_match=tumor_match_str,
             cancer_mismatch=cancer_mismatch
+        )
+    elif ctx.has_clinical:
+        # Has CIViC evidence but no FDA-approved therapies
+        ctx.add_well_characterized(
+            "clinical actionability",
+            "Clinical evidence exists (non-FDA)",
+            category=GapCategory.CLINICAL,
         )
     else:
         ctx.add_gap(

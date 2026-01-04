@@ -36,6 +36,10 @@ class CharacterizedAspect(BaseModel):
     basis: str = Field(..., description="Why we think so (e.g., 'FDA-approved therapies exist')")
     category: GapCategory | None = Field(None, description="Category this aspect belongs to (for grouping)")
     matches_on: str | None = Field(None, description="Match level breakdown (e.g., '2 variant, 1 gene')")
+    tumor_match: str | None = Field(
+        None,
+        description="Tumor type match breakdown (e.g., '2 tumor, 1 other'). None if not applicable."
+    )
     cancer_mismatch: str | None = Field(
         None,
         description="If FDA approval is for a DIFFERENT cancer than queried, indicates which cancer "
