@@ -29,6 +29,7 @@ from oncomind.models.evidence.fda import FDAApproval
 from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
+from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch, SourceMatch
 
 __all__ = [
     # Base class and types
@@ -67,4 +68,7 @@ __all__ = [
     "LiteratureKnowledge",
     "PubMedEvidence",
     "VICCEvidence",
+    # Tumor evidence aggregation
+    "TumorEvidenceMatch",
+    "SourceMatch",
 ]

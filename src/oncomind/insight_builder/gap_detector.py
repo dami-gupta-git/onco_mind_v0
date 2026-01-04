@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from oncomind.models.evidence.evidence_gaps import (
     EvidenceGaps, EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
 )
+from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch
 from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent, _extract_codon_position
 from oncomind.config.constants import (
     TUMOR_TYPE_MAPPINGS,
@@ -430,13 +431,15 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
     if not ctx.tumor_type:
         return
 
-    tumor_specific = _check_tumor_specific_evidence(evidence, ctx.tumor_type)
+    tumor_match = _check_tumor_specific_evidence(evidence, ctx.tumor_type)
 
-    if tumor_specific:
+    if tumor_match.has_tumor_evidence:
         ctx.add_well_characterized(
             f"evidence in {ctx.tumor_type}",
-            "Tumor-specific CIViC/FDA/VICC/CGI data",
-            category=GapCategory.TUMOR_TYPE
+            tumor_match.sources_str,
+            category=GapCategory.TUMOR_TYPE,
+            matches_on=tumor_match.matches_on_str,
+            tumor_match=tumor_match.tumor_match_str
         )
     else:
         # Severity depends on gene importance and pathogenic signal
@@ -1192,47 +1195,102 @@ def _sort_characterized_by_category(
     return sorted(items, key=lambda x: _CATEGORY_ORDER.get(x.category, 99))
 
 
-def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> bool:
-    """Check if any evidence is specific to this tumor type."""
+def _get_match_level(item) -> str:
+    """Extract match level from an evidence item.
+
+    Returns 'variant', 'codon', or 'gene'.
+    """
+    # Try variant_level.level (EvidenceLevel pattern)
+    if hasattr(item, 'variant_level') and item.variant_level and item.variant_level.level:
+        return item.variant_level.level
+    # Try match_level property (FDA pattern)
+    if hasattr(item, 'match_level') and item.match_level:
+        return item.match_level
+    return "gene"
+
+
+def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> TumorEvidenceMatch:
+    """Check which evidence sources have tumor-specific data.
+
+    Returns a TumorEvidenceMatch with per-source breakdown of:
+    - How many items match the tumor type
+    - Match level (variant/codon/gene) for each item
+
+    Args:
+        evidence: The aggregated evidence
+        tumor_type: The queried tumor type (e.g., "Lung Cancer")
+
+    Returns:
+        TumorEvidenceMatch with aggregated match info
+    """
     tumor_lower = tumor_type.lower()
+    result = TumorEvidenceMatch(tumor_type=tumor_type)
 
-    # Check CIViC assertions
-    for assertion in evidence.civic_assertions:
-        if assertion.disease and tumor_lower in assertion.disease.lower():
-            return True
+    def count_matches(items, tumor_check_fn) -> tuple[int, int, int, int]:
+        """Count items matching tumor and their match levels.
 
-    # Check CIViC evidence items
-    for civic in evidence.civic_evidence:
-        if civic.disease and civic.is_tumor_match:
-            # is_tumor_match is True when disease matches the queried tumor type
-            return True
+        Returns (count, variant_matches, codon_matches, gene_matches)
+        """
+        count = variant = codon = gene = 0
+        for item in items:
+            if tumor_check_fn(item):
+                count += 1
+                level = _get_match_level(item)
+                if level == "variant":
+                    variant += 1
+                elif level == "codon":
+                    codon += 1
+                else:
+                    gene += 1
+        return count, variant, codon, gene
 
-    # Check FDA approvals
-    for approval in evidence.fda_approvals:
-        if approval.indication:
-            parsed = approval.parse_indication_for_tumor(tumor_type)
-            if parsed.get('tumor_match'):
-                return True
+    # CIViC assertions
+    counts = count_matches(
+        evidence.civic_assertions,
+        lambda a: a.disease and tumor_lower in a.disease.lower()
+    )
+    if counts[0] > 0:
+        result.add_source_match("CIViC Assertions", *counts)
 
-    # Check VICC evidence
-    for vicc in evidence.vicc_evidence:
-        if vicc.disease and tumor_lower in vicc.disease.lower():
-            return True
+    # CIViC evidence
+    counts = count_matches(
+        evidence.civic_evidence,
+        lambda c: c.disease and c.is_tumor_match
+    )
+    if counts[0] > 0:
+        result.add_source_match("CIViC", *counts)
 
-    # Check CGI biomarkers (all tiers)
-    for cgi in evidence.cgi_biomarkers:
-        if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
-            return True
+    # FDA approvals
+    def fda_tumor_check(approval):
+        if not approval.indication:
+            return False
+        parsed = approval.parse_indication_for_tumor(tumor_type)
+        return parsed.get('tumor_match', False)
 
-    for cgi in evidence.preclinical_biomarkers:
-        if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
-            return True
+    counts = count_matches(evidence.fda_approvals, fda_tumor_check)
+    if counts[0] > 0:
+        result.add_source_match("FDA", *counts)
 
-    for cgi in evidence.early_phase_biomarkers:
-        if cgi.tumor_type and tumor_lower in cgi.tumor_type.lower():
-            return True
+    # VICC evidence
+    counts = count_matches(
+        evidence.vicc_evidence,
+        lambda v: v.disease and tumor_lower in v.disease.lower()
+    )
+    if counts[0] > 0:
+        result.add_source_match("VICC", *counts)
 
-    return False
+    # CGI biomarkers (all tiers combined)
+    cgi_tumor_check = lambda c: c.tumor_type and tumor_lower in c.tumor_type.lower()
+    all_cgi = (
+        list(evidence.cgi_biomarkers) +
+        list(evidence.preclinical_biomarkers) +
+        list(evidence.early_phase_biomarkers)
+    )
+    counts = count_matches(all_cgi, cgi_tumor_check)
+    if counts[0] > 0:
+        result.add_source_match("CGI", *counts)
+
+    return result
 
 
 def _has_pathogenic_signal(evidence: "Evidence") -> bool:
