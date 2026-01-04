@@ -24,19 +24,48 @@ class CIViCEvidence(EvidenceItemBase):
     pmid: str | None = None
     source_url: str | None = None
     trust_rating: int | None = None  # 1-5 star rating
-    # Match specificity tracking
-    match_level: str | None = Field(
-        default=None,
-        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
-    )
+    # Additional match tracking fields (not in base class)
     matched_profile: str | None = Field(
         default=None,
         description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
     )
-    disease_match: bool = Field(
-        default=True,
-        description="True if disease/tumor type matches the query"
-    )
+
+    @computed_field
+    @property
+    def match_level(self) -> str:
+        """Get the locus match level: 'variant', 'codon', or 'gene'.
+
+        Uses variant_level.level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence and FDAApproval.
+        """
+        if self.variant_level and self.variant_level.level:
+            return self.variant_level.level
+        return "gene"
+
+    @computed_field
+    @property
+    def disease_match(self) -> bool:
+        """Check if evidence matches the queried tumor type.
+
+        Uses cancer_type_level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence and FDAApproval.
+
+        Returns:
+            True if cancer_specific, False otherwise.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return True  # Default to True for backward compatibility
+
+    @property
+    def is_tumor_match(self) -> bool | None:
+        """Check if evidence matches the queried tumor type.
+
+        Alias for disease_match, consistent with ClinicalTrialEvidence.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return None
 
     @computed_field
     @property
@@ -81,19 +110,48 @@ class CIViCAssertionEvidence(EvidenceItemBase):
     description: str | None = None
     is_sensitivity: bool = False
     is_resistance: bool = False
-    # Match specificity tracking
-    match_level: str | None = Field(
-        default=None,
-        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
-    )
+    # Additional match tracking fields (not in base class)
     matched_profile: str | None = Field(
         default=None,
         description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
     )
-    disease_match: bool = Field(
-        default=True,
-        description="True if disease/tumor type matches the query"
-    )
+
+    @computed_field
+    @property
+    def match_level(self) -> str:
+        """Get the locus match level: 'variant', 'codon', or 'gene'.
+
+        Uses variant_level.level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence and FDAApproval.
+        """
+        if self.variant_level and self.variant_level.level:
+            return self.variant_level.level
+        return "gene"
+
+    @computed_field
+    @property
+    def disease_match(self) -> bool:
+        """Check if assertion matches the queried tumor type.
+
+        Uses cancer_type_level from EvidenceItemBase for consistency
+        with ClinicalTrialEvidence and FDAApproval.
+
+        Returns:
+            True if cancer_specific, False otherwise.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return True  # Default to True for backward compatibility
+
+    @property
+    def is_tumor_match(self) -> bool | None:
+        """Check if assertion matches the queried tumor type.
+
+        Alias for disease_match, consistent with ClinicalTrialEvidence.
+        """
+        if self.cancer_type_level and self.cancer_type_level.level:
+            return self.cancer_type_level.level == "cancer_specific"
+        return None
 
     @computed_field
     @property

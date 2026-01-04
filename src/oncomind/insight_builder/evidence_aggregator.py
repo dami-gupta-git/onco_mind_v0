@@ -95,11 +95,11 @@ class EvidenceAggregatorConfig:
     # Default is 5 years to get recent, relevant literature
     semantic_scholar_recent_years: int = 5
 
-    # Result limits
-    max_vicc_results: int = 50
-    max_civic_assertions: int = 50
-    max_clinical_trials: int = 10
-    max_literature_results: int = 4
+    # Result limits (set high to effectively remove caps)
+    max_vicc_results: int = 500
+    max_civic_assertions: int = 500
+    max_clinical_trials: int = 500
+    max_literature_results: int = 20
 
     # Concurrency control for rate-limited APIs
     literature_concurrency: int = 1

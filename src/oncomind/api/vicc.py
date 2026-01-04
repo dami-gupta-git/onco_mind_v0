@@ -553,6 +553,26 @@ class VICCClient:
             # Build matched profile string
             matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
 
+            # Determine tumor match
+            tumor_matches = False
+            if tumor_type and assoc.disease:
+                tumor_matches = tumor_type.lower() in assoc.disease.lower() or assoc.disease.lower() in tumor_type.lower()
+
+            # Build EvidenceLevel objects for consistency with other models
+            from oncomind.models.evidence.base import EvidenceLevel
+            variant_level = EvidenceLevel(
+                level=match_level,
+                scope="specific" if match_level == "variant" else "unspecified",
+                origin="kb",
+            )
+            cancer_type_level = None
+            if tumor_type:
+                cancer_type_level = EvidenceLevel(
+                    level="cancer_specific" if tumor_matches else (assoc.disease or "pan_cancer"),
+                    scope="specific" if tumor_matches else "unspecified",
+                    origin="kb",
+                )
+
             evidence_list.append(VICCEvidence(
                 description=assoc.description,
                 gene=assoc.gene,
@@ -567,8 +587,9 @@ class VICCClient:
                 is_sensitivity=assoc.is_sensitivity(),
                 is_resistance=assoc.is_resistance(),
                 oncokb_level=assoc.get_oncokb_level(),
-                match_level=match_level,
                 matched_profile=matched_profile,
+                variant_level=variant_level,
+                cancer_type_level=cancer_type_level,
             ))
 
         return evidence_list
