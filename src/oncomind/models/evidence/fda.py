@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from oncomind.models.evidence.base import EvidenceItemBase
 
@@ -19,6 +19,8 @@ class FDAApproval(EvidenceItemBase):
     companion_diagnostic: str | None = None
     black_box_warning: str | None = None
     dosing_for_variant: str | None = None
+
+    @computed_field
     @property
     def match_level(self) -> str:
         """Get the locus match level: 'variant', 'codon', or 'gene'.

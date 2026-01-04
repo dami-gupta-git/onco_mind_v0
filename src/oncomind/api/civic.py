@@ -658,7 +658,22 @@ class CIViCClient:
                     match_level = self._determine_match_level(profile_name, gene, variant)
 
                     # Determine disease match
-                    disease_match = self._tumor_matches(disease, tumor_type) if tumor_type and disease else True
+                    disease_matches = self._tumor_matches(disease, tumor_type) if tumor_type and disease else True
+
+                    # Build EvidenceLevel objects for consistency with other models
+                    from oncomind.models.evidence.base import EvidenceLevel
+                    variant_level = EvidenceLevel(
+                        level=match_level,
+                        scope="specific" if match_level == "variant" else "unspecified",
+                        origin="kb",
+                    )
+                    cancer_type_level = None
+                    if tumor_type:
+                        cancer_type_level = EvidenceLevel(
+                            level="cancer_specific" if disease_matches else (disease or "pan_cancer"),
+                            scope="specific" if disease_matches else "unspecified",
+                            origin="kb",
+                        )
 
                     evidence_list.append(CIViCEvidence(
                         evidence_id=evidence_id,
@@ -674,9 +689,9 @@ class CIViCClient:
                         pmid=str(pmid) if pmid else None,
                         source_url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else None,
                         trust_rating=node.get("evidenceRating"),
-                        match_level=match_level,
                         matched_profile=profile_name,
-                        disease_match=disease_match,
+                        variant_level=variant_level,
+                        cancer_type_level=cancer_type_level,
                     ))
 
                     if len(evidence_list) >= max_results:
@@ -718,7 +733,22 @@ class CIViCClient:
                 variant,
             )
             # Check if disease matches (tumor type filtering already applied, but track it)
-            disease_match = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
+            disease_matches = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
+
+            # Build EvidenceLevel objects for consistency with other models
+            from oncomind.models.evidence.base import EvidenceLevel
+            variant_level = EvidenceLevel(
+                level=match_level,
+                scope="specific" if match_level == "variant" else "unspecified",
+                origin="kb",
+            )
+            cancer_type_level = None
+            if tumor_type:
+                cancer_type_level = EvidenceLevel(
+                    level="cancer_specific" if disease_matches else (assertion.disease or "pan_cancer"),
+                    scope="specific" if disease_matches else "unspecified",
+                    origin="kb",
+                )
 
             evidence_list.append(CIViCAssertionEvidence(
                 assertion_id=assertion.assertion_id,
@@ -737,9 +767,9 @@ class CIViCClient:
                 description=assertion.description,
                 is_sensitivity=assertion.is_sensitivity(),
                 is_resistance=assertion.is_resistance(),
-                match_level=match_level,
                 matched_profile=assertion.molecular_profile,
-                disease_match=disease_match,
+                variant_level=variant_level,
+                cancer_type_level=cancer_type_level,
             ))
 
         return evidence_list

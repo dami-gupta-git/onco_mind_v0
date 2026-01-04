@@ -52,11 +52,11 @@ class ConductorConfig:
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.1
 
-    # Result limits
-    max_vicc_results: int = 50
-    max_civic_assertions: int = 50
-    max_clinical_trials: int = 10
-    max_literature_results: int = 4
+    # Result limits (no artificial caps - fetch all available evidence)
+    max_vicc_results: int = 100
+    max_civic_assertions: int = 100
+    max_clinical_trials: int = 50
+    max_literature_results: int = 6
 
     # Literature source: "none", "pubmed", or "semantic_scholar"
     literature_source: str = "pubmed"

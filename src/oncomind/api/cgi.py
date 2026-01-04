@@ -410,6 +410,26 @@ class CGIClient:
             # Determine match specificity
             match_level = self._determine_match_level(biomarker.alteration, gene, variant)
 
+            # Determine tumor match
+            tumor_matches = False
+            if tumor_type and biomarker.tumor_type:
+                tumor_matches = tumor_type.lower() in biomarker.tumor_type.lower() or biomarker.tumor_type.lower() in tumor_type.lower()
+
+            # Build EvidenceLevel objects for consistency with other models
+            from oncomind.models.evidence.base import EvidenceLevel
+            variant_level = EvidenceLevel(
+                level=match_level,
+                scope="specific" if match_level == "variant" else "unspecified",
+                origin="kb",
+            )
+            cancer_type_level = None
+            if tumor_type:
+                cancer_type_level = EvidenceLevel(
+                    level="cancer_specific" if tumor_matches else (biomarker.tumor_type or "pan_cancer"),
+                    scope="specific" if tumor_matches else "unspecified",
+                    origin="kb",
+                )
+
             evidence_list.append(CGIBiomarkerEvidence(
                 gene=biomarker.gene,
                 alteration=biomarker.alteration,
@@ -420,8 +440,9 @@ class CGIClient:
                 source=biomarker.source,
                 tumor_type=biomarker.tumor_type,
                 fda_approved=biomarker.is_fda_approved(),
-                match_level=match_level,
                 matched_alteration=biomarker.alteration,
+                variant_level=variant_level,
+                cancer_type_level=cancer_type_level,
             ))
 
         return evidence_list
