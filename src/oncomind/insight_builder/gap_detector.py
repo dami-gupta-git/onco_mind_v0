@@ -727,10 +727,28 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
 
     if has_trials:
         n_trials = len(evidence.clinical_trials)
+
+        # Count by tumor match using cancer_type_level
+        tumor_match_counts: dict[str, int] = {"tumor": 0, "other": 0}
+        for trial in evidence.clinical_trials:
+            if trial.cancer_type_level and trial.cancer_type_level.level == "cancer_specific":
+                tumor_match_counts["tumor"] += 1
+            else:
+                tumor_match_counts["other"] += 1
+
+        # Build tumor match string
+        tumor_match_parts = []
+        if tumor_match_counts["tumor"] > 0:
+            tumor_match_parts.append(f"{tumor_match_counts['tumor']} tumor")
+        if tumor_match_counts["other"] > 0:
+            tumor_match_parts.append(f"{tumor_match_counts['other']} other")
+        tumor_match_str = ", ".join(tumor_match_parts) if tumor_match_parts else None
+
         ctx.add_well_characterized(
             "clinical trial options",
             f"{n_trials} active trial{'s' if n_trials != 1 else ''}",
-            category=GapCategory.CLINICAL
+            category=GapCategory.CLINICAL,
+            tumor_match=tumor_match_str
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
