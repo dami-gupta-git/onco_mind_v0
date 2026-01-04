@@ -459,10 +459,12 @@ with tab1:
     - **3/C**: Case reports or limited evidence
     - **4/D**: Preclinical or computational evidence
     - **R1/R2**: Resistance evidence (strong/emerging)
+
+    **Match Level:** 🎯 = variant-specific, 🔢 = codon-level, 🧬 = gene-level
     """)
                         # Use markdown table for clickable source links
-                        rows = ["| Source | Drugs | Response | Disease | Level |",
-                                "|--------|-------|----------|---------|-------|"]
+                        rows = ["| Source | Match | Drugs | Response | Disease | Level |",
+                                "|--------|-------|-------|----------|---------|-------|"]
                         for v in vicc:
                             source = (v.get('source') or 'vicc').upper()
                             pub_url = v.get('publication_url')
@@ -470,12 +472,14 @@ with tab1:
                             if isinstance(pub_url, list) and pub_url:
                                 pub_url = pub_url[0]
                             source_link = f"[{source}]({pub_url})" if pub_url else source
+                            match_level = v.get('match_level', '')
+                            match_icon = {"variant": "🎯", "codon": "🔢", "gene": "🧬"}.get(match_level, "")
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
                             response = v.get('response_type', 'Unknown')
                             disease = (v.get('disease', '') or '')[:25]
                             level = v.get('evidence_level', '')
-                            rows.append(f"| {source_link} | {drugs} | {response} | {disease} | {level} |")
+                            rows.append(f"| {source_link} | {match_icon} | {drugs} | {response} | {disease} | {level} |")
                         st.markdown("\n".join(rows))
                     tab_idx += 1
 
@@ -899,8 +903,8 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            # Two tables side by side
-            table_cols = st.columns(2)
+            # Two tables side by side (Well Characterized ~20% wider than Evidence Gaps)
+            table_cols = st.columns([7, 4])
 
             with table_cols[0]:
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
@@ -1028,17 +1032,32 @@ with tab1:
 
                 if wc_rows:
                     st.markdown("**✅ Well Characterized** — _what we know_")
-                    # Use markdown table for text wrapping
-                    md_rows = ["| Aspect | Basis | Locus Match | Tumor Match |",
-                               "|--------|-------|-------------|-------------|"]
+                    # Use HTML table for column width control
+                    html_rows = []
                     for row in wc_rows:
                         aspect = row.get("Aspect", "")
-                        # Escape pipe characters in basis to prevent breaking markdown table
-                        basis = row.get("Basis", "").replace("|", ",")
+                        basis = row.get("Basis", "").replace("<", "&lt;").replace(">", "&gt;")
                         locus = row.get("Locus Match", "")
                         tumor = row.get("Tumor Match", "")
-                        md_rows.append(f"| {aspect} | {basis} | {locus} | {tumor} |")
-                    st.markdown("\n".join(md_rows))
+                        html_rows.append(f"<tr><td>{aspect}</td><td>{basis}</td><td>{locus}</td><td>{tumor}</td></tr>")
+
+                    html_table = f"""
+                    <style>
+                        .wc-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+                        .wc-table th, .wc-table td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                        .wc-table th {{ background-color: #f8f9fa; font-weight: 600; }}
+                        .wc-table td {{ word-wrap: break-word; }}
+                        .wc-table th:nth-child(1), .wc-table td:nth-child(1) {{ width: 25%; }}
+                        .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 35%; }}
+                        .wc-table th:nth-child(3), .wc-table td:nth-child(3) {{ width: 30%; }}
+                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 10%; }}
+                    </style>
+                    <table class="wc-table">
+                        <thead><tr><th>Aspect</th><th>Basis</th><th>Locus Match</th><th>Tumor Match</th></tr></thead>
+                        <tbody>{"".join(html_rows)}</tbody>
+                    </table>
+                    """
+                    st.markdown(html_table, unsafe_allow_html=True)
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
@@ -1071,15 +1090,30 @@ with tab1:
 
                 if gaps_data:
                     st.markdown("**❓ Evidence Gaps** — _what we don't know_")
-                    # Use markdown table for text wrapping
-                    md_rows = ["| Severity | Category | Description |",
-                               "|----------|----------|-------------|"]
+                    # Use HTML table for column width control
+                    html_rows = []
                     for row in gaps_data:
                         severity = row.get("Severity", "")
                         category = row.get("Category", "")
-                        desc = row.get("Description", "")
-                        md_rows.append(f"| {severity} | {category} | {desc} |")
-                    st.markdown("\n".join(md_rows))
+                        desc = row.get("Description", "").replace("<", "&lt;").replace(">", "&gt;")
+                        html_rows.append(f"<tr><td>{severity}</td><td>{category}</td><td>{desc}</td></tr>")
+
+                    html_table = f"""
+                    <style>
+                        .gaps-table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+                        .gaps-table th, .gaps-table td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                        .gaps-table th {{ background-color: #f8f9fa; font-weight: 600; }}
+                        .gaps-table td {{ word-wrap: break-word; }}
+                        .gaps-table th:nth-child(1), .gaps-table td:nth-child(1) {{ width: 25%; white-space: nowrap; }}
+                        .gaps-table th:nth-child(2), .gaps-table td:nth-child(2) {{ width: 25%; }}
+                        .gaps-table th:nth-child(3), .gaps-table td:nth-child(3) {{ width: 50%; }}
+                    </style>
+                    <table class="gaps-table">
+                        <thead><tr><th>Severity</th><th>Category</th><th>Description</th></tr></thead>
+                        <tbody>{"".join(html_rows)}</tbody>
+                    </table>
+                    """
+                    st.markdown(html_table, unsafe_allow_html=True)
 
             # Suggested studies (collapsible) - full width below tables
             gaps = evidence_gaps.get('gaps', [])
