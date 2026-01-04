@@ -295,6 +295,7 @@ def _build_response(result) -> Dict[str, Any]:
         ],
         "clinvar_entries": [
             {
+                "variation_id": c.variation_id,
                 "clinical_significance": c.clinical_significance,
                 "conditions": c.conditions,
                 "review_status": c.review_status,

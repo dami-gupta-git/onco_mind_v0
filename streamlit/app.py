@@ -408,8 +408,8 @@ with tab1:
     """)
                         if civic_assertions:
                             st.markdown("**Curated Assertions:**")
-                            rows = ["| ID | Match | Therapies | Significance | Disease | AMP Level |",
-                                    "|-----|-------|-----------|--------------|---------|-----------|"]
+                            rows = ["| ID | Locus Match | Tumor Match | Therapies | Significance | Disease | AMP Level |",
+                                    "|-----|-------------|-------------|-----------|--------------|---------|-----------|"]
                             for a in civic_assertions:
                                 therapies_str = ", ".join(a.get('therapies', [])) or "N/A"
                                 aid = a.get('aid') or a.get('id', '')
@@ -420,8 +420,11 @@ with tab1:
                                 amp = a.get('amp_level', '')
                                 # Match level indicator with label
                                 match = a.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                rows.append(f"| {id_link} | {match_display} | {therapies_str} | {sig} | {disease} | {amp} |")
+                                match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                # Tumor match indicator
+                                disease_match = a.get('disease_match', True)
+                                tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
+                                rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {therapies_str} | {sig} | {disease} | {amp} |")
                             st.markdown("\n".join(rows))
 
                         if civic_evidence:
@@ -429,8 +432,8 @@ with tab1:
                                 st.markdown("---")
                             st.markdown(f"**Evidence Items ({len(civic_evidence)}):**")
                             # Use markdown table so IDs are clickable
-                            rows = ["| ID | Match | Drugs | Significance | Disease | Level | Type |",
-                                    "|----|-------|-------|--------------|---------|-------|------|"]
+                            rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Disease | Level | Type |",
+                                    "|----|-------------|-------------|-------|--------------|---------|-------|------|"]
                             for e in civic_evidence[:15]:  # Limit to 15 rows
                                 drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
                                 drugs_str = drugs_str[:25] if len(drugs_str) > 25 else drugs_str
@@ -441,16 +444,21 @@ with tab1:
                                 sig = e.get('clinical_significance', 'Unknown')
                                 level = e.get('evidence_level', '')
                                 etype = e.get('evidence_type', '')
-                                # Match level indicator with label
+                                # Match level indicator
                                 match = e.get('match_level', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                rows.append(f"| {id_link} | {match_display} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
+                                match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                # Tumor match indicator
+                                disease_match = e.get('disease_match', True)
+                                tumor_match_cell = "✅ Yes" if disease_match else "⚠️ Other"
+                                rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
                             st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # VICC tab
                 if vicc:
                     with tabs[tab_idx]:
+                        if tumor_display:
+                            st.caption(f"Filtered to **{tumor_display}**")
                         with st.expander("📖 Evidence Level Guide", expanded=False):
                             st.markdown("""
     **Evidence Levels:**
@@ -463,8 +471,8 @@ with tab1:
     **Match Level:** 🎯 = variant-specific, 🔢 = codon-level, 🧬 = gene-level
     """)
                         # Use markdown table for clickable source links
-                        rows = ["| Source | Match | Drugs | Response | Disease | Level |",
-                                "|--------|-------|-------|----------|---------|-------|"]
+                        rows = ["| Source | Locus Match | Drugs | Response | Disease | Level |",
+                                "|--------|-------------|-------|----------|---------|-------|"]
                         for v in vicc:
                             source = (v.get('source') or 'vicc').upper()
                             pub_url = v.get('publication_url')
@@ -473,13 +481,13 @@ with tab1:
                                 pub_url = pub_url[0]
                             source_link = f"[{source}]({pub_url})" if pub_url else source
                             match_level = v.get('match_level', '')
-                            match_icon = {"variant": "🎯", "codon": "🔢", "gene": "🧬"}.get(match_level, "")
+                            match_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match_level, "")
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
                             response = v.get('response_type', 'Unknown')
                             disease = (v.get('disease', '') or '')[:25]
                             level = v.get('evidence_level', '')
-                            rows.append(f"| {source_link} | {match_icon} | {drugs} | {response} | {disease} | {level} |")
+                            rows.append(f"| {source_link} | {match_display} | {drugs} | {response} | {disease} | {level} |")
                         st.markdown("\n".join(rows))
                     tab_idx += 1
 
@@ -554,7 +562,7 @@ with tab1:
                         st.caption(" &nbsp;|&nbsp; ".join(count_parts))
 
                         # Use markdown table for clickable NCT IDs
-                        rows = ["| Match | NCT ID | Phase | Status | Title |",
+                        rows = ["| Locus Match | NCT ID | Phase | Status | Title |",
                                 "|-------|--------|-------|--------|-------|"]
                         for t in trials:
                             matched_biomarker = t.get('matched_biomarker', '')
@@ -793,15 +801,15 @@ with tab1:
                                 # Tumor match column
                                 cancer_spec = t.get('cancer_specificity', '')
                                 if cancer_spec == 'cancer_specific':
-                                    tumor_display = "✅ Yes"
+                                    tumor_match_cell = "✅ Yes"
                                 elif cancer_spec == 'pan_cancer':
-                                    tumor_display = "🌐 Pan-cancer"
+                                    tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_display = "⚠️ Other"
+                                    tumor_match_cell = "⚠️ Other"
                                 else:
-                                    tumor_display = "-"
+                                    tumor_match_cell = "-"
 
-                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {response} | {source} |")
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
                             st.markdown("\n".join(rows))
 
                         if clinical:
@@ -823,15 +831,15 @@ with tab1:
                                 # Tumor match column
                                 cancer_spec = t.get('cancer_specificity', '')
                                 if cancer_spec == 'cancer_specific':
-                                    tumor_display = "✅ Yes"
+                                    tumor_match_cell = "✅ Yes"
                                 elif cancer_spec == 'pan_cancer':
-                                    tumor_display = "🌐 Pan-cancer"
+                                    tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_display = "⚠️ Other"
+                                    tumor_match_cell = "⚠️ Other"
                                 else:
-                                    tumor_display = "-"
+                                    tumor_match_cell = "-"
 
-                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {level} | {response} | {source} |")
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {level} | {response} | {source} |")
                             st.markdown("\n".join(rows))
 
                         if preclinical_therapies:
@@ -853,15 +861,15 @@ with tab1:
                                 # Tumor match column
                                 cancer_spec = t.get('cancer_specificity', '')
                                 if cancer_spec == 'cancer_specific':
-                                    tumor_display = "✅ Yes"
+                                    tumor_match_cell = "✅ Yes"
                                 elif cancer_spec == 'pan_cancer':
-                                    tumor_display = "🌐 Pan-cancer"
+                                    tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_display = "⚠️ Other"
+                                    tumor_match_cell = "⚠️ Other"
                                 else:
-                                    tumor_display = "-"
+                                    tumor_match_cell = "-"
 
-                                rows.append(f"| {drug_display} | {locus_display} | {tumor_display} | {response} | {source} |")
+                                rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
                             st.markdown("\n".join(rows))
                     tab_idx += 1
             else:
@@ -1009,11 +1017,12 @@ with tab1:
                         locus_str = format_locus_match(locus_str)
 
                         # Tumor match column - only show for specific rows
-                        # Only prevalence/observed in samples and cell line models get tumor match indicator
+                        # Prevalence, cell line models, and drug response get tumor match indicator
                         is_prevalence_row = 'observed in samples' in aspect.lower() or 'prevalence' in aspect.lower()
                         is_cell_line_row = 'cell line' in aspect.lower()
+                        is_drug_response_row = 'drug response' in aspect.lower()
 
-                        if is_prevalence_row or is_cell_line_row:
+                        if is_prevalence_row or is_cell_line_row or is_drug_response_row:
                             cancer_mismatch = item.get('cancer_mismatch', '')
                             if cancer_mismatch:
                                 tumor_str = "⚠️ Other"
