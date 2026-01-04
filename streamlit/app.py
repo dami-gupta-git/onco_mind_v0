@@ -562,8 +562,8 @@ with tab1:
                         st.caption(" &nbsp;|&nbsp; ".join(count_parts))
 
                         # Use markdown table for clickable NCT IDs
-                        rows = ["| Locus Match | NCT ID | Phase | Status | Title |",
-                                "|-------|--------|-------|--------|-------|"]
+                        rows = ["| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |",
+                                "|-------------|-------------|--------|-------|--------|-------|"]
                         for t in trials:
                             matched_biomarker = t.get('matched_biomarker', '')
                             match_scope = t.get('match_scope')
@@ -578,13 +578,22 @@ with tab1:
                             else:
                                 match_display = f"🧬 {matched_biomarker}" if matched_biomarker else "🧬 Gene"
 
+                            # Tumor match display
+                            disease_match = t.get('disease_match')
+                            if disease_match is True:
+                                tumor_match_display = "✅ Yes"
+                            elif disease_match is False:
+                                tumor_match_display = "⚠️ Other"
+                            else:
+                                tumor_match_display = "-"
+
                             nct_id = t.get('nct_id', '')
                             nct_url = t.get('url') or f"https://clinicaltrials.gov/study/{nct_id}" if nct_id else ''
                             nct_link = f"[{nct_id}]({nct_url})" if nct_id and nct_url else nct_id
                             phase = t.get('phase', 'N/A')
                             status = t.get('status', '')
                             title = (t.get('title', '') or '')[:50] + "..."
-                            rows.append(f"| {match_display} | {nct_link} | {phase} | {status} | {title} |")
+                            rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title} |")
                         st.markdown("\n".join(rows))
                     tab_idx += 1
 
@@ -1157,9 +1166,9 @@ with tab1:
                         .wc-table th {{ background-color: #f8f9fa; font-weight: 600; }}
                         .wc-table td {{ word-wrap: break-word; }}
                         .wc-table th:nth-child(1), .wc-table td:nth-child(1) {{ width: 25%; }}
-                        .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 35%; }}
+                        .wc-table th:nth-child(2), .wc-table td:nth-child(2) {{ width: 30%; }}
                         .wc-table th:nth-child(3), .wc-table td:nth-child(3) {{ width: 25%; }}
-                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 15%; }}
+                        .wc-table th:nth-child(4), .wc-table td:nth-child(4) {{ width: 20%; }}
                     </style>
                     <table class="wc-table">
                         <thead><tr><th>Aspect</th><th>Basis</th><th>Locus Match</th><th>Tumor Match</th></tr></thead>
