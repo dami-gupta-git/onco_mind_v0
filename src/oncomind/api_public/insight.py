@@ -141,6 +141,9 @@ async def get_insight(
     builder_config = config.to_builder_config()
     evidence = await _build_evidence(parsed, parsed.tumor_type, builder_config)
 
+    # Compute evidence gaps (what's known vs unknown)
+    evidence.compute_evidence_gaps()
+
     # Apply LLM enhancement if enabled
     llm_insight = None
     if config.enable_llm:
@@ -246,6 +249,8 @@ async def get_insights(
                 evidence = await builder.build_evidence(
                     parsed, parsed.tumor_type or tumor_type
                 )
+                # Compute evidence gaps
+                evidence.compute_evidence_gaps()
                 evidences.append(evidence)
             except Exception as e:
                 print(f"  Warning: Failed to process {parsed.gene} {parsed.variant}: {str(e)}")
@@ -429,7 +434,7 @@ async def _apply_llm_enhancement(
                 # Skip if extraction failed
                 if knowledge_data is not None:
                     from oncomind.models.evidence.literature_knowledge import (
-                        LiteratureKnowledge, DrugResistance, DrugSensitivity
+                        LiteratureKnowledge, LitDrugResistance, LitDrugSensitivity
                     )
 
                     resistant_to = []
@@ -437,16 +442,16 @@ async def _apply_llm_enhancement(
                         if isinstance(r, dict):
                             if "is_predictive" not in r:
                                 r["is_predictive"] = True
-                            resistant_to.append(DrugResistance(**r))
+                            resistant_to.append(LitDrugResistance(**r))
                         else:
-                            resistant_to.append(DrugResistance(drug=str(r), is_predictive=True))
+                            resistant_to.append(LitDrugResistance(drug=str(r), is_predictive=True))
 
                     evidence.literature_knowledge = LiteratureKnowledge(
                         mutation_type=knowledge_data.get("mutation_type", "unknown"),
                         is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
                         resistant_to=resistant_to,
                         sensitive_to=[
-                            DrugSensitivity(**s) if isinstance(s, dict) else DrugSensitivity(drug=str(s))
+                            LitDrugSensitivity(**s) if isinstance(s, dict) else LitDrugSensitivity(drug=str(s))
                             for s in knowledge_data.get("sensitive_to", [])
                         ],
                         clinical_significance=knowledge_data.get("clinical_significance", ""),

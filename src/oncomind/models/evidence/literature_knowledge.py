@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 
-class DrugResistance(BaseModel):
+class LitDrugResistance(BaseModel):
     """Drug resistance information extracted from literature."""
     drug: str = Field(..., description="Drug name")
     evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
@@ -12,7 +12,7 @@ class DrugResistance(BaseModel):
     match_level: str = Field("gene", description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)")
 
 
-class DrugSensitivity(BaseModel):
+class LitDrugSensitivity(BaseModel):
     """Drug sensitivity information extracted from literature."""
     drug: str = Field(..., description="Drug name")
     evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
@@ -37,12 +37,12 @@ class LiteratureKnowledge(BaseModel):
         description="True if variant is ONLY prognostic (affects survival) but does NOT predict response to specific drugs"
     )
 
-    resistant_to: list[DrugResistance] = Field(
+    resistant_to: list[LitDrugResistance] = Field(
         default_factory=list,
         description="Drugs this variant causes resistance to"
     )
 
-    sensitive_to: list[DrugSensitivity] = Field(
+    sensitive_to: list[LitDrugSensitivity] = Field(
         default_factory=list,
         description="Drugs this variant may respond to"
     )

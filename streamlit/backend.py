@@ -378,9 +378,9 @@ def _build_response(result) -> Dict[str, Any]:
             "drug_sensitivities": [
                 {
                     "drug_name": ds.drug_name,
-                    "ic50_nm": ds.ic50_nm,
-                    "auc": ds.auc,
+                    "mean_log2fc": ds.mean_log2fc,
                     "n_cell_lines": ds.n_cell_lines,
+                    "sensitive_lines": ds.sensitive_lines,
                 }
                 for ds in evidence.depmap_evidence.drug_sensitivities
             ],

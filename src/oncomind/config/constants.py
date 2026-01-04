@@ -62,7 +62,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "mel": ["melanoma", "mel", "cutaneous melanoma", "skin melanoma"],
     "cm": ["cutaneous melanoma", "cm", "melanoma", "skin melanoma"],  # CGI uses CM
     "skcm": ["skin cutaneous melanoma", "skcm", "cutaneous melanoma"],
-    "uvm": ["uveal melanoma", "uvm", "ocular melanoma"],
+    "uvm": ["uveal melanoma", "uvm", "ocular melanoma", "eye cancer", "eye"],
 
     # Breast
     "bc": ["breast", "bc", "breast cancer", "breast carcinoma"],

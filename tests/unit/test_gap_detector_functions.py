@@ -28,7 +28,7 @@ from oncomind.insight_builder.gap_detector import (
     _compute_overall_quality,
 )
 from oncomind.models.evidence.evidence_gaps import GapCategory, GapSeverity, EvidenceGap
-from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge, DrugResistance
+from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge, LitDrugResistance
 
 
 # =============================================================================
@@ -527,8 +527,8 @@ class TestCheckResistanceMechanisms:
         """LLM literature knowledge with resistant_to should mark as well-characterized."""
         mock_evidence.literature_knowledge = LiteratureKnowledge(
             resistant_to=[
-                DrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=True),
-                DrugResistance(drug="Erlotinib", evidence="clinical", is_predictive=True),
+                LitDrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=True),
+                LitDrugResistance(drug="Erlotinib", evidence="clinical", is_predictive=True),
             ],
             mutation_type="secondary",
         )
@@ -556,7 +556,7 @@ class TestCheckResistanceMechanisms:
         """Non-predictive resistance in literature should NOT mark as well-characterized."""
         mock_evidence.literature_knowledge = LiteratureKnowledge(
             resistant_to=[
-                DrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=False),
+                LitDrugResistance(drug="Gefitinib", evidence="clinical", is_predictive=False),
             ],
             mutation_type="secondary",
         )

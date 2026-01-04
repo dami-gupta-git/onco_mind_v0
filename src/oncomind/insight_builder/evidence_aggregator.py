@@ -404,22 +404,47 @@ class EvidenceAggregator:
         if not result:
             return None
 
-        # Merge with cBioPortal cell lines (primary source) if available
-        if cell_line_models:
-            result = DepMapEvidence(
-                gene=result.gene,
-                variant=result.variant,
-                gene_dependency=result.gene_dependency,
-                co_dependencies=result.co_dependencies,
-                drug_sensitivities=result.drug_sensitivities,
-                cell_line_models=cell_line_models,
-                data_version=result.data_version,
-                n_cell_lines_screened=result.n_cell_lines_screened,
-            )
+        # Merge cell lines from both sources (DepMap local CSV + cBioPortal CCLE API)
+        # DepMap local data is often more complete, so we union both sets
+        merged_cell_lines = self._merge_cell_lines(result.cell_line_models, cell_line_models)
+
+        result = DepMapEvidence(
+            gene=result.gene,
+            variant=result.variant,
+            gene_dependency=result.gene_dependency,
+            co_dependencies=result.co_dependencies,
+            drug_sensitivities=result.drug_sensitivities,
+            cell_line_models=merged_cell_lines,
+            data_version=result.data_version,
+            n_cell_lines_screened=result.n_cell_lines_screened,
+        )
 
         if result.has_data():
             tracker.sources_with_data.append("DepMap")
         return result
+
+    def _merge_cell_lines(
+        self,
+        depmap_lines: list[CellLineModel],
+        cbioportal_lines: list[CellLineModel],
+    ) -> list[CellLineModel]:
+        """Merge cell lines from DepMap and cBioPortal, deduplicating by name."""
+        # Use normalized name as key for deduplication
+        seen: dict[str, CellLineModel] = {}
+
+        # Add DepMap lines first (primary source with more complete data)
+        for cl in depmap_lines or []:
+            key = cl.name.upper().replace("-", "").replace("_", "")
+            if key not in seen:
+                seen[key] = cl
+
+        # Add cBioPortal lines (may have additional metadata)
+        for cl in cbioportal_lines or []:
+            key = cl.name.upper().replace("-", "").replace("_", "")
+            if key not in seen:
+                seen[key] = cl
+
+        return list(seen.values())
 
     def _extract_myvariant_data(
         self, evidence: Any, variant: ParsedVariant, normalized_variant: str
