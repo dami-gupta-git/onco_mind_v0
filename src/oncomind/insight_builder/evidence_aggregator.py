@@ -61,6 +61,12 @@ from oncomind.models.evidence.base import EvidenceLevel
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
 from oncomind.config.debug import get_logger
+from oncomind.config.constants import (
+    MAX_CIVIC_ASSERTIONS,
+    MAX_CLINICAL_TRIALS,
+    MAX_LITERATURE_RESULTS,
+    MAX_VICC_RESULTS,
+)
 
 logger = get_logger(__name__)
 
@@ -95,11 +101,11 @@ class EvidenceAggregatorConfig:
     # Default is 5 years to get recent, relevant literature
     semantic_scholar_recent_years: int = 5
 
-    # Result limits (set high to effectively remove caps)
-    max_vicc_results: int = 500
-    max_civic_assertions: int = 500
-    max_clinical_trials: int = 500
-    max_literature_results: int = 20
+    # Result limits (from constants.py)
+    max_vicc_results: int = MAX_VICC_RESULTS
+    max_civic_assertions: int = MAX_CIVIC_ASSERTIONS
+    max_clinical_trials: int = MAX_CLINICAL_TRIALS
+    max_literature_results: int = MAX_LITERATURE_RESULTS
 
     # Concurrency control for rate-limited APIs
     literature_concurrency: int = 1

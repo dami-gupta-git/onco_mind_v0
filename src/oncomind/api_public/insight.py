@@ -34,6 +34,12 @@ from oncomind.normalization import (
     parse_variant_row,
     ParsedVariant,
 )
+from oncomind.config.constants import (
+    MAX_CIVIC_ASSERTIONS,
+    MAX_CLINICAL_TRIALS,
+    MAX_LITERATURE_RESULTS,
+    MAX_VICC_RESULTS,
+)
 
 
 @dataclass
@@ -62,11 +68,11 @@ class InsightConfig:
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.1
 
-    # Result limits (set high to effectively remove caps)
-    max_vicc_results: int = 500
-    max_civic_assertions: int = 500
-    max_clinical_trials: int = 500
-    max_literature_results: int = 20
+    # Result limits (from constants.py)
+    max_vicc_results: int = MAX_VICC_RESULTS
+    max_civic_assertions: int = MAX_CIVIC_ASSERTIONS
+    max_clinical_trials: int = MAX_CLINICAL_TRIALS
+    max_literature_results: int = MAX_LITERATURE_RESULTS
 
     # Processing options
     validate_variant_type: bool = True  # Reject fusions/amplifications

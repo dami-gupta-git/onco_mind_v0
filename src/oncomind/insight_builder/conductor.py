@@ -21,7 +21,13 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.config.constants import (
+    MAX_CIVIC_ASSERTIONS,
+    MAX_CLINICAL_TRIALS,
+    MAX_LITERATURE_RESULTS,
+    MAX_VICC_RESULTS,
+    TUMOR_TYPE_MAPPINGS,
+)
 from oncomind.config.debug import get_logger
 from oncomind.insight_builder.evidence_aggregator import (
     EvidenceAggregator,
@@ -52,11 +58,11 @@ class ConductorConfig:
     llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.1
 
-    # Result limits (set high to effectively remove caps)
-    max_vicc_results: int = 500
-    max_civic_assertions: int = 500
-    max_clinical_trials: int = 500
-    max_literature_results: int = 20
+    # Result limits (from constants.py)
+    max_vicc_results: int = MAX_VICC_RESULTS
+    max_civic_assertions: int = MAX_CIVIC_ASSERTIONS
+    max_clinical_trials: int = MAX_CLINICAL_TRIALS
+    max_literature_results: int = MAX_LITERATURE_RESULTS
 
     # Literature source: "none", "pubmed", or "semantic_scholar"
     literature_source: str = "pubmed"
