@@ -608,21 +608,53 @@ with tab1:
                 # Research tab
                 if preclinical or early_phase:
                     with tabs[tab_idx]:
-                        col1, col2 = st.columns([2, 1])
-                        with col1:
-                            st.warning("⚠️ [CGI](https://www.cancergenomeinterpreter.org/) biomarker entries that are NOT FDA-approved and are from early clinical trials, late trials, case reports, or preclinical studies.")
+                        st.warning("⚠️ [CGI](https://www.cancergenomeinterpreter.org/) biomarker entries that are NOT FDA-approved and are from early clinical trials, late trials, case reports, or preclinical studies.")
                         if preclinical:
                             st.markdown("**Preclinical (Cell Line/Animal Models):**")
+                            rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
+                                    "|------|-------------|-------------|-------------|------------|"]
                             for b in preclinical:
                                 drug = b.get('drug', 'Unknown')
                                 assoc = b.get('association', 'Unknown')
-                                st.markdown(f"- {drug}: {assoc}")
+                                cgi_tumor = b.get('tumor_type', '') or ''
+                                # Locus match
+                                match = b.get('match_level', '')
+                                locus_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "-")
+                                # Tumor match
+                                cgi_tumor_lower = cgi_tumor.lower()
+                                tumor_lower = (tumor_display or '').lower() if tumor_display else ''
+                                if tumor_lower and tumor_lower in cgi_tumor_lower:
+                                    tumor_match_cell = "✅ Yes"
+                                elif cgi_tumor_lower:
+                                    tumor_match_cell = "⚠️ Other"
+                                else:
+                                    tumor_match_cell = "-"
+                                rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
+                            st.markdown("\n".join(rows))
                         if early_phase:
+                            if preclinical:
+                                st.markdown("---")
                             st.markdown("**Early Phase/Case Reports:**")
+                            rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
+                                    "|------|-------------|-------------|-------------|------------|"]
                             for b in early_phase:
                                 drug = b.get('drug', 'Unknown')
                                 assoc = b.get('association', 'Unknown')
-                                st.markdown(f"- {drug}: {assoc}")
+                                cgi_tumor = b.get('tumor_type', '') or ''
+                                # Locus match
+                                match = b.get('match_level', '')
+                                locus_display = {"variant": "🎯 Variant", "codon": "🔢 Codon", "gene": "🧬 Gene"}.get(match, "-")
+                                # Tumor match
+                                cgi_tumor_lower = cgi_tumor.lower()
+                                tumor_lower = (tumor_display or '').lower() if tumor_display else ''
+                                if tumor_lower and tumor_lower in cgi_tumor_lower:
+                                    tumor_match_cell = "✅ Yes"
+                                elif cgi_tumor_lower:
+                                    tumor_match_cell = "⚠️ Other"
+                                else:
+                                    tumor_match_cell = "-"
+                                rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
+                            st.markdown("\n".join(rows))
                     tab_idx += 1
 
                 # cBioPortal tab
@@ -647,9 +679,11 @@ with tab1:
 
                         prev_cols = st.columns(2)
                         with prev_cols[0]:
-                            st.metric(f"Any {gene_symbol} alteration", f"{gene_pct:.1f}%", f"{gene_count}/{total}")
+                            st.metric(f"Any {gene_symbol} alteration", f"{gene_pct:.1f}%")
+                            st.caption(f"{gene_count}/{total}")
                         with prev_cols[1]:
-                            st.metric(f"Exact {variant_name}", f"{variant_pct:.1f}%", f"{variant_count}/{total}")
+                            st.metric(f"Exact {variant_name}", f"{variant_pct:.1f}%")
+                            st.caption(f"{variant_count}/{total}")
 
                         co_occurring = cbioportal.get('co_occurring', [])
                         mutually_exclusive = cbioportal.get('mutually_exclusive', [])
@@ -712,8 +746,8 @@ with tab1:
                                 else:
                                     st.info(f"⚪ {gene_display} is not essential")
                             with dep_cols[1]:
-                                st.metric("Gene CERES Score", f"{score:.2f}" if score else "N/A",
-                                          f"{dep_pct:.0f}% of cell lines depend on {gene_display}")
+                                st.metric("Gene CERES Score", f"{score:.2f}" if score else "N/A")
+                                st.caption(f"{dep_pct:.0f}% of cell lines depend on {gene_display}")
                             st.caption(f"Based on CRISPR screens in {n_total} cancer cell lines. CERES < -0.5 indicates essentiality.")
 
                         if drug_sens:
@@ -741,9 +775,19 @@ with tab1:
                                     name = cl.get('name', '')
                                     depmap_id = cl.get('depmap_id')
                                     url = f"https://depmap.org/portal/cell_line/{depmap_id}" if depmap_id else None
+                                    # Tumor match: compare cell line disease to user's tumor type
+                                    cl_disease = (cl.get('primary_disease') or '').lower()
+                                    tumor_lower = (tumor_display or '').lower() if tumor_display else ''
+                                    if tumor_lower and tumor_lower in cl_disease:
+                                        tumor_match_cell = "✅ Yes"
+                                    elif tumor_lower and cl_disease:
+                                        tumor_match_cell = "⚠️ Other"
+                                    else:
+                                        tumor_match_cell = "-"
                                     cl_rows.append({
                                         "Cell Line": name,
                                         "DepMap": url,
+                                        "Tumor Match": tumor_match_cell,
                                         "Disease": cl.get('primary_disease', ''),
                                         "Subtype": cl.get('subtype', ''),
                                         "Mutation": cl.get('mutation_details', variant_display),
