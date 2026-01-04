@@ -299,7 +299,7 @@ class CIViCClient:
         Returns:
             True if tumor types match. Returns False for pan-cancer diseases
             when a specific tumor type is queried (they should be included
-            but marked as disease_match=False).
+            but marked as is_tumor_match=False).
         """
         if not tumor_type:
             return True  # No filter
@@ -657,8 +657,8 @@ class CIViCClient:
                     # Determine match level
                     match_level = self._determine_match_level(profile_name, gene, variant)
 
-                    # Determine disease match
-                    disease_matches = self._tumor_matches(disease, tumor_type) if tumor_type and disease else True
+                    # Determine tumor match
+                    tumor_matches = self._tumor_matches(disease, tumor_type) if tumor_type and disease else True
 
                     # Build EvidenceLevel objects for consistency with other models
                     from oncomind.models.evidence.base import EvidenceLevel
@@ -670,8 +670,8 @@ class CIViCClient:
                     cancer_type_level = None
                     if tumor_type:
                         cancer_type_level = EvidenceLevel(
-                            level="cancer_specific" if disease_matches else (disease or "pan_cancer"),
-                            scope="specific" if disease_matches else "unspecified",
+                            level="cancer_specific" if tumor_matches else (disease or "pan_cancer"),
+                            scope="specific" if tumor_matches else "unspecified",
                             origin="kb",
                         )
 
@@ -732,8 +732,8 @@ class CIViCClient:
                 gene,
                 variant,
             )
-            # Check if disease matches (tumor type filtering already applied, but track it)
-            disease_matches = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
+            # Check if tumor matches (tumor type filtering already applied, but track it)
+            tumor_matches = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
@@ -745,8 +745,8 @@ class CIViCClient:
             cancer_type_level = None
             if tumor_type:
                 cancer_type_level = EvidenceLevel(
-                    level="cancer_specific" if disease_matches else (assertion.disease or "pan_cancer"),
-                    scope="specific" if disease_matches else "unspecified",
+                    level="cancer_specific" if tumor_matches else (assertion.disease or "pan_cancer"),
+                    scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
                 )
 

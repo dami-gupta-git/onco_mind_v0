@@ -32,30 +32,3 @@ class CGIBiomarkerEvidence(EvidenceItemBase):
         if self.variant_level and self.variant_level.level:
             return self.variant_level.level
         return "gene"
-
-    @property
-    def is_tumor_match(self) -> bool | None:
-        """Check if biomarker matches the queried tumor type.
-
-        Uses cancer_type_level from EvidenceItemBase for consistency
-        with ClinicalTrialEvidence, FDAApproval, and CIViC models.
-
-        Returns:
-            True if cancer_specific, False if not, None if unknown.
-        """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level == "cancer_specific"
-        return None
-
-    @property
-    def cancer_specificity(self) -> str | None:
-        """Get the cancer specificity level.
-
-        Returns:
-            'cancer_specific' if matches queried tumor,
-            'pan_cancer' if tumor-agnostic,
-            or the specific cancer name if different tumor type.
-        """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level
-        return None

@@ -1203,8 +1203,8 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> boo
 
     # Check CIViC evidence items
     for civic in evidence.civic_evidence:
-        if civic.disease and civic.disease_match:
-            # disease_match is True when disease matches the queried tumor type
+        if civic.disease and civic.is_tumor_match:
+            # is_tumor_match is True when disease matches the queried tumor type
             return True
 
     # Check FDA approvals

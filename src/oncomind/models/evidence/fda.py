@@ -32,33 +32,6 @@ class FDAApproval(EvidenceItemBase):
             return self.variant_level.level
         return "gene"
 
-    @property
-    def is_tumor_match(self) -> bool | None:
-        """Check if approval matches the queried tumor type.
-
-        Uses cancer_type_level from EvidenceItemBase for consistency
-        with ClinicalTrialEvidence.
-
-        Returns:
-            True if cancer_specific, False if not, None if unknown.
-        """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level == "cancer_specific"
-        return None
-
-    @property
-    def cancer_specificity(self) -> str | None:
-        """Get the cancer specificity level.
-
-        Returns:
-            'cancer_specific' if matches queried tumor,
-            'pan_cancer' if tumor-agnostic,
-            or the specific cancer name if different tumor type.
-        """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level
-        return None
-
     def parse_indication_for_tumor(self, tumor_type: str) -> dict:
         """Parse FDA indication text to extract line-of-therapy and approval type for a specific tumor."""
         if not self.indication or not tumor_type:
