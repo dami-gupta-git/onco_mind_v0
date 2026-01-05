@@ -34,11 +34,24 @@ When has_tumor_specific_cbioportal_data is FALSE:
 
 === MATCH SPECIFICITY (CRITICAL) ===
 
-Always indicate evidence match level:
-- VARIANT-LEVEL: "osimertinib (this variant, {tumor_type})"
-- CODON-LEVEL: "MEK inhibitors (studied for Q209P, not Q209L)" - same codon, different amino acid
-- GENE-LEVEL: "erlotinib (gene-level)"
-- OTHER CANCER: "sotorasib (approved for NSCLC, not {tumor_type})"
+Always indicate both LOCUS match and TUMOR match level for therapeutic evidence:
+
+LOCUS MATCH (variant specificity):
+- VARIANT-LEVEL: Evidence directly studied for THIS specific variant
+- CODON-LEVEL: Evidence from OTHER variants at same codon (e.g., Q209P data applied to Q209L)
+- GENE-LEVEL: Evidence from gene-level studies (any mutation in the gene)
+
+TUMOR MATCH (cancer specificity):
+- CANCER-SPECIFIC: Evidence from the patient's tumor type ({tumor_type})
+- PAN-CANCER: Tumor-agnostic evidence (e.g., MSI-H, Solid Tumor)
+- OTHER CANCER: Evidence from a different specific cancer type
+
+Format therapeutic entries as: "drug (locus-level, tumor-context)"
+Examples:
+- "osimertinib (variant-level, NSCLC)" - best evidence
+- "sotorasib (variant-level, approved for NSCLC not CRC)" - different tumor
+- "MEK inhibitors (codon-level from Q209P, melanoma)" - same codon, different AA
+- "erlotinib (gene-level, pan-cancer)" - gene-level, tumor-agnostic
 
 CODON-LEVEL EVIDENCE WARNING:
 When evidence comes from OTHER variants at the same codon (e.g., Q209P data applied to Q209L):
@@ -76,6 +89,9 @@ has_vicc_evidence: {has_vicc_evidence}
 
 ## LOCUS MATCH SUMMARY
 {locus_match_text}
+
+## TUMOR MATCH SUMMARY
+{tumor_match_text}
 
 ## BIOLOGICAL CONTEXT
 {biological_context}
@@ -205,6 +221,7 @@ def create_synthesis_prompt(
     resistance_summary: str = "",
     sensitivity_summary: str = "",
     locus_match_summary: dict | None = None,
+    tumor_match_summary: dict | None = None,
 ) -> list[dict]:
     """Create prompt for stage 1: evidence synthesis."""
     tumor_display = tumor_type or "Pan-cancer"
@@ -228,6 +245,18 @@ def create_synthesis_prompt(
     else:
         locus_match_text = "No locus match data available."
 
+    # Build tumor match text for LLM context
+    if tumor_match_summary:
+        tumor_match_text = tumor_match_summary.get("summary_text", "No tumor match data available.")
+        # Add warnings about evidence from other tumor types
+        if tumor_match_summary.get("is_all_other"):
+            other_tumors = ", ".join(tumor_match_summary.get("other_tumor_types", [])[:3])
+            tumor_match_text += f" CAUTION: All evidence is from other tumor types ({other_tumors}) - extrapolation required."
+        elif not tumor_match_summary.get("has_tumor_specific"):
+            tumor_match_text += " WARNING: Limited tumor-specific evidence."
+    else:
+        tumor_match_text = "No tumor match data available."
+
     user_content = SYNTHESIS_USER_PROMPT.format(
         gene=gene,
         variant=variant,
@@ -237,6 +266,7 @@ def create_synthesis_prompt(
         has_fda_approvals=str(data_availability.get("has_fda_approvals", False)).upper(),
         has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
         locus_match_text=locus_match_text,
+        tumor_match_text=tumor_match_text,
         biological_context=biological_context or "No cBioPortal data available.",
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",

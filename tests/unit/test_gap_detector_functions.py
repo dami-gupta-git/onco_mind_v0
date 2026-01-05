@@ -86,6 +86,10 @@ def mock_evidence():
     # LLM-extracted literature knowledge
     evidence.literature_knowledge = None
 
+    # Mock get_vicc_unique() to return vicc_evidence by default
+    # Tests can override this if needed
+    evidence.get_vicc_unique = lambda: evidence.vicc_evidence
+
     return evidence
 
 
@@ -408,7 +412,7 @@ class TestCheckTumorSpecificEvidence:
         assert tumor_match.has_tumor_evidence is True
         sources = tumor_match.sources_str
         assert "1 CIViC Assertions" in sources
-        assert "2 VICC" in sources
+        assert "2 VICC (meta-KB)" in sources
 
     def test_tumor_evidence_match_locus_levels(self, mock_evidence):
         """TumorEvidenceMatch should track variant/codon/gene match levels."""
