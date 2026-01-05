@@ -486,6 +486,30 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 suggested_studies=["Basket trial", "Off-label use case series"],
                 addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
             )
+
+        # Add gap if FDA approval exists but not for this specific variant (extrapolated evidence)
+        if match_counts["variant"] == 0 and (match_counts["gene"] > 0 or match_counts["codon"] > 0):
+            # Evidence exists but only at gene or codon level, not variant-specific
+            if match_counts["gene"] > 0 and match_counts["codon"] == 0:
+                # Only gene-level (weakest extrapolation)
+                ctx.add_gap(
+                    category=GapCategory.CLINICAL,
+                    severity=GapSeverity.SIGNIFICANT,
+                    description=f"FDA-approved therapies exist for {ctx.gene} but not specifically for {ctx.variant} (gene-level extrapolation)",
+                    suggested_studies=["Variant-specific efficacy analysis", "Case series for this variant"],
+                    addressable_with=["ClinicalTrials.gov variant-specific arms", "Real-world evidence databases"]
+                )
+            elif match_counts["codon"] > 0:
+                # Codon-level (moderate extrapolation, e.g., V600E approval applied to V600K)
+                from oncomind.models.evidence.base import extract_variant_position
+                codon_pos = extract_variant_position(ctx.variant) or ""
+                ctx.add_gap(
+                    category=GapCategory.CLINICAL,
+                    severity=GapSeverity.MINOR,
+                    description=f"FDA-approved therapies exist for {ctx.gene} codon {codon_pos} variants but not specifically for {ctx.variant} (codon-level extrapolation)",
+                    suggested_studies=["Variant-specific response comparison"],
+                    addressable_with=["Published case reports", "Basket trial subgroup analyses"]
+                )
     elif ctx.has_clinical:
         # Has CIViC evidence but no FDA-approved therapies
         ctx.add_well_characterized(
@@ -572,7 +596,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         if cgi_counts.total:
             drug_sources.append(f"{cgi_counts.total} CGI")
         if vicc_counts.total:
-            drug_sources.append(f"{vicc_counts.total} VICC")
+            drug_sources.append(f"{vicc_counts.total} VICC (meta-KB)")
         if fda_counts.total:
             drug_sources.append(f"{fda_counts.total} FDA")
 
@@ -594,6 +618,29 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
                 suggested_studies=["Tumor-specific drug screen", "Basket trial analysis"],
                 addressable_with=["Literature search", "Clinical trial databases"]
             )
+
+        # Add gap if drug response data exists but not for this specific variant (extrapolated)
+        if counts.variant == 0 and (counts.gene > 0 or counts.codon > 0):
+            if counts.gene > 0 and counts.codon == 0:
+                # Only gene-level (weakest extrapolation)
+                ctx.add_gap(
+                    category=GapCategory.DRUG_RESPONSE,
+                    severity=GapSeverity.SIGNIFICANT,
+                    description=f"Drug response data exists for {ctx.gene} but not specifically for {ctx.variant} (gene-level extrapolation)",
+                    suggested_studies=["Variant-specific drug sensitivity assay", "Isogenic cell line comparison"],
+                    addressable_with=["DepMap variant-specific analysis", "GDSC mutation annotations"]
+                )
+            elif counts.codon > 0:
+                # Codon-level (moderate extrapolation)
+                from oncomind.models.evidence.base import extract_variant_position
+                codon_pos = extract_variant_position(ctx.variant) or ""
+                ctx.add_gap(
+                    category=GapCategory.DRUG_RESPONSE,
+                    severity=GapSeverity.MINOR,
+                    description=f"Drug response data exists for {ctx.gene} codon {codon_pos} variants but not specifically for {ctx.variant} (codon-level extrapolation)",
+                    suggested_studies=["Variant-specific response comparison"],
+                    addressable_with=["Published case series", "Functional assay data"]
+                )
     else:
         ctx.add_gap(
             category=GapCategory.DRUG_RESPONSE,
