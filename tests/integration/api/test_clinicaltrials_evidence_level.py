@@ -4,7 +4,7 @@ Tests that EvidenceLevel fields are correctly populated based on trial content:
 - Variant-specific trials: locus_match.level == "variant"
 - Gene-only trials: locus_match.level == "gene"
 - Disease-only trials: locus_match is None
-- Cancer-specific trials: cancer_type_level.level == "cancer_specific"
+- Cancer-specific trials: cancer_type_match.level == "cancer_specific"
 """
 
 import pytest
@@ -91,8 +91,8 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_biomarker_search_cancer_type_level(self):
-        """Test that cancer_type_level is set when tumor_type is provided."""
+    async def test_biomarker_search_cancer_type_match(self):
+        """Test that cancer_type_match is set when tumor_type is provided."""
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence(
                 gene="BRAF",
@@ -105,17 +105,17 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         assert len(results) > 0, "Expected at least one trial for BRAF V600E"
 
         for trial in results:
-            # cancer_type_level should be set when tumor_type is provided
-            assert trial.cancer_type_level is not None, (
-                f"Trial {trial.nct_id} should have cancer_type_level when tumor_type provided"
+            # cancer_type_match should be set when tumor_type is provided
+            assert trial.cancer_type_match is not None, (
+                f"Trial {trial.nct_id} should have cancer_type_match when tumor_type provided"
             )
-            assert trial.cancer_type_level.level in ("cancer_specific", "pan_cancer")
-            assert trial.cancer_type_level.origin == "trial"
+            assert trial.cancer_type_match.level in ("cancer_specific", "pan_cancer")
+            assert trial.cancer_type_match.origin == "trial"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_biomarker_search_no_tumor_type(self):
-        """Test that cancer_type_level is None when tumor_type not provided."""
+        """Test that cancer_type_match is None when tumor_type not provided."""
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence(
                 gene="TP53",
@@ -127,15 +127,15 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         # May or may not find trials for TP53 specifically
         for trial in results:
-            # cancer_type_level should be None when tumor_type not provided
-            assert trial.cancer_type_level is None, (
-                f"Trial {trial.nct_id} should have cancer_type_level=None when no tumor_type"
+            # cancer_type_match should be None when tumor_type not provided
+            assert trial.cancer_type_match is None, (
+                f"Trial {trial.nct_id} should have cancer_type_match=None when no tumor_type"
             )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_disease_search_cancer_specific(self):
-        """Test disease-based search returns cancer_type_level populated."""
+        """Test disease-based search returns cancer_type_match populated."""
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence_by_disease(
                 tumor_type="NSCLC",
@@ -148,11 +148,11 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         assert len(results) > 0, "Expected trials for NSCLC"
 
         for trial in results:
-            # cancer_type_level should always be set for disease search
-            assert trial.cancer_type_level is not None, (
-                f"Trial {trial.nct_id} should have cancer_type_level for disease search"
+            # cancer_type_match should always be set for disease search
+            assert trial.cancer_type_match is not None, (
+                f"Trial {trial.nct_id} should have cancer_type_match for disease search"
             )
-            assert trial.cancer_type_level.origin == "trial"
+            assert trial.cancer_type_match.origin == "trial"
 
             # Most NSCLC trials should be cancer_specific
             # (searched by condition, so conditions should match)
@@ -215,8 +215,8 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         # All results should have properly populated fields
         for trial in results:
             assert trial.nct_id.startswith("NCT")
-            # cancer_type_level should be set (tumor_type was provided)
-            assert trial.cancer_type_level is not None
+            # cancer_type_match should be set (tumor_type was provided)
+            assert trial.cancer_type_match is not None
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -246,12 +246,12 @@ class TestClinicalTrialsEvidenceLevelIntegration:
                 elif trial.locus_match.level == "gene":
                     assert trial.locus_match.scope == "unspecified"
 
-            # Check cancer_type_level consistency
-            if trial.cancer_type_level:
-                if trial.cancer_type_level.level == "cancer_specific":
-                    assert trial.cancer_type_level.scope == "specific"
-                elif trial.cancer_type_level.level == "pan_cancer":
-                    assert trial.cancer_type_level.scope == "unspecified"
+            # Check cancer_type_match consistency
+            if trial.cancer_type_match:
+                if trial.cancer_type_match.level == "cancer_specific":
+                    assert trial.cancer_type_match.scope == "specific"
+                elif trial.cancer_type_match.level == "pan_cancer":
+                    assert trial.cancer_type_match.scope == "unspecified"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -276,5 +276,5 @@ class TestClinicalTrialsEvidenceLevelIntegration:
             assert trial.locus_match is None, (
                 f"Trial {trial.nct_id} should have locus_match=None without gene context"
             )
-            # cancer_type_level should still be set
-            assert trial.cancer_type_level is not None
+            # cancer_type_match should still be set
+            assert trial.cancer_type_match is not None

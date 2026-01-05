@@ -682,7 +682,7 @@ class Evidence(BaseModel):
         """Determine cancer_specificity for an FDA approval.
 
         Uses the cancer_specificity property from FDAApproval, which reads from
-        cancer_type_level set during evidence aggregation. This ensures consistency
+        cancer_type_match set during evidence aggregation. This ensures consistency
         with how ClinicalTrialEvidence handles tumor matching.
 
         Returns:
@@ -690,11 +690,11 @@ class Evidence(BaseModel):
             - "pan_cancer": if tumor-agnostic or unknown
             - The actual cancer type (e.g., "ovarian cancer"): if no match but we know the cancer
         """
-        # Use the property from FDAApproval (reads from cancer_type_level)
+        # Use the property from FDAApproval (reads from cancer_type_match)
         if approval.cancer_specificity:
             return approval.cancer_specificity
 
-        # Fallback for approvals without cancer_type_level set (legacy data)
+        # Fallback for approvals without cancer_type_match set (legacy data)
         if self.context.tumor_type and approval.indication:
             parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
             if parsed.get('tumor_match'):

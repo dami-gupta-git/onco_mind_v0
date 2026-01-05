@@ -74,6 +74,6 @@ class ClinicalTrialEvidence(EvidenceItemBase):
         Returns:
             True if cancer_specific, False if not, None if unknown.
         """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level == "cancer_specific"
+        if self.cancer_type_match and self.cancer_type_match.level:
+            return self.cancer_type_match.level == "cancer_specific"
         return None

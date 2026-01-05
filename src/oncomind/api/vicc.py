@@ -565,9 +565,9 @@ class VICCClient:
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
             )
-            cancer_type_level = None
+            cancer_type_match = None
             if tumor_type:
-                cancer_type_level = EvidenceLevel(
+                cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if tumor_matches else (assoc.disease or "pan_cancer"),
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
@@ -589,7 +589,7 @@ class VICCClient:
                 oncokb_level=assoc.get_oncokb_level(),
                 matched_profile=matched_profile,
                 locus_match=locus_match,
-                cancer_type_level=cancer_type_level,
+                cancer_type_match=cancer_type_match,
             ))
 
         return evidence_list

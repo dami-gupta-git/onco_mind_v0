@@ -667,9 +667,9 @@ class CIViCClient:
                         scope="specific" if match_level == "variant" else "unspecified",
                         origin="kb",
                     )
-                    cancer_type_level = None
+                    cancer_type_match = None
                     if tumor_type:
-                        cancer_type_level = EvidenceLevel(
+                        cancer_type_match = EvidenceLevel(
                             level="cancer_specific" if tumor_matches else (disease or "pan_cancer"),
                             scope="specific" if tumor_matches else "unspecified",
                             origin="kb",
@@ -691,7 +691,7 @@ class CIViCClient:
                         trust_rating=node.get("evidenceRating"),
                         matched_profile=profile_name,
                         locus_match=locus_match,
-                        cancer_type_level=cancer_type_level,
+                        cancer_type_match=cancer_type_match,
                     ))
 
                     if len(evidence_list) >= max_results:
@@ -742,9 +742,9 @@ class CIViCClient:
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
             )
-            cancer_type_level = None
+            cancer_type_match = None
             if tumor_type:
-                cancer_type_level = EvidenceLevel(
+                cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if tumor_matches else (assertion.disease or "pan_cancer"),
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
@@ -769,7 +769,7 @@ class CIViCClient:
                 is_resistance=assertion.is_resistance(),
                 matched_profile=assertion.molecular_profile,
                 locus_match=locus_match,
-                cancer_type_level=cancer_type_level,
+                cancer_type_match=cancer_type_match,
             ))
 
         return evidence_list

@@ -562,9 +562,9 @@ class ClinicalTrialsClient:
                 origin="trial",
             )
 
-            # Build cancer_type_level based on whether trial targets specific tumor type
+            # Build cancer_type_match based on whether trial targets specific tumor type
             # Only set if tumor_type was queried; otherwise leave as None (unknown)
-            cancer_type_level = None
+            cancer_type_match = None
             if tumor_type:
                 tumor_type_lower = tumor_type.lower()
                 cancer_matches = False
@@ -574,7 +574,7 @@ class ClinicalTrialsClient:
                             cancer_matches = True
                             break
 
-                cancer_type_level = EvidenceLevel(
+                cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if cancer_matches else "pan_cancer",
                     scope="specific" if cancer_matches else "unspecified",
                     origin="trial",
@@ -590,7 +590,7 @@ class ClinicalTrialsClient:
                 sponsor=trial.sponsor,
                 url=trial.url,
                 locus_match=locus_match,
-                cancer_type_level=cancer_type_level,
+                cancer_type_match=cancer_type_match,
                 matched_biomarker=matched_biomarker,
             ))
 
@@ -657,7 +657,7 @@ class ClinicalTrialsClient:
                     )
                 # else: match_type == "none", locus_match stays None
 
-            # cancer_type_level - we searched by disease so it should match
+            # cancer_type_match - we searched by disease so it should match
             tumor_type_lower = tumor_type.lower()
             cancer_matches = False
             if trial.conditions:
@@ -666,7 +666,7 @@ class ClinicalTrialsClient:
                         cancer_matches = True
                         break
 
-            cancer_type_level = EvidenceLevel(
+            cancer_type_match = EvidenceLevel(
                 level="cancer_specific" if cancer_matches else "pan_cancer",
                 scope="specific" if cancer_matches else "unspecified",
                 origin="trial",
@@ -682,7 +682,7 @@ class ClinicalTrialsClient:
                 sponsor=trial.sponsor,
                 url=trial.url,
                 locus_match=locus_match,
-                cancer_type_level=cancer_type_level,
+                cancer_type_match=cancer_type_match,
                 matched_biomarker=matched_biomarker,
             ))
 
