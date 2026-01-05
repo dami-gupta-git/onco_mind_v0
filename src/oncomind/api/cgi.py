@@ -376,10 +376,8 @@ class CGIClient:
             # Determine match specificity
             match_level = self._determine_match_level(biomarker.alteration, gene, variant)
 
-            # Determine tumor match
-            tumor_matches = False
-            if tumor_type and biomarker.tumor_type:
-                tumor_matches = tumor_type.lower() in biomarker.tumor_type.lower() or biomarker.tumor_type.lower() in tumor_type.lower()
+            # Determine tumor match using centralized function
+            tumor_matches = tumor_types_match(tumor_type, biomarker.tumor_type) if tumor_type else False
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel

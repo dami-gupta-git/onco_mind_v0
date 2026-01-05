@@ -518,10 +518,8 @@ class VICCClient:
             # Build matched profile string
             matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
 
-            # Determine tumor match
-            tumor_matches = False
-            if tumor_type and assoc.disease:
-                tumor_matches = tumor_type.lower() in assoc.disease.lower() or assoc.disease.lower() in tumor_type.lower()
+            # Determine tumor match using centralized function
+            tumor_matches = tumor_types_match(tumor_type, assoc.disease) if tumor_type else False
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
