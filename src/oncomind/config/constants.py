@@ -628,6 +628,11 @@ LLM_DEFAULT_TEMPERATURE = 0.1
 # =============================================================================
 # Result limits for evidence fetching
 MAX_VICC_RESULTS = 500
+
+# VICC sources that have dedicated tabs/counts elsewhere
+# These should be filtered out when displaying VICC to avoid double-counting
+# VICC aggregates from: CIViC, CGI, JAX-CKB, OncoKB, PMKB, MolecularMatch
+VICC_DUPLICATE_SOURCES: set[str] = {"civic", "cgi"}
 MAX_CIVIC_ASSERTIONS = 500
 MAX_CLINICAL_TRIALS = 500
 MAX_LITERATURE_RESULTS = 30

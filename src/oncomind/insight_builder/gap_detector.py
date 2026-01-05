@@ -1373,13 +1373,14 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     if counts[0] > 0:
         result.add_source_match("FDA", *counts)
 
-    # VICC evidence - use the tumor_match property already computed by API client
+    # VICC evidence - use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
+    vicc_unique = evidence.get_vicc_unique()
     counts = count_matches(
-        evidence.vicc_evidence,
+        vicc_unique,
         lambda v: v.disease and v.tumor_match
     )
     if counts[0] > 0:
-        result.add_source_match("VICC", *counts)
+        result.add_source_match("VICC (meta-KB)", *counts)
 
     # CGI biomarkers (all tiers combined) - use tumor_match property
     all_cgi = (

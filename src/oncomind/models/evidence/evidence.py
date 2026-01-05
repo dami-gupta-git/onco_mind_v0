@@ -313,6 +313,19 @@ class Evidence(BaseModel):
                 drugs.append(name)
         return drugs
 
+    def get_vicc_unique(self) -> list[VICCEvidence]:
+        """Get VICC evidence excluding sources that have dedicated tabs.
+
+        VICC MetaKB aggregates from CIViC, CGI, JAX-CKB, OncoKB, PMKB, MolecularMatch.
+        Since we have dedicated tabs for CIViC and CGI, we filter those out here
+        to avoid double-counting in summaries and gap detection.
+
+        Returns:
+            List of VICCEvidence items from non-duplicate sources (JAX, OncoKB, PMKB, etc.)
+        """
+        from oncomind.config.constants import VICC_DUPLICATE_SOURCES
+        return [v for v in self.vicc_evidence if v.source.lower() not in VICC_DUPLICATE_SOURCES]
+
     def get_summary(self) -> str:
         """Generate a summary of the variant evidence."""
         parts = []
