@@ -524,12 +524,26 @@ class FDAClient:
                 if clinical_studies_note and not variant_in_indications:
                     full_indication = f"{full_indication}\n\n{clinical_studies_note}"
 
-                # Determine match level based on where variant was found
-                # variant_in_indications = exact variant in FDA indication text (variant level)
-                # clinical_studies_note with "X" pattern = codon level (e.g., G719X covers G719S)
-                # Otherwise = gene level
-                locus_match = "gene"
-                if variant_in_indications:
+                # Determine match level using centralized locus matching
+                # This properly handles:
+                # - variant level: exact match (G12C query, G12C approval)
+                # - codon level: same position, different AA (G12D query, G12C approval)
+                # - gene level: only gene matches
+                from oncomind.models.evidence.base import determine_locus_match
+
+                # Extract the approved variant from the indication text
+                # This is what the drug is actually approved for
+                approved_variant = None
+                if variant:
+                    # Try to find a variant pattern in the indication
+                    variant_pattern = re.search(rf'{gene}\s+([A-Z]\d+[A-Z])', indication_text.upper() if indication_text else "")
+                    if variant_pattern:
+                        approved_variant = variant_pattern.group(1)
+
+                # Use centralized locus matching
+                if approved_variant:
+                    locus_match = determine_locus_match(approved_variant, variant)
+                elif variant_in_indications:
                     locus_match = "variant"
                 elif clinical_studies_note:
                     # Check if it matched via codon pattern (X wildcard)
@@ -537,6 +551,8 @@ class FDAClient:
                         locus_match = "codon"
                     else:
                         locus_match = "variant"
+                else:
+                    locus_match = "gene"
 
                 return {
                     "drug_name": brand_name or generic_name,
