@@ -62,6 +62,32 @@ class TestIsPanCancerTerm:
         assert is_pan_cancer_term("  cancer  ")
         assert is_pan_cancer_term("  solid tumor  ")
 
+    def test_fda_tumor_agnostic_biomarkers_detected(self):
+        """FDA tumor-agnostic biomarkers should be detected via substring matching."""
+        fda_pan_cancer_indications = [
+            "MSI-H Solid Tumors",
+            "MSI-H/dMMR Solid Tumors",
+            "dMMR Advanced Solid Tumors",
+            "NTRK fusion-positive tumors",
+            "NTRK gene fusion solid tumors",
+            "Tumor-agnostic indication",
+            "TMB-H solid tumors",
+        ]
+        for indication in fda_pan_cancer_indications:
+            assert is_pan_cancer_term(indication), f"Expected '{indication}' to be pan-cancer"
+
+    def test_fda_indication_with_specific_cancer_not_pan_cancer(self):
+        """FDA indications for specific cancers should NOT be pan-cancer."""
+        specific_fda_indications = [
+            "Metastatic melanoma",
+            "Non-small cell lung cancer",
+            "HER2-positive breast cancer",
+            "BRAF V600E mutant colorectal cancer",
+            "Unresectable hepatocellular carcinoma",
+        ]
+        for indication in specific_fda_indications:
+            assert not is_pan_cancer_term(indication), f"Expected '{indication}' to NOT be pan-cancer"
+
 
 class TestTumorTypesMatch:
     """Tests for tumor_types_match function."""
