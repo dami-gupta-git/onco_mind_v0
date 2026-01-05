@@ -1,6 +1,6 @@
 """PubMed literature evidence models."""
 
-from pydantic import Field, computed_field
+from pydantic import Field
 
 from oncomind.models.evidence.base import EvidenceItemBase
 
@@ -29,18 +29,6 @@ class PubMedEvidence(EvidenceItemBase):
     is_open_access: bool | None = Field(None, description="Whether paper is open access")
     open_access_pdf_url: str | None = Field(None, description="URL to open access PDF if available")
     semantic_scholar_id: str | None = Field(None, description="Semantic Scholar paper ID")
-
-    @computed_field
-    @property
-    def match_level(self) -> str:
-        """Get the locus match level: 'variant', 'codon', or 'gene'.
-
-        Uses locus_match.level from EvidenceItemBase for consistency
-        with other evidence models.
-        """
-        if self.locus_match and self.locus_match.level:
-            return self.locus_match.level
-        return "gene"
 
     def is_resistance_evidence(self) -> bool:
         """Check if this article provides resistance evidence."""

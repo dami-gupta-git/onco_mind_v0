@@ -206,7 +206,7 @@ class CIViCClient:
             self._client = httpx.AsyncClient(timeout=self.timeout)
         return self._client
 
-    def _determine_match_level(
+    def _determine_locus_match(
         self,
         molecular_profile: str,
         gene: str,
@@ -577,7 +577,7 @@ class CIViCClient:
                     pmid = source_data.get("pmid") if source_data else None
 
                     # Determine match level
-                    match_level = self._determine_match_level(profile_name, gene, variant)
+                    locus_match = self._determine_locus_match(profile_name, gene, variant)
 
                     # Determine tumor match
                     tumor_matches = tumor_types_match(disease, tumor_type) if tumor_type and disease else False
@@ -585,8 +585,8 @@ class CIViCClient:
                     # Build EvidenceLevel objects for consistency with other models
                     from oncomind.models.evidence.base import EvidenceLevel
                     locus_variant_match = EvidenceLevel(
-                        level=match_level,
-                        scope="specific" if match_level == "variant" else "unspecified",
+                        level=locus_match,
+                        scope="specific" if locus_match == "variant" else "unspecified",
                         origin="kb",
                     )
                     cancer_type_match = None
@@ -649,7 +649,7 @@ class CIViCClient:
 
         for assertion in assertions:
             # Determine match specificity
-            match_level = self._determine_match_level(
+            locus_match = self._determine_locus_match(
                 assertion.molecular_profile,
                 gene,
                 variant,
@@ -660,8 +660,8 @@ class CIViCClient:
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
             locus_variant_match = EvidenceLevel(
-                level=match_level,
-                scope="specific" if match_level == "variant" else "unspecified",
+                level=locus_match,
+                scope="specific" if locus_match == "variant" else "unspecified",
                 origin="kb",
             )
             cancer_type_match = None

@@ -1,4 +1,4 @@
-from pydantic import Field, computed_field
+from pydantic import Field
 
 from oncomind.models.evidence.base import EvidenceItemBase
 
@@ -28,14 +28,3 @@ class VICCEvidence(EvidenceItemBase):
         description="The molecular profile that was actually matched"
     )
 
-    @computed_field
-    @property
-    def match_level(self) -> str:
-        """Get the locus match level: 'variant', 'codon', or 'gene'.
-
-        Uses locus_match.level from EvidenceItemBase for consistency
-        with ClinicalTrialEvidence, FDAApproval, CIViC, and CGI models.
-        """
-        if self.locus_match and self.locus_match.level:
-            return self.locus_match.level
-        return "gene"

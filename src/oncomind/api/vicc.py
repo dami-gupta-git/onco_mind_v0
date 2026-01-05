@@ -207,7 +207,7 @@ class VICCClient:
         """
         return f'{gene.upper()} AND "exon {exon}"'
 
-    def _determine_match_level(
+    def _determine_locus_match(
         self,
         assoc_variant: str | None,
         queried_gene: str,
@@ -514,7 +514,7 @@ class VICCClient:
 
         for assoc in associations:
             # Determine match specificity
-            match_level = self._determine_match_level(assoc.variant, gene, variant)
+            locus_match = self._determine_locus_match(assoc.variant, gene, variant)
             # Build matched profile string
             matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
 
@@ -525,8 +525,8 @@ class VICCClient:
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
             locus_variant_match = EvidenceLevel(
-                level=match_level,
-                scope="specific" if match_level == "variant" else "unspecified",
+                level=locus_match,
+                scope="specific" if locus_match == "variant" else "unspecified",
                 origin="kb",
             )
             cancer_type_match = None

@@ -48,7 +48,7 @@ class LLMInsightInput:
     data_availability: dict | None = None
     resistance_summary: str = ""
     sensitivity_summary: str = ""
-    match_level_summary: dict | None = None
+    locus_match_summary: dict | None = None
     generate_hypotheses: bool = True
 
 
@@ -180,7 +180,7 @@ class LLMService:
         data_availability: dict | None = None,
         resistance_summary: str = "",
         sensitivity_summary: str = "",
-        match_level_summary: dict | None = None,
+        locus_match_summary: dict | None = None,
         generate_hypotheses: bool = True,
     ) -> LLMInsight:
         """Generate variant insight using two-stage LLM pipeline.
@@ -201,7 +201,7 @@ class LLMService:
             data_availability: Dict with boolean flags for data presence
             resistance_summary: Concise summary of resistance evidence
             sensitivity_summary: Concise summary of sensitivity evidence
-            match_level_summary: Dict with match specificity info
+            locus_match_summary: Dict with locus match specificity info
             generate_hypotheses: Whether to run stage 2 (default True)
 
         Returns:
@@ -240,7 +240,7 @@ class LLMService:
             data_availability=data_availability,
             resistance_summary=resistance_summary,
             sensitivity_summary=sensitivity_summary,
-            match_level_summary=match_level_summary,
+            locus_match_summary=locus_match_summary,
         )
 
         synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
