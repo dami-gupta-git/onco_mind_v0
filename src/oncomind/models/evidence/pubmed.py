@@ -42,33 +42,6 @@ class PubMedEvidence(EvidenceItemBase):
             return self.locus_match.level
         return "gene"
 
-    @property
-    def is_tumor_match(self) -> bool | None:
-        """Check if evidence matches the queried tumor type.
-
-        Uses cancer_type_match from EvidenceItemBase for consistency
-        with other evidence models.
-
-        Returns:
-            True if cancer_specific, False if not, None if unknown.
-        """
-        if self.cancer_type_match and self.cancer_type_match.level:
-            return self.cancer_type_match.level == "cancer_specific"
-        return None
-
-    @property
-    def cancer_specificity(self) -> str | None:
-        """Get the cancer specificity level.
-
-        Returns:
-            'cancer_specific' if matches queried tumor,
-            'pan_cancer' if tumor-agnostic,
-            or the specific cancer name if different tumor type.
-        """
-        if self.cancer_type_match and self.cancer_type_match.level:
-            return self.cancer_type_match.level
-        return None
-
     def is_resistance_evidence(self) -> bool:
         """Check if this article provides resistance evidence."""
         return self.signal_type is not None and self.signal_type in ['resistance', 'mixed']
