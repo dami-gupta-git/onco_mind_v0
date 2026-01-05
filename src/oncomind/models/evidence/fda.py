@@ -26,34 +26,51 @@ class FDAApproval(EvidenceItemBase):
         """Extract the specific variant(s) the drug is approved for from indication text.
 
         Looks for patterns like 'KRAS G12C-mutated', 'EGFR exon 19 deletion', etc.
+        Falls back to known drug-variant associations when text parsing fails.
 
         Returns:
             The variant string (e.g., 'G12C', 'exon 19 del') or None if not found
         """
-        if not self.indication or not self.gene:
+        if not self.gene:
             return None
 
-        indication_upper = self.indication.upper()
         gene_upper = self.gene.upper()
 
-        # Pattern 1: Gene + specific variant (e.g., "KRAS G12C", "BRAF V600E")
-        # Matches: KRAS G12C, EGFR L858R, BRAF V600E, etc.
-        variant_pattern = rf'{gene_upper}\s+([A-Z]\d+[A-Z])'
-        match = re.search(variant_pattern, indication_upper)
-        if match:
-            return match.group(1)
+        # Try to extract from indication text first
+        if self.indication:
+            indication_upper = self.indication.upper()
 
-        # Pattern 2: Gene + exon notation (e.g., "EGFR exon 19 deletion")
-        exon_pattern = rf'{gene_upper}\s+(EXON\s*\d+\s*(?:DELETION|DEL|INSERTION|INS))'
-        match = re.search(exon_pattern, indication_upper)
-        if match:
-            return match.group(1).lower().replace('deletion', 'del').replace('insertion', 'ins')
+            # Pattern 1: Gene + specific variant (e.g., "KRAS G12C", "BRAF V600E")
+            # Matches: KRAS G12C, EGFR L858R, BRAF V600E, etc.
+            variant_pattern = rf'{gene_upper}\s+([A-Z]\d+[A-Z])'
+            match = re.search(variant_pattern, indication_upper)
+            if match:
+                return match.group(1)
 
-        # Pattern 3: Gene-mutated without specific variant (e.g., "BRCA-mutated")
-        # This means any mutation in the gene, not a specific variant
-        mutated_pattern = rf'{gene_upper}[\s-]*(MUTATED|MUTATION)'
-        if re.search(mutated_pattern, indication_upper):
-            return "any mutation"
+            # Pattern 2: Gene + exon notation (e.g., "EGFR exon 19 deletion")
+            exon_pattern = rf'{gene_upper}\s+(EXON\s*\d+\s*(?:DELETION|DEL|INSERTION|INS))'
+            match = re.search(exon_pattern, indication_upper)
+            if match:
+                return match.group(1).lower().replace('deletion', 'del').replace('insertion', 'ins')
+
+            # Pattern 3: Gene-mutated without specific variant (e.g., "BRCA-mutated")
+            # This means any mutation in the gene, not a specific variant
+            mutated_pattern = rf'{gene_upper}[\s-]*(MUTATED|MUTATION)'
+            if re.search(mutated_pattern, indication_upper):
+                return "any mutation"
+
+        # Fallback: Known variant-specific drugs
+        # These drugs are FDA-approved ONLY for specific variants, not the whole gene
+        drug_name = (self.generic_name or self.drug_name or "").lower()
+        known_variant_drugs = {
+            # KRAS G12C inhibitors - only approved for G12C
+            ("kras", "sotorasib"): "G12C",
+            ("kras", "adagrasib"): "G12C",
+        }
+
+        for (gene, drug), variant in known_variant_drugs.items():
+            if gene_upper == gene.upper() and drug in drug_name:
+                return variant
 
         return None
 

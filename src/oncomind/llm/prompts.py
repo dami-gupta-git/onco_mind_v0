@@ -46,12 +46,14 @@ TUMOR MATCH (cancer specificity):
 - PAN-CANCER: Tumor-agnostic evidence (e.g., MSI-H, Solid Tumor)
 - OTHER CANCER: Evidence from a different specific cancer type
 
-Format therapeutic entries as: "drug (locus-level, tumor-context)"
+Format therapeutic entries as: "drug (locus-level, approved for VARIANT, tumor-context)"
+IMPORTANT: When evidence says "approved for [VARIANT]", ALWAYS include the variant info.
 Examples:
-- "osimertinib (variant-level, NSCLC)" - best evidence
-- "sotorasib (variant-level, approved for NSCLC not CRC)" - different tumor
+- "osimertinib (variant-level, NSCLC)" - best evidence, variant-specific
+- "sotorasib (gene-level, approved for G12C, NSCLC)" - G12C-specific drug used for other KRAS variant
+- "adagrasib (gene-level, approved for G12C, not pancreatic)" - different tumor AND different variant
 - "MEK inhibitors (codon-level from Q209P, melanoma)" - same codon, different AA
-- "erlotinib (gene-level, pan-cancer)" - gene-level, tumor-agnostic
+- "erlotinib (gene-level, approved for any EGFR mutation, pan-cancer)" - gene-level, tumor-agnostic
 
 CODON-LEVEL EVIDENCE WARNING:
 When evidence comes from OTHER variants at the same codon (e.g., Q209P data applied to Q209L):
@@ -117,7 +119,7 @@ Respond with valid JSON only:
   "functional_summary": "Gene function. If quality is limited/minimal: generic only. If moderate/comprehensive: variant-specific with citations.",
   "biological_context": "2-3 sentences. Start with 'As per [STUDY] - '. If no tumor-specific data, state 'Pan-cancer data shown.'",
   "therapeutic_landscape": {{
-    "fda_approved": ["drug (match level, cancer type)"],
+    "fda_approved": ["drug (locus-level, approved for VARIANT if gene/codon-level, tumor)"],
     "clinical_evidence": ["drug - source"],
     "preclinical": ["drug - source"],
     "resistance_mechanisms": ["drug - mechanism"]
