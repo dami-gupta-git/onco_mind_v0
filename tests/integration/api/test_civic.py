@@ -343,10 +343,10 @@ class TestCIViCAssertionEvidence:
                 "BRAF", "V600E", tumor_type="melanoma", max_results=10
             )
 
-            # If we got results, is_tumor_match should be True
+            # If we got results, tumor_match should be True
             for evidence in evidence_list:
-                assert evidence.is_tumor_match is True, (
-                    f"Evidence with tumor filter should have is_tumor_match=True, "
+                assert evidence.tumor_match is True, (
+                    f"Evidence with tumor filter should have tumor_match=True, "
                     f"got disease={evidence.disease}"
                 )
 
@@ -554,10 +554,10 @@ class TestCIViCEvidenceItems:
                 "BRAF", "V600E", tumor_type="melanoma", max_results=10
             )
 
-            # If we got results, is_tumor_match should be True
+            # If we got results, tumor_match should be True
             for evidence in evidence_list:
-                assert evidence.is_tumor_match is True, (
-                    f"Evidence with tumor filter should have is_tumor_match=True, "
+                assert evidence.tumor_match is True, (
+                    f"Evidence with tumor filter should have tumor_match=True, "
                     f"got disease={evidence.disease}"
                 )
 

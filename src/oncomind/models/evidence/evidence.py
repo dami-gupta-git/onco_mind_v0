@@ -517,11 +517,8 @@ class Evidence(BaseModel):
                         else:
                             evidence_level = "Phase 2"
 
-                        # Determine cancer specificity from trial conditions
-                        cancer_specificity = "pan_cancer"
-                        if trial.conditions and self.context.tumor_type:
-                            if any(tumor_types_match(self.context.tumor_type, condition) for condition in trial.conditions):
-                                cancer_specificity = "cancer_specific"
+                        # Use the tumor_match property already set by the API client
+                        cancer_specificity = "cancer_specific" if trial.tumor_match else "pan_cancer"
 
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=drug,

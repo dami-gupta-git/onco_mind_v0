@@ -1,7 +1,7 @@
 """Base class for all evidence items with common metadata fields."""
 
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, PAN_CANCER_BIOMARKERS, TUMOR_TYPE_MAPPINGS
 
@@ -200,9 +200,12 @@ class EvidenceItemBase(BaseModel):
         description="Cancer type specificity evidence metadata"
     )
 
+    @computed_field
     @property
-    def is_tumor_match(self) -> bool | None:
+    def tumor_match(self) -> bool | None:
         """Check if evidence matches the queried tumor type.
+
+        This is a computed field so it's included in model_dump() for serialization.
 
         Returns:
             True if cancer_specific, False if not cancer_specific, None if unknown.

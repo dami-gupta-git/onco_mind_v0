@@ -568,8 +568,9 @@ class ClinicalTrialsClient:
             # Only set if tumor_type was queried; otherwise leave as None (unknown)
             cancer_type_match = None
             if tumor_type:
+                # Args: source_disease (condition from trial), queried_tumor (user's query)
                 cancer_matches = any(
-                    tumor_types_match(tumor_type, condition)
+                    tumor_types_match(condition, tumor_type)
                     for condition in (trial.conditions or [])
                 )
 
@@ -657,8 +658,9 @@ class ClinicalTrialsClient:
                 # else: match_type == "none", locus_match stays None
 
             # cancer_type_match - we searched by disease so it should match
+            # Args: source_disease (condition from trial), queried_tumor (user's query)
             cancer_matches = any(
-                tumor_types_match(tumor_type, condition)
+                tumor_types_match(condition, tumor_type)
                 for condition in (trial.conditions or [])
             )
 

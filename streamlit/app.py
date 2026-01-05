@@ -111,17 +111,14 @@ EXAMPLE_VARIANTS = {
     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
     "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
     "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
-    "PIK3CA H1047R - Breast Cancer": ("PIK3CA", "H1047R", "Breast Cancer"),
+    "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
-    "TP53 R248W - Multiple": ("TP53", "R248W", ""),
-    "TP53 R273H - Multiple": ("TP53", "R273H", ""),
     "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
     "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
     "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
     "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
     "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
-    "MET exon 14 skip - NSCLC": ("MET", "exon14del", "NSCLC"),
 }
 
 # Initialize session state for persisting results
@@ -502,8 +499,8 @@ with tab1:
     **Match Level:** 🎯 = variant-specific, 📍 = codon-level, 🧬 = gene-level
     """)
                         # Use markdown table for clickable source links
-                        rows = ["| Source | Locus Match | Drugs | Response | Disease | Level |",
-                                "|--------|-------------|-------|----------|---------|-------|"]
+                        rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease | Level |",
+                                "|--------|-------------|-------------|-------|----------|---------|-------|"]
                         for v in vicc:
                             source = (v.get('source') or 'vicc').upper()
                             pub_url = v.get('publication_url')
@@ -513,12 +510,15 @@ with tab1:
                             source_link = f"[{source}]({pub_url})" if pub_url else source
                             match_level = v.get('match_level', '')
                             match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match_level, "")
+                            # Tumor match indicator
+                            tumor_match = v.get('tumor_match')
+                            tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
                             response = v.get('response_type', 'Unknown')
                             disease = (v.get('disease', '') or '')[:25]
                             level = v.get('evidence_level', '')
-                            rows.append(f"| {source_link} | {match_display} | {drugs} | {response} | {disease} | {level} |")
+                            rows.append(f"| {source_link} | {match_display} | {tumor_match_cell} | {drugs} | {response} | {disease} | {level} |")
                         scrollable_table("\n".join(rows))
                     tab_idx += 1
 

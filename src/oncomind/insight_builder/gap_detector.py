@@ -121,11 +121,20 @@ def count_with_levels(
                 elif tissue and not is_pan_cancer_term(tissue):
                     counts.other_cancers.add(tissue)
             else:
-                # Default: use tumor_types_match
-                if tumor_types_match(tumor_type, tissue):
+                # Default: use the tumor_match property if available (single source of truth)
+                # This ensures consistency with evidence tables in the UI
+                item_tumor_match = getattr(item, 'tumor_match', None)
+                if item_tumor_match is True:
                     counts.tumor += 1
-                elif tissue and not is_pan_cancer_term(tissue):
+                elif item_tumor_match is False and tissue and not is_pan_cancer_term(tissue):
                     counts.other_cancers.add(tissue)
+                elif item_tumor_match is None:
+                    # Fallback for items without tumor_match property
+                    # Args: source_disease (tissue from evidence), queried_tumor (user's query)
+                    if tumor_types_match(tissue, tumor_type):
+                        counts.tumor += 1
+                    elif tissue and not is_pan_cancer_term(tissue):
+                        counts.other_cancers.add(tissue)
 
     return counts
 
@@ -547,14 +556,9 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
     cgi_counts = count_with_levels(evidence.cgi_biomarkers, ctx.tumor_type)
     vicc_counts = count_with_levels(evidence.vicc_evidence, ctx.tumor_type)
 
-    # FDA approvals - use parse_indication_for_tumor for tumor matching
-    def fda_tumor_check(approval):
-        if ctx.tumor_type and approval.indication:
-            parsed = approval.parse_indication_for_tumor(ctx.tumor_type)
-            return parsed.get('tumor_match', False)
-        return False
-
-    fda_counts = count_with_levels(evidence.fda_approvals, ctx.tumor_type, fda_tumor_check)
+    # FDA approvals - use tumor_match property (set by evidence_aggregator)
+    # No custom tumor_check_fn needed; count_with_levels will use the tumor_match property
+    fda_counts = count_with_levels(evidence.fda_approvals, ctx.tumor_type)
 
     # Aggregate counts
     counts = MatchCounts().add(cgi_counts).add(vicc_counts).add(fda_counts)
@@ -661,9 +665,10 @@ def _check_depmap_drug_sensitivity(evidence: "Evidence", ctx: GapDetectionContex
     has_tumor_matched = False
     if ctx.tumor_type and evidence.depmap_evidence.cell_line_models:
         mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        # Args: source_disease (from model), queried_tumor (user's query)
         tumor_models = [
             m for m in mutant_models
-            if m.primary_disease and tumor_types_match(ctx.tumor_type, m.primary_disease)
+            if m.primary_disease and tumor_types_match(m.primary_disease, ctx.tumor_type)
         ]
         has_tumor_matched = bool(tumor_models)
     elif not ctx.tumor_type:
@@ -837,8 +842,8 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
             if level in match_counts:
                 match_counts[level] += 1
 
-            # Count tumor match using is_tumor_match property
-            if trial.is_tumor_match is True:
+            # Count tumor match using tumor_match property
+            if trial.tumor_match is True:
                 tumor_match_counts["tumor"] += 1
             else:
                 tumor_match_counts["other"] += 1
@@ -891,9 +896,10 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
         if mutant_models:
             # Check for tumor-type-specific models if tumor type is specified
             if ctx.tumor_type:
+                # Args: source_disease (from model), queried_tumor (user's query)
                 tumor_models = [
                     m for m in mutant_models
-                    if m.primary_disease and tumor_types_match(ctx.tumor_type, m.primary_disease)
+                    if m.primary_disease and tumor_types_match(m.primary_disease, ctx.tumor_type)
                 ]
                 if tumor_models:
                     # Only add tumor-specific entry (not the general one)
@@ -1229,9 +1235,10 @@ def _get_top_sensitive_drugs(evidence: "Evidence", tumor_type: str | None = None
     # Check for tumor-matched cell lines
     if tumor_type and evidence.depmap_evidence.cell_line_models:
         mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        # Args: source_disease (from model), queried_tumor (user's query)
         tumor_matched = [
             m for m in mutant_models
-            if m.primary_disease and tumor_types_match(tumor_type, m.primary_disease)
+            if m.primary_disease and tumor_types_match(m.primary_disease, tumor_type)
         ]
         if not tumor_matched:
             # No tumor-matched cell lines - don't suggest drugs from unrelated tumor types
@@ -1345,10 +1352,10 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
                     gene += 1
         return count, variant, codon, gene
 
-    # CIViC assertions
+    # CIViC assertions - use the tumor_match property already computed by API client
     counts = count_matches(
         evidence.civic_assertions,
-        lambda a: tumor_types_match(tumor_type, a.disease)
+        lambda a: a.disease and a.tumor_match
     )
     if counts[0] > 0:
         result.add_source_match("CIViC Assertions", *counts)
@@ -1356,38 +1363,34 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     # CIViC evidence
     counts = count_matches(
         evidence.civic_evidence,
-        lambda c: c.disease and c.is_tumor_match
+        lambda c: c.disease and c.tumor_match
     )
     if counts[0] > 0:
         result.add_source_match("CIViC", *counts)
 
-    # FDA approvals
-    def fda_tumor_check(approval):
-        if not approval.indication:
-            return False
-        parsed = approval.parse_indication_for_tumor(tumor_type)
-        return parsed.get('tumor_match', False)
-
-    counts = count_matches(evidence.fda_approvals, fda_tumor_check)
+    # FDA approvals - use tumor_match property (set by evidence_aggregator)
+    counts = count_matches(
+        evidence.fda_approvals,
+        lambda f: f.indication and f.tumor_match
+    )
     if counts[0] > 0:
         result.add_source_match("FDA", *counts)
 
-    # VICC evidence
+    # VICC evidence - use the tumor_match property already computed by API client
     counts = count_matches(
         evidence.vicc_evidence,
-        lambda v: tumor_types_match(tumor_type, v.disease)
+        lambda v: v.disease and v.tumor_match
     )
     if counts[0] > 0:
         result.add_source_match("VICC", *counts)
 
-    # CGI biomarkers (all tiers combined)
-    cgi_tumor_check = lambda c: tumor_types_match(tumor_type, c.tumor_type)
+    # CGI biomarkers (all tiers combined) - use tumor_match property
     all_cgi = (
         list(evidence.cgi_biomarkers) +
         list(evidence.preclinical_biomarkers) +
         list(evidence.early_phase_biomarkers)
     )
-    counts = count_matches(all_cgi, cgi_tumor_check)
+    counts = count_matches(all_cgi, lambda c: c.tumor_type and c.tumor_match)
     if counts[0] > 0:
         result.add_source_match("CGI", *counts)
 
