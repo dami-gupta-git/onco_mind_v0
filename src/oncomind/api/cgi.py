@@ -22,7 +22,12 @@ from typing import Any
 
 import httpx
 
-from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
+from oncomind.models.evidence.base import (
+    is_pan_cancer_term,
+    tumor_types_match,
+    determine_locus_match,
+    extract_variant_position,
+)
 
 
 class CGIError(Exception):
@@ -216,6 +221,12 @@ class CGIClient:
     def _determine_locus_match(self, cgi_alteration: str, gene: str, variant: str) -> str:
         """Determine the match specificity level for a CGI alteration.
 
+        CGI-specific parsing handles:
+        - Comma-separated patterns (e.g., "EGFR:G719.,L858R")
+        - Wildcard patterns: "G719." for codon-level, "." for gene-level
+
+        After parsing, delegates to the core determine_locus_match() function.
+
         Args:
             cgi_alteration: CGI alteration string (e.g., "EGFR:G719.,L858R")
             gene: Gene symbol (e.g., "EGFR")
@@ -229,9 +240,12 @@ class CGIClient:
 
         gene_upper = gene.upper()
         variant_upper = variant.upper().replace("P.", "")
+        queried_position = extract_variant_position(variant)
 
         # Split by comma to get individual variants
         parts = cgi_alteration.replace(f"{gene_upper}:", "").split(",")
+
+        best_match = "gene"
 
         for part in parts:
             part = part.strip().upper()
@@ -241,29 +255,34 @@ class CGIClient:
             if ":" in part:
                 part = part.split(":")[-1]
 
-            # Exact match = variant level
-            if part == variant_upper:
-                return "variant"
-
-            # Wildcard for any mutation: "." = gene level
+            # Wildcard for any mutation: "." = gene level (skip, already default)
             if part == ".":
-                return "gene"
+                continue
 
-            # Pattern match: "G719." = codon level (same position, any AA)
+            # CGI-specific: Pattern match "G719." = codon level (same position, any AA)
             if part.endswith(".") and not part.startswith("."):
                 base_pattern = part[:-1]
                 if variant_upper.startswith(base_pattern):
-                    return "codon"
+                    if best_match != "variant":
+                        best_match = "codon"
+                    continue
 
-            # Position wildcard: ".13." = codon level
+            # CGI-specific: Position wildcard ".13." = codon level
             if part.startswith(".") and part.endswith(".") and len(part) > 2:
                 position_str = part[1:-1]
-                if position_str.isdigit():
-                    variant_match = re.match(r'^([A-Z])(\d+)([A-Z])$', variant_upper)
-                    if variant_match and variant_match.group(2) == position_str:
-                        return "codon"
+                if position_str.isdigit() and queried_position == position_str:
+                    if best_match != "variant":
+                        best_match = "codon"
+                    continue
 
-        return "gene"
+            # For non-wildcard patterns, use the core matching function
+            match_result = determine_locus_match(part, variant_upper)
+            if match_result == "variant":
+                return "variant"  # Exact match, return immediately
+            if match_result == "codon" and best_match != "variant":
+                best_match = "codon"
+
+        return best_match
 
     def fetch_biomarkers(
         self, gene: str, variant: str, tumor_type: str | None = None

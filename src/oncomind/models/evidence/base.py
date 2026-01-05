@@ -1,9 +1,87 @@
 """Base class for all evidence items with common metadata fields."""
 
+import re
 from typing import Literal
 from pydantic import BaseModel, Field, computed_field
 
 from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, PAN_CANCER_BIOMARKERS, TUMOR_TYPE_MAPPINGS
+
+
+# Type alias for locus match levels
+LocusMatch = Literal["variant", "codon", "gene"]
+
+# Regex pattern to extract position from variant notation (e.g., V600E -> 600, L858R -> 858)
+_VARIANT_POSITION_PATTERN = re.compile(r'[A-Z](\d+)')
+
+
+def determine_locus_match(
+    source_variant: str | None,
+    queried_variant: str | None,
+) -> LocusMatch:
+    """Core locus matching: compare two normalized variant strings.
+
+    This is the centralized function for determining evidence specificity.
+    All API clients should use this function (or call it via their wrappers
+    that handle source-specific parsing).
+
+    Matching hierarchy:
+    - 'variant': Exact match of the queried variant
+    - 'codon': Same position, different amino acid (e.g., V600E vs V600K)
+    - 'gene': Only gene matches, not specific variant
+
+    Args:
+        source_variant: Variant from the knowledge base (e.g., "V600E", "L858R")
+        queried_variant: User-provided variant to match against
+
+    Returns:
+        'variant' if exact match,
+        'codon' if same position different AA,
+        'gene' if no match or missing data
+    """
+    # Handle missing data
+    if not source_variant or not queried_variant:
+        return "gene"
+
+    # Clean variants for comparison (remove p. prefix, uppercase)
+    source_clean = source_variant.replace("p.", "").replace("P.", "").upper().strip()
+    queried_clean = queried_variant.replace("p.", "").replace("P.", "").upper().strip()
+
+    # Skip empty strings after cleaning
+    if not source_clean or not queried_clean:
+        return "gene"
+
+    # Exact variant match (bidirectional substring for flexibility)
+    if queried_clean == source_clean:
+        return "variant"
+    if queried_clean in source_clean or source_clean in queried_clean:
+        return "variant"
+
+    # Check for codon-level match (same position, different amino acid change)
+    queried_pos_match = _VARIANT_POSITION_PATTERN.search(queried_clean)
+    source_pos_match = _VARIANT_POSITION_PATTERN.search(source_clean)
+
+    if queried_pos_match and source_pos_match:
+        if queried_pos_match.group(1) == source_pos_match.group(1):
+            return "codon"
+
+    return "gene"
+
+
+def extract_variant_position(variant: str | None) -> str | None:
+    """Extract the numeric position from a variant notation.
+
+    Args:
+        variant: Variant notation (e.g., "V600E", "L858R", "p.G719S")
+
+    Returns:
+        Position string (e.g., "600", "858", "719") or None if not found
+    """
+    if not variant:
+        return None
+
+    clean = variant.replace("p.", "").replace("P.", "").upper().strip()
+    match = _VARIANT_POSITION_PATTERN.search(clean)
+    return match.group(1) if match else None
 
 
 # Type aliases for the allowed values

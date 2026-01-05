@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
+from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match, determine_locus_match
 
 
 class VICCError(Exception):
@@ -215,39 +215,17 @@ class VICCClient:
     ) -> str:
         """Determine the match specificity level for a VICC association.
 
+        Delegates to the core determine_locus_match() function.
+
         Args:
             assoc_variant: The variant from the VICC association (e.g., "V600E")
-            queried_gene: The gene being queried
+            queried_gene: The gene being queried (unused, kept for API compatibility)
             queried_variant: The variant being queried (e.g., "V600E")
 
         Returns:
             Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
         """
-        import re
-
-        if not queried_variant:
-            return "gene"
-
-        if not assoc_variant:
-            return "gene"
-
-        # Clean variants for comparison
-        assoc_upper = assoc_variant.replace("p.", "").upper()
-        queried_upper = queried_variant.replace("p.", "").upper()
-
-        # Exact variant match
-        if queried_upper in assoc_upper or assoc_upper in queried_upper:
-            return "variant"
-
-        # Check for codon-level match (same position, different amino acid change)
-        queried_pos_match = re.search(r'[A-Z](\d+)', queried_upper)
-        assoc_pos_match = re.search(r'[A-Z](\d+)', assoc_upper)
-
-        if queried_pos_match and assoc_pos_match:
-            if queried_pos_match.group(1) == assoc_pos_match.group(1):
-                return "codon"
-
-        return "gene"
+        return determine_locus_match(assoc_variant, queried_variant)
 
     def _parse_association(self, hit: dict[str, Any]) -> VICCAssociation | None:
         """Parse a VICC API hit into an association object.
