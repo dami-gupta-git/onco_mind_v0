@@ -528,15 +528,15 @@ class FDAClient:
                 # variant_in_indications = exact variant in FDA indication text (variant level)
                 # clinical_studies_note with "X" pattern = codon level (e.g., G719X covers G719S)
                 # Otherwise = gene level
-                variant_match_level = "gene"
+                locus_match = "gene"
                 if variant_in_indications:
-                    variant_match_level = "variant"
+                    locus_match = "variant"
                 elif clinical_studies_note:
                     # Check if it matched via codon pattern (X wildcard)
                     if "variant class includes" in (clinical_studies_note or ""):
-                        variant_match_level = "codon"
+                        locus_match = "codon"
                     else:
-                        variant_match_level = "variant"
+                        locus_match = "variant"
 
                 return {
                     "drug_name": brand_name or generic_name,
@@ -549,7 +549,7 @@ class FDAClient:
                     "variant_in_indications": variant_in_indications,
                     "variant_in_clinical_studies": clinical_studies_note is not None,
                     # Use EvidenceItemBase fields for consistency with ClinicalTrialEvidence
-                    "locus_variant_match": {"level": variant_match_level, "scope": "specific", "origin": "kb"},
+                    "locus_variant_match": {"level": locus_match, "scope": "specific", "origin": "kb"},
                 }
 
             return None

@@ -213,7 +213,7 @@ class CGIClient:
 
         return False
 
-    def _determine_match_level(self, cgi_alteration: str, gene: str, variant: str) -> str:
+    def _determine_locus_match(self, cgi_alteration: str, gene: str, variant: str) -> str:
         """Determine the match specificity level for a CGI alteration.
 
         Args:
@@ -374,7 +374,7 @@ class CGIClient:
 
         for biomarker in biomarkers:
             # Determine match specificity
-            match_level = self._determine_match_level(biomarker.alteration, gene, variant)
+            locus_match = self._determine_locus_match(biomarker.alteration, gene, variant)
 
             # Determine tumor match using centralized function
             # Args: source_disease (from biomarker), queried_tumor (user's query)
@@ -383,8 +383,8 @@ class CGIClient:
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
             locus_variant_match = EvidenceLevel(
-                level=match_level,
-                scope="specific" if match_level == "variant" else "unspecified",
+                level=locus_match,
+                scope="specific" if locus_match == "variant" else "unspecified",
                 origin="kb",
             )
             cancer_type_match = None

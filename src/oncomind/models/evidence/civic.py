@@ -32,18 +32,6 @@ class CIViCEvidence(EvidenceItemBase):
 
     @computed_field
     @property
-    def match_level(self) -> str:
-        """Get the locus match level: 'variant', 'codon', or 'gene'.
-
-        Uses locus_match.level from EvidenceItemBase for consistency
-        with ClinicalTrialEvidence and FDAApproval.
-        """
-        if self.locus_match and self.locus_match.level:
-            return self.locus_match.level
-        return "gene"
-
-    @computed_field
-    @property
     def eid(self) -> str | None:
         """Formatted Evidence Item ID (e.g., 'EID5586')."""
         if self.evidence_id is not None:
@@ -90,18 +78,6 @@ class CIViCAssertionEvidence(EvidenceItemBase):
         default=None,
         description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
     )
-
-    @computed_field
-    @property
-    def match_level(self) -> str:
-        """Get the locus match level: 'variant', 'codon', or 'gene'.
-
-        Uses locus_match.level from EvidenceItemBase for consistency
-        with ClinicalTrialEvidence and FDAApproval.
-        """
-        if self.locus_match and self.locus_match.level:
-            return self.locus_match.level
-        return "gene"
 
     @computed_field
     @property

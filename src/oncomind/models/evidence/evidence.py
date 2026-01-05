@@ -1363,7 +1363,7 @@ class Evidence(BaseModel):
                 counts['gene'] += 1
         return counts
 
-    def get_match_level_summary(self) -> dict:
+    def get_locus_match_summary(self) -> dict:
         """Compute summary statistics about evidence match specificity.
 
         Returns:

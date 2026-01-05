@@ -204,7 +204,7 @@ def create_synthesis_prompt(
     data_availability: dict | None = None,
     resistance_summary: str = "",
     sensitivity_summary: str = "",
-    match_level_summary: dict | None = None,
+    locus_match_summary: dict | None = None,
 ) -> list[dict]:
     """Create prompt for stage 1: evidence synthesis."""
     tumor_display = tumor_type or "Pan-cancer"
@@ -217,16 +217,16 @@ def create_synthesis_prompt(
     if data_availability is None:
         data_availability = {}
 
-    # Build match level text for LLM context
-    if match_level_summary:
-        match_level_text = match_level_summary.get("summary_text", "No match level data available.")
+    # Build locus match text for LLM context
+    if locus_match_summary:
+        locus_match_text = locus_match_summary.get("summary_text", "No locus match data available.")
         # Add detail about what's variant-specific vs gene-level
-        if match_level_summary.get("is_all_gene_level"):
-            match_level_text += " CAUTION: No variant-specific evidence found - use gene-level inferences carefully."
-        elif not match_level_summary.get("has_variant_specific"):
-            match_level_text += " WARNING: Limited variant-specific data."
+        if locus_match_summary.get("is_all_gene_level"):
+            locus_match_text += " CAUTION: No variant-specific evidence found - use gene-level inferences carefully."
+        elif not locus_match_summary.get("has_variant_specific"):
+            locus_match_text += " WARNING: Limited variant-specific data."
     else:
-        match_level_text = "No match level data available."
+        locus_match_text = "No locus match data available."
 
     user_content = SYNTHESIS_USER_PROMPT.format(
         gene=gene,
@@ -236,7 +236,7 @@ def create_synthesis_prompt(
         has_civic_assertions=str(data_availability.get("has_civic_assertions", False)).upper(),
         has_fda_approvals=str(data_availability.get("has_fda_approvals", False)).upper(),
         has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
-        match_level_text=match_level_text,
+        match_level_text=locus_match_text,
         biological_context=biological_context or "No cBioPortal data available.",
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
@@ -318,7 +318,7 @@ def create_research_prompt(
     data_availability: dict | None = None,
     resistance_summary: str = "",
     sensitivity_summary: str = "",
-    match_level_summary: dict | None = None,
+    locus_match_summary: dict | None = None,
 ) -> list[dict]:
     """Create prompt for research-focused variant synthesis.
 
@@ -336,5 +336,5 @@ def create_research_prompt(
         data_availability=data_availability,
         resistance_summary=resistance_summary,
         sensitivity_summary=sensitivity_summary,
-        match_level_summary=match_level_summary,
+        locus_match_summary=locus_match_summary,
     )
