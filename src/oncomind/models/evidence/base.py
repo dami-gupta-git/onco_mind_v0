@@ -187,11 +187,11 @@ class EvidenceItemBase(BaseModel):
     """Base class for all evidence items.
 
     Provides common metadata fields for tracking evidence provenance:
-    - locus_match: Tracks whether evidence is at variant or gene level
+    - locus_variant_match: Tracks whether evidence is at variant or gene level
     - cancer_type_match: Tracks whether evidence is cancer-specific or pan-cancer
     """
 
-    locus_match: EvidenceLevel | None = Field(
+    locus_variant_match: EvidenceLevel | None = Field(
         default=None,
         description="Variant/gene level evidence metadata"
     )
@@ -199,6 +199,20 @@ class EvidenceItemBase(BaseModel):
         default=None,
         description="Cancer type specificity evidence metadata"
     )
+
+    @computed_field
+    @property
+    def locus_match(self) -> str:
+        """Get the locus match level: 'variant', 'codon', or 'gene'.
+
+        This is a computed field so it's included in model_dump() for serialization.
+
+        Returns:
+            The locus match level string, defaults to 'gene' if not set.
+        """
+        if self.locus_variant_match and self.locus_variant_match.level:
+            return self.locus_variant_match.level
+        return "gene"
 
     @computed_field
     @property
