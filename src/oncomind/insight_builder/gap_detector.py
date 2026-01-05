@@ -86,7 +86,7 @@ def count_with_levels(
     """Count items with match level breakdown and tumor matching.
 
     Args:
-        items: List of evidence items (must have match_level attribute or be passable to _get_match_level)
+        items: List of evidence items (must have locus_match attribute or be passable to _get_locus_match)
         tumor_type: The tumor type to match against (optional)
         tumor_check_fn: Function(item) -> bool to check tumor match. If None, uses
             tumor_types_match with item.tumor_type or item.disease attribute.
@@ -98,7 +98,7 @@ def count_with_levels(
 
     for item in items:
         counts.total += 1
-        level = _get_match_level(item)
+        level = _get_locus_match(item)
         if level == 'variant':
             counts.variant += 1
         elif level == 'codon':
@@ -422,8 +422,8 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
             if source in source_counts:
                 source_counts[source] += 1
 
-            # Count match level
-            level = therapy.match_level or "gene"
+            # Count locus match level
+            level = therapy.locus_match or "gene"
             if level in match_counts:
                 match_counts[level] += 1
 
@@ -701,7 +701,7 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
     counts = MatchCounts()
 
     # 1. PubMed articles with resistance evidence
-    # PubMed articles don't have match_level (count as gene-level) or tumor type info
+    # PubMed articles don't have locus_match (count as gene-level) or tumor type info
     resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
     if resistance_articles:
         resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
@@ -837,8 +837,8 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
         tumor_match_counts: dict[str, int] = {"tumor": 0, "other": 0}
 
         for trial in evidence.clinical_trials:
-            # Count locus match using match_level property
-            level = trial.match_level
+            # Count locus match using locus_match property
+            level = trial.locus_match
             if level in match_counts:
                 match_counts[level] += 1
 
@@ -1304,8 +1304,8 @@ def _sort_characterized_by_category(
     return sorted(items, key=lambda x: _CATEGORY_ORDER.get(x.category, 99))
 
 
-def _get_match_level(item) -> str:
-    """Extract match level from an evidence item.
+def _get_locus_match(item) -> str:
+    """Extract locus match level from an evidence item.
 
     Returns 'variant', 'codon', or 'gene'.
     """
@@ -1340,7 +1340,7 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
         for item in items:
             if tumor_check_fn(item):
                 count += 1
-                level = _get_match_level(item)
+                level = _get_locus_match(item)
                 if level == "variant":
                     variant += 1
                 elif level == "codon":

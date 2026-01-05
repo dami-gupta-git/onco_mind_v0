@@ -507,10 +507,10 @@ Return JSON with these exact fields:
 {{
     "mutation_type": "<primary|secondary|both|unknown>",
     "resistant_to": [
-        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "mechanism": "<mechanism>", "match_level": "<variant|codon|gene>"}}
+        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "mechanism": "<mechanism>", "locus_match": "<variant|codon|gene>"}}
     ],
     "sensitive_to": [
-        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "match_level": "<variant|codon|gene>"}}
+        {{"drug": "<drug name>", "evidence": "<preclinical|clinical|FDA-labeled>", "locus_match": "<variant|codon|gene>"}}
     ],
     "clinical_significance": "<2-3 sentence summary>",
     "evidence_level": "<FDA-approved|Phase 3|Phase 2|Preclinical|Case reports|None>",

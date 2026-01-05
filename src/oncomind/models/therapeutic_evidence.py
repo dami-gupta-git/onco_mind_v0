@@ -94,7 +94,7 @@ class TherapeuticEvidence(BaseModel):
     )
 
     # Match specificity tracking
-    match_level: str | None = Field(
+    locus_match: str | None = Field(
         None,
         description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
     )

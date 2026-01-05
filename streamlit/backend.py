@@ -160,7 +160,7 @@ def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
             "source_url": e.source_url,
             "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
             # Match specificity tracking
-            "match_level": e.match_level,
+            "locus_match": e.locus_match,
             "matched_profile": e.matched_profile,
             "tumor_match": e.tumor_match,
         })
@@ -242,7 +242,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "black_box_warning": a.black_box_warning,
                 "dosing_for_variant": a.dosing_for_variant,
                 # Match specificity tracking
-                "match_level": a.match_level,
+                "locus_match": a.locus_match,
             }
             for a in evidence.fda_approvals
         ],
@@ -258,7 +258,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "amp_tier": a.amp_tier,
                 "description": a.description,
                 # Match specificity tracking
-                "match_level": a.match_level,
+                "locus_match": a.locus_match,
                 "matched_profile": a.matched_profile,
                 "tumor_match": a.tumor_match,
             }
@@ -276,7 +276,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "molecular_profile_score": v.molecular_profile_score,
                 "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
                 # Match specificity tracking
-                "match_level": v.match_level,
+                "locus_match": v.locus_match,
                 "matched_profile": v.matched_profile,
                 "tumor_match": v.tumor_match,
             }
@@ -290,7 +290,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "evidence_level": b.evidence_level,
                 "fda_approved": b.fda_approved,
                 # Match specificity tracking
-                "match_level": b.match_level,
+                "locus_match": b.locus_match,
                 "matched_alteration": b.matched_alteration,
             }
             for b in evidence.cgi_biomarkers
@@ -321,7 +321,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "drugs": t.interventions,
                 "conditions": t.conditions,
                 "url": t.url,
-                "variant_specific": t.match_level == "variant",
+                "variant_specific": t.locus_match == "variant",
                 "matched_biomarker": t.matched_biomarker,
                 "match_scope": t.match_scope,
                 "tumor_match": t.tumor_match,
@@ -336,7 +336,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "journal": a.journal,
                 "signal_type": a.signal_type,
                 "url": a.url,
-                "match_level": a.match_level,
+                "locus_match": a.locus_match,
                 "cancer_specificity": a.cancer_specificity,
             }
             for a in evidence.pubmed_articles
@@ -348,7 +348,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "association": b.association,
                 "evidence_level": b.evidence_level,
                 "tumor_type": b.tumor_type,
-                "match_level": b.match_level,
+                "locus_match": b.locus_match,
             }
             for b in evidence.preclinical_biomarkers
         ],
@@ -358,7 +358,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "association": b.association,
                 "evidence_level": b.evidence_level,
                 "tumor_type": b.tumor_type,
-                "match_level": b.match_level,
+                "locus_match": b.locus_match,
             }
             for b in evidence.early_phase_biomarkers
         ],
@@ -423,7 +423,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "source_url": t.source_url,
                 "confidence": t.confidence,
                 # Match specificity tracking
-                "match_level": t.match_level,
+                "locus_match": t.locus_match,
                 # Cancer type specificity
                 "cancer_specificity": t.cancer_specificity,
             }
