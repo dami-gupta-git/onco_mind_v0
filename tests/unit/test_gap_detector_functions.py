@@ -441,6 +441,7 @@ class TestCheckTumorSpecificEvidence:
         assertion = MagicMock()
         assertion.disease = "Melanoma"
         assertion.locus_match = None
+        assertion.tumor_match = False  # Explicitly set tumor_match to False
         mock_evidence.civic_assertions = [assertion]
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "Pancreatic")
@@ -479,18 +480,17 @@ class TestCheckTumorSpecificEvidence:
         assert tumor_match.cgi_biomarkers.count == 3
 
     def test_tumor_evidence_fda_parsing(self, mock_evidence):
-        """TumorEvidenceMatch should use FDA approval's parse_indication_for_tumor method."""
-        # Create FDA approval with indication parsing
+        """TumorEvidenceMatch should use FDA approval's tumor_match property."""
+        # Create FDA approval with tumor_match set (by evidence_aggregator)
         fda = MagicMock()
         fda.indication = "Non-small cell lung cancer"
-        fda.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": True})
+        fda.tumor_match = True  # Set by evidence_aggregator via parse_indication_for_tumor
         fda.locus_match = None
         mock_evidence.fda_approvals = [fda]
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "NSCLC")
 
         assert tumor_match.has_tumor_evidence is True
-        fda.parse_indication_for_tumor.assert_called_once_with("NSCLC")
 
 
 # =============================================================================
@@ -579,23 +579,26 @@ class TestCheckDrugResponse:
     def test_drug_response_tumor_match_counting(self, mock_evidence):
         """Drug response should track tumor matches vs others."""
         # Create CGI biomarkers - 1 matching lung, 1 not
-        # Tumor matching uses: tumor_lower in tumor_type.lower()
-        # So "lung" in "lung cancer" = True
+        # Note: tumor_match property is the single source of truth for tumor matching
         cgi_match = MagicMock()
         cgi_match.locus_match = None
         cgi_match.tumor_type = "Lung Cancer"  # Contains "lung"
+        cgi_match.tumor_match = True  # Explicitly set tumor_match
         cgi_no_match = MagicMock()
         cgi_no_match.locus_match = None
         cgi_no_match.tumor_type = "Melanoma"  # Does NOT contain "lung"
+        cgi_no_match.tumor_match = False  # Explicitly set tumor_match
         mock_evidence.cgi_biomarkers = [cgi_match, cgi_no_match]
 
         # Create VICC evidence - 2 matching
         vicc1 = MagicMock()
         vicc1.locus_match = None
         vicc1.disease = "Lung adenocarcinoma"  # Contains "lung"
+        vicc1.tumor_match = True  # Explicitly set tumor_match
         vicc2 = MagicMock()
         vicc2.locus_match = None
         vicc2.disease = "Lung squamous"  # Contains "lung"
+        vicc2.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.vicc_evidence = [vicc1, vicc2]
 
         ctx = GapDetectionContext(
@@ -937,6 +940,7 @@ class TestCheckResistanceMechanisms:
         cgi_resistance.association = "Resistance"
         cgi_resistance.locus_match = None
         cgi_resistance.tumor_type = "Lung Cancer"  # Contains "lung"
+        cgi_resistance.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.cgi_biomarkers = [cgi_resistance]
 
         # Create VICC evidence with resistance - not matching tumor
@@ -944,6 +948,7 @@ class TestCheckResistanceMechanisms:
         vicc_resistance.response_type = "RESISTANCE"
         vicc_resistance.locus_match = None
         vicc_resistance.disease = "Melanoma"  # Does NOT contain "lung"
+        vicc_resistance.tumor_match = False  # Explicitly set tumor_match
         mock_evidence.vicc_evidence = [vicc_resistance]
 
         # Create CIViC assertion with resistance - matching tumor
@@ -951,6 +956,7 @@ class TestCheckResistanceMechanisms:
         civic_resistance.is_resistance = True
         civic_resistance.locus_match = None
         civic_resistance.disease = "Lung adenocarcinoma"  # Contains "lung"
+        civic_resistance.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.civic_assertions = [civic_resistance]
 
         ctx = GapDetectionContext(

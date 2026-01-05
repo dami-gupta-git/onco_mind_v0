@@ -537,8 +537,9 @@ def is_oncogene_class_fda_tumor(gene: str, variant: str, tumor_type: str | None)
     if not class_info:
         return False
 
+    # Args: source_disease (from FDA tumor list), queried_tumor (user's query)
     for fda_tumor in class_info.get("fda_tumors", []):
-        if tumor_types_match(tumor_type, fda_tumor):
+        if tumor_types_match(fda_tumor, tumor_type):
             return True
 
     return False
@@ -637,8 +638,9 @@ def is_high_prevalence_tumor(gene: str, tumor_type: str | None) -> bool:
     if not info:
         return False
 
+    # Args: source_disease (from prevalence list), queried_tumor (user's query)
     for high_prev_tumor in info.get("high_prevalence_tumors", []):
-        if tumor_types_match(tumor_type, high_prev_tumor):
+        if tumor_types_match(high_prev_tumor, tumor_type):
             return True
 
     return False

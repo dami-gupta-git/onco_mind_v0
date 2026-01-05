@@ -519,7 +519,8 @@ class VICCClient:
             matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
 
             # Determine tumor match using centralized function
-            tumor_matches = tumor_types_match(tumor_type, assoc.disease) if tumor_type else False
+            # Args: source_disease (from KB), queried_tumor (user's query)
+            tumor_matches = tumor_types_match(assoc.disease, tumor_type) if tumor_type else False
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel

@@ -162,7 +162,7 @@ def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
             # Match specificity tracking
             "match_level": e.match_level,
             "matched_profile": e.matched_profile,
-            "tumor_match": e.is_tumor_match,
+            "tumor_match": e.tumor_match,
         })
     return deduped
 
@@ -260,7 +260,7 @@ def _build_response(result) -> Dict[str, Any]:
                 # Match specificity tracking
                 "match_level": a.match_level,
                 "matched_profile": a.matched_profile,
-                "tumor_match": a.is_tumor_match,
+                "tumor_match": a.tumor_match,
             }
             for a in evidence.civic_assertions
         ],
@@ -278,6 +278,7 @@ def _build_response(result) -> Dict[str, Any]:
                 # Match specificity tracking
                 "match_level": v.match_level,
                 "matched_profile": v.matched_profile,
+                "tumor_match": v.tumor_match,
             }
             for v in evidence.vicc_evidence
         ],
@@ -323,7 +324,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "variant_specific": t.match_level == "variant",
                 "matched_biomarker": t.matched_biomarker,
                 "match_scope": t.match_scope,
-                "tumor_match": t.is_tumor_match,
+                "tumor_match": t.tumor_match,
             }
             for t in evidence.clinical_trials
         ],

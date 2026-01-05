@@ -53,7 +53,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "lusc": ["lung squamous", "lusc", "squamous cell lung", "squamous cell carcinoma of lung"],
 
     # Colorectal
-    "crc": ["colorectal", "colon", "rectal", "crc", "colorectal cancer", "colorectal carcinoma"],
+    "crc": ["colorectal", "colon", "rectal", "crc", "mcrc", "colorectal cancer", "colorectal carcinoma"],
     "coad": ["colon adenocarcinoma", "coad", "colon cancer"],
     "read": ["rectal adenocarcinoma", "read", "rectum adenocarcinoma", "rectal cancer"],
     "coread": ["colorectal", "colon", "rectal", "colorectal adenocarcinoma", "crc", "coadread"],
@@ -87,12 +87,12 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "pdac": ["pancreatic ductal adenocarcinoma", "pdac", "pancreatic ductal"],
     "lihc": ["liver hepatocellular carcinoma", "lihc", "hepatocellular carcinoma", "hcc"],
     "hcc": ["hepatocellular carcinoma", "hcc"],
-    "chol": ["cholangiocarcinoma", "chol", "bile duct cancer", "intrahepatic cholangiocarcinoma"],
+    "chol": ["cholangiocarcinoma", "chol", "bile duct cancer", "biliary", "intrahepatic cholangiocarcinoma"],
 
     # Genitourinary
     "prad": ["prostate adenocarcinoma", "prad", "prostate cancer", "prostate carcinoma"],
     "prostate": ["prostate", "prostate cancer"],
-    "blca": ["bladder urothelial carcinoma", "blca", "bladder cancer", "urothelial carcinoma"],
+    "blca": ["bladder urothelial carcinoma", "blca", "bladder cancer", "urothelial carcinoma", "transitional cell"],
     "rcc": ["renal cell carcinoma", "rcc", "kidney cancer"],
     "ccrcc": ["clear cell renal cell carcinoma", "ccrcc", "clear cell kidney"],
     "prcc": ["papillary renal cell carcinoma", "prcc"],
@@ -131,6 +131,10 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "dlbcl": ["diffuse large b-cell lymphoma", "dlbcl"],
     "fl": ["follicular lymphoma", "fl"],
     "mm": ["multiple myeloma", "mm", "plasma cell myeloma", "myeloma"],
+    # Myeloproliferative neoplasms
+    "mpn": ["myeloproliferative neoplasm", "mpn", "myeloproliferative"],
+    "mf": ["myelofibrosis", "mf", "primary myelofibrosis"],
+    "pv": ["polycythemia vera", "pv"],
 
     # Other / Rare
     "acc": ["adrenocortical carcinoma", "acc"],
