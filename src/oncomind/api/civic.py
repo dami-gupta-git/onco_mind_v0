@@ -21,7 +21,12 @@ from typing import Any
 import httpx
 
 from oncomind.config.debug import get_logger
-from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
+from oncomind.models.evidence.base import (
+    is_pan_cancer_term,
+    tumor_types_match,
+    determine_locus_match,
+    extract_variant_position,
+)
 
 logger = get_logger(__name__)
 
@@ -214,6 +219,9 @@ class CIViCClient:
     ) -> str:
         """Determine the match specificity level for a molecular profile.
 
+        CIViC-specific: Extracts variant from molecular profile string (e.g., "EGFR L858R")
+        then delegates to core determine_locus_match().
+
         Args:
             molecular_profile: The molecular profile string from CIViC (e.g., "EGFR L858R")
             gene: The queried gene symbol
@@ -222,7 +230,8 @@ class CIViCClient:
         Returns:
             Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
         """
-        import re
+        if not variant:
+            return "gene"
 
         profile_upper = molecular_profile.upper() if molecular_profile else ""
         gene_upper = gene.upper()
@@ -231,28 +240,16 @@ class CIViCClient:
         if gene_upper not in profile_upper:
             return "gene"  # Shouldn't happen but fallback
 
-        if not variant:
-            return "gene"
-
         # Clean variant for comparison
-        clean_variant = variant.replace("p.", "").upper()
+        clean_variant = variant.replace("p.", "").replace("P.", "").upper()
 
-        # Exact variant match
-        if clean_variant in profile_upper:
-            return "variant"
+        # Try to extract the variant portion from the molecular profile
+        # CIViC profiles are like "EGFR L858R" or "BRAF V600E"
+        # Extract everything after the gene name
+        profile_variant = profile_upper.replace(gene_upper, "").strip()
 
-        # Check for codon-level match (same position, different amino acid change)
-        # Extract position from variant (e.g., L858R -> 858, V600E -> 600)
-        pos_match = re.search(r'[A-Z](\d+)', clean_variant)
-        if pos_match:
-            position = pos_match.group(1)
-            # Check if profile contains same position with any amino acid
-            codon_pattern = rf'[A-Z]{position}[A-Z]?'
-            if re.search(codon_pattern, profile_upper):
-                # Make sure it's actually a different variant at same position
-                return "codon"
-
-        return "gene"
+        # Use the core matching function
+        return determine_locus_match(profile_variant, clean_variant)
 
     def _parse_assertion(self, node: dict[str, Any]) -> CIViCAssertion | None:
         """Parse a GraphQL assertion node into an assertion object.
