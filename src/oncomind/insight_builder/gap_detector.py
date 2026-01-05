@@ -58,8 +58,8 @@ class MatchCounts:
         return ", ".join(parts) if parts else "0 matches"
 
     @property
-    def tumor_match_str(self) -> str:
-        """Build tumor_match string (e.g., '2 tumor, 4 other')."""
+    def tumor_breakdown_str(self) -> str:
+        """Build tumor breakdown string (e.g., '2 tumor, 4 other')."""
         other = self.total - self.tumor
         parts = [f"{self.tumor} tumor"]
         if other > 0:
@@ -498,7 +498,7 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
             tumor_match.sources_str,
             category=GapCategory.TUMOR_TYPE,
             matches_on=tumor_match.matches_on_str,
-            tumor_match=tumor_match.tumor_match_str
+            tumor_match=tumor_match.tumor_count_str
         )
     else:
         # Severity depends on gene importance and pathogenic signal
@@ -567,7 +567,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             " + ".join(drug_sources),
             category=GapCategory.DRUG_RESPONSE,
             matches_on=counts.matches_on_str,
-            tumor_match=counts.tumor_match_str
+            tumor_match=counts.tumor_breakdown_str
         )
     else:
         ctx.add_gap(
@@ -614,7 +614,7 @@ def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext
         " + ".join(sources),
         category=GapCategory.PRECLINICAL,
         matches_on=counts.matches_on_str,
-        tumor_match=counts.tumor_match_str
+        tumor_match=counts.tumor_breakdown_str
     )
 
 
@@ -716,7 +716,7 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
             " + ".join(resistance_sources),
             category=GapCategory.RESISTANCE,
             matches_on=counts.matches_on_str,
-            tumor_match=counts.tumor_match_str
+            tumor_match=counts.tumor_breakdown_str
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(

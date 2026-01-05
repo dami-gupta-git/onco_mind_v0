@@ -66,14 +66,3 @@ class ClinicalTrialEvidence(EvidenceItemBase):
         if self.locus_match:
             return self.locus_match.scope
         return None
-
-    @property
-    def is_tumor_match(self) -> bool | None:
-        """Check if trial matches the queried tumor type.
-
-        Returns:
-            True if cancer_specific, False if not, None if unknown.
-        """
-        if self.cancer_type_match and self.cancer_type_match.level:
-            return self.cancer_type_match.level == "cancer_specific"
-        return None

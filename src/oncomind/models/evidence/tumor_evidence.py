@@ -67,8 +67,8 @@ class TumorEvidenceMatch(BaseModel):
         return ", ".join(parts) if parts else None
 
     @property
-    def tumor_match_str(self) -> str | None:
-        """Build tumor_match string (e.g., '6 tumor')."""
+    def tumor_count_str(self) -> str | None:
+        """Build tumor count string (e.g., '6 tumor')."""
         if self.total_matches == 0:
             return None
         return f"{self.total_matches} tumor"
