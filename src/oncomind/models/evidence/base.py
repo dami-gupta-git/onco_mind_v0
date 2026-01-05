@@ -3,7 +3,7 @@
 from typing import Literal
 from pydantic import BaseModel, Field
 
-from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, TUMOR_TYPE_MAPPINGS
+from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, PAN_CANCER_BIOMARKERS, TUMOR_TYPE_MAPPINGS
 
 
 # Type aliases for the allowed values
@@ -27,22 +27,36 @@ def is_ambiguous_variant(gene: str, variant: str) -> bool:
 
 
 def is_pan_cancer_term(disease: str | None) -> bool:
-    """Check if disease is a generic pan-cancer term.
+    """Check if disease is a generic pan-cancer term or contains a tumor-agnostic biomarker.
 
     Pan-cancer diseases like "Cancer" or "Solid Tumor" apply broadly
     and should not be considered a specific tumor type match.
+
+    Uses two matching strategies:
+    - EXACT match for generic terms (e.g., "Cancer", "Solid Tumor") to avoid
+      false positives on strings like "Lung Cancer"
+    - SUBSTRING match for FDA tumor-agnostic biomarkers (e.g., "MSI-H", "NTRK")
+      to catch FDA indications like "MSI-H Solid Tumors"
 
     Args:
         disease: Disease string from any knowledge base
 
     Returns:
-        True if disease is a generic pan-cancer term
+        True if disease is a pan-cancer term or contains a tumor-agnostic biomarker
     """
     if not disease:
         return False
 
     disease_lower = disease.lower().strip()
-    return disease_lower in PAN_CANCER_TERMS
+
+    # Check for exact match on generic pan-cancer terms
+    # (e.g., "Cancer", "Solid Tumor", "Malignant Neoplasm")
+    if disease_lower in PAN_CANCER_TERMS:
+        return True
+
+    # Check for substring match on FDA tumor-agnostic biomarkers
+    # (e.g., "MSI-H Solid Tumors", "NTRK fusion-positive tumors")
+    return any(biomarker in disease_lower for biomarker in PAN_CANCER_BIOMARKERS)
 
 
 def tumor_types_match(

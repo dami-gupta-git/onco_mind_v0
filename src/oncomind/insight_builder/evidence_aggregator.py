@@ -56,7 +56,7 @@ from oncomind.models.evidence import (
     VICCEvidence,
 )
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
-from oncomind.models.evidence.base import EvidenceLevel
+from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -545,10 +545,8 @@ class EvidenceAggregator:
             tumor_match = parsed.get('tumor_match', False)
 
             # Check for pan-cancer / tumor-agnostic approvals (MSI-H, NTRK, etc.)
-            indication_lower = (approval.indication or "").lower()
-            is_pan_cancer = any(p in indication_lower for p in [
-                'solid tumor', 'msi-h', 'dmmr', 'tumor-agnostic', 'ntrk'
-            ])
+            # Uses centralized is_pan_cancer_term() which handles substring matching
+            is_pan_cancer = is_pan_cancer_term(approval.indication)
 
             if tumor_match:
                 if is_pan_cancer:

@@ -149,6 +149,8 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
 # tumor type match. When evidence is labeled with these terms, it applies broadly
 # across tumor types and should be marked as "pan_cancer" rather than "cancer_specific".
 
+# Terms that require EXACT match (case-insensitive)
+# These are generic terms that are too short/common for substring matching
 PAN_CANCER_TERMS: set[str] = {
     "cancer",
     "solid tumor",
@@ -165,6 +167,19 @@ PAN_CANCER_TERMS: set[str] = {
     "all tumor types",
     "any tumor",
     "any cancer",
+}
+
+# Terms that use SUBSTRING match (for FDA indications like "MSI-H Solid Tumors")
+# These are specific enough to safely use substring matching
+PAN_CANCER_BIOMARKERS: set[str] = {
+    "msi-h",
+    "msi-high",
+    "dmmr",
+    "tumor-agnostic",
+    "tumour-agnostic",
+    "ntrk",
+    "tmb-h",
+    "tmb-high",
 }
 
 
