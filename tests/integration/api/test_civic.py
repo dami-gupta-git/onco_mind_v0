@@ -258,21 +258,21 @@ class TestCIViCAssertionEvidence:
 
             assert len(evidence_list) >= 1, "Should return at least 1 evidence object"
             for evidence in evidence_list:
-                assert hasattr(evidence, "match_level")
-                assert evidence.match_level in ["variant", "codon", "gene"]
+                assert hasattr(evidence, "locus_match")
+                assert evidence.locus_match in ["variant", "codon", "gene"]
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_match_level_tracking(self):
-        """Match level should be correctly tracked in evidence."""
+    async def test_locus_match_tracking(self):
+        """Locus match should be correctly tracked in evidence."""
         async with CIViCClient() as client:
             evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=10)
 
             # V600E exact matches should have variant-level match
             v600e_evidence = [e for e in evidence_list if "V600E" in e.molecular_profile.upper()]
             for evidence in v600e_evidence:
-                assert evidence.match_level == "variant", (
-                    f"V600E exact match should be variant level, got {evidence.match_level}"
+                assert evidence.locus_match == "variant", (
+                    f"V600E exact match should be variant level, got {evidence.locus_match}"
                 )
 
     @pytest.mark.integration
@@ -401,7 +401,7 @@ class TestCIViCAssertionEvidence:
                 assert "molecular_profile" in data
                 assert "disease" in data
                 assert "therapies" in data
-                assert "match_level" in data
+                assert "locus_match" in data
                 assert "is_sensitivity" in data
                 assert "is_resistance" in data
 
@@ -437,7 +437,7 @@ class TestCIViCEvidenceItems:
                 assert evidence.evidence_id is not None
                 assert evidence.eid is not None
                 assert evidence.eid.startswith("EID")
-                assert evidence.match_level in ("variant", "codon", "gene")
+                assert evidence.locus_match in ("variant", "codon", "gene")
 
             # Should have Capivasertib evidence (FDA approved for AKT1 E17K)
             drug_names = []
@@ -484,8 +484,8 @@ class TestCIViCEvidenceItems:
                 assert evidence.evidence_type is not None
                 assert evidence.evidence_level is not None
 
-                # Match level tracking
-                assert evidence.match_level in ["variant", "codon", "gene"]
+                # Locus match tracking
+                assert evidence.locus_match in ["variant", "codon", "gene"]
                 assert evidence.matched_profile is not None
 
     @pytest.mark.integration
@@ -529,7 +529,7 @@ class TestCIViCEvidenceItems:
             assert len(evidence_list) >= 1, "EGFR L858R should have evidence items"
 
             # Should have variant-level matches
-            variant_matches = [e for e in evidence_list if e.match_level == "variant"]
+            variant_matches = [e for e in evidence_list if e.locus_match == "variant"]
             assert len(variant_matches) > 0, "EGFR L858R should have variant-level matches"
 
     @pytest.mark.integration
@@ -579,7 +579,7 @@ class TestCIViCEvidenceItems:
                 assert "evidence_type" in data
                 assert "evidence_level" in data
                 assert "drugs" in data
-                assert "match_level" in data
+                assert "locus_match" in data
                 assert "matched_profile" in data
 
                 # Verify computed properties are serialized

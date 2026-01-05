@@ -563,7 +563,7 @@ class TestCheckDrugResponse:
         # Create 1 FDA approval
         fda = MagicMock()
         fda.locus_variant_match = None
-        fda.match_level = "variant"
+        fda.locus_match = "variant"
         fda.indication = "Melanoma"
         fda.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": False})
         mock_evidence.fda_approvals = [fda]
@@ -1459,7 +1459,7 @@ class TestDetectEvidenceGapsIntegration:
         fda_approval = MagicMock()
         fda_approval.indication = "Melanoma"
         fda_approval.locus_variant_match = None
-        fda_approval.match_level = "variant"
+        fda_approval.locus_match = "variant"
         fda_approval.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": True})
         mock_evidence.fda_approvals = [fda_approval]
 

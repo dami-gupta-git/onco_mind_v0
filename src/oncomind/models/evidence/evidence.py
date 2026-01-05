@@ -405,7 +405,7 @@ class Evidence(BaseModel):
                             source="CIViC",
                             source_url=assertion.civic_url,
                             confidence="high" if assertion.amp_tier == "Tier I" else "moderate",
-                            match_level=assertion.match_level,
+                            locus_match=assertion.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -434,7 +434,7 @@ class Evidence(BaseModel):
                             source=f"VICC ({vicc.source})" if vicc.source else "VICC",
                             source_url=vicc_url,
                             confidence="moderate" if vicc.evidence_level in ("A", "B") else "low",
-                            match_level=vicc.match_level,
+                            locus_match=vicc.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -467,7 +467,7 @@ class Evidence(BaseModel):
                             tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                             source="CGI (preclinical)",
                             confidence="low",
-                            match_level=biomarker.match_level,
+                            locus_match=biomarker.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -497,7 +497,7 @@ class Evidence(BaseModel):
                             tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                             source="CGI (early phase)",
                             confidence="low",
-                            match_level=biomarker.match_level,
+                            locus_match=biomarker.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -531,7 +531,7 @@ class Evidence(BaseModel):
                             source=f"ClinicalTrials.gov ({trial.nct_id})",
                             source_url=trial.url,
                             confidence="low",  # Trial data, not yet published results
-                            match_level=getattr(trial, 'match_scope', None),
+                            locus_match=getattr(trial, 'match_scope', None),
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -603,7 +603,7 @@ class Evidence(BaseModel):
                     tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
                     source="FDA",
                     confidence="high",
-                    match_level=approval.match_level,
+                    locus_match=approval.locus_match,
                     cancer_specificity=cancer_specificity,
                 ))
 
@@ -628,7 +628,7 @@ class Evidence(BaseModel):
                             source="CIViC",
                             source_url=assertion.civic_url,
                             confidence="high",
-                            match_level=assertion.match_level,
+                            locus_match=assertion.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -658,7 +658,7 @@ class Evidence(BaseModel):
                         tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                         source="CGI",
                         confidence="high",
-                        match_level=biomarker.match_level,
+                        locus_match=biomarker.locus_match,
                         cancer_specificity=cancer_specificity,
                     ))
 
@@ -1097,7 +1097,7 @@ class Evidence(BaseModel):
             fda_drugs = []
             for approval in self.fda_approvals[:4]:
                 drug = approval.generic_name or approval.brand_name or approval.drug_name
-                match_level = approval.match_level  # "variant", "codon", or "gene"
+                locus_match = approval.locus_match  # "variant", "codon", or "gene"
 
                 # Build annotation parts
                 parts = []
@@ -1110,17 +1110,17 @@ class Evidence(BaseModel):
 
                 # Add match level - critical for LLM to know if this is variant-specific
                 # For gene-level matches, also show what variant the drug is approved for
-                if match_level == "variant":
+                if locus_match == "variant":
                     parts.append("variant-level")
                 else:
                     # Try to extract what variant the drug is actually approved for
                     approved_variant = approval.extract_approved_variant()
                     if approved_variant and approved_variant != "any mutation":
-                        parts.append(f"{match_level}-level, approved for {approved_variant}")
+                        parts.append(f"{locus_match}-level, approved for {approved_variant}")
                     elif approved_variant == "any mutation":
-                        parts.append(f"{match_level}-level, approved for any {approval.gene} mutation")
+                        parts.append(f"{locus_match}-level, approved for any {approval.gene} mutation")
                     else:
-                        parts.append(f"{match_level}-level")
+                        parts.append(f"{locus_match}-level")
 
                 fda_drugs.append(f"{drug} ({', '.join(parts)})")
             lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
@@ -1344,12 +1344,12 @@ class Evidence(BaseModel):
 
         return "\n".join(lines)
 
-    def _count_match_levels(self, items: list, attr: str = 'match_level') -> dict[str, int]:
-        """Count items by match level.
+    def _count_locus_matches(self, items: list, attr: str = 'locus_match') -> dict[str, int]:
+        """Count items by locus match level.
 
         Args:
-            items: List of evidence items with match_level attribute
-            attr: Attribute name to check for match level
+            items: List of evidence items with locus_match attribute
+            attr: Attribute name to check for locus match level
 
         Returns:
             Dict with counts for variant, codon, and gene levels
@@ -1374,31 +1374,31 @@ class Evidence(BaseModel):
         gene_count = 0
 
         # FDA approvals
-        fda_counts = self._count_match_levels(self.fda_approvals)
+        fda_counts = self._count_locus_matches(self.fda_approvals)
         variant_count += fda_counts['variant']
         codon_count += fda_counts['codon']
         gene_count += fda_counts['gene']
 
         # VICC evidence
-        vicc_counts = self._count_match_levels(self.vicc_evidence)
+        vicc_counts = self._count_locus_matches(self.vicc_evidence)
         variant_count += vicc_counts['variant']
         codon_count += vicc_counts['codon']
         gene_count += vicc_counts['gene']
 
         # CIViC assertions
-        civic_a_counts = self._count_match_levels(self.civic_assertions)
+        civic_a_counts = self._count_locus_matches(self.civic_assertions)
         variant_count += civic_a_counts['variant']
         codon_count += civic_a_counts['codon']
         gene_count += civic_a_counts['gene']
 
         # CIViC evidence items
-        civic_e_counts = self._count_match_levels(self.civic_evidence)
+        civic_e_counts = self._count_locus_matches(self.civic_evidence)
         variant_count += civic_e_counts['variant']
         codon_count += civic_e_counts['codon']
         gene_count += civic_e_counts['gene']
 
         # CGI biomarkers
-        cgi_counts = self._count_match_levels(self.cgi_biomarkers)
+        cgi_counts = self._count_locus_matches(self.cgi_biomarkers)
         variant_count += cgi_counts['variant']
         codon_count += cgi_counts['codon']
         gene_count += cgi_counts['gene']
@@ -1416,7 +1416,7 @@ class Evidence(BaseModel):
         # Literature knowledge - resistance and sensitivity signals
         if self.literature_knowledge:
             for entry in self.literature_knowledge.resistant_to:
-                level = getattr(entry, 'match_level', None) or 'gene'
+                level = getattr(entry, 'locus_match', None) or 'gene'
                 if level == 'variant':
                     variant_count += 1
                 elif level == 'codon':
@@ -1424,7 +1424,7 @@ class Evidence(BaseModel):
                 else:
                     gene_count += 1
             for entry in self.literature_knowledge.sensitive_to:
-                level = getattr(entry, 'match_level', None) or 'gene'
+                level = getattr(entry, 'locus_match', None) or 'gene'
                 if level == 'variant':
                     variant_count += 1
                 elif level == 'codon':

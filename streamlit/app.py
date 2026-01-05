@@ -405,9 +405,9 @@ with tab1:
                     with tabs[tab_idx]:
                         # Build match summary for CIViC
                         all_civic = civic_assertions + civic_evidence
-                        civic_variant = len([c for c in all_civic if c.get('match_level') == 'variant'])
-                        civic_codon = len([c for c in all_civic if c.get('match_level') == 'codon'])
-                        civic_gene = len([c for c in all_civic if c.get('match_level') == 'gene'])
+                        civic_variant = len([c for c in all_civic if c.get('locus_match') == 'variant'])
+                        civic_codon = len([c for c in all_civic if c.get('locus_match') == 'codon'])
+                        civic_gene = len([c for c in all_civic if c.get('locus_match') == 'gene'])
                         civic_match_parts = []
                         if civic_variant > 0:
                             civic_match_parts.append(f"🎯 **{civic_variant}** variant")
@@ -447,7 +447,7 @@ with tab1:
                                 sig = a.get('significance', 'Unknown')
                                 amp = a.get('amp_level', '')
                                 # Match level indicator with label
-                                match = a.get('match_level', '')
+                                match = a.get('locus_match', '')
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 tumor_match = a.get('tumor_match')
@@ -473,7 +473,7 @@ with tab1:
                                 level = e.get('evidence_level', '')
                                 etype = e.get('evidence_type', '')
                                 # Match level indicator
-                                match = e.get('match_level', '')
+                                match = e.get('locus_match', '')
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 tumor_match = e.get('tumor_match')
@@ -508,8 +508,8 @@ with tab1:
                             if isinstance(pub_url, list) and pub_url:
                                 pub_url = pub_url[0]
                             source_link = f"[{source}]({pub_url})" if pub_url else source
-                            match_level = v.get('match_level', '')
-                            match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match_level, "")
+                            locus_match = v.get('locus_match', '')
+                            match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "")
                             # Tumor match indicator
                             tumor_match = v.get('tumor_match')
                             tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
@@ -659,7 +659,7 @@ with tab1:
                                 assoc = b.get('association', 'Unknown')
                                 cgi_tumor = b.get('tumor_type', '') or ''
                                 # Locus match
-                                match = b.get('match_level', '')
+                                match = b.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
                                 # Tumor match
                                 cgi_tumor_lower = cgi_tumor.lower()
@@ -683,7 +683,7 @@ with tab1:
                                 assoc = b.get('association', 'Unknown')
                                 cgi_tumor = b.get('tumor_type', '') or ''
                                 # Locus match
-                                match = b.get('match_level', '')
+                                match = b.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
                                 # Tumor match
                                 cgi_tumor_lower = cgi_tumor.lower()
@@ -850,9 +850,9 @@ with tab1:
                 if therapies:
                     with tabs[tab_idx]:
                         # Build match summary
-                        therapy_variant = len([t for t in therapies if t.get('match_level') == 'variant'])
-                        therapy_codon = len([t for t in therapies if t.get('match_level') == 'codon'])
-                        therapy_gene = len([t for t in therapies if t.get('match_level') == 'gene'])
+                        therapy_variant = len([t for t in therapies if t.get('locus_match') == 'variant'])
+                        therapy_codon = len([t for t in therapies if t.get('locus_match') == 'codon'])
+                        therapy_gene = len([t for t in therapies if t.get('locus_match') == 'gene'])
                         therapy_match_parts = []
                         if therapy_variant > 0:
                             therapy_match_parts.append(f"🎯 **{therapy_variant}** variant")
@@ -892,7 +892,7 @@ with tab1:
                                 drug_display = f"[{drug}]({source_url})" if source_url else drug
                                 response = t.get('response_type', '') or "Sensitivity"
                                 source = t.get('source', '')
-                                match = t.get('match_level', '')
+                                match = t.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
 
                                 # Tumor match column
@@ -922,7 +922,7 @@ with tab1:
                                 level = t.get('evidence_level', '')
                                 response = t.get('response_type', '') or "-"
                                 source = t.get('source', '')
-                                match = t.get('match_level', '')
+                                match = t.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
 
                                 # Tumor match column
@@ -952,7 +952,7 @@ with tab1:
                                 drug_display = f"[{drug}]({source_url})" if source_url else drug
                                 response = t.get('response_type', '') or "-"
                                 source = t.get('source', '')
-                                match = t.get('match_level', '')
+                                match = t.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
 
                                 # Tumor match column
@@ -1030,12 +1030,12 @@ with tab1:
                 trial_match_str = ", ".join(match_parts) if match_parts else ""
 
                 # Compute drug response match breakdown from VICC and CGI
-                vicc_variant = len([v for v in vicc if v.get('match_level') == 'variant']) if vicc else 0
-                vicc_codon = len([v for v in vicc if v.get('match_level') == 'codon']) if vicc else 0
-                vicc_gene = len([v for v in vicc if v.get('match_level') == 'gene']) if vicc else 0
-                cgi_variant = len([b for b in cgi_biomarkers if b.get('match_level') == 'variant']) if cgi_biomarkers else 0
-                cgi_codon = len([b for b in cgi_biomarkers if b.get('match_level') == 'codon']) if cgi_biomarkers else 0
-                cgi_gene = len([b for b in cgi_biomarkers if b.get('match_level') == 'gene']) if cgi_biomarkers else 0
+                vicc_variant = len([v for v in vicc if v.get('locus_match') == 'variant']) if vicc else 0
+                vicc_codon = len([v for v in vicc if v.get('locus_match') == 'codon']) if vicc else 0
+                vicc_gene = len([v for v in vicc if v.get('locus_match') == 'gene']) if vicc else 0
+                cgi_variant = len([b for b in cgi_biomarkers if b.get('locus_match') == 'variant']) if cgi_biomarkers else 0
+                cgi_codon = len([b for b in cgi_biomarkers if b.get('locus_match') == 'codon']) if cgi_biomarkers else 0
+                cgi_gene = len([b for b in cgi_biomarkers if b.get('locus_match') == 'gene']) if cgi_biomarkers else 0
 
                 drug_variant = vicc_variant + cgi_variant
                 drug_codon = vicc_codon + cgi_codon
@@ -1051,9 +1051,9 @@ with tab1:
                 drug_match_str = ", ".join(drug_match_parts) if drug_match_parts else ""
 
                 # Compute FDA approval match breakdown
-                fda_variant = len([a for a in fda_approvals if a.get('match_level') == 'variant']) if fda_approvals else 0
-                fda_codon = len([a for a in fda_approvals if a.get('match_level') == 'codon']) if fda_approvals else 0
-                fda_gene = len([a for a in fda_approvals if a.get('match_level') == 'gene']) if fda_approvals else 0
+                fda_variant = len([a for a in fda_approvals if a.get('locus_match') == 'variant']) if fda_approvals else 0
+                fda_codon = len([a for a in fda_approvals if a.get('locus_match') == 'codon']) if fda_approvals else 0
+                fda_gene = len([a for a in fda_approvals if a.get('locus_match') == 'gene']) if fda_approvals else 0
 
                 fda_match_parts = []
                 if fda_variant > 0:

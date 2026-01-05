@@ -74,8 +74,8 @@ has_civic_assertions: {has_civic_assertions}
 has_fda_approvals: {has_fda_approvals}
 has_vicc_evidence: {has_vicc_evidence}
 
-## MATCH LEVEL SUMMARY
-{match_level_text}
+## LOCUS MATCH SUMMARY
+{locus_match_text}
 
 ## BIOLOGICAL CONTEXT
 {biological_context}
@@ -236,7 +236,7 @@ def create_synthesis_prompt(
         has_civic_assertions=str(data_availability.get("has_civic_assertions", False)).upper(),
         has_fda_approvals=str(data_availability.get("has_fda_approvals", False)).upper(),
         has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
-        match_level_text=locus_match_text,
+        locus_match_text=locus_match_text,
         biological_context=biological_context or "No cBioPortal data available.",
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",

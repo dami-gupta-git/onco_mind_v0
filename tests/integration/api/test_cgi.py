@@ -235,31 +235,31 @@ class TestCGIBiomarkerEvidence:
 
         assert len(evidence_list) >= 1, "Should return at least 1 evidence object"
         for evidence in evidence_list:
-            assert hasattr(evidence, "match_level")
-            assert evidence.match_level in ["variant", "codon", "gene"]
+            assert hasattr(evidence, "locus_match")
+            assert evidence.locus_match in ["variant", "codon", "gene"]
 
     @pytest.mark.integration
-    def test_match_level_variant(self):
-        """Exact variant matches should have variant match level."""
+    def test_locus_match_variant(self):
+        """Exact variant matches should have variant locus match."""
         client = CGIClient()
         evidence_list = client.fetch_biomarker_evidence("BRAF", "V600E")
 
         v600e_evidence = [e for e in evidence_list if "V600E" in e.alteration.upper()]
         for evidence in v600e_evidence:
-            assert evidence.match_level == "variant", (
-                f"V600E exact match should be variant level, got {evidence.match_level}"
+            assert evidence.locus_match == "variant", (
+                f"V600E exact match should be variant level, got {evidence.locus_match}"
             )
 
     @pytest.mark.integration
-    def test_match_level_codon(self):
-        """Wildcard pattern matches should have codon match level."""
+    def test_locus_match_codon(self):
+        """Wildcard pattern matches should have codon locus match."""
         client = CGIClient()
         # G719S matches the G719. pattern (codon-level)
         evidence_list = client.fetch_biomarker_evidence("EGFR", "G719S")
 
         # Check if any evidence has codon-level match
-        codon_matches = [e for e in evidence_list if e.match_level == "codon"]
-        variant_matches = [e for e in evidence_list if e.match_level == "variant"]
+        codon_matches = [e for e in evidence_list if e.locus_match == "codon"]
+        variant_matches = [e for e in evidence_list if e.locus_match == "variant"]
 
         # G719S should match either as exact variant or via G719. pattern (codon)
         assert len(codon_matches) > 0 or len(variant_matches) > 0, (
