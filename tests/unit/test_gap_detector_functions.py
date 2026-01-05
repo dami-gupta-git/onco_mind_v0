@@ -418,11 +418,13 @@ class TestCheckTumorSpecificEvidence:
         assertion_variant = MagicMock()
         assertion_variant.disease = "Lung Cancer"
         assertion_variant.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
+        assertion_variant.locus_match = "variant"  # Computed property value for MagicMock
 
         # Create CIViC assertion with gene-level match
         assertion_gene = MagicMock()
         assertion_gene.disease = "Lung Cancer"
         assertion_gene.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
+        assertion_gene.locus_match = "gene"  # Computed property value for MagicMock
 
         mock_evidence.civic_assertions = [assertion_variant, assertion_gene]
 
@@ -627,19 +629,21 @@ class TestCheckDrugResponse:
         # Create CGI biomarker with variant-level match
         cgi_variant = MagicMock()
         cgi_variant.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
+        cgi_variant.locus_match = "variant"  # Computed property value for MagicMock
         cgi_variant.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi_variant]
 
         # Create VICC evidence with gene-level match
         vicc_gene = MagicMock()
         vicc_gene.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
+        vicc_gene.locus_match = "gene"  # Computed property value for MagicMock
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
         # Create FDA approval with codon-level match
         fda_codon = MagicMock()
         fda_codon.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
-        fda_codon.match_level = None  # Will fall back to locus_variant_match
+        fda_codon.locus_match = "codon"  # Computed property value for MagicMock
         fda_codon.indication = None
         mock_evidence.fda_approvals = [fda_codon]
 
@@ -892,6 +896,7 @@ class TestCheckResistanceMechanisms:
         cgi_resistance = MagicMock()
         cgi_resistance.association = "Resistance"
         cgi_resistance.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
+        cgi_resistance.locus_match = "variant"  # Computed property value for MagicMock
         cgi_resistance.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi_resistance]
 
@@ -899,6 +904,7 @@ class TestCheckResistanceMechanisms:
         vicc_resistance = MagicMock()
         vicc_resistance.response_type = "RESISTANCE"
         vicc_resistance.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
+        vicc_resistance.locus_match = "gene"  # Computed property value for MagicMock
         vicc_resistance.disease = None
         mock_evidence.vicc_evidence = [vicc_resistance]
 
@@ -906,6 +912,7 @@ class TestCheckResistanceMechanisms:
         civic_resistance = MagicMock()
         civic_resistance.is_resistance = True
         civic_resistance.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
+        civic_resistance.locus_match = "codon"  # Computed property value for MagicMock
         civic_resistance.disease = None
         mock_evidence.civic_assertions = [civic_resistance]
 
