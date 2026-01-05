@@ -549,7 +549,7 @@ class FDAClient:
                     "variant_in_indications": variant_in_indications,
                     "variant_in_clinical_studies": clinical_studies_note is not None,
                     # Use EvidenceItemBase fields for consistency with ClinicalTrialEvidence
-                    "locus_match": {"level": variant_match_level, "scope": "specific", "origin": "kb"},
+                    "locus_variant_match": {"level": variant_match_level, "scope": "specific", "origin": "kb"},
                 }
 
             return None
