@@ -45,6 +45,7 @@ from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.evidence_gaps import EvidenceGaps
 from oncomind.models.therapeutic_evidence import TherapeuticEvidence
+from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 
 # Backwards compatibility alias
 RecommendedTherapy = TherapeuticEvidence
@@ -519,11 +520,8 @@ class Evidence(BaseModel):
                         # Determine cancer specificity from trial conditions
                         cancer_specificity = "pan_cancer"
                         if trial.conditions and self.context.tumor_type:
-                            tumor_lower = self.context.tumor_type.lower()
-                            for condition in trial.conditions:
-                                if tumor_lower in condition.lower() or condition.lower() in tumor_lower:
-                                    cancer_specificity = "cancer_specific"
-                                    break
+                            if any(tumor_types_match(self.context.tumor_type, condition) for condition in trial.conditions):
+                                cancer_specificity = "cancer_specific"
 
                         evidence_list.append(TherapeuticEvidence(
                             drug_name=drug,
@@ -729,59 +727,12 @@ class Evidence(BaseModel):
         if not queried_tumor:
             return "pan_cancer"
 
-        disease_lower = disease.lower()
-        queried_lower = queried_tumor.lower()
-
-        # Check for tumor-agnostic terms
-        pan_cancer_terms = [
-            "solid tumor", "all solid", "pan-cancer", "any solid",
-            "advanced solid", "all tumor", "tumor agnostic"
-        ]
-        if any(term in disease_lower for term in pan_cancer_terms):
+        # Check for tumor-agnostic terms using centralized function
+        if is_pan_cancer_term(disease):
             return "pan_cancer"
 
-        # Build keyword mappings for flexible matching
-        tumor_keywords = {
-            'colorectal': ['colorectal', 'colon', 'rectal', 'crc', 'mcrc'],
-            'melanoma': ['melanoma'],
-            'lung': ['lung', 'nsclc', 'non-small cell'],
-            'breast': ['breast'],
-            'thyroid': ['thyroid', 'atc', 'anaplastic thyroid'],
-            'gist': ['gist', 'gastrointestinal stromal'],
-            'bladder': ['bladder', 'urothelial', 'transitional cell'],
-            'cholangiocarcinoma': ['cholangiocarcinoma', 'bile duct', 'biliary'],
-            'myeloproliferative': ['myelofibrosis', 'polycythemia vera', 'myeloproliferative', 'mpn'],
-            'ovarian': ['ovarian', 'ovary'],
-            'pancreatic': ['pancreatic', 'pancreas'],
-            'prostate': ['prostate'],
-            'gastric': ['gastric', 'stomach'],
-            'esophageal': ['esophageal', 'esophagus'],
-            'renal': ['renal', 'kidney'],
-            'hepatocellular': ['hepatocellular', 'liver', 'hcc'],
-            'endometrial': ['endometrial', 'uterine', 'uterus'],
-            'cervical': ['cervical', 'cervix'],
-            'head and neck': ['head and neck', 'hnscc', 'oral', 'laryngeal', 'pharyngeal'],
-            'glioblastoma': ['glioblastoma', 'gbm', 'glioma'],
-            'leukemia': ['leukemia', 'aml', 'cml', 'all', 'cll'],
-            'lymphoma': ['lymphoma', 'hodgkin', 'non-hodgkin'],
-            'myeloma': ['myeloma', 'multiple myeloma'],
-        }
-
-        # Find keywords for queried tumor
-        queried_keywords = []
-        for key, keywords in tumor_keywords.items():
-            if any(kw in queried_lower for kw in keywords):
-                queried_keywords = keywords
-                break
-        if not queried_keywords:
-            queried_keywords = [queried_lower]
-
-        # Check if disease matches queried tumor
-        if any(kw in disease_lower for kw in queried_keywords):
-            return "cancer_specific"
-
-        # Also check direct substring match
-        if queried_lower in disease_lower or disease_lower in queried_lower:
+        # Check if disease matches queried tumor using centralized function
+        if tumor_types_match(disease, queried_tumor):
             return "cancer_specific"
 
         # No match - return the specific disease
