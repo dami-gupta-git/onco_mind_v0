@@ -114,7 +114,7 @@ class TumorEvidenceMatch(BaseModel):
             self.civic_evidence = source_match
         elif source_lower == "fda" or source == "FDA":
             self.fda_approvals = source_match
-        elif source_lower == "vicc" or source == "VICC":
+        elif source_lower == "vicc" or source == "VICC" or "vicc" in source_lower:
             self.vicc_evidence = source_match
         elif source_lower == "cgi" or source == "CGI":
             self.cgi_biomarkers = source_match

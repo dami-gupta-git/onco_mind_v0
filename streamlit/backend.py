@@ -265,6 +265,7 @@ def _build_response(result) -> Dict[str, Any]:
             for a in evidence.civic_assertions
         ],
         "civic_evidence": _dedupe_civic_evidence(evidence.civic_evidence),
+        # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
         "vicc_evidence": [
             {
                 "source": v.source,
@@ -280,7 +281,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "matched_profile": v.matched_profile,
                 "tumor_match": v.tumor_match,
             }
-            for v in evidence.vicc_evidence
+            for v in evidence.get_vicc_unique()
         ],
         "cgi_biomarkers": [
             {

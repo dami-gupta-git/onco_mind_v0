@@ -282,7 +282,8 @@ class Conductor:
             # Check if we have curated clinical evidence
             "has_civic_assertions": bool(evidence.civic_assertions),
             "has_fda_approvals": bool(evidence.fda_approvals),
-            "has_vicc_evidence": bool(evidence.vicc_evidence),
+            # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
+            "has_vicc_evidence": bool(evidence.get_vicc_unique()),
         }
 
         # Get therapeutic signal summaries
