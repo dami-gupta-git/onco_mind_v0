@@ -143,6 +143,32 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
 
 
 # =============================================================================
+# PAN-CANCER TERMS
+# =============================================================================
+# Generic tumor-agnostic disease terms that should NOT be considered a specific
+# tumor type match. When evidence is labeled with these terms, it applies broadly
+# across tumor types and should be marked as "pan_cancer" rather than "cancer_specific".
+
+PAN_CANCER_TERMS: set[str] = {
+    "cancer",
+    "solid tumor",
+    "solid tumors",
+    "solid tumour",
+    "solid tumours",
+    "advanced solid tumor",
+    "advanced solid tumors",
+    "malignant neoplasm",
+    "malignant neoplasms",
+    "neoplasm",
+    "tumor",
+    "tumour",
+    "all tumor types",
+    "any tumor",
+    "any cancer",
+}
+
+
+# =============================================================================
 # PRIORITY TUMOR TYPES FOR UI
 # =============================================================================
 # OncoTree codes for commonly assessed tumor types

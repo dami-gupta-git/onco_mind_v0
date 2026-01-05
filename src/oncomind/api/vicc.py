@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
 
 
 class VICCError(Exception):
@@ -252,6 +252,9 @@ class VICCClient:
     def _tumor_matches(self, vicc_disease: str, tumor_type: str | None) -> bool:
         """Check if VICC disease matches user tumor type.
 
+        Delegates to centralized tumor_types_match() function in base.py,
+        with pan-cancer detection.
+
         Args:
             vicc_disease: Disease string from VICC (may contain multiple terms)
             tumor_type: User-provided tumor type
@@ -262,27 +265,11 @@ class VICCClient:
         if not tumor_type:
             return True  # No filter
 
-        vicc_lower = vicc_disease.lower() if vicc_disease else ""
-        tumor_lower = tumor_type.lower()
+        # Pan-cancer diseases don't count as a specific tumor match
+        if is_pan_cancer_term(vicc_disease):
+            return False
 
-        # Direct substring match
-        if tumor_lower in vicc_lower or vicc_lower in tumor_lower:
-            return True
-
-        # Check tumor type mappings
-        for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
-            # Check if tumor matches this mapping (either as abbrev or substring match)
-            tumor_matches_mapping = (
-                tumor_lower == abbrev or
-                any(tumor_lower in name for name in full_names) or
-                any(name in tumor_lower for name in full_names)
-            )
-            if tumor_matches_mapping:
-                # Check if VICC disease matches any full name
-                if any(name in vicc_lower for name in full_names):
-                    return True
-
-        return False
+        return tumor_types_match(vicc_disease, tumor_type)
 
     def _parse_association(self, hit: dict[str, Any]) -> VICCAssociation | None:
         """Parse a VICC API hit into an association object.
