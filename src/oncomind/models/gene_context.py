@@ -16,6 +16,8 @@ from enum import Enum
 from functools import lru_cache
 from typing import Any
 
+from oncomind.models.evidence.base import tumor_types_match
+
 
 # =============================================================================
 # GENE CLASS CONFIGURATION
@@ -535,9 +537,8 @@ def is_oncogene_class_fda_tumor(gene: str, variant: str, tumor_type: str | None)
     if not class_info:
         return False
 
-    tumor_lower = tumor_type.lower()
     for fda_tumor in class_info.get("fda_tumors", []):
-        if fda_tumor in tumor_lower or tumor_lower in fda_tumor:
+        if tumor_types_match(tumor_type, fda_tumor):
             return True
 
     return False
@@ -636,9 +637,8 @@ def is_high_prevalence_tumor(gene: str, tumor_type: str | None) -> bool:
     if not info:
         return False
 
-    tumor_lower = tumor_type.lower()
     for high_prev_tumor in info.get("high_prevalence_tumors", []):
-        if high_prev_tumor in tumor_lower or tumor_lower in high_prev_tumor:
+        if tumor_types_match(tumor_type, high_prev_tumor):
             return True
 
     return False

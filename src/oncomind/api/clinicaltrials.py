@@ -25,6 +25,8 @@ from tenacity import (
     wait_exponential_jitter,
 )
 
+from oncomind.models.evidence.base import tumor_types_match
+
 
 class ClinicalTrialsRateLimitError(Exception):
     """Raised when rate limited by ClinicalTrials.gov API.
@@ -566,13 +568,10 @@ class ClinicalTrialsClient:
             # Only set if tumor_type was queried; otherwise leave as None (unknown)
             cancer_type_match = None
             if tumor_type:
-                tumor_type_lower = tumor_type.lower()
-                cancer_matches = False
-                if trial.conditions:
-                    for condition in trial.conditions:
-                        if tumor_type_lower in condition.lower() or condition.lower() in tumor_type_lower:
-                            cancer_matches = True
-                            break
+                cancer_matches = any(
+                    tumor_types_match(tumor_type, condition)
+                    for condition in (trial.conditions or [])
+                )
 
                 cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if cancer_matches else "pan_cancer",
@@ -658,13 +657,10 @@ class ClinicalTrialsClient:
                 # else: match_type == "none", locus_match stays None
 
             # cancer_type_match - we searched by disease so it should match
-            tumor_type_lower = tumor_type.lower()
-            cancer_matches = False
-            if trial.conditions:
-                for condition in trial.conditions:
-                    if tumor_type_lower in condition.lower() or condition.lower() in tumor_type_lower:
-                        cancer_matches = True
-                        break
+            cancer_matches = any(
+                tumor_types_match(tumor_type, condition)
+                for condition in (trial.conditions or [])
+            )
 
             cancer_type_match = EvidenceLevel(
                 level="cancer_specific" if cancer_matches else "pan_cancer",
