@@ -254,42 +254,6 @@ class CIViCClient:
 
         return "gene"
 
-    def _is_pan_cancer(self, disease: str | None) -> bool:
-        """Check if disease is a generic pan-cancer term.
-
-        Delegates to centralized is_pan_cancer_term() function in base.py.
-
-        Args:
-            disease: Disease string from CIViC
-
-        Returns:
-            True if disease is a generic pan-cancer term
-        """
-        return is_pan_cancer_term(disease)
-
-    def _tumor_matches(self, civic_disease: str, tumor_type: str | None) -> bool:
-        """Check if CIViC disease matches user tumor type.
-
-        Delegates to centralized tumor_types_match() function in base.py.
-
-        Args:
-            civic_disease: Disease string from CIViC
-            tumor_type: User-provided tumor type
-
-        Returns:
-            True if tumor types match. Returns False for pan-cancer diseases
-            when a specific tumor type is queried (they should be included
-            but marked as is_tumor_match=False).
-        """
-        if not tumor_type:
-            return True  # No filter
-
-        # Pan-cancer diseases don't count as a specific tumor match
-        if is_pan_cancer_term(civic_disease):
-            return False
-
-        return tumor_types_match(civic_disease, tumor_type)
-
     def _parse_assertion(self, node: dict[str, Any]) -> CIViCAssertion | None:
         """Parse a GraphQL assertion node into an assertion object.
 
@@ -400,8 +364,8 @@ class CIViCClient:
             # Filter by tumor type if specified
             # Include pan-cancer assertions (e.g., "Cancer") but filter out non-matching specific cancers
             if tumor_type and assertion.disease:
-                is_pan_cancer = self._is_pan_cancer(assertion.disease)
-                tumor_matches = self._tumor_matches(assertion.disease, tumor_type)
+                is_pan_cancer = is_pan_cancer_term(assertion.disease)
+                tumor_matches = tumor_types_match(assertion.disease, tumor_type)
                 if not is_pan_cancer and not tumor_matches:
                     continue
 
@@ -596,8 +560,8 @@ class CIViCClient:
                     # Filter by tumor type if specified
                     # Include pan-cancer evidence (e.g., "Cancer") but filter out non-matching specific cancers
                     if tumor_type and disease:
-                        is_pan_cancer = self._is_pan_cancer(disease)
-                        tumor_matches = self._tumor_matches(disease, tumor_type)
+                        is_pan_cancer = is_pan_cancer_term(disease)
+                        tumor_matches = tumor_types_match(disease, tumor_type)
                         if not is_pan_cancer and not tumor_matches:
                             continue
 
@@ -616,7 +580,7 @@ class CIViCClient:
                     match_level = self._determine_match_level(profile_name, gene, variant)
 
                     # Determine tumor match
-                    tumor_matches = self._tumor_matches(disease, tumor_type) if tumor_type and disease else True
+                    tumor_matches = tumor_types_match(disease, tumor_type) if tumor_type and disease else False
 
                     # Build EvidenceLevel objects for consistency with other models
                     from oncomind.models.evidence.base import EvidenceLevel
@@ -691,7 +655,7 @@ class CIViCClient:
                 variant,
             )
             # Check if tumor matches (tumor type filtering already applied, but track it)
-            tumor_matches = self._tumor_matches(assertion.disease, tumor_type) if tumor_type else True
+            tumor_matches = tumor_types_match(assertion.disease, tumor_type) if tumor_type else False
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel

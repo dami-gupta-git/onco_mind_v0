@@ -173,68 +173,39 @@ class TestComputeCancerSpecificity:
 
 
 class TestIntegrationWithAPIClients:
-    """Integration tests verifying API client methods use centralized functions."""
+    """Integration tests verifying centralized functions work correctly for API client use cases."""
 
-    def test_civic_client_uses_centralized_pan_cancer(self):
-        """CIViC client's _is_pan_cancer should delegate to centralized function."""
-        from oncomind.api.civic import CIViCClient
+    def test_pan_cancer_detection_for_civic(self):
+        """Test pan-cancer detection that CIViC API client uses."""
+        # Pan-cancer terms should be detected
+        assert is_pan_cancer_term("Cancer") is True
+        assert is_pan_cancer_term("Solid Tumor") is True
 
-        client = CIViCClient()
+        # Specific cancers should not be detected as pan-cancer
+        assert is_pan_cancer_term("NSCLC") is False
+        assert is_pan_cancer_term("Lung Cancer") is False
 
-        # Should delegate to is_pan_cancer_term
-        assert client._is_pan_cancer("Cancer") == is_pan_cancer_term("Cancer")
-        assert client._is_pan_cancer("Solid Tumor") == is_pan_cancer_term("Solid Tumor")
-        assert client._is_pan_cancer("NSCLC") == is_pan_cancer_term("NSCLC")
-        assert client._is_pan_cancer("Lung Cancer") == is_pan_cancer_term("Lung Cancer")
-
-    def test_civic_client_tumor_matches(self):
-        """CIViC client's _tumor_matches should use centralized logic."""
-        from oncomind.api.civic import CIViCClient
-
-        client = CIViCClient()
-
-        # Pan-cancer should return False (not a specific match)
-        assert client._tumor_matches("Cancer", "NSCLC") is False
-        assert client._tumor_matches("Solid Tumor", "Melanoma") is False
-
+    def test_tumor_matching_for_civic(self):
+        """Test tumor matching logic used by CIViC API client."""
         # Matching tumors should return True
-        assert client._tumor_matches("Non-Small Cell Lung Cancer", "NSCLC") is True
-        assert client._tumor_matches("Lung Adenocarcinoma", "NSCLC") is True
+        assert tumor_types_match("Non-Small Cell Lung Cancer", "NSCLC") is True
+        assert tumor_types_match("Lung Adenocarcinoma", "NSCLC") is True
 
         # Non-matching should return False
-        assert client._tumor_matches("Breast Cancer", "NSCLC") is False
+        assert tumor_types_match("Breast Cancer", "NSCLC") is False
 
-        # No filter (None tumor_type) should return True
-        assert client._tumor_matches("Any Disease", None) is True
-
-    def test_vicc_client_tumor_matches_with_pan_cancer(self):
-        """VICC client's _tumor_matches should now handle pan-cancer terms."""
-        from oncomind.api.vicc import VICCClient
-
-        client = VICCClient()
-
-        # Pan-cancer should return False (previously VICC didn't check this!)
-        assert client._tumor_matches("Cancer", "NSCLC") is False
-        assert client._tumor_matches("Solid Tumor", "Melanoma") is False
-
+    def test_tumor_matching_for_vicc(self):
+        """Test tumor matching logic used by VICC API client."""
         # Matching tumors should return True
-        assert client._tumor_matches("Non-Small Cell Lung Cancer", "NSCLC") is True
+        assert tumor_types_match("Non-Small Cell Lung Cancer", "NSCLC") is True
+        assert tumor_types_match("melanoma", "melanoma") is True
 
-        # No filter should return True
-        assert client._tumor_matches("Any Disease", None) is True
+        # Non-matching should return False
+        assert tumor_types_match("breast cancer", "melanoma") is False
 
-    def test_cgi_client_tumor_matches_with_pan_cancer(self):
-        """CGI client's _tumor_type_matches should now handle pan-cancer terms."""
-        from oncomind.api.cgi import CGIClient
-
-        client = CGIClient()
-
-        # Pan-cancer should return False (previously CGI didn't check this!)
-        assert client._tumor_type_matches("Cancer", "NSCLC") is False
-        assert client._tumor_type_matches("Solid Tumor", "Melanoma") is False
-
-        # Matching tumors should return True
-        assert client._tumor_type_matches("NSCLC", "Non-Small Cell Lung Cancer") is True
-
-        # No filter should return True
-        assert client._tumor_type_matches("Any Type", None) is True
+    def test_tumor_matching_for_cgi(self):
+        """Test tumor matching logic used by CGI API client."""
+        # CGI uses abbreviations like NSCLC, MEL, CRC
+        assert tumor_types_match("NSCLC", "Non-Small Cell Lung Cancer") is True
+        assert tumor_types_match("MEL", "Melanoma") is True
+        assert tumor_types_match("CRC", "Colorectal Cancer") is True

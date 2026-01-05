@@ -249,28 +249,6 @@ class VICCClient:
 
         return "gene"
 
-    def _tumor_matches(self, vicc_disease: str, tumor_type: str | None) -> bool:
-        """Check if VICC disease matches user tumor type.
-
-        Delegates to centralized tumor_types_match() function in base.py,
-        with pan-cancer detection.
-
-        Args:
-            vicc_disease: Disease string from VICC (may contain multiple terms)
-            tumor_type: User-provided tumor type
-
-        Returns:
-            True if tumor types match
-        """
-        if not tumor_type:
-            return True  # No filter
-
-        # Pan-cancer diseases don't count as a specific tumor match
-        if is_pan_cancer_term(vicc_disease):
-            return False
-
-        return tumor_types_match(vicc_disease, tumor_type)
-
     def _parse_association(self, hit: dict[str, Any]) -> VICCAssociation | None:
         """Parse a VICC API hit into an association object.
 
@@ -415,7 +393,7 @@ class VICCClient:
             if assoc is None:
                 continue
 
-            if tumor_type and not self._tumor_matches(assoc.disease, tumor_type):
+            if tumor_type and not is_pan_cancer_term(assoc.disease) and not tumor_types_match(assoc.disease, tumor_type):
                 continue
 
             if self._is_compound_mutation_resistance(assoc, variant):

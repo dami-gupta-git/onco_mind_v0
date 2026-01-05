@@ -1436,9 +1436,25 @@ class TestDetectEvidenceGapsIntegration:
         mock_evidence.functional.alphamissense_score = 0.98
         mock_evidence.functional.alphamissense_prediction = "pathogenic"
         mock_evidence.functional.cadd_score = 30.0
-        mock_evidence.civic_assertions = [MagicMock()]
-        mock_evidence.fda_approvals = [MagicMock()]
-        mock_evidence.cgi_biomarkers = [MagicMock()]
+
+        # Create properly mocked evidence items with string disease attributes
+        civic_assertion = MagicMock()
+        civic_assertion.disease = "Melanoma"
+        civic_assertion.locus_match = None
+        mock_evidence.civic_assertions = [civic_assertion]
+
+        fda_approval = MagicMock()
+        fda_approval.indication = "Melanoma"
+        fda_approval.locus_match = None
+        fda_approval.match_level = "variant"
+        fda_approval.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": True})
+        mock_evidence.fda_approvals = [fda_approval]
+
+        cgi_biomarker = MagicMock()
+        cgi_biomarker.tumor_type = "Melanoma"
+        cgi_biomarker.locus_match = None
+        mock_evidence.cgi_biomarkers = [cgi_biomarker]
+
         mock_evidence.literature_searched = True
         mock_evidence.pubmed_articles = [MagicMock() for _ in range(20)]
 
