@@ -662,7 +662,7 @@ class CIViCClient:
 
                     # Build EvidenceLevel objects for consistency with other models
                     from oncomind.models.evidence.base import EvidenceLevel
-                    variant_level = EvidenceLevel(
+                    locus_match = EvidenceLevel(
                         level=match_level,
                         scope="specific" if match_level == "variant" else "unspecified",
                         origin="kb",
@@ -690,7 +690,7 @@ class CIViCClient:
                         source_url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else None,
                         trust_rating=node.get("evidenceRating"),
                         matched_profile=profile_name,
-                        variant_level=variant_level,
+                        locus_match=locus_match,
                         cancer_type_level=cancer_type_level,
                     ))
 
@@ -737,7 +737,7 @@ class CIViCClient:
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
-            variant_level = EvidenceLevel(
+            locus_match = EvidenceLevel(
                 level=match_level,
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
@@ -768,7 +768,7 @@ class CIViCClient:
                 is_sensitivity=assertion.is_sensitivity(),
                 is_resistance=assertion.is_resistance(),
                 matched_profile=assertion.molecular_profile,
-                variant_level=variant_level,
+                locus_match=locus_match,
                 cancer_type_level=cancer_type_level,
             ))
 

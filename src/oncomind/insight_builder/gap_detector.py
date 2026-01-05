@@ -1303,9 +1303,9 @@ def _get_match_level(item) -> str:
 
     Returns 'variant', 'codon', or 'gene'.
     """
-    # Try variant_level.level (EvidenceLevel pattern)
-    if hasattr(item, 'variant_level') and item.variant_level and item.variant_level.level:
-        return item.variant_level.level
+    # Try locus_match.level (EvidenceLevel pattern)
+    if hasattr(item, 'locus_match') and item.locus_match and item.locus_match.level:
+        return item.locus_match.level
     # Try match_level property (FDA pattern)
     if hasattr(item, 'match_level') and item.match_level:
         return item.match_level

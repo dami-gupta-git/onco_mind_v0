@@ -51,20 +51,20 @@ class ClinicalTrialEvidence(EvidenceItemBase):
     def match_level(self) -> str:
         """Get the locus match level: 'variant' or 'gene'.
 
-        Uses variant_level.level from EvidenceItemBase.
+        Uses locus_match.level from EvidenceItemBase.
         """
-        if self.variant_level and self.variant_level.level:
-            return self.variant_level.level
+        if self.locus_match and self.locus_match.level:
+            return self.locus_match.level
         return "gene"
 
     @property
     def match_scope(self) -> str | None:
         """Get the match scope: 'specific', 'ambiguous', or 'unspecified'.
 
-        Uses variant_level.scope from EvidenceItemBase.
+        Uses locus_match.scope from EvidenceItemBase.
         """
-        if self.variant_level:
-            return self.variant_level.scope
+        if self.locus_match:
+            return self.locus_match.scope
         return None
 
     @property

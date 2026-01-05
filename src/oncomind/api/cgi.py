@@ -417,7 +417,7 @@ class CGIClient:
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
-            variant_level = EvidenceLevel(
+            locus_match = EvidenceLevel(
                 level=match_level,
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
@@ -441,7 +441,7 @@ class CGIClient:
                 tumor_type=biomarker.tumor_type,
                 fda_approved=biomarker.is_fda_approved(),
                 matched_alteration=biomarker.alteration,
-                variant_level=variant_level,
+                locus_match=locus_match,
                 cancer_type_level=cancer_type_level,
             ))
 

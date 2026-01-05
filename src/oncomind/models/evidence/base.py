@@ -60,11 +60,11 @@ class EvidenceItemBase(BaseModel):
     """Base class for all evidence items.
 
     Provides common metadata fields for tracking evidence provenance:
-    - variant_level: Tracks whether evidence is at variant or gene level
+    - locus_match: Tracks whether evidence is at variant or gene level
     - cancer_type_level: Tracks whether evidence is cancer-specific or pan-cancer
     """
 
-    variant_level: EvidenceLevel | None = Field(
+    locus_match: EvidenceLevel | None = Field(
         default=None,
         description="Variant/gene level evidence metadata"
     )
