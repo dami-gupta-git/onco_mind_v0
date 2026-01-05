@@ -3,7 +3,7 @@
 from typing import Literal
 from pydantic import BaseModel, Field
 
-from oncomind.config.constants import BROAD_VARIANTS
+from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, TUMOR_TYPE_MAPPINGS
 
 
 # Type aliases for the allowed values
@@ -24,6 +24,119 @@ def is_ambiguous_variant(gene: str, variant: str) -> bool:
     return (gene.upper(), variant.upper()) in {
         (g.upper(), v.upper()) for g, v in BROAD_VARIANTS
     }
+
+
+def is_pan_cancer_term(disease: str | None) -> bool:
+    """Check if disease is a generic pan-cancer term.
+
+    Pan-cancer diseases like "Cancer" or "Solid Tumor" apply broadly
+    and should not be considered a specific tumor type match.
+
+    Args:
+        disease: Disease string from any knowledge base
+
+    Returns:
+        True if disease is a generic pan-cancer term
+    """
+    if not disease:
+        return False
+
+    disease_lower = disease.lower().strip()
+    return disease_lower in PAN_CANCER_TERMS
+
+
+def tumor_types_match(
+    source_disease: str | None,
+    queried_tumor: str | None,
+    min_substring_length: int = 3,
+) -> bool:
+    """Check if two tumor types match via substring or TUMOR_TYPE_MAPPINGS.
+
+    This is the centralized tumor matching logic used across all API clients.
+    It handles:
+    - Direct substring matches (bidirectional)
+    - TUMOR_TYPE_MAPPINGS aliases (e.g., "NSCLC" matches "lung adenocarcinoma")
+    - Minimum substring length to avoid false positives from short abbreviations
+
+    Args:
+        source_disease: Disease/tumor from the knowledge base (e.g., "Lung Adenocarcinoma")
+        queried_tumor: User-provided tumor type (e.g., "NSCLC")
+        min_substring_length: Minimum length for direct substring matching (default 3)
+
+    Returns:
+        True if tumor types match
+    """
+    if not source_disease or not queried_tumor:
+        return False
+
+    source_lower = source_disease.lower().strip()
+    query_lower = queried_tumor.lower().strip()
+
+    # Direct substring match (both directions)
+    # Only if both strings are long enough to avoid false positives
+    if len(source_lower) >= min_substring_length and len(query_lower) >= min_substring_length:
+        if query_lower in source_lower or source_lower in query_lower:
+            return True
+
+    # Check via TUMOR_TYPE_MAPPINGS
+    for abbrev, aliases in TUMOR_TYPE_MAPPINGS.items():
+        # Check if queried tumor matches this mapping category
+        query_matches = (
+            query_lower == abbrev or
+            any(query_lower in alias or alias in query_lower for alias in aliases)
+        )
+        # Check if source disease matches this mapping category
+        source_matches = (
+            source_lower == abbrev or
+            any(source_lower in alias or alias in source_lower for alias in aliases)
+        )
+        # If both match the same category, they're related
+        if query_matches and source_matches:
+            return True
+
+    return False
+
+
+def compute_cancer_specificity(
+    source_disease: str | None,
+    queried_tumor: str | None,
+) -> str:
+    """Determine cancer specificity level for evidence.
+
+    This is the centralized function for computing cancer_type_match.level.
+    It determines whether evidence is:
+    - "cancer_specific": Evidence matches the user's queried tumor type
+    - "pan_cancer": Evidence is tumor-agnostic (e.g., "Solid Tumor", "Cancer")
+    - specific cancer name: Evidence is for a different specific tumor type
+
+    Args:
+        source_disease: Disease/tumor from the knowledge base
+        queried_tumor: User-provided tumor type to match against
+
+    Returns:
+        "cancer_specific" if matches queried tumor,
+        "pan_cancer" if source is tumor-agnostic,
+        or the source disease name if it's a different specific tumor
+    """
+    # Handle missing source disease
+    if not source_disease:
+        return "pan_cancer"
+
+    # Check if source is a generic pan-cancer term
+    if is_pan_cancer_term(source_disease):
+        return "pan_cancer"
+
+    # If no queried tumor, we can't determine specificity
+    # Return the source disease as the specific cancer type
+    if not queried_tumor:
+        return source_disease
+
+    # Check if there's a match
+    if tumor_types_match(source_disease, queried_tumor):
+        return "cancer_specific"
+
+    # No match - return the source disease as the specific cancer type
+    return source_disease
 
 
 Origin = Literal["kb", "trial", "inferred"]

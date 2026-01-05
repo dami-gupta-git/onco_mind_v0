@@ -20,8 +20,8 @@ from typing import Any
 
 import httpx
 
-from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
 from oncomind.config.debug import get_logger
+from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
 
 logger = get_logger(__name__)
 
@@ -257,8 +257,7 @@ class CIViCClient:
     def _is_pan_cancer(self, disease: str | None) -> bool:
         """Check if disease is a generic pan-cancer term.
 
-        Pan-cancer diseases like "Cancer" or "Solid Tumor" apply broadly
-        and should not be considered a specific tumor type match.
+        Delegates to centralized is_pan_cancer_term() function in base.py.
 
         Args:
             disease: Disease string from CIViC
@@ -266,31 +265,12 @@ class CIViCClient:
         Returns:
             True if disease is a generic pan-cancer term
         """
-        if not disease:
-            return False
-
-        disease_lower = disease.lower().strip()
-
-        # Generic pan-cancer terms
-        pan_cancer_terms = {
-            "cancer",
-            "solid tumor",
-            "solid tumors",
-            "solid tumour",
-            "solid tumours",
-            "advanced solid tumor",
-            "advanced solid tumors",
-            "malignant neoplasm",
-            "malignant neoplasms",
-            "neoplasm",
-            "tumor",
-            "tumour",
-        }
-
-        return disease_lower in pan_cancer_terms
+        return is_pan_cancer_term(disease)
 
     def _tumor_matches(self, civic_disease: str, tumor_type: str | None) -> bool:
         """Check if CIViC disease matches user tumor type.
+
+        Delegates to centralized tumor_types_match() function in base.py.
 
         Args:
             civic_disease: Disease string from CIViC
@@ -305,32 +285,10 @@ class CIViCClient:
             return True  # No filter
 
         # Pan-cancer diseases don't count as a specific tumor match
-        if self._is_pan_cancer(civic_disease):
+        if is_pan_cancer_term(civic_disease):
             return False
 
-        civic_lower = civic_disease.lower() if civic_disease else ""
-        tumor_lower = tumor_type.lower()
-
-        # Direct substring match (but not if civic_disease is too generic)
-        # e.g., "breast cancer" in "her2-negative breast cancer" = True
-        # but "cancer" in "breast cancer" would be caught by _is_pan_cancer above
-        if tumor_lower in civic_lower or civic_lower in tumor_lower:
-            return True
-
-        # Check tumor type mappings
-        for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
-            # Check if tumor matches this mapping (either as abbrev or substring match)
-            tumor_matches_mapping = (
-                tumor_lower == abbrev or
-                any(tumor_lower in name for name in full_names) or
-                any(name in tumor_lower for name in full_names)
-            )
-            if tumor_matches_mapping:
-                # Check if civic disease matches any full name
-                if any(name in civic_lower for name in full_names):
-                    return True
-
-        return False
+        return tumor_types_match(civic_disease, tumor_type)
 
     def _parse_assertion(self, node: dict[str, Any]) -> CIViCAssertion | None:
         """Parse a GraphQL assertion node into an assertion object.

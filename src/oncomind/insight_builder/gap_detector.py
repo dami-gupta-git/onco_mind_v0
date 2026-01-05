@@ -10,12 +10,12 @@ from oncomind.models.evidence.evidence_gaps import (
 from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch
 from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent, _extract_codon_position
 from oncomind.config.constants import (
-    TUMOR_TYPE_MAPPINGS,
     GNOMAD_COMMON_AF_THRESHOLD,
     LITERATURE_WELL_CHARACTERIZED_THRESHOLD,
     COOCCURRENCE_STRONG_THRESHOLD_PCT,
     HOTSPOT_ADJACENCY_WINDOW,
 )
+from oncomind.models.evidence.base import tumor_types_match
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
@@ -26,9 +26,7 @@ if TYPE_CHECKING:
 def _tumor_type_matches(tumor_type: str | None, tissue: str | None) -> bool:
     """Check if a tissue/disease matches the expected tumor type.
 
-    Uses TUMOR_TYPE_MAPPINGS to handle aliases like:
-    - "Melanoma" matching "SKIN"
-    - "NSCLC" matching "LUNG"
+    Delegates to centralized tumor_types_match() function in base.py.
 
     Args:
         tumor_type: The tumor type we're looking for (e.g., "Melanoma")
@@ -43,30 +41,7 @@ def _tumor_type_matches(tumor_type: str | None, tissue: str | None) -> bool:
     if not isinstance(tissue, str) or not tissue:
         return False
 
-    tumor_lower = tumor_type.lower()
-    tissue_lower = tissue.lower()
-
-    # Direct match
-    if tumor_lower in tissue_lower or tissue_lower in tumor_lower:
-        return True
-
-    # Check via tumor type mappings
-    for abbrev, aliases in TUMOR_TYPE_MAPPINGS.items():
-        # Check if tumor_type matches any alias
-        tumor_matches = (
-            tumor_lower == abbrev or
-            any(tumor_lower in alias or alias in tumor_lower for alias in aliases)
-        )
-        # Check if tissue matches any alias
-        tissue_matches = (
-            tissue_lower == abbrev or
-            any(tissue_lower in alias or alias in tissue_lower for alias in aliases)
-        )
-        # If both match the same category, they're related
-        if tumor_matches and tissue_matches:
-            return True
-
-    return False
+    return tumor_types_match(tissue, tumor_type)
 
 
 # =============================================================================

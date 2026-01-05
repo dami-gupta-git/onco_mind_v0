@@ -259,6 +259,18 @@ class TestVICCClient:
         assert client._tumor_matches("lung cancer", None) is True
         assert client._tumor_matches("", None) is True
 
+    def test_tumor_matches_pan_cancer_returns_false(self):
+        """Test that pan-cancer terms return False (not specific matches)."""
+        client = VICCClient()
+
+        # Pan-cancer terms should NOT be considered specific tumor matches
+        assert client._tumor_matches("Cancer", "NSCLC") is False
+        assert client._tumor_matches("Solid Tumor", "Melanoma") is False
+        assert client._tumor_matches("Solid Tumors", "Breast Cancer") is False
+        assert client._tumor_matches("Malignant Neoplasm", "CRC") is False
+        assert client._tumor_matches("Any Tumor", "Lung Cancer") is False
+        assert client._tumor_matches("Advanced Solid Tumor", "NSCLC") is False
+
     @pytest.mark.asyncio
     async def test_fetch_associations_mocked(self):
         """Test fetching associations with mocked response."""

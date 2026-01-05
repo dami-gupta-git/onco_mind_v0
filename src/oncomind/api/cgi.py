@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match
 
 
 class CGIError(Exception):
@@ -268,6 +268,9 @@ class CGIClient:
     def _tumor_type_matches(self, cgi_tumor_type: str, tumor_type: str | None) -> bool:
         """Check if tumor types match.
 
+        Delegates to centralized tumor_types_match() function in base.py,
+        with pan-cancer detection.
+
         Args:
             cgi_tumor_type: CGI tumor type abbreviation (e.g., "NSCLC", "L")
             tumor_type: User-provided tumor type (e.g., "Non-Small Cell Lung Cancer")
@@ -278,25 +281,11 @@ class CGIClient:
         if not tumor_type:
             return True  # No filter, match all
 
-        tumor_lower = tumor_type.lower()
-        cgi_lower = cgi_tumor_type.lower() if cgi_tumor_type else ""
+        # Pan-cancer diseases don't count as a specific tumor match
+        if is_pan_cancer_term(cgi_tumor_type):
+            return False
 
-        # Check if any mapping matches using centralized constants
-        for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
-            if cgi_lower == abbrev or cgi_lower in full_names:
-                if any(name in tumor_lower for name in full_names):
-                    return True
-
-        # Direct substring match - check if user's tumor type contains CGI type
-        # or if CGI type equals user's tumor type (but avoid false positives
-        # from short abbreviations like "ma" in "melanoma")
-        if cgi_lower and len(cgi_lower) >= 3:
-            # Only do substring matching for longer CGI types to avoid
-            # false positives (e.g., "ma" matching "melanoma")
-            if cgi_lower in tumor_lower or tumor_lower in cgi_lower:
-                return True
-
-        return False
+        return tumor_types_match(cgi_tumor_type, tumor_type)
 
     def fetch_biomarkers(
         self, gene: str, variant: str, tumor_type: str | None = None
