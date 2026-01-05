@@ -394,13 +394,13 @@ class TestCheckTumorSpecificEvidence:
         # Create CIViC assertion matching tumor - use tumor type that will match
         assertion = MagicMock()
         assertion.disease = "Lung Cancer"  # Use "Lung Cancer" so it matches "Lung"
-        assertion.locus_match = None
+        assertion.locus_variant_match = None
         mock_evidence.civic_assertions = [assertion]
 
         # Create VICC evidence matching tumor
         vicc = MagicMock()
         vicc.disease = "Lung adenocarcinoma"  # Will match "Lung"
-        vicc.locus_match = None
+        vicc.locus_variant_match = None
         mock_evidence.vicc_evidence = [vicc, vicc]  # 2 VICC items
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "Lung")
@@ -417,12 +417,12 @@ class TestCheckTumorSpecificEvidence:
         # Create CIViC assertion with variant-level match
         assertion_variant = MagicMock()
         assertion_variant.disease = "Lung Cancer"
-        assertion_variant.locus_match = EvidenceLevel(level="variant", scope="specific")
+        assertion_variant.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
 
         # Create CIViC assertion with gene-level match
         assertion_gene = MagicMock()
         assertion_gene.disease = "Lung Cancer"
-        assertion_gene.locus_match = EvidenceLevel(level="gene", scope="unspecified")
+        assertion_gene.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
 
         mock_evidence.civic_assertions = [assertion_variant, assertion_gene]
 
@@ -440,7 +440,7 @@ class TestCheckTumorSpecificEvidence:
         # Create evidence that doesn't match the tumor type
         assertion = MagicMock()
         assertion.disease = "Melanoma"
-        assertion.locus_match = None
+        assertion.locus_variant_match = None
         assertion.tumor_match = False  # Explicitly set tumor_match to False
         mock_evidence.civic_assertions = [assertion]
 
@@ -456,19 +456,19 @@ class TestCheckTumorSpecificEvidence:
         # Create CGI FDA-approved biomarker
         cgi_fda = MagicMock()
         cgi_fda.tumor_type = "Lung Cancer"
-        cgi_fda.locus_match = None
+        cgi_fda.locus_variant_match = None
         mock_evidence.cgi_biomarkers = [cgi_fda]
 
         # Create preclinical biomarker
         preclin = MagicMock()
         preclin.tumor_type = "Lung Cancer"
-        preclin.locus_match = None
+        preclin.locus_variant_match = None
         mock_evidence.preclinical_biomarkers = [preclin]
 
         # Create early phase biomarker
         early = MagicMock()
         early.tumor_type = "Lung Cancer"
-        early.locus_match = None
+        early.locus_variant_match = None
         mock_evidence.early_phase_biomarkers = [early]
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "Lung Cancer")
@@ -485,7 +485,7 @@ class TestCheckTumorSpecificEvidence:
         fda = MagicMock()
         fda.indication = "Non-small cell lung cancer"
         fda.tumor_match = True  # Set by evidence_aggregator via parse_indication_for_tumor
-        fda.locus_match = None
+        fda.locus_variant_match = None
         mock_evidence.fda_approvals = [fda]
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "NSCLC")
@@ -545,22 +545,22 @@ class TestCheckDrugResponse:
         """Drug response should count CGI, VICC, and FDA sources correctly."""
         # Create 2 CGI biomarkers
         cgi1 = MagicMock()
-        cgi1.locus_match = None
+        cgi1.locus_variant_match = None
         cgi1.tumor_type = "Lung Cancer"
         cgi2 = MagicMock()
-        cgi2.locus_match = None
+        cgi2.locus_variant_match = None
         cgi2.tumor_type = "Melanoma"
         mock_evidence.cgi_biomarkers = [cgi1, cgi2]
 
         # Create 3 VICC evidence items
         mock_evidence.vicc_evidence = [MagicMock(), MagicMock(), MagicMock()]
         for v in mock_evidence.vicc_evidence:
-            v.locus_match = None
+            v.locus_variant_match = None
             v.disease = "Other Cancer"
 
         # Create 1 FDA approval
         fda = MagicMock()
-        fda.locus_match = None
+        fda.locus_variant_match = None
         fda.match_level = "variant"
         fda.indication = "Melanoma"
         fda.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": False})
@@ -581,22 +581,22 @@ class TestCheckDrugResponse:
         # Create CGI biomarkers - 1 matching lung, 1 not
         # Note: tumor_match property is the single source of truth for tumor matching
         cgi_match = MagicMock()
-        cgi_match.locus_match = None
+        cgi_match.locus_variant_match = None
         cgi_match.tumor_type = "Lung Cancer"  # Contains "lung"
         cgi_match.tumor_match = True  # Explicitly set tumor_match
         cgi_no_match = MagicMock()
-        cgi_no_match.locus_match = None
+        cgi_no_match.locus_variant_match = None
         cgi_no_match.tumor_type = "Melanoma"  # Does NOT contain "lung"
         cgi_no_match.tumor_match = False  # Explicitly set tumor_match
         mock_evidence.cgi_biomarkers = [cgi_match, cgi_no_match]
 
         # Create VICC evidence - 2 matching
         vicc1 = MagicMock()
-        vicc1.locus_match = None
+        vicc1.locus_variant_match = None
         vicc1.disease = "Lung adenocarcinoma"  # Contains "lung"
         vicc1.tumor_match = True  # Explicitly set tumor_match
         vicc2 = MagicMock()
-        vicc2.locus_match = None
+        vicc2.locus_variant_match = None
         vicc2.disease = "Lung squamous"  # Contains "lung"
         vicc2.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.vicc_evidence = [vicc1, vicc2]
@@ -620,26 +620,26 @@ class TestCheckDrugResponse:
         assert "3 tumor" in tumor_match
         assert "1 other" in tumor_match
 
-    def test_drug_response_locus_match_levels(self, mock_evidence, base_context):
+    def test_drug_response_locus_variant_match_levels(self, mock_evidence, base_context):
         """Drug response should track match levels (variant, codon, gene)."""
         from oncomind.models.evidence.base import EvidenceLevel
 
         # Create CGI biomarker with variant-level match
         cgi_variant = MagicMock()
-        cgi_variant.locus_match = EvidenceLevel(level="variant", scope="specific")
+        cgi_variant.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
         cgi_variant.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi_variant]
 
         # Create VICC evidence with gene-level match
         vicc_gene = MagicMock()
-        vicc_gene.locus_match = EvidenceLevel(level="gene", scope="unspecified")
+        vicc_gene.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
         # Create FDA approval with codon-level match
         fda_codon = MagicMock()
-        fda_codon.locus_match = EvidenceLevel(level="codon", scope="specific")
-        fda_codon.match_level = None  # Will fall back to locus_match
+        fda_codon.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
+        fda_codon.match_level = None  # Will fall back to locus_variant_match
         fda_codon.indication = None
         mock_evidence.fda_approvals = [fda_codon]
 
@@ -884,28 +884,28 @@ class TestCheckResistanceMechanisms:
         resistance_gaps = [g for g in base_context.gaps if g.category == GapCategory.RESISTANCE]
         assert len(resistance_gaps) == 0
 
-    def test_resistance_mechanisms_locus_match_levels(self, mock_evidence):
+    def test_resistance_mechanisms_locus_variant_match_levels(self, mock_evidence):
         """Resistance mechanisms should track match levels (variant, codon, gene)."""
         from oncomind.models.evidence.base import EvidenceLevel
 
         # Create CGI biomarker with resistance at variant level
         cgi_resistance = MagicMock()
         cgi_resistance.association = "Resistance"
-        cgi_resistance.locus_match = EvidenceLevel(level="variant", scope="specific")
+        cgi_resistance.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
         cgi_resistance.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi_resistance]
 
         # Create VICC evidence with resistance at gene level
         vicc_resistance = MagicMock()
         vicc_resistance.response_type = "RESISTANCE"
-        vicc_resistance.locus_match = EvidenceLevel(level="gene", scope="unspecified")
+        vicc_resistance.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
         vicc_resistance.disease = None
         mock_evidence.vicc_evidence = [vicc_resistance]
 
         # Create CIViC assertion with resistance at codon level
         civic_resistance = MagicMock()
         civic_resistance.is_resistance = True
-        civic_resistance.locus_match = EvidenceLevel(level="codon", scope="specific")
+        civic_resistance.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
         civic_resistance.disease = None
         mock_evidence.civic_assertions = [civic_resistance]
 
@@ -938,7 +938,7 @@ class TestCheckResistanceMechanisms:
         # Create CGI biomarker with resistance - matching tumor
         cgi_resistance = MagicMock()
         cgi_resistance.association = "Resistance"
-        cgi_resistance.locus_match = None
+        cgi_resistance.locus_variant_match = None
         cgi_resistance.tumor_type = "Lung Cancer"  # Contains "lung"
         cgi_resistance.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.cgi_biomarkers = [cgi_resistance]
@@ -946,7 +946,7 @@ class TestCheckResistanceMechanisms:
         # Create VICC evidence with resistance - not matching tumor
         vicc_resistance = MagicMock()
         vicc_resistance.response_type = "RESISTANCE"
-        vicc_resistance.locus_match = None
+        vicc_resistance.locus_variant_match = None
         vicc_resistance.disease = "Melanoma"  # Does NOT contain "lung"
         vicc_resistance.tumor_match = False  # Explicitly set tumor_match
         mock_evidence.vicc_evidence = [vicc_resistance]
@@ -954,7 +954,7 @@ class TestCheckResistanceMechanisms:
         # Create CIViC assertion with resistance - matching tumor
         civic_resistance = MagicMock()
         civic_resistance.is_resistance = True
-        civic_resistance.locus_match = None
+        civic_resistance.locus_variant_match = None
         civic_resistance.disease = "Lung adenocarcinoma"  # Contains "lung"
         civic_resistance.tumor_match = True  # Explicitly set tumor_match
         mock_evidence.civic_assertions = [civic_resistance]
@@ -990,18 +990,18 @@ class TestCheckResistanceMechanisms:
         # 2 CGI biomarkers with resistance
         cgi1 = MagicMock()
         cgi1.association = "Resistance"
-        cgi1.locus_match = None
+        cgi1.locus_variant_match = None
         cgi1.tumor_type = None
         cgi2 = MagicMock()
         cgi2.association = "RESISTANCE"
-        cgi2.locus_match = None
+        cgi2.locus_variant_match = None
         cgi2.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi1, cgi2]
 
         # 1 CIViC assertion with resistance
         civic = MagicMock()
         civic.is_resistance = True
-        civic.locus_match = None
+        civic.locus_variant_match = None
         civic.disease = None
         mock_evidence.civic_assertions = [civic]
 
@@ -1010,7 +1010,7 @@ class TestCheckResistanceMechanisms:
         for _ in range(3):
             vicc = MagicMock()
             vicc.response_type = "RESISTANCE"
-            vicc.locus_match = None
+            vicc.locus_variant_match = None
             vicc.disease = None
             mock_evidence.vicc_evidence.append(vicc)
 
@@ -1446,19 +1446,19 @@ class TestDetectEvidenceGapsIntegration:
         # Create properly mocked evidence items with string disease attributes
         civic_assertion = MagicMock()
         civic_assertion.disease = "Melanoma"
-        civic_assertion.locus_match = None
+        civic_assertion.locus_variant_match = None
         mock_evidence.civic_assertions = [civic_assertion]
 
         fda_approval = MagicMock()
         fda_approval.indication = "Melanoma"
-        fda_approval.locus_match = None
+        fda_approval.locus_variant_match = None
         fda_approval.match_level = "variant"
         fda_approval.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": True})
         mock_evidence.fda_approvals = [fda_approval]
 
         cgi_biomarker = MagicMock()
         cgi_biomarker.tumor_type = "Melanoma"
-        cgi_biomarker.locus_match = None
+        cgi_biomarker.locus_variant_match = None
         mock_evidence.cgi_biomarkers = [cgi_biomarker]
 
         mock_evidence.literature_searched = True

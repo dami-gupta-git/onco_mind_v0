@@ -1,9 +1,9 @@
 """Integration tests for ClinicalTrials EvidenceLevel population.
 
 Tests that EvidenceLevel fields are correctly populated based on trial content:
-- Variant-specific trials: locus_match.level == "variant"
-- Gene-only trials: locus_match.level == "gene"
-- Disease-only trials: locus_match is None
+- Variant-specific trials: locus_variant_match.level == "variant"
+- Gene-only trials: locus_variant_match.level == "gene"
+- Disease-only trials: locus_variant_match is None
 - Cancer-specific trials: cancer_type_match.level == "cancer_specific"
 """
 
@@ -18,7 +18,7 @@ class TestClinicalTrialsEvidenceLevelIntegration:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_biomarker_search_variant_specific(self):
-        """Test that variant-specific trials have locus_match.level == 'variant'.
+        """Test that variant-specific trials have locus_variant_match.level == 'variant'.
 
         Uses EGFR L858R which is a well-known, specific variant commonly
         mentioned in trial titles/eligibility.
@@ -37,31 +37,31 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         # Check that variant-specific trials exist
         variant_specific_count = sum(
             1 for t in results
-            if t.locus_match and t.locus_match.level == "variant"
+            if t.locus_variant_match and t.locus_variant_match.level == "variant"
         )
         gene_only_count = sum(
             1 for t in results
-            if t.locus_match and t.locus_match.level == "gene"
+            if t.locus_variant_match and t.locus_variant_match.level == "gene"
         )
 
         # At least one should be variant-specific for a well-known variant
         assert variant_specific_count > 0 or gene_only_count > 0, (
-            "Expected at least one trial with locus_match populated"
+            "Expected at least one trial with locus_variant_match populated"
         )
 
-        # All trials should have locus_match set (biomarker search)
+        # All trials should have locus_variant_match set (biomarker search)
         for trial in results:
-            assert trial.locus_match is not None, (
-                f"Trial {trial.nct_id} should have locus_match set"
+            assert trial.locus_variant_match is not None, (
+                f"Trial {trial.nct_id} should have locus_variant_match set"
             )
-            assert trial.locus_match.origin == "trial", (
+            assert trial.locus_variant_match.origin == "trial", (
                 f"Trial {trial.nct_id} should have origin='trial'"
             )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_biomarker_search_gene_level(self):
-        """Test that gene-level trials have locus_match.level == 'gene'.
+        """Test that gene-level trials have locus_variant_match.level == 'gene'.
 
         When a trial mentions the gene but not the specific variant,
         it should be marked as gene-level.
@@ -79,15 +79,15 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         # Check EvidenceLevel fields
         for trial in results:
-            assert trial.locus_match is not None
-            assert trial.locus_match.level in ("variant", "gene")
-            assert trial.locus_match.origin == "trial"
+            assert trial.locus_variant_match is not None
+            assert trial.locus_variant_match.level in ("variant", "gene")
+            assert trial.locus_variant_match.origin == "trial"
 
-            if trial.locus_match.level == "variant":
+            if trial.locus_variant_match.level == "variant":
                 # Scope can be "specific" (exact match) or "ambiguous" (codon-level match)
-                assert trial.locus_match.scope in ("specific", "ambiguous")
+                assert trial.locus_variant_match.scope in ("specific", "ambiguous")
             else:
-                assert trial.locus_match.scope == "unspecified"
+                assert trial.locus_variant_match.scope == "unspecified"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -159,10 +159,10 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_disease_search_locus_match_optional(self):
-        """Test disease-based search may or may not have locus_match.
+    async def test_disease_search_locus_variant_match_optional(self):
+        """Test disease-based search may or may not have locus_variant_match.
 
-        locus_match depends on whether trial mentions gene/variant.
+        locus_variant_match depends on whether trial mentions gene/variant.
         """
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence_by_disease(
@@ -175,17 +175,17 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         assert len(results) > 0, "Expected trials for Melanoma"
 
-        # Count trials by locus_match status
+        # Count trials by locus_variant_match status
         variant_specific = 0
         gene_only = 0
         no_biomarker = 0
 
         for trial in results:
-            if trial.locus_match is None:
+            if trial.locus_variant_match is None:
                 no_biomarker += 1
-            elif trial.locus_match.level == "variant":
+            elif trial.locus_variant_match.level == "variant":
                 variant_specific += 1
-            elif trial.locus_match.level == "gene":
+            elif trial.locus_variant_match.level == "gene":
                 gene_only += 1
 
         # Disease search should return a mix - some with biomarker, some without
@@ -238,13 +238,13 @@ class TestClinicalTrialsEvidenceLevelIntegration:
             )
 
         for trial in results:
-            # Check locus_match consistency
-            if trial.locus_match:
-                if trial.locus_match.level == "variant":
+            # Check locus_variant_match consistency
+            if trial.locus_variant_match:
+                if trial.locus_variant_match.level == "variant":
                     # Scope can be "specific" (exact match) or "ambiguous" (codon-level match)
-                    assert trial.locus_match.scope in ("specific", "ambiguous")
-                elif trial.locus_match.level == "gene":
-                    assert trial.locus_match.scope == "unspecified"
+                    assert trial.locus_variant_match.scope in ("specific", "ambiguous")
+                elif trial.locus_variant_match.level == "gene":
+                    assert trial.locus_variant_match.scope == "unspecified"
 
             # Check cancer_type_match consistency
             if trial.cancer_type_match:
@@ -258,7 +258,7 @@ class TestClinicalTrialsEvidenceLevelIntegration:
     async def test_disease_only_no_gene_context(self):
         """Test disease search without gene/variant context.
 
-        When no gene/variant provided, locus_match should be None.
+        When no gene/variant provided, locus_variant_match should be None.
         """
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence_by_disease(
@@ -272,9 +272,9 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         assert len(results) > 0, "Expected trials for Breast Cancer"
 
         for trial in results:
-            # Without gene context, locus_match should be None
-            assert trial.locus_match is None, (
-                f"Trial {trial.nct_id} should have locus_match=None without gene context"
+            # Without gene context, locus_variant_match should be None
+            assert trial.locus_variant_match is None, (
+                f"Trial {trial.nct_id} should have locus_variant_match=None without gene context"
             )
             # cancer_type_match should still be set
             assert trial.cancer_type_match is not None
