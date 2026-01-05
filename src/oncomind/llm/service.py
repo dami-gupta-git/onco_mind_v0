@@ -181,6 +181,7 @@ class LLMService:
         resistance_summary: str = "",
         sensitivity_summary: str = "",
         locus_match_summary: dict | None = None,
+        tumor_match_summary: dict | None = None,
         generate_hypotheses: bool = True,
     ) -> LLMInsight:
         """Generate variant insight using two-stage LLM pipeline.
@@ -202,6 +203,7 @@ class LLMService:
             resistance_summary: Concise summary of resistance evidence
             sensitivity_summary: Concise summary of sensitivity evidence
             locus_match_summary: Dict with locus match specificity info
+            tumor_match_summary: Dict with tumor match specificity info
             generate_hypotheses: Whether to run stage 2 (default True)
 
         Returns:
@@ -241,6 +243,7 @@ class LLMService:
             resistance_summary=resistance_summary,
             sensitivity_summary=sensitivity_summary,
             locus_match_summary=locus_match_summary,
+            tumor_match_summary=tumor_match_summary,
         )
 
         synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)

@@ -293,6 +293,9 @@ class Conductor:
         # Compute locus match summary for evidence specificity
         locus_match_summary = evidence.get_locus_match_summary()
 
+        # Compute tumor match summary for cancer type specificity
+        tumor_match_summary = evidence.get_tumor_match_summary()
+
         # Generate LLM insight with research-focused prompt
         return await llm_service.get_llm_insight(
             gene=evidence.identifiers.gene,
@@ -307,6 +310,7 @@ class Conductor:
             resistance_summary=resistance_summary,
             sensitivity_summary=sensitivity_summary,
             locus_match_summary=locus_match_summary,
+            tumor_match_summary=tumor_match_summary,
         )
 
 

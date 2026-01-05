@@ -1485,3 +1485,107 @@ class Evidence(BaseModel):
             "is_all_gene_level": gene_count == total and total > 0,
             "cbioportal_variant_specific": cbioportal_variant_specific,
         }
+
+    def get_tumor_match_summary(self) -> dict:
+        """Compute summary statistics about tumor type match specificity.
+
+        Counts evidence items by tumor match level:
+        - cancer_specific: Evidence matches the user's queried tumor type
+        - pan_cancer: Evidence is tumor-agnostic (e.g., "Solid Tumor", "MSI-H")
+        - other: Evidence is for a different specific tumor type
+
+        Returns:
+            Dict with counts, other tumor types found, and summary text for LLM prompt
+        """
+        cancer_specific_count = 0
+        pan_cancer_count = 0
+        other_count = 0
+        other_tumor_types: set[str] = set()
+
+        def count_tumor_match(item) -> None:
+            """Count tumor match for an evidence item."""
+            nonlocal cancer_specific_count, pan_cancer_count, other_count
+            # Try tumor_match property first (bool: True = cancer_specific)
+            tumor_match = getattr(item, 'tumor_match', None)
+            if tumor_match is True:
+                cancer_specific_count += 1
+                return
+            elif tumor_match is False:
+                # False means either pan_cancer or other - check cancer_specificity
+                pass
+
+            # Check cancer_specificity for more detail
+            specificity = getattr(item, 'cancer_specificity', None)
+            if specificity == "cancer_specific":
+                cancer_specific_count += 1
+            elif specificity == "pan_cancer":
+                pan_cancer_count += 1
+            elif specificity:
+                # It's a specific cancer name (e.g., "ovarian cancer")
+                other_count += 1
+                other_tumor_types.add(specificity)
+            else:
+                # No tumor info - treat as pan_cancer (unknown)
+                pan_cancer_count += 1
+
+        # FDA approvals
+        for approval in self.fda_approvals:
+            count_tumor_match(approval)
+
+        # VICC evidence
+        for vicc in self.vicc_evidence:
+            count_tumor_match(vicc)
+
+        # CIViC assertions
+        for assertion in self.civic_assertions:
+            count_tumor_match(assertion)
+
+        # CIViC evidence items
+        for evidence in self.civic_evidence:
+            count_tumor_match(evidence)
+
+        # CGI biomarkers
+        for biomarker in self.cgi_biomarkers:
+            count_tumor_match(biomarker)
+
+        # Clinical trials
+        for trial in self.clinical_trials:
+            count_tumor_match(trial)
+
+        total = cancer_specific_count + pan_cancer_count + other_count
+        queried_tumor = self.context.tumor_type or "unknown"
+
+        # Build summary text
+        if total == 0:
+            summary_text = "No therapeutic evidence available."
+        elif cancer_specific_count == total:
+            summary_text = f"All {total} evidence items are specific to {queried_tumor}."
+        elif other_count == total:
+            others_str = ", ".join(sorted(other_tumor_types)[:3])
+            summary_text = f"All {total} evidence items are from other tumor types ({others_str})."
+        elif pan_cancer_count == total:
+            summary_text = f"All {total} evidence items are pan-cancer/tumor-agnostic."
+        else:
+            parts = []
+            if cancer_specific_count > 0:
+                parts.append(f"{cancer_specific_count} {queried_tumor}-specific")
+            if pan_cancer_count > 0:
+                parts.append(f"{pan_cancer_count} pan-cancer")
+            if other_count > 0:
+                others_str = ", ".join(sorted(other_tumor_types)[:3])
+                if len(other_tumor_types) > 3:
+                    others_str += f" +{len(other_tumor_types) - 3} more"
+                parts.append(f"{other_count} other ({others_str})")
+            summary_text = f"Tumor match: {', '.join(parts)}."
+
+        return {
+            "cancer_specific_count": cancer_specific_count,
+            "pan_cancer_count": pan_cancer_count,
+            "other_count": other_count,
+            "other_tumor_types": sorted(other_tumor_types),
+            "total": total,
+            "summary_text": summary_text,
+            "has_tumor_specific": cancer_specific_count > 0,
+            "is_all_other": other_count == total and total > 0,
+            "queried_tumor": queried_tumor,
+        }
