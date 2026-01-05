@@ -46,14 +46,14 @@ class PubMedEvidence(EvidenceItemBase):
     def is_tumor_match(self) -> bool | None:
         """Check if evidence matches the queried tumor type.
 
-        Uses cancer_type_level from EvidenceItemBase for consistency
+        Uses cancer_type_match from EvidenceItemBase for consistency
         with other evidence models.
 
         Returns:
             True if cancer_specific, False if not, None if unknown.
         """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level == "cancer_specific"
+        if self.cancer_type_match and self.cancer_type_match.level:
+            return self.cancer_type_match.level == "cancer_specific"
         return None
 
     @property
@@ -65,8 +65,8 @@ class PubMedEvidence(EvidenceItemBase):
             'pan_cancer' if tumor-agnostic,
             or the specific cancer name if different tumor type.
         """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level
+        if self.cancer_type_match and self.cancer_type_match.level:
+            return self.cancer_type_match.level
         return None
 
     def is_resistance_evidence(self) -> bool:

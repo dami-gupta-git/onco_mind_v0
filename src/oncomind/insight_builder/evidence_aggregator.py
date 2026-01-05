@@ -522,10 +522,10 @@ class EvidenceAggregator:
         approvals: list[FDAApproval],
         tumor_type: str | None,
     ) -> list[FDAApproval]:
-        """Enrich FDA approvals with cancer_type_level based on tumor type.
+        """Enrich FDA approvals with cancer_type_match based on tumor type.
 
         Uses parse_indication_for_tumor() to determine if the approval
-        matches the queried tumor type, then sets cancer_type_level
+        matches the queried tumor type, then sets cancer_type_match
         for consistency with ClinicalTrialEvidence.
 
         Args:
@@ -533,10 +533,10 @@ class EvidenceAggregator:
             tumor_type: The queried tumor type (may be None)
 
         Returns:
-            Same list with cancer_type_level populated
+            Same list with cancer_type_match populated
         """
         if not tumor_type:
-            # No tumor type to match against - leave cancer_type_level as None
+            # No tumor type to match against - leave cancer_type_match as None
             return approvals
 
         for approval in approvals:
@@ -560,7 +560,7 @@ class EvidenceAggregator:
                 extracted_cancer = approval.extract_indication_cancer_type()
                 level = extracted_cancer if extracted_cancer else "pan_cancer"
 
-            approval.cancer_type_level = EvidenceLevel(
+            approval.cancer_type_match = EvidenceLevel(
                 level=level,
                 scope="specific" if tumor_match else "unspecified",
                 origin="kb",
@@ -763,7 +763,7 @@ class EvidenceAggregator:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
             fda_approvals: list[FDAApproval] = []
         else:
-            # Enrich FDA approvals with cancer_type_level based on tumor type
+            # Enrich FDA approvals with cancer_type_match based on tumor type
             fda_approvals = self._enrich_fda_with_tumor_match(fda_approvals_raw, tumor)
 
         # Get gene context

@@ -422,9 +422,9 @@ class CGIClient:
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
             )
-            cancer_type_level = None
+            cancer_type_match = None
             if tumor_type:
-                cancer_type_level = EvidenceLevel(
+                cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if tumor_matches else (biomarker.tumor_type or "pan_cancer"),
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
@@ -442,7 +442,7 @@ class CGIClient:
                 fda_approved=biomarker.is_fda_approved(),
                 matched_alteration=biomarker.alteration,
                 locus_match=locus_match,
-                cancer_type_level=cancer_type_level,
+                cancer_type_match=cancer_type_match,
             ))
 
         return evidence_list

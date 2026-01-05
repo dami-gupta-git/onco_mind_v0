@@ -61,14 +61,14 @@ class EvidenceItemBase(BaseModel):
 
     Provides common metadata fields for tracking evidence provenance:
     - locus_match: Tracks whether evidence is at variant or gene level
-    - cancer_type_level: Tracks whether evidence is cancer-specific or pan-cancer
+    - cancer_type_match: Tracks whether evidence is cancer-specific or pan-cancer
     """
 
     locus_match: EvidenceLevel | None = Field(
         default=None,
         description="Variant/gene level evidence metadata"
     )
-    cancer_type_level: EvidenceLevel | None = Field(
+    cancer_type_match: EvidenceLevel | None = Field(
         default=None,
         description="Cancer type specificity evidence metadata"
     )
@@ -80,8 +80,8 @@ class EvidenceItemBase(BaseModel):
         Returns:
             True if cancer_specific, False if not cancer_specific, None if unknown.
         """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level == "cancer_specific"
+        if self.cancer_type_match and self.cancer_type_match.level:
+            return self.cancer_type_match.level == "cancer_specific"
         return None
 
     @property
@@ -94,6 +94,6 @@ class EvidenceItemBase(BaseModel):
             or the specific cancer name if different tumor type,
             or None if unknown.
         """
-        if self.cancer_type_level and self.cancer_type_level.level:
-            return self.cancer_type_level.level
+        if self.cancer_type_match and self.cancer_type_match.level:
+            return self.cancer_type_match.level
         return None
