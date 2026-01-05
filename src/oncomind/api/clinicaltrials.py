@@ -555,8 +555,8 @@ class ClinicalTrialsClient:
                 level = "gene"
                 scope = "unspecified"
 
-            # Build variant_level based on match type
-            variant_level = EvidenceLevel(
+            # Build locus_match based on match type
+            locus_match = EvidenceLevel(
                 level=level,
                 scope=scope,
                 origin="trial",
@@ -589,7 +589,7 @@ class ClinicalTrialsClient:
                 interventions=trial.interventions,
                 sponsor=trial.sponsor,
                 url=trial.url,
-                variant_level=variant_level,
+                locus_match=locus_match,
                 cancer_type_level=cancer_type_level,
                 matched_biomarker=matched_biomarker,
             ))
@@ -607,7 +607,7 @@ class ClinicalTrialsClient:
         """Search for clinical trials by disease and convert to evidence model.
 
         This searches by disease/tumor type only. If gene/variant are provided,
-        they are used to determine the variant_level (whether trial mentions
+        they are used to determine the locus_match (whether trial mentions
         the biomarker), but the search itself is disease-based.
 
         Args:
@@ -631,31 +631,31 @@ class ClinicalTrialsClient:
         evidence_list = []
 
         for trial in trials:
-            # Determine variant_level using mentions_variant
+            # Determine locus_match using mentions_variant
             # mentions_variant returns: (match_type, matched_biomarker)
-            variant_level = None
+            locus_match = None
             matched_biomarker = None
             if gene:
                 match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
                 if match_type == "specific":
-                    variant_level = EvidenceLevel(
+                    locus_match = EvidenceLevel(
                         level="variant",
                         scope="specific",
                         origin="trial",
                     )
                 elif match_type == "ambiguous":
-                    variant_level = EvidenceLevel(
+                    locus_match = EvidenceLevel(
                         level="variant",
                         scope="ambiguous",
                         origin="trial",
                     )
                 elif match_type == "gene":
-                    variant_level = EvidenceLevel(
+                    locus_match = EvidenceLevel(
                         level="gene",
                         scope="unspecified",
                         origin="trial",
                     )
-                # else: match_type == "none", variant_level stays None
+                # else: match_type == "none", locus_match stays None
 
             # cancer_type_level - we searched by disease so it should match
             tumor_type_lower = tumor_type.lower()
@@ -681,7 +681,7 @@ class ClinicalTrialsClient:
                 interventions=trial.interventions,
                 sponsor=trial.sponsor,
                 url=trial.url,
-                variant_level=variant_level,
+                locus_match=locus_match,
                 cancer_type_level=cancer_type_level,
                 matched_biomarker=matched_biomarker,
             ))
@@ -747,7 +747,7 @@ class ClinicalTrialsClient:
             disease_results = []
 
         # Merge and deduplicate by NCT ID
-        # Prefer biomarker results (they have more specific variant_level)
+        # Prefer biomarker results (they have more specific locus_match)
         seen_nct_ids: set[str] = set()
         merged: list["ClinicalTrialEvidence"] = []
 

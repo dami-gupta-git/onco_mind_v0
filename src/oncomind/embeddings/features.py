@@ -159,7 +159,7 @@ def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
     # Count variant-specific trials
     variant_specific_trials = sum(
         1 for t in panel.clinical_trials
-        if t.variant_level and t.variant_level.level == "variant"
+        if t.locus_match and t.locus_match.level == "variant"
     )
 
     return {

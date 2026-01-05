@@ -560,7 +560,7 @@ class VICCClient:
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
-            variant_level = EvidenceLevel(
+            locus_match = EvidenceLevel(
                 level=match_level,
                 scope="specific" if match_level == "variant" else "unspecified",
                 origin="kb",
@@ -588,7 +588,7 @@ class VICCClient:
                 is_resistance=assoc.is_resistance(),
                 oncokb_level=assoc.get_oncokb_level(),
                 matched_profile=matched_profile,
-                variant_level=variant_level,
+                locus_match=locus_match,
                 cancer_type_level=cancer_type_level,
             ))
 

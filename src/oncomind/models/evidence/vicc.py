@@ -33,9 +33,9 @@ class VICCEvidence(EvidenceItemBase):
     def match_level(self) -> str:
         """Get the locus match level: 'variant', 'codon', or 'gene'.
 
-        Uses variant_level.level from EvidenceItemBase for consistency
+        Uses locus_match.level from EvidenceItemBase for consistency
         with ClinicalTrialEvidence, FDAApproval, CIViC, and CGI models.
         """
-        if self.variant_level and self.variant_level.level:
-            return self.variant_level.level
+        if self.locus_match and self.locus_match.level:
+            return self.locus_match.level
         return "gene"

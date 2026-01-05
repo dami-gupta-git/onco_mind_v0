@@ -530,7 +530,7 @@ HOTSPOT_ADJACENCY_WINDOW = 5
 # =============================================================================
 # Variants that are ambiguous - same notation exists in multiple genes or
 # the variant notation is too broad to be considered specific.
-# These should have scope="ambiguous" when variant_level.level="variant"
+# These should have scope="ambiguous" when locus_match.level="variant"
 # Format: (gene, variant) tuples with exact match required
 
 BROAD_VARIANTS: set[tuple[str, str]] = {
