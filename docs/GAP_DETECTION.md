@@ -161,6 +161,74 @@ Models with V600E exist but none in Cholangiocarcinoma — cross-histology testi
 
 ---
 
+## Other Cancer Evidence Gaps
+
+When evidence exists for a variant but only in **other cancer types** (not the queried tumor and not pan-cancer), OncoMind surfaces this as a **SIGNIFICANT gap** in the Evidence Gaps table.
+
+### When This Gap Fires
+
+The gap is created when **ALL** of the following are true:
+1. Evidence exists for the variant (FDA approvals, drug response data, preclinical biomarkers, or resistance data)
+2. Zero evidence matches the queried tumor type
+3. Zero pan-cancer evidence exists
+
+### When This Gap Does NOT Fire
+
+The gap will **not** appear when:
+- Evidence exists that matches the queried tumor type (even if other-cancer evidence also exists)
+- Pan-cancer evidence exists (e.g., "Solid Tumor" indications)
+
+### Example: Gap Fires
+
+```
+Query: PIK3CA H1047R in Cholangiocarcinoma
+
+Evidence found:
+- FDA approval for Breast Cancer
+- FDA approval for Ovarian Cancer
+- CGI biomarker for Endometrial Cancer
+
+Result: SIGNIFICANT gap created
+"FDA-approved therapies for PIK3CA H1047R exist only in other cancers
+(Breast Cancer, Ovarian Cancer, Endometrial Cancer), not Cholangiocarcinoma"
+```
+
+### Example: Gap Does NOT Fire
+
+```
+Query: BRAF V600E in Thyroid Cancer
+
+Evidence found:
+- FDA approval for Melanoma (other)
+- FDA approval for Solid Tumor (pan-cancer) ← Pan-cancer exists!
+- FDA approval for NSCLC (other)
+
+Result: No "other cancer" gap created
+Because pan-cancer evidence exists, the gap doesn't fire.
+The Clinical Actionability row shows: "3 pan-cancer, ⚠️ 11 other"
+```
+
+### Affected Categories
+
+This gap logic applies to four categories:
+
+| Category | Gap Description Pattern |
+|----------|------------------------|
+| **CLINICAL** | "FDA-approved therapies for {gene} {variant} exist only in other cancers ({cancers}), not {tumor}" |
+| **DRUG_RESPONSE** | "Drug response data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
+| **PRECLINICAL** | "Preclinical biomarker data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
+| **RESISTANCE** | "Resistance data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
+
+### Suggested Studies
+
+When this gap fires, suggested studies include:
+- Basket trial enrollment
+- Off-label use case series
+- Tumor-specific drug screens
+- ClinicalTrials.gov search for expansion studies
+
+---
+
 ## LLM Research Hypothesis Generation
 
 Gap detection feeds into LLM-powered hypothesis generation:
