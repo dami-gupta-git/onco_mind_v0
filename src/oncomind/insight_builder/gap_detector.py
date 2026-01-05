@@ -15,7 +15,7 @@ from oncomind.config.constants import (
     COOCCURRENCE_STRONG_THRESHOLD_PCT,
     HOTSPOT_ADJACENCY_WINDOW,
 )
-from oncomind.models.evidence.base import tumor_types_match
+from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
@@ -41,6 +41,7 @@ class MatchCounts:
     codon: int = 0
     gene: int = 0
     tumor: int = 0
+    other_cancers: set = field(default_factory=set)  # Cancer types that didn't match
 
     @property
     def matches_on_str(self) -> str:
@@ -73,6 +74,7 @@ class MatchCounts:
         self.codon += other.codon
         self.gene += other.gene
         self.tumor += other.tumor
+        self.other_cancers.update(other.other_cancers)
         return self
 
 
@@ -106,19 +108,24 @@ def count_with_levels(
 
         # Tumor matching
         if tumor_type:
+            # Get the disease/tumor from the item
+            tumor_attr = getattr(item, 'tumor_type', None)
+            disease_attr = getattr(item, 'disease', None)
+            tissue = (tumor_attr if isinstance(tumor_attr, str) and tumor_attr
+                      else disease_attr if isinstance(disease_attr, str) and disease_attr
+                      else None)
+
             if tumor_check_fn:
                 if tumor_check_fn(item):
                     counts.tumor += 1
+                elif tissue and not is_pan_cancer_term(tissue):
+                    counts.other_cancers.add(tissue)
             else:
-                # Default: try item.tumor_type, then item.disease
-                # Check for non-empty strings (handles MagicMock in tests)
-                tumor_attr = getattr(item, 'tumor_type', None)
-                disease_attr = getattr(item, 'disease', None)
-                tissue = (tumor_attr if isinstance(tumor_attr, str) and tumor_attr
-                          else disease_attr if isinstance(disease_attr, str) and disease_attr
-                          else None)
+                # Default: use tumor_types_match
                 if tumor_types_match(tumor_type, tissue):
                     counts.tumor += 1
+                elif tissue and not is_pan_cancer_term(tissue):
+                    counts.other_cancers.add(tissue)
 
     return counts
 
@@ -157,7 +164,6 @@ class GapDetectionContext:
         category: GapCategory | None = None,
         matches_on: str | None = None,
         tumor_match: str | None = None,
-        cancer_mismatch: str | None = None
     ) -> None:
         """Add a well-characterized aspect with its basis and category."""
         # Use title case for aspect
@@ -170,7 +176,6 @@ class GapDetectionContext:
                 category=category,
                 matches_on=matches_on,
                 tumor_match=tumor_match,
-                cancer_mismatch=cancer_mismatch
             )
         )
 
@@ -454,19 +459,24 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 tumor_parts.append(f"{tumor_match_counts['other']} other")
             tumor_match_str = ", ".join(tumor_parts) if tumor_parts else None
 
-        # Determine cancer_mismatch value
-        cancer_mismatch = None
-        if other_cancers and tumor_match_counts["tumor"] == 0 and tumor_match_counts["pan_cancer"] == 0:
-            cancer_mismatch = ", ".join(other_cancers[:2])
-
         ctx.add_well_characterized(
             "clinical actionability",
             " + ".join(parts) if parts else "Clinical evidence exists",
             category=GapCategory.CLINICAL,
             matches_on=matches_on,
             tumor_match=tumor_match_str,
-            cancer_mismatch=cancer_mismatch
         )
+
+        # Add gap if evidence exists only in other cancers (not tumor-matched or pan-cancer)
+        if other_cancers and tumor_match_counts["tumor"] == 0 and tumor_match_counts["pan_cancer"] == 0:
+            other_cancers_str = ", ".join(other_cancers[:3])
+            ctx.add_gap(
+                category=GapCategory.CLINICAL,
+                severity=GapSeverity.SIGNIFICANT,
+                description=f"FDA-approved therapies for {ctx.gene} {ctx.variant} exist only in other cancers ({other_cancers_str}), not {tumor_type}",
+                suggested_studies=["Basket trial", "Off-label use case series"],
+                addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
+            )
     elif ctx.has_clinical:
         # Has CIViC evidence but no FDA-approved therapies
         ctx.add_well_characterized(
@@ -567,8 +577,19 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             " + ".join(drug_sources),
             category=GapCategory.DRUG_RESPONSE,
             matches_on=counts.matches_on_str,
-            tumor_match=counts.tumor_breakdown_str
+            tumor_match=counts.tumor_breakdown_str,
         )
+
+        # Add gap if evidence exists only in other tumors (not tumor-matched)
+        if ctx.tumor_type and counts.tumor == 0 and counts.other_cancers:
+            other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
+            ctx.add_gap(
+                category=GapCategory.DRUG_RESPONSE,
+                severity=GapSeverity.SIGNIFICANT,
+                description=f"Drug response data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
+                suggested_studies=["Tumor-specific drug screen", "Basket trial analysis"],
+                addressable_with=["Literature search", "Clinical trial databases"]
+            )
     else:
         ctx.add_gap(
             category=GapCategory.DRUG_RESPONSE,
@@ -614,8 +635,19 @@ def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext
         " + ".join(sources),
         category=GapCategory.PRECLINICAL,
         matches_on=counts.matches_on_str,
-        tumor_match=counts.tumor_breakdown_str
+        tumor_match=counts.tumor_breakdown_str,
     )
+
+    # Add gap if evidence exists only in other tumors (not tumor-matched)
+    if ctx.tumor_type and counts.tumor == 0 and counts.other_cancers:
+        other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
+        ctx.add_gap(
+            category=GapCategory.PRECLINICAL,
+            severity=GapSeverity.SIGNIFICANT,
+            description=f"Preclinical biomarker data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
+            suggested_studies=["Tumor-specific cell line studies", "PDX models"],
+            addressable_with=["DepMap", "GDSC", "Literature search"]
+        )
 
 
 def _check_depmap_drug_sensitivity(evidence: "Evidence", ctx: GapDetectionContext) -> None:
@@ -716,8 +748,19 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
             " + ".join(resistance_sources),
             category=GapCategory.RESISTANCE,
             matches_on=counts.matches_on_str,
-            tumor_match=counts.tumor_breakdown_str
+            tumor_match=counts.tumor_breakdown_str,
         )
+
+        # Add gap if evidence exists only in other tumors (not tumor-matched)
+        if ctx.tumor_type and counts.tumor == 0 and counts.other_cancers:
+            other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
+            ctx.add_gap(
+                category=GapCategory.RESISTANCE,
+                severity=GapSeverity.SIGNIFICANT,
+                description=f"Resistance data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
+                suggested_studies=["Tumor-specific resistance screen", "Serial biopsy study"],
+                addressable_with=["Literature search", "CIViC"]
+            )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
             category=GapCategory.RESISTANCE,

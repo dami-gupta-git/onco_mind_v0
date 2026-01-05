@@ -1142,8 +1142,8 @@ class TestClinicalActionabilityTumorMatch:
                     f"Should have tumor or pan_cancer count, got: {clinical_item.tumor_match}"
 
     @pytest.mark.asyncio
-    async def test_clinical_actionability_other_cancer_shows_mismatch(self):
-        """Clinical actionability for mismatched tumor should show cancer_mismatch."""
+    async def test_clinical_actionability_other_cancer_creates_gap(self):
+        """Clinical actionability for mismatched tumor should create a gap."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             # BRAF V600E is approved in Melanoma - query in Thyroid (different)
@@ -1159,11 +1159,9 @@ class TestClinicalActionabilityTumorMatch:
             if "clinical actionability" in item.aspect.lower()
         ]
 
-        # If there's clinical data, check for tumor match/mismatch tracking
+        # If there's clinical data, check for tumor match tracking
         if clinical:
             clinical_item = clinical[0]
-            # Should have some indication of tumor match status
-            has_tracking = (clinical_item.tumor_match is not None or
-                          clinical_item.cancer_mismatch is not None)
-            # Note: may or may not have cancer_mismatch depending on data availability
-            # Just verify the tracking fields are being used
+            # Should have some indication of tumor match status via tumor_match field
+            has_tracking = clinical_item.tumor_match is not None
+            # Note: if evidence exists only in other cancers, a gap should also be created

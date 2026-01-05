@@ -1162,19 +1162,16 @@ with tab1:
                             tumor_str = format_tumor_match(tumor_match_data)
                         else:
                             # Fall back to old logic for rows that don't have tumor_match
-                            # Prevalence, cell line models, drug response get tumor match indicator
-                            is_prevalence_row = 'observed in samples' in aspect.lower() or 'prevalence' in aspect.lower()
-                            is_cell_line_row = 'cell line' in aspect.lower()
-                            is_drug_response_row = 'drug response' in aspect.lower()
-
-                            if is_prevalence_row or is_cell_line_row or is_drug_response_row:
-                                cancer_mismatch = item.get('cancer_mismatch', '')
-                                if cancer_mismatch:
-                                    tumor_str = "⚠️ Other"
+                            # Show tumor match info if available
+                            tumor_match = item.get('tumor_match', '')
+                            if tumor_match:
+                                # Parse tumor match string like "2 tumor, 1 other"
+                                if 'tumor' in tumor_match:
+                                    tumor_str = f"✅ {tumor_match}"
                                 else:
-                                    tumor_str = "✅ Yes"
+                                    tumor_str = f"⚠️ {tumor_match}"
                             else:
-                                tumor_str = ""  # No tumor match indicator for other rows
+                                tumor_str = ""  # No tumor match indicator
 
                         wc_rows.append({
                             "Category": (item.get('category') or '').replace('_', ' ').title(),

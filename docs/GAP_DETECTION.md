@@ -302,8 +302,9 @@ class CharacterizedAspect(BaseModel):
     category: GapCategory # For grouping (DRUG_RESPONSE, RESISTANCE, etc.)
     matches_on: str | None    # "3 variant, 0 codon, 2 gene"
     tumor_match: str | None   # "4 tumor, 1 other"
-    cancer_mismatch: str | None  # "Melanoma" (if FDA approval is for different cancer)
 ```
+
+**Note**: When evidence exists only in other tumors (not the queried tumor), a SIGNIFICANT gap is created instead of using a `cancer_mismatch` field. This surfaces the information more prominently in the Evidence Gaps table.
 
 ### matches_on: Locus Level Tracking
 
@@ -387,7 +388,7 @@ Shows how many evidence items match the queried tumor type:
 ### Clinical Actionability
 **Sources counted**: FDA approvals, CIViC assertions
 
-Tracks `tumor_match` and `cancer_mismatch` to show when FDA approval exists but for a different cancer than queried.
+Tracks `tumor_match` to show tumor-specific vs other-tumor counts. When FDA approvals exist only for other cancers (not the queried tumor), a SIGNIFICANT gap is created to surface this prominently.
 
 ---
 
