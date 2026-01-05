@@ -265,28 +265,6 @@ class CGIClient:
 
         return "gene"
 
-    def _tumor_type_matches(self, cgi_tumor_type: str, tumor_type: str | None) -> bool:
-        """Check if tumor types match.
-
-        Delegates to centralized tumor_types_match() function in base.py,
-        with pan-cancer detection.
-
-        Args:
-            cgi_tumor_type: CGI tumor type abbreviation (e.g., "NSCLC", "L")
-            tumor_type: User-provided tumor type (e.g., "Non-Small Cell Lung Cancer")
-
-        Returns:
-            True if tumor types match
-        """
-        if not tumor_type:
-            return True  # No filter, match all
-
-        # Pan-cancer diseases don't count as a specific tumor match
-        if is_pan_cancer_term(cgi_tumor_type):
-            return False
-
-        return tumor_types_match(cgi_tumor_type, tumor_type)
-
     def fetch_biomarkers(
         self, gene: str, variant: str, tumor_type: str | None = None
     ) -> list[CGIBiomarker]:
@@ -315,9 +293,8 @@ class CGIClient:
                 continue
 
             # Check tumor type match if specified
-            if tumor_type and not self._tumor_type_matches(
-                row.get("Primary Tumor type", ""), tumor_type
-            ):
+            cgi_tumor = row.get("Primary Tumor type", "")
+            if tumor_type and not is_pan_cancer_term(cgi_tumor) and not tumor_types_match(cgi_tumor, tumor_type):
                 continue
 
             # Get drug name, falling back to drug family if Drug is empty/placeholder

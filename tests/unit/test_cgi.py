@@ -174,52 +174,6 @@ class TestCGIClient:
         assert client._variant_matches("EGFR:G719S", "EGFR", "p.G719S") is True
         assert client._variant_matches("BRAF:V600E", "BRAF", "p.V600E") is True
 
-    def test_tumor_type_matches_nsclc(self):
-        """Test tumor type matching for NSCLC."""
-        client = CGIClient()
-
-        # Various NSCLC representations
-        assert client._tumor_type_matches("NSCLC", "Non-Small Cell Lung Cancer") is True
-        assert client._tumor_type_matches("NSCLC", "NSCLC") is True
-        assert client._tumor_type_matches("L", "Lung Cancer") is True
-
-        # Non-matching
-        assert client._tumor_type_matches("NSCLC", "Melanoma") is False
-
-    def test_tumor_type_matches_melanoma(self):
-        """Test tumor type matching for melanoma."""
-        client = CGIClient()
-
-        assert client._tumor_type_matches("MEL", "Melanoma") is True
-        assert client._tumor_type_matches("MEL", "Cutaneous Melanoma") is True
-
-    def test_tumor_type_matches_colorectal(self):
-        """Test tumor type matching for colorectal cancer."""
-        client = CGIClient()
-
-        assert client._tumor_type_matches("CRC", "Colorectal Cancer") is True
-        assert client._tumor_type_matches("CRC", "Colon Cancer") is True
-
-    def test_tumor_type_matches_none(self):
-        """Test that None tumor type matches all."""
-        client = CGIClient()
-
-        # None tumor type should match anything
-        assert client._tumor_type_matches("NSCLC", None) is True
-        assert client._tumor_type_matches("MEL", None) is True
-        assert client._tumor_type_matches("CRC", None) is True
-
-    def test_tumor_type_matches_pan_cancer_returns_false(self):
-        """Test that pan-cancer terms return False (not specific matches)."""
-        client = CGIClient()
-
-        # Pan-cancer terms should NOT be considered specific tumor matches
-        assert client._tumor_type_matches("Cancer", "NSCLC") is False
-        assert client._tumor_type_matches("Solid Tumor", "Melanoma") is False
-        assert client._tumor_type_matches("Solid Tumors", "Breast Cancer") is False
-        assert client._tumor_type_matches("Malignant Neoplasm", "CRC") is False
-        assert client._tumor_type_matches("Any Tumor", "Lung Cancer") is False
-
     def test_cache_is_valid_no_file(self):
         """Test cache validation when file doesn't exist."""
         client = CGIClient()

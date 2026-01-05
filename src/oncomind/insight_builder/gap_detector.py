@@ -23,25 +23,6 @@ if TYPE_CHECKING:
     from oncomind.models.evidence import Evidence
 
 
-def _tumor_type_matches(tumor_type: str | None, tissue: str | None) -> bool:
-    """Check if a tissue/disease matches the expected tumor type.
-
-    Delegates to centralized tumor_types_match() function in base.py.
-
-    Args:
-        tumor_type: The tumor type we're looking for (e.g., "Melanoma")
-        tissue: The tissue/disease from the cell line (e.g., "SKIN")
-
-    Returns:
-        True if there's a match
-    """
-    # Ensure both are non-empty strings
-    if not isinstance(tumor_type, str) or not tumor_type:
-        return False
-    if not isinstance(tissue, str) or not tissue:
-        return False
-
-    return tumor_types_match(tissue, tumor_type)
 
 
 # =============================================================================
@@ -106,7 +87,7 @@ def count_with_levels(
         items: List of evidence items (must have match_level attribute or be passable to _get_match_level)
         tumor_type: The tumor type to match against (optional)
         tumor_check_fn: Function(item) -> bool to check tumor match. If None, uses
-            _tumor_type_matches with item.tumor_type or item.disease attribute.
+            tumor_types_match with item.tumor_type or item.disease attribute.
 
     Returns:
         MatchCounts with all counts populated
@@ -136,7 +117,7 @@ def count_with_levels(
                 tissue = (tumor_attr if isinstance(tumor_attr, str) and tumor_attr
                           else disease_attr if isinstance(disease_attr, str) and disease_attr
                           else None)
-                if _tumor_type_matches(tumor_type, tissue):
+                if tumor_types_match(tumor_type, tissue):
                     counts.tumor += 1
 
     return counts
@@ -650,7 +631,7 @@ def _check_depmap_drug_sensitivity(evidence: "Evidence", ctx: GapDetectionContex
         mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
         tumor_models = [
             m for m in mutant_models
-            if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
+            if m.primary_disease and tumor_types_match(ctx.tumor_type, m.primary_disease)
         ]
         has_tumor_matched = bool(tumor_models)
     elif not ctx.tumor_type:
@@ -869,7 +850,7 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
             if ctx.tumor_type:
                 tumor_models = [
                     m for m in mutant_models
-                    if m.primary_disease and _tumor_type_matches(ctx.tumor_type, m.primary_disease)
+                    if m.primary_disease and tumor_types_match(ctx.tumor_type, m.primary_disease)
                 ]
                 if tumor_models:
                     # Only add tumor-specific entry (not the general one)
@@ -1207,7 +1188,7 @@ def _get_top_sensitive_drugs(evidence: "Evidence", tumor_type: str | None = None
         mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
         tumor_matched = [
             m for m in mutant_models
-            if m.primary_disease and _tumor_type_matches(tumor_type, m.primary_disease)
+            if m.primary_disease and tumor_types_match(tumor_type, m.primary_disease)
         ]
         if not tumor_matched:
             # No tumor-matched cell lines - don't suggest drugs from unrelated tumor types
@@ -1324,7 +1305,7 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     # CIViC assertions
     counts = count_matches(
         evidence.civic_assertions,
-        lambda a: _tumor_type_matches(tumor_type, a.disease)
+        lambda a: tumor_types_match(tumor_type, a.disease)
     )
     if counts[0] > 0:
         result.add_source_match("CIViC Assertions", *counts)
@@ -1351,13 +1332,13 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     # VICC evidence
     counts = count_matches(
         evidence.vicc_evidence,
-        lambda v: _tumor_type_matches(tumor_type, v.disease)
+        lambda v: tumor_types_match(tumor_type, v.disease)
     )
     if counts[0] > 0:
         result.add_source_match("VICC", *counts)
 
     # CGI biomarkers (all tiers combined)
-    cgi_tumor_check = lambda c: _tumor_type_matches(tumor_type, c.tumor_type)
+    cgi_tumor_check = lambda c: tumor_types_match(tumor_type, c.tumor_type)
     all_cgi = (
         list(evidence.cgi_biomarkers) +
         list(evidence.preclinical_biomarkers) +

@@ -228,49 +228,6 @@ class TestVICCClient:
         assert "V600E" in query
         assert "p." not in query
 
-    def test_tumor_matches_direct(self):
-        """Test direct tumor type matching."""
-        client = VICCClient()
-
-        # Direct match
-        assert client._tumor_matches("melanoma", "melanoma") is True
-        assert client._tumor_matches("lung cancer", "lung") is True
-
-        # No match
-        assert client._tumor_matches("breast cancer", "melanoma") is False
-
-    def test_tumor_matches_with_mappings(self):
-        """Test tumor type matching using mappings."""
-        client = VICCClient()
-
-        # NSCLC variations
-        assert client._tumor_matches("non-small cell lung", "nsclc") is True
-        assert client._tumor_matches("lung adenocarcinoma", "nsclc") is True
-
-        # CRC variations
-        assert client._tumor_matches("colorectal cancer", "crc") is True
-        assert client._tumor_matches("colon cancer", "crc") is True
-
-    def test_tumor_matches_none_filter(self):
-        """Test that None tumor type matches all."""
-        client = VICCClient()
-
-        assert client._tumor_matches("melanoma", None) is True
-        assert client._tumor_matches("lung cancer", None) is True
-        assert client._tumor_matches("", None) is True
-
-    def test_tumor_matches_pan_cancer_returns_false(self):
-        """Test that pan-cancer terms return False (not specific matches)."""
-        client = VICCClient()
-
-        # Pan-cancer terms should NOT be considered specific tumor matches
-        assert client._tumor_matches("Cancer", "NSCLC") is False
-        assert client._tumor_matches("Solid Tumor", "Melanoma") is False
-        assert client._tumor_matches("Solid Tumors", "Breast Cancer") is False
-        assert client._tumor_matches("Malignant Neoplasm", "CRC") is False
-        assert client._tumor_matches("Any Tumor", "Lung Cancer") is False
-        assert client._tumor_matches("Advanced Solid Tumor", "NSCLC") is False
-
     @pytest.mark.asyncio
     async def test_fetch_associations_mocked(self):
         """Test fetching associations with mocked response."""
