@@ -75,6 +75,16 @@ Distinguish expected biology from true conflicts:
 - ALWAYS cite sources for statistics with markdown links as provided
 - Include resistance signals in therapeutic_landscape.resistance_mechanisms
 - Include sensitivity signals in therapeutic_landscape.clinical_evidence or preclinical
+- NEVER describe HOW a variant works mechanistically. Only state THAT it is oncogenic/pathogenic if evidence says so. Delete any phrases about membrane localization, pathway activation, signaling, or protein function mechanisms.
+
+=== CRITICAL: NO HALLUCINATION ===
+
+- NEVER mention drugs, clinical trials, or treatments NOT explicitly listed in the DATABASE EVIDENCE section
+- If no FDA approvals are listed → say "No FDA-approved therapies"
+- If no clinical trials are listed → say "No clinical trials found"
+- Do NOT invent drug names, trial identifiers (NCT numbers), or phase information
+- Do NOT use your training knowledge about drugs or trials - ONLY use what's provided below
+- If evidence is sparse, say "Limited evidence available" - do NOT fill gaps with training data
 """
 
 SYNTHESIS_USER_PROMPT = """Synthesize evidence for this variant. Use ONLY the data below.
@@ -120,9 +130,9 @@ Respond with valid JSON only:
   "biological_context": "2-3 sentences. Start with 'As per [STUDY] - '. If no tumor-specific data, state 'Pan-cancer data shown.'",
   "therapeutic_landscape": {{
     "fda_approved": ["drug (locus-level, approved for VARIANT if gene/codon-level, tumor)"],
-    "clinical_evidence": ["drug - source"],
-    "preclinical": ["drug - source"],
-    "resistance_mechanisms": ["drug - mechanism"]
+    "clinical_evidence": ["drug (locus-level, tumor) - source"],
+    "preclinical": ["drug (locus-level) - source"],
+    "resistance_mechanisms": ["drug - mechanism (locus-level)"]
   }},
   "evidence_assessment": {{
     "overall_quality": "{overall_quality}",
