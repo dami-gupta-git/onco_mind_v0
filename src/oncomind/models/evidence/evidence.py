@@ -607,15 +607,21 @@ class Evidence(BaseModel):
 
                 cancer_specificity = self._get_fda_cancer_specificity(approval)
 
-                # Determine response_type based on whether variant is in indications
-                # Only say "Sensitivity" if FDA specifically approved for this variant
-                # For gene-level matches, check VICC for resistance data
-                response_type = None
-                if approval.variant_in_indications:
-                    response_type = "Sensitivity"
-                elif approval.locus_match in ("codon", "gene"):
-                    # Check if VICC shows resistance for this drug
-                    response_type = self._get_response_from_vicc(drug_key)
+                # Determine response_type by checking CIViC/VICC/CGI evidence
+                # Even for variant-level FDA approvals, check for resistance signals
+                # (e.g., KIT D816V is imatinib-resistant despite gene-level approval)
+                response_type = self._get_response_type_from_evidence(drug_key)
+
+                # If no evidence found, default based on FDA approval level
+                if response_type is None:
+                    if approval.variant_in_indications:
+                        response_type = "Sensitivity"
+                    # For gene/codon level, leave as None (unknown for this variant)
+
+                # Generate DailyMed URL for FDA drug label
+                # Use brand name if available, otherwise generic name
+                dailymed_search = approval.brand_name or approval.generic_name or approval.drug_name
+                dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={dailymed_search.replace(' ', '+')}" if dailymed_search else None
 
                 evidence_list.append(TherapeuticEvidence(
                     drug_name=drug_name,
@@ -626,6 +632,7 @@ class Evidence(BaseModel):
                     mechanism=None,
                     tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
                     source="FDA",
+                    source_url=dailymed_url,
                     confidence="high",
                     locus_match=approval.locus_match,
                     cancer_specificity=cancer_specificity,
@@ -672,6 +679,9 @@ class Evidence(BaseModel):
 
                     cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
 
+                    # Generate DailyMed URL for CGI-sourced FDA approvals
+                    dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={biomarker.drug.replace(' ', '+')}"
+
                     evidence_list.append(TherapeuticEvidence(
                         drug_name=biomarker.drug,
                         evidence_level="FDA-approved",
@@ -681,6 +691,7 @@ class Evidence(BaseModel):
                         mechanism=None,
                         tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                         source="CGI",
+                        source_url=dailymed_url,
                         confidence="high",
                         locus_match=biomarker.locus_match,
                         cancer_specificity=cancer_specificity,
@@ -697,30 +708,44 @@ class Evidence(BaseModel):
                 return parsed.get('line_of_therapy')
         return None
 
-    def _get_response_from_vicc(self, drug_name: str) -> str | None:
-        """Check VICC evidence for response type for a drug.
+    def _get_response_type_from_evidence(self, drug_name: str) -> str | None:
+        """Check CIViC, VICC, and CGI evidence for response type for a drug.
 
-        For FDA approvals where the variant is not in the indication (gene-level match),
-        check if VICC evidence shows this variant causes resistance to the drug.
+        This is used to determine if a drug should show Sensitivity or Resistance
+        for FDA approvals. Even if FDA approved at gene level, variant-specific
+        resistance evidence should override (e.g., KIT D816V is imatinib-resistant).
 
-        OncoKB is weighted higher (2x) as it's more carefully curated.
+        Sources checked (with weights):
+        - VICC (OncoKB weighted 2x, others 1x)
+        - CIViC evidence items
+        - CGI biomarkers
 
         Args:
             drug_name: Drug name (lowercase) to look up
 
         Returns:
-            "Resistance" if VICC shows resistance, "Sensitivity" if sensitivity, None otherwise
+            "Resistance" if evidence shows resistance
+            "Sensitivity" if evidence shows sensitivity
+            "Conflicting" if both resistance and sensitivity with similar scores
+            None if no evidence found
         """
         drug_lower = drug_name.lower()
         resistance_score = 0
         sensitivity_score = 0
 
+        def drug_matches(drug_list: list[str]) -> bool:
+            """Check if drug_name matches any drug in the list."""
+            for d in drug_list:
+                d_lower = d.lower()
+                if drug_lower in d_lower or d_lower in drug_lower:
+                    return True
+            return False
+
+        # Check VICC evidence (includes OncoKB, JAX-CKB, etc.)
         for vicc in self.vicc_evidence:
             if not vicc.drugs:
                 continue
-            # Check if this VICC entry mentions the drug
-            vicc_drugs = [d.lower() for d in vicc.drugs]
-            if not any(drug_lower in d or d in drug_lower for d in vicc_drugs):
+            if not drug_matches(vicc.drugs):
                 continue
 
             # Weight OncoKB higher (more curated)
@@ -731,10 +756,56 @@ class Evidence(BaseModel):
             elif vicc.is_sensitivity:
                 sensitivity_score += weight
 
-        # If more resistance signals than sensitivity, call it resistance
-        if resistance_score > sensitivity_score and resistance_score > 0:
+        # Check CIViC evidence items
+        for civic in self.civic_evidence:
+            if not civic.drugs:
+                continue
+            if not drug_matches(civic.drugs):
+                continue
+
+            # CIViC evidence items weighted by evidence level
+            # Level A/B = 2, Level C/D/E = 1
+            weight = 2 if civic.evidence_level in ("A", "B") else 1
+
+            if civic.clinical_significance:
+                sig_upper = civic.clinical_significance.upper()
+                if "RESIST" in sig_upper:
+                    resistance_score += weight
+                elif "SENSITIV" in sig_upper or "RESPONSE" in sig_upper:
+                    sensitivity_score += weight
+
+        # Check CGI biomarkers
+        for biomarker in self.cgi_biomarkers:
+            if not biomarker.drug:
+                continue
+            if not drug_matches([biomarker.drug]):
+                continue
+
+            # CGI FDA-approved entries weighted higher
+            weight = 2 if biomarker.fda_approved else 1
+
+            if biomarker.association:
+                assoc_upper = biomarker.association.upper()
+                if "RESIST" in assoc_upper:
+                    resistance_score += weight
+                elif "RESPONS" in assoc_upper or "SENSITIV" in assoc_upper:
+                    sensitivity_score += weight
+
+        # Determine response type based on scores
+        # Resistance takes precedence if scores are close (within 2x)
+        # because resistance is clinically more important to flag
+        if resistance_score > 0 and sensitivity_score > 0:
+            # Both exist - check if one clearly dominates
+            if resistance_score >= sensitivity_score:
+                return "Resistance"
+            elif sensitivity_score > resistance_score * 2:
+                # Sensitivity only if it strongly outweighs resistance
+                return "Sensitivity"
+            else:
+                return "Resistance"  # Default to resistance when conflicting
+        elif resistance_score > 0:
             return "Resistance"
-        elif sensitivity_score > resistance_score and sensitivity_score > 0:
+        elif sensitivity_score > 0:
             return "Sensitivity"
 
         return None
@@ -919,95 +990,184 @@ class Evidence(BaseModel):
             "pubmed_articles_count": len(self.pubmed_articles),
         }
 
+    def _get_variant_level_response_drugs(self) -> tuple[set[str], set[str]]:
+        """Get drugs with variant-level sensitivity or resistance evidence.
+
+        Used to filter out conflicting codon/gene-level evidence.
+        If a drug has variant-level resistance, we should not show codon-level sensitivity.
+        If a drug has variant-level sensitivity, we should not show codon-level resistance.
+
+        Returns:
+            Tuple of (variant_level_sensitive_drugs, variant_level_resistant_drugs)
+        """
+        variant_sensitive: set[str] = set()
+        variant_resistant: set[str] = set()
+
+        # Check VICC evidence
+        for vicc in self.vicc_evidence:
+            if vicc.locus_match == "variant" and vicc.drugs:
+                for drug in vicc.drugs:
+                    drug_lower = drug.lower()
+                    if vicc.is_sensitivity:
+                        variant_sensitive.add(drug_lower)
+                    if vicc.is_resistance:
+                        variant_resistant.add(drug_lower)
+
+        # Check CIViC assertions
+        for assertion in self.civic_assertions:
+            if assertion.locus_match == "variant" and assertion.therapies:
+                for therapy in assertion.therapies:
+                    drug_lower = therapy.lower()
+                    if assertion.is_sensitivity:
+                        variant_sensitive.add(drug_lower)
+                    if assertion.is_resistance:
+                        variant_resistant.add(drug_lower)
+
+        # Check CIViC evidence items
+        for evidence in self.civic_evidence:
+            if evidence.locus_match == "variant" and evidence.drugs and evidence.clinical_significance:
+                sig_upper = evidence.clinical_significance.upper()
+                for drug in evidence.drugs:
+                    drug_lower = drug.lower()
+                    if "SENS" in sig_upper or "RESPON" in sig_upper:
+                        variant_sensitive.add(drug_lower)
+                    if "RESIST" in sig_upper:
+                        variant_resistant.add(drug_lower)
+
+        # Check CGI biomarkers
+        for biomarker in self.cgi_biomarkers:
+            if biomarker.locus_match == "variant" and biomarker.drug and biomarker.association:
+                drug_lower = biomarker.drug.lower()
+                assoc_upper = biomarker.association.upper()
+                if "SENS" in assoc_upper or "RESPON" in assoc_upper:
+                    variant_sensitive.add(drug_lower)
+                if "RESIST" in assoc_upper:
+                    variant_resistant.add(drug_lower)
+
+        # Check CGI preclinical and early-phase biomarkers
+        for biomarker in self.preclinical_biomarkers + self.early_phase_biomarkers:
+            if biomarker.locus_match == "variant" and biomarker.drug and biomarker.association:
+                drug_lower = biomarker.drug.lower()
+                assoc_upper = biomarker.association.upper()
+                if "SENS" in assoc_upper or "RESPON" in assoc_upper:
+                    variant_sensitive.add(drug_lower)
+                if "RESIST" in assoc_upper:
+                    variant_resistant.add(drug_lower)
+
+        return variant_sensitive, variant_resistant
+
     def get_resistance_summary(self) -> str:
         """Get a synthesized summary of resistance evidence.
 
         Returns a narrative summary grouping drugs by class/generation where possible.
-        Example: "Gatekeeper mutation conferring resistance to 1st/2nd-gen EGFR TKIs
-                  (erlotinib, gefitinib, afatinib); variable response to osimertinib (conflicting evidence)"
-        """
-        # Collect all resistance drugs with their sources
-        resistance_drugs: dict[str, set[str]] = {}  # drug -> set of sources
+        Includes locus match level for each drug.
 
-        # VICC resistance evidence
+        IMPORTANT: If a drug has variant-level SENSITIVITY evidence, we exclude codon/gene-level
+        resistance evidence for that drug. This prevents misleading summaries when the queried
+        variant has specific sensitivity evidence.
+
+        Example: "Resistance to 1st/2nd-gen EGFR TKIs: erlotinib (variant-level), gefitinib (variant-level)"
+        """
+        # Get drugs with variant-level sensitivity - we'll exclude codon/gene resistance for these
+        variant_sensitive_drugs, _ = self._get_variant_level_response_drugs()
+
+        # Collect all resistance drugs with their sources and locus match level
+        # dict[str, tuple[set[str], str]] = drug -> (sources, best_locus_match)
+        resistance_drugs: dict[str, tuple[set[str], str]] = {}
+
+        def get_best_locus(existing: str | None, new: str | None) -> str:
+            """Get the most specific locus match (variant > codon > gene)."""
+            priority = {"variant": 3, "codon": 2, "gene": 1}
+            existing_p = priority.get(existing or "", 0)
+            new_p = priority.get(new or "", 0)
+            if new_p > existing_p:
+                return new or "gene"
+            return existing or new or "gene"
+
+        def should_include_resistance(drug_lower: str, locus: str) -> bool:
+            """Check if resistance evidence should be included.
+
+            Exclude codon/gene-level resistance if drug has variant-level sensitivity.
+            """
+            if locus == "variant":
+                return True  # Always include variant-level evidence
+            # For codon/gene level, exclude if drug has variant-level sensitivity
+            return drug_lower not in variant_sensitive_drugs
+
+        def add_drug(drug: str, source: str, locus: str | None) -> None:
+            """Add or update a drug entry with source and locus."""
+            drug_lower = drug.lower()
+            locus_str = locus or "gene"
+            if not should_include_resistance(drug_lower, locus_str):
+                return  # Skip this evidence
+            if drug_lower in resistance_drugs:
+                sources, existing_locus = resistance_drugs[drug_lower]
+                sources.add(source)
+                resistance_drugs[drug_lower] = (sources, get_best_locus(existing_locus, locus_str))
+            else:
+                resistance_drugs[drug_lower] = ({source}, locus_str)
+
+        # VICC resistance evidence - with locus match
         for vicc in self.vicc_evidence:
             if vicc.is_resistance and vicc.drugs:
+                locus = vicc.locus_match or "gene"
                 for drug in vicc.drugs:
-                    drug_lower = drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("VICC")
+                    add_drug(drug, "VICC", locus)
 
-        # CIViC resistance assertions
+        # CIViC resistance assertions - with locus match
         for assertion in self.civic_assertions:
             if assertion.is_resistance and assertion.therapies:
+                locus = assertion.locus_match or "gene"
                 for therapy in assertion.therapies:
-                    drug_lower = therapy.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("CIViC")
+                    add_drug(therapy, "CIViC", locus)
 
-        # CIViC resistance evidence items
+        # CIViC resistance evidence items - with locus match
         for evidence in self.civic_evidence:
             if evidence.clinical_significance and "RESIST" in evidence.clinical_significance.upper():
                 if evidence.drugs:
+                    locus = evidence.locus_match or "gene"
                     for drug in evidence.drugs:
-                        drug_lower = drug.lower()
-                        if drug_lower not in resistance_drugs:
-                            resistance_drugs[drug_lower] = set()
-                        resistance_drugs[drug_lower].add("CIViC")
+                        add_drug(drug, "CIViC", locus)
 
-        # CGI resistance biomarkers (FDA-approved)
+        # CGI resistance biomarkers (FDA-approved) - with locus match
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and "RESIST" in biomarker.association.upper():
                 if biomarker.drug:
-                    drug_lower = biomarker.drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("CGI")
+                    locus = biomarker.locus_match or "gene"
+                    add_drug(biomarker.drug, "CGI", locus)
 
-        # CGI preclinical resistance biomarkers
+        # CGI preclinical resistance biomarkers - with locus match
         for biomarker in self.preclinical_biomarkers:
             if biomarker.association and "RESIST" in biomarker.association.upper():
                 if biomarker.drug:
-                    drug_lower = biomarker.drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("CGI (preclinical)")
+                    locus = biomarker.locus_match or "gene"
+                    add_drug(biomarker.drug, "CGI (preclinical)", locus)
 
-        # CGI early-phase resistance biomarkers
+        # CGI early-phase resistance biomarkers - with locus match
         for biomarker in self.early_phase_biomarkers:
             if biomarker.association and "RESIST" in biomarker.association.upper():
                 if biomarker.drug:
-                    drug_lower = biomarker.drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("CGI (early phase)")
+                    locus = biomarker.locus_match or "gene"
+                    add_drug(biomarker.drug, "CGI (early phase)", locus)
 
-        # Literature resistance signals from LLM extraction
+        # Literature resistance signals from LLM extraction (no locus match available)
         if self.literature_knowledge and self.literature_knowledge.resistant_to:
             for entry in self.literature_knowledge.resistant_to:
                 drug = entry.drug
                 if drug:
-                    drug_lower = drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add("Literature")
+                    add_drug(drug, "Literature", None)
 
-        # PubMed articles with resistance evidence
+        # PubMed articles with resistance evidence (no locus match available)
         for article in self.pubmed_articles:
             if article.is_resistance_evidence() and article.drugs_mentioned:
                 for drug in article.drugs_mentioned:
-                    drug_lower = drug.lower()
-                    if drug_lower not in resistance_drugs:
-                        resistance_drugs[drug_lower] = set()
-                    resistance_drugs[drug_lower].add(f"PubMed:{article.pmid}")
+                    add_drug(drug, f"PubMed:{article.pmid}", None)
 
         # Filter: only include resistance for drugs that have sensitivity evidence
         # for some variant in this gene. This removes drugs like lapatinib that were
         # tested as negative controls but have no clinical relevance for this gene/tumor.
         resistance_drugs = {
-            drug: sources for drug, sources in resistance_drugs.items()
+            drug: (sources, locus) for drug, (sources, locus) in resistance_drugs.items()
             if self._drug_has_sensitivity_for_gene(drug)
         }
 
@@ -1027,6 +1187,12 @@ class Evidence(BaseModel):
                         drug_part = parts[0].replace("Conflicting drug response for", "").strip()
                         conflicting_drugs[drug_part.lower()] = gap.description
 
+        # Helper to format drug with locus level
+        def format_drug_with_locus(drug: str) -> str:
+            """Format a drug name with its locus match level."""
+            _, locus = resistance_drugs[drug]
+            return f"{drug} ({locus}-level)"
+
         # Group drugs by class for synthesis
         summaries = []
         gene = self.identifiers.gene.upper()
@@ -1042,30 +1208,30 @@ class Evidence(BaseModel):
             other_drugs = [d for d in resistance_drugs if d not in egfr_1st_2nd_gen and d not in egfr_3rd_gen]
 
             if resistant_1st_2nd:
-                drug_list = ", ".join(sorted(resistant_1st_2nd))
-                summaries.append(f"Resistance to 1st/2nd-gen EGFR TKIs ({drug_list})")
+                drug_list = ", ".join(format_drug_with_locus(d) for d in sorted(resistant_1st_2nd))
+                summaries.append(f"Resistance to 1st/2nd-gen EGFR TKIs: {drug_list}")
 
             for drug in resistant_3rd:
+                _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
                 else:
-                    summaries.append(f"Resistance to {drug}")
+                    summaries.append(f"Resistance to {drug} ({locus}-level)")
 
             for drug in other_drugs[:3]:
+                _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
                 else:
-                    sources = ", ".join(sorted(resistance_drugs[drug]))
-                    summaries.append(f"{drug} resistance ({sources})")
+                    summaries.append(f"{drug} resistance ({locus}-level)")
         else:
             # Generic grouping for non-EGFR genes
-            # First add any conflicting drugs
             for drug in list(resistance_drugs.keys())[:8]:
+                _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} (conflicting evidence)")
+                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
                 else:
-                    sources = ", ".join(sorted(resistance_drugs[drug]))
-                    summaries.append(f"{drug} resistance ({sources})")
+                    summaries.append(f"{drug} resistance ({locus}-level)")
 
         return "; ".join(summaries[:5]) if summaries else ""
 
@@ -1073,88 +1239,146 @@ class Evidence(BaseModel):
         """Get a synthesized summary of sensitivity evidence.
 
         Returns a narrative summary grouping drugs by evidence tier (FDA > Clinical > Preclinical).
-        Now includes cancer specificity to distinguish FDA approvals that match vs don't match
-        the queried tumor type.
-        Example: "FDA-approved for melanoma: osimertinib; FDA-approved for OTHER cancer (ovarian cancer): avutometinib"
+        Includes cancer specificity and locus match level for each drug.
+
+        IMPORTANT: If a drug has variant-level RESISTANCE evidence, we exclude codon/gene-level
+        sensitivity evidence for that drug. This prevents misleading summaries like
+        "sunitinib sensitive (codon-level)" when sunitinib has variant-level resistance for the queried variant.
+
+        Example: "FDA-approved for melanoma: osimertinib (variant-level); Clinical evidence: ponatinib (codon-level)"
         """
-        # Collect drugs by evidence tier and cancer specificity
-        fda_matching_drugs: set[str] = set()  # FDA approved for THIS tumor
-        fda_other_drugs: dict[str, str] = {}  # drug -> cancer type (for other tumors)
-        clinical_drugs: set[str] = set()  # VICC, CIViC, CGI
+        # Get drugs with variant-level resistance - we'll exclude codon/gene sensitivity for these
+        _, variant_resistant_drugs = self._get_variant_level_response_drugs()
+
+        # Collect drugs by evidence tier with locus match level
+        # Using dict[str, str] where key=drug, value=locus_match (variant/codon/gene)
+        fda_matching_drugs: dict[str, str] = {}  # FDA approved for THIS tumor
+        fda_other_drugs: dict[str, tuple[str, str]] = {}  # drug -> (cancer_type, locus_match)
+        clinical_drugs: dict[str, str] = {}  # VICC, CIViC, CGI -> drug: locus_match
         literature_drugs: set[str] = set()
 
         tumor_type = self.context.tumor_type or "cancer"
 
-        # FDA approvals - now with cancer specificity
+        def get_best_locus(existing: str | None, new: str | None) -> str:
+            """Get the most specific locus match (variant > codon > gene)."""
+            priority = {"variant": 3, "codon": 2, "gene": 1}
+            existing_p = priority.get(existing or "", 0)
+            new_p = priority.get(new or "", 0)
+            if new_p > existing_p:
+                return new or "gene"
+            return existing or new or "gene"
+
+        def should_include_sensitivity(drug_lower: str, locus: str) -> bool:
+            """Check if sensitivity evidence should be included.
+
+            Exclude codon/gene-level sensitivity if drug has variant-level resistance.
+            """
+            if locus == "variant":
+                return True  # Always include variant-level evidence
+            # For codon/gene level, exclude if drug has variant-level resistance
+            return drug_lower not in variant_resistant_drugs
+
+        # FDA approvals - with cancer specificity and locus match
         for approval in self.fda_approvals:
             drug = approval.generic_name or approval.brand_name or approval.drug_name
             if drug:
+                drug_lower = drug.lower()
+                locus = approval.locus_match or "gene"
                 cancer_spec = self._get_fda_cancer_specificity(approval)
-                if cancer_spec == "cancer_specific":
-                    fda_matching_drugs.add(drug.lower())
-                elif cancer_spec == "pan_cancer":
-                    fda_matching_drugs.add(drug.lower())  # pan-cancer counts as matching
+                if cancer_spec == "cancer_specific" or cancer_spec == "pan_cancer":
+                    if drug_lower in fda_matching_drugs:
+                        fda_matching_drugs[drug_lower] = get_best_locus(fda_matching_drugs[drug_lower], locus)
+                    else:
+                        fda_matching_drugs[drug_lower] = locus
                 else:
                     # FDA approved for a different cancer
-                    fda_other_drugs[drug.lower()] = cancer_spec
+                    if drug_lower in fda_other_drugs:
+                        _, existing_locus = fda_other_drugs[drug_lower]
+                        fda_other_drugs[drug_lower] = (cancer_spec, get_best_locus(existing_locus, locus))
+                    else:
+                        fda_other_drugs[drug_lower] = (cancer_spec, locus)
 
         # All FDA drugs for deduplication
-        all_fda_drugs = fda_matching_drugs | set(fda_other_drugs.keys())
+        all_fda_drugs = set(fda_matching_drugs.keys()) | set(fda_other_drugs.keys())
 
-        # VICC sensitivity evidence
+        # VICC sensitivity evidence - with locus match
         for vicc in self.vicc_evidence:
             if vicc.is_sensitivity and vicc.drugs:
+                locus = vicc.locus_match or "gene"
                 for drug in vicc.drugs:
                     drug_lower = drug.lower()
-                    if drug_lower not in all_fda_drugs:
-                        clinical_drugs.add(drug_lower)
+                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                        if drug_lower in clinical_drugs:
+                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                        else:
+                            clinical_drugs[drug_lower] = locus
 
-        # CIViC sensitivity assertions
+        # CIViC sensitivity assertions - with locus match
         for assertion in self.civic_assertions:
             if assertion.is_sensitivity and assertion.therapies:
+                locus = assertion.locus_match or "gene"
                 for therapy in assertion.therapies:
                     drug_lower = therapy.lower()
-                    if drug_lower not in all_fda_drugs:
-                        clinical_drugs.add(drug_lower)
+                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                        if drug_lower in clinical_drugs:
+                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                        else:
+                            clinical_drugs[drug_lower] = locus
 
-        # CIViC sensitivity evidence items
+        # CIViC sensitivity evidence items - with locus match
         for evidence in self.civic_evidence:
             if evidence.clinical_significance:
                 sig_upper = evidence.clinical_significance.upper()
                 if ("SENS" in sig_upper or "RESPON" in sig_upper) and "RESIST" not in sig_upper:
                     if evidence.drugs:
+                        locus = evidence.locus_match or "gene"
                         for drug in evidence.drugs:
                             drug_lower = drug.lower()
-                            if drug_lower not in all_fda_drugs:
-                                clinical_drugs.add(drug_lower)
+                            if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                                if drug_lower in clinical_drugs:
+                                    clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                                else:
+                                    clinical_drugs[drug_lower] = locus
 
-        # CGI sensitivity biomarkers (FDA-approved)
+        # CGI sensitivity biomarkers (FDA-approved) - with locus match
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
-                    if drug_lower not in all_fda_drugs:
-                        clinical_drugs.add(drug_lower)
+                    locus = biomarker.locus_match or "gene"
+                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                        if drug_lower in clinical_drugs:
+                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                        else:
+                            clinical_drugs[drug_lower] = locus
 
-        # CGI preclinical sensitivity biomarkers
-        cgi_preclinical_drugs: set[str] = set()
+        # CGI preclinical sensitivity biomarkers - with locus match
+        cgi_preclinical_drugs: dict[str, str] = {}
         for biomarker in self.preclinical_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                        cgi_preclinical_drugs.add(drug_lower)
+                    locus = biomarker.locus_match or "gene"
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs and should_include_sensitivity(drug_lower, locus):
+                        if drug_lower in cgi_preclinical_drugs:
+                            cgi_preclinical_drugs[drug_lower] = get_best_locus(cgi_preclinical_drugs[drug_lower], locus)
+                        else:
+                            cgi_preclinical_drugs[drug_lower] = locus
 
-        # CGI early-phase sensitivity biomarkers (clinical trials, case reports)
-        early_phase_drugs: set[str] = set()
+        # CGI early-phase sensitivity biomarkers (clinical trials, case reports) - with locus match
+        early_phase_drugs: dict[str, str] = {}
         for biomarker in self.early_phase_biomarkers:
             if biomarker.association and "RESIST" not in biomarker.association.upper():
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                        early_phase_drugs.add(drug_lower)
+                    locus = biomarker.locus_match or "gene"
+                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs and should_include_sensitivity(drug_lower, locus):
+                        if drug_lower in early_phase_drugs:
+                            early_phase_drugs[drug_lower] = get_best_locus(early_phase_drugs[drug_lower], locus)
+                        else:
+                            early_phase_drugs[drug_lower] = locus
 
-        # Literature sensitivity signals from LLM extraction
+        # Literature sensitivity signals from LLM extraction (no locus match available)
         if self.literature_knowledge and self.literature_knowledge.sensitive_to:
             for entry in self.literature_knowledge.sensitive_to:
                 drug = entry.drug
@@ -1163,7 +1387,7 @@ class Evidence(BaseModel):
                     if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                         literature_drugs.add(drug_lower)
 
-        # PubMed articles with sensitivity evidence
+        # PubMed articles with sensitivity evidence (no locus match available)
         for article in self.pubmed_articles:
             if article.is_sensitivity_evidence() and article.drugs_mentioned:
                 for drug in article.drugs_mentioned:
@@ -1171,46 +1395,53 @@ class Evidence(BaseModel):
                     if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                         literature_drugs.add(drug_lower)
 
-        # DepMap/PRISM drug sensitivities (preclinical)
-        depmap_preclinical_drugs: set[str] = set()
+        # DepMap/PRISM drug sensitivities (preclinical) - gene-level by nature
+        depmap_preclinical_drugs: dict[str, str] = {}
         if self.depmap_evidence and self.depmap_evidence.drug_sensitivities:
             for ds in self.depmap_evidence.get_top_sensitive_drugs(5):
                 drug_lower = ds.drug_name.lower()
                 if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                    depmap_preclinical_drugs.add(drug_lower)
+                    depmap_preclinical_drugs[drug_lower] = "gene"  # DepMap is gene-level
 
         # Combine all preclinical drugs
-        all_preclinical_drugs = cgi_preclinical_drugs | depmap_preclinical_drugs
+        all_preclinical_drugs = {**cgi_preclinical_drugs, **depmap_preclinical_drugs}
 
-        # Build synthesized summary
+        # Build synthesized summary with locus match levels
         summaries = []
+
+        def format_drugs_with_locus(drugs: dict[str, str], limit: int = 5) -> str:
+            """Format drugs with their locus match level."""
+            parts = []
+            for drug, locus in sorted(drugs.items())[:limit]:
+                parts.append(f"{drug} ({locus}-level)")
+            return ", ".join(parts)
 
         # FDA approved for THIS tumor type
         if fda_matching_drugs:
-            drug_list = ", ".join(sorted(fda_matching_drugs)[:5])
+            drug_list = format_drugs_with_locus(fda_matching_drugs, 5)
             summaries.append(f"FDA-approved for {tumor_type}: {drug_list}")
 
         # FDA approved for OTHER tumor types (IMPORTANT: LLM must know this is NOT for the queried tumor)
         if fda_other_drugs:
             other_parts = []
-            for drug, cancer in sorted(fda_other_drugs.items())[:3]:
-                other_parts.append(f"{drug} ({cancer})")
+            for drug, (cancer, locus) in sorted(fda_other_drugs.items())[:3]:
+                other_parts.append(f"{drug} ({locus}-level, {cancer})")
             summaries.append(f"FDA-approved for OTHER cancers (NOT {tumor_type}): {', '.join(other_parts)}")
 
         if clinical_drugs:
-            drug_list = ", ".join(sorted(clinical_drugs)[:5])
+            drug_list = format_drugs_with_locus(clinical_drugs, 5)
             summaries.append(f"Clinical evidence: {drug_list}")
 
         if early_phase_drugs:
-            drug_list = ", ".join(sorted(early_phase_drugs)[:3])
+            drug_list = format_drugs_with_locus(early_phase_drugs, 3)
             summaries.append(f"Early phase trials: {drug_list}")
 
         if all_preclinical_drugs:
-            drug_list = ", ".join(sorted(all_preclinical_drugs)[:3])
+            drug_list = format_drugs_with_locus(all_preclinical_drugs, 3)
             summaries.append(f"Preclinical: {drug_list}")
 
         if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not early_phase_drugs and not all_preclinical_drugs:
-            # Only show literature if no higher-tier evidence
+            # Only show literature if no higher-tier evidence (no locus match for literature)
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")
 

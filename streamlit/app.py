@@ -1320,15 +1320,17 @@ with tab1:
                 if therapeutic_landscape:
                     tl_parts = []
                     if therapeutic_landscape.get("fda_approved"):
-                        tl_parts.append(f"FDA-approved: {', '.join(therapeutic_landscape['fda_approved'])}")
+                        tl_parts.append(f"**FDA-approved:** {', '.join(therapeutic_landscape['fda_approved'])}")
                     if therapeutic_landscape.get("clinical_evidence"):
-                        tl_parts.append(f"Clinical evidence: {', '.join(therapeutic_landscape['clinical_evidence'])}")
+                        tl_parts.append(f"**Clinical evidence:** {', '.join(therapeutic_landscape['clinical_evidence'])}")
                     if therapeutic_landscape.get("preclinical"):
-                        tl_parts.append(f"Preclinical: {', '.join(therapeutic_landscape['preclinical'])}")
+                        tl_parts.append(f"**Preclinical:** {', '.join(therapeutic_landscape['preclinical'])}")
                     if therapeutic_landscape.get("resistance_mechanisms"):
-                        tl_parts.append(f"Resistance: {', '.join(therapeutic_landscape['resistance_mechanisms'])}")
+                        tl_parts.append(f"**Resistance:** {', '.join(therapeutic_landscape['resistance_mechanisms'])}")
                     if tl_parts:
-                        st.markdown(f"**Therapeutic Landscape:** {'; '.join(tl_parts)}")
+                        st.markdown("**Therapeutic Landscape:**")
+                        for part in tl_parts:
+                            st.markdown(f"- {part}")
                     # NOTE: match_level_note removed from LLM output
                     # Match level info is shown in Evidence Specificity panel instead
 

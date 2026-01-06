@@ -1041,6 +1041,11 @@ BIOMARKER_SELECTION_DRUGS: dict[str, dict] = {
     "keytruda": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
     "keytruda qlex": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
     "pembrolizumab and hyaluronidase": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
+    # VEGFR inhibitors approved for CRC - FDA label mentions EGFR therapy for patient selection
+    # (RAS wild-type CRC patients should have received anti-EGFR therapy before fruquintinib)
+    # This is NOT an EGFR-targeting drug - it targets VEGFR1/2/3
+    "fruquintinib": {"target": "VEGFR", "biomarker_genes": ["EGFR", "KRAS", "RAS"]},
+    "fruzaqla": {"target": "VEGFR", "biomarker_genes": ["EGFR", "KRAS", "RAS"]},
 }
 
 
