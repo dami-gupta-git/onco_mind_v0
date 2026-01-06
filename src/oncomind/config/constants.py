@@ -869,7 +869,7 @@ FDA_ONCOLOGY_TERMS = [
     "metastatic", "oncology", "chemotherapy", "antineoplastic",
     "locally advanced", "unresectable", "refractory",
     # Biomarker terms
-    "mutation-positive", "mutated", "biomarker", "pd-l1",
+    "mutation-positive", "mutation", "mutated", "biomarker", "pd-l1",
     "msi-h", "microsatellite", "tmb", "tumor mutational",
     # Drug class terms
     "kinase inhibitor", "tyrosine kinase", "checkpoint inhibitor",

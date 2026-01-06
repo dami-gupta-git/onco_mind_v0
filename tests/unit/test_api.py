@@ -344,8 +344,10 @@ class TestFDAClient:
         }
 
         with patch.object(client, "_query_drugsfda", new_callable=AsyncMock) as mock_query:
-            # First call returns empty, second call returns broad results
-            mock_query.side_effect = [{"results": []}, mock_response]
+            # Strategy 1 searches: BRAF AND V600E, BRAF AND V600X (codon-level pattern)
+            # Strategy 2 searches: indications_and_usage:BRAF (gene-level search)
+            # Need 3 mock responses for these 3 calls
+            mock_query.side_effect = [{"results": []}, {"results": []}, mock_response]
 
             approvals = await client.fetch_drug_approvals("BRAF", "V600E")
 
