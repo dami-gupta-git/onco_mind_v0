@@ -1031,4 +1031,36 @@ BIOMARKER_SELECTION_DRUGS: dict[str, dict] = {
     # Chemotherapies often indicated alongside biomarker-selected patients
     "pemetrexed": {"target": "TYMS", "biomarker_genes": ["EGFR", "ALK"]},
     "pemetrexed disodium": {"target": "TYMS", "biomarker_genes": ["EGFR", "ALK"]},
+    # VEGFR2 inhibitors - ramucirumab (Cyramza) approved with erlotinib for EGFR-mutant NSCLC
+    # but targets VEGFR2, not EGFR
+    "ramucirumab": {"target": "VEGFR2", "biomarker_genes": ["EGFR"]},
+    "cyramza": {"target": "VEGFR2", "biomarker_genes": ["EGFR"]},
 }
+
+
+def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
+    """Check if a drug uses the gene as a biomarker for patient selection, not as its target.
+
+    For example, datopotamab deruxtecan (DATROWAY) is approved for EGFR-mutant NSCLC,
+    but it targets TROP2, not EGFR. For EGFR queries, we should filter it out because
+    it's not an "EGFR drug" - it's a drug for patients who happen to have EGFR mutations.
+
+    Args:
+        drug_name: Drug name (case-insensitive)
+        gene: Gene symbol to check (e.g., "EGFR")
+
+    Returns:
+        True if this drug uses the gene as a biomarker (should be filtered for that gene)
+    """
+    if not drug_name or not gene:
+        return False
+
+    drug_lower = drug_name.lower()
+    gene_upper = gene.upper()
+
+    for drug_key, info in BIOMARKER_SELECTION_DRUGS.items():
+        # Check if drug name matches (substring match in both directions)
+        if drug_key in drug_lower or drug_lower in drug_key:
+            if gene_upper in [g.upper() for g in info.get("biomarker_genes", [])]:
+                return True
+    return False
