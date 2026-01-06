@@ -854,3 +854,38 @@ DEPMAP_SENSITIVE_LINES_DISPLAY = 5  # Max sensitive cell lines to display per dr
 DEPMAP_DEPENDENCY_THRESHOLD = -0.5  # Score below this = dependent
 
 
+# =============================================================================
+# FDA ONCOLOGY FILTER TERMS
+# =============================================================================
+# Terms used to identify oncology drugs and filter out false positives
+# (e.g., "eGFR" kidney function vs "EGFR" cancer gene)
+
+FDA_ONCOLOGY_TERMS = [
+    # Cancer types
+    "cancer", "tumor", "tumour", "carcinoma", "sarcoma", "lymphoma",
+    "leukemia", "leukaemia", "melanoma", "neoplasm", "malignant",
+    "myeloma", "glioma", "glioblastoma", "blastoma", "mesothelioma",
+    # Clinical terms
+    "metastatic", "oncology", "chemotherapy", "antineoplastic",
+    "locally advanced", "unresectable", "refractory",
+    # Biomarker terms
+    "mutation-positive", "mutated", "biomarker", "pd-l1",
+    "msi-h", "microsatellite", "tmb", "tumor mutational",
+    # Drug class terms
+    "kinase inhibitor", "tyrosine kinase", "checkpoint inhibitor",
+    "immunotherapy", "targeted therapy", "antibody-drug conjugate",
+    "monoclonal antibody", "bispecific",
+    # Specific cancer contexts
+    "egfr-positive", "egfr mutation", "non-small cell lung",
+    "nsclc", "sclc", "gist", "gastrointestinal stromal",
+    "colorectal", "breast cancer", "prostate cancer", "pancreatic",
+    "hepatocellular", "cholangiocarcinoma", "ovarian", "endometrial",
+]
+
+# Terms indicating non-oncology context for EGFR (kidney function "eGFR")
+FDA_EGFR_EXCLUSION_TERMS = [
+    "glomerular filtration", "egfr ml/min", "egfr <", "egfr >",
+    "renal function", "kidney", "diabetes", "type 2 diabetes",
+    "glycemic", "glucose", "insulin", "sglt2", "metformin",
+    "dapagliflozin", "empagliflozin", "canagliflozin",
+]

@@ -21,7 +21,11 @@ from tenacity import (
     wait_exponential,
 )
 
-from oncomind.config.constants import GENE_ALIASES
+from oncomind.config.constants import (
+    GENE_ALIASES,
+    FDA_ONCOLOGY_TERMS,
+    FDA_EGFR_EXCLUSION_TERMS,
+)
 
 
 class FDAAPIError(Exception):
@@ -74,6 +78,65 @@ class FDAClient:
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=self.timeout)
         return self._client
+
+    def _is_oncology_related(self, record: dict[str, Any], gene: str) -> bool:
+        """Check if an FDA record is oncology-related for a given gene.
+
+        This filters out false positives where gene names appear in non-oncology contexts.
+        For example, "EGFR" (epidermal growth factor receptor, cancer gene) vs "eGFR"
+        (estimated glomerular filtration rate, kidney function measure).
+
+        Args:
+            record: FDA label API response record
+            gene: Gene symbol being searched
+
+        Returns:
+            True if the record appears to be oncology-related, False otherwise
+        """
+        # Get indication text
+        indications = record.get("indications_and_usage", [])
+        if isinstance(indications, list):
+            indication_text = " ".join(indications).lower()
+        else:
+            indication_text = str(indications).lower()
+
+        # Get pharmacologic class if available
+        pharm_class = ""
+        if "openfda" in record:
+            pharm_classes = record["openfda"].get("pharm_class_epc", [])
+            if pharm_classes:
+                pharm_class = " ".join(pharm_classes).lower()
+
+        # Check if any oncology term is present
+        combined_text = indication_text + " " + pharm_class
+        has_oncology_term = any(term in combined_text for term in FDA_ONCOLOGY_TERMS)
+
+        # For EGFR specifically, check for false positives from kidney/diabetes drugs
+        # "eGFR" (estimated glomerular filtration rate) is a kidney function metric
+        if gene.upper() == "EGFR":
+            is_kidney_diabetes = any(term in combined_text for term in FDA_EGFR_EXCLUSION_TERMS)
+
+            # If it has kidney/diabetes terms and no oncology terms, exclude it
+            if is_kidney_diabetes and not has_oncology_term:
+                return False
+
+        # If we found oncology terms, include the drug
+        if has_oncology_term:
+            return True
+
+        # For gene-level matches without clear oncology terms, be conservative
+        # Only include if the gene name appears in a context suggesting cancer biomarker
+        gene_lower = gene.lower()
+        biomarker_patterns = [
+            f"{gene_lower} mutation",
+            f"{gene_lower}-positive",
+            f"{gene_lower}-mutated",
+            f"{gene_lower} inhibitor",
+            f"anti-{gene_lower}",
+        ]
+        has_biomarker_context = any(p in indication_text for p in biomarker_patterns)
+
+        return has_biomarker_context
 
     @retry(
         retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
@@ -192,8 +255,11 @@ class FDAClient:
                 for r in result.get("results", []):
                     drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
                     if drug_id and drug_id not in seen_drugs:
-                        seen_drugs.add(drug_id)
-                        approvals.append(r)
+                        # Filter out non-oncology drugs that mention gene names in unrelated contexts
+                        # e.g., "eGFR" (kidney function) vs "EGFR" (cancer gene)
+                        if self._is_oncology_related(r, search_gene):
+                            seen_drugs.add(drug_id)
+                            approvals.append(r)
 
             # Strategy 3: For KIT variants, also search for GIST-specific approvals
             # FDA labels for GIST often don't explicitly mention KIT but imply it
