@@ -1119,7 +1119,12 @@ class Evidence(BaseModel):
                     if parsed['tumor_match']:
                         parts.append(parsed['line_of_therapy'])
                     else:
-                        parts.append("other indication")
+                        # Explicitly state what cancer it IS approved for (not the queried tumor)
+                        approved_cancer = approval.extract_indication_cancer_type()
+                        if approved_cancer:
+                            parts.append(f"approved for {approved_cancer}, NOT {tumor_type}")
+                        else:
+                            parts.append(f"other indication, NOT {tumor_type}")
 
                 # Add match level - critical for LLM to know if this is variant-specific
                 # For gene-level matches, also show what variant the drug is approved for
@@ -1201,8 +1206,29 @@ class Evidence(BaseModel):
             if vicc_drugs:
                 lines.append(f"VICC MetaKB: {'; '.join(vicc_drugs)}")
 
-        # ClinVar - one line
-        if self.clinvar_significance:
+        # ClinVar - include all entries with significance, review status, and conditions
+        if self.clinvar_entries:
+            clinvar_summaries = []
+            for entry in self.clinvar_entries[:10]:  # Limit to 10 entries
+                parts = []
+                if entry.clinical_significance:
+                    parts.append(entry.clinical_significance)
+                if entry.review_status:
+                    parts.append(f"review: {entry.review_status}")
+                if entry.conditions:
+                    # Show first 2 conditions
+                    conds = ", ".join(entry.conditions[:2])
+                    if len(entry.conditions) > 2:
+                        conds += f" (+{len(entry.conditions) - 2} more)"
+                    parts.append(f"conditions: {conds}")
+                if parts:
+                    clinvar_summaries.append(" | ".join(parts))
+            if clinvar_summaries:
+                lines.append(f"ClinVar ({len(self.clinvar_entries)} entries):")
+                for i, summary in enumerate(clinvar_summaries, 1):
+                    lines.append(f"  {i}. {summary}")
+        elif self.clinvar_significance:
+            # Fallback to single significance if no entries but significance exists
             lines.append(f"ClinVar: {self.clinvar_significance}")
 
         # Clinical Trials - compact

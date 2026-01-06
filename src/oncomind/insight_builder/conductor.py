@@ -65,7 +65,7 @@ class ConductorConfig:
     max_literature_results: int = MAX_LITERATURE_RESULTS
 
     # Literature source: "none", "pubmed", or "semantic_scholar"
-    literature_source: str = "pubmed"
+    literature_source: str = "semantic_scholar"
 
     # Semantic Scholar: filter to recent papers (last N years, 0 = no filter)
     semantic_scholar_recent_years: int = 5

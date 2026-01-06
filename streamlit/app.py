@@ -119,6 +119,7 @@ EXAMPLE_VARIANTS = {
     "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
     "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
+    "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
 }
 
 # Initialize session state for persisting results

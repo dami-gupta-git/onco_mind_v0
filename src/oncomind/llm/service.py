@@ -246,6 +246,14 @@ class LLMService:
             tumor_match_summary=tumor_match_summary,
         )
 
+        print("\n" + "=" * 80)
+        print("LLM CALL: SYNTHESIS STAGE")
+        print("=" * 80)
+        for msg in synthesis_messages:
+            print(f"\n--- {msg['role'].upper()} ---")
+            print(msg["content"])
+        print("=" * 80 + "\n")
+
         synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
 
         if synthesis_data is None:
@@ -286,6 +294,14 @@ class LLMService:
                 evidence_assessment=evidence_assessment,
                 therapeutic_signals=therapeutic_signals,
             )
+
+            print("\n" + "=" * 80)
+            print("LLM CALL: HYPOTHESIS STAGE")
+            print("=" * 80)
+            for msg in hypothesis_messages:
+                print(f"\n--- {msg['role'].upper()} ---")
+                print(msg["content"])
+            print("=" * 80 + "\n")
 
             hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS)
 
@@ -409,6 +425,14 @@ Return JSON with these exact fields:
             {"role": "user", "content": user_prompt},
         ]
 
+        print("\n" + "=" * 80)
+        print("LLM CALL: PAPER RELEVANCE SCORING")
+        print("=" * 80)
+        for msg in messages:
+            print(f"\n--- {msg['role'].upper()} ---")
+            print(msg["content"])
+        print("=" * 80 + "\n")
+
         try:
             # Use fast/cheap model for paper scoring (high volume operation)
             response = await acompletion(
@@ -527,6 +551,14 @@ Return JSON with these exact fields:
             {"role": "user", "content": user_prompt},
         ]
 
+        print("\n" + "=" * 80)
+        print("LLM CALL: VARIANT KNOWLEDGE EXTRACTION")
+        print("=" * 80)
+        for msg in messages:
+            print(f"\n--- {msg['role'].upper()} ---")
+            print(msg["content"])
+        print("=" * 80 + "\n")
+
         try:
             # Use fast/cheap model for knowledge extraction (high volume operation)
             response = await acompletion(
@@ -558,3 +590,73 @@ Return JSON with these exact fields:
         except Exception as e:
             logger.error(f"Variant knowledge extraction error: {e}")
             return None
+
+    async def test_llm_baseline_knowledge(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+    ) -> dict:
+        """Test what the LLM knows from training data alone (no evidence provided).
+
+        This is a diagnostic method to understand what the LLM's baseline knowledge
+        is for a given variant, without any database evidence. Useful for detecting
+        when LLM outputs come from training data vs provided evidence.
+
+        Args:
+            gene: Gene symbol (e.g., "PIK3CA")
+            variant: Variant notation (e.g., "H1047R")
+            tumor_type: Optional tumor type context
+
+        Returns:
+            dict with LLM's baseline knowledge about the variant
+        """
+        tumor_context = f" in {tumor_type}" if tumor_type else ""
+
+        system_prompt = """You are a cancer genomics expert. Answer based ONLY on your training knowledge.
+Do NOT say you need more information. Tell me everything you know from your training data."""
+
+        user_prompt = f"""What do you know about {gene} {variant}{tumor_context}?
+
+Return JSON with:
+{{
+    "variant_function": "What does this variant do molecularly?",
+    "oncogenic_mechanism": "How does it drive cancer?",
+    "clinical_significance": "What is known clinically?",
+    "fda_approved_drugs": ["List any FDA-approved drugs for this variant"],
+    "resistance_mechanisms": ["Known resistance mechanisms"],
+    "sensitivity_mechanisms": ["Known drug sensitivities"],
+    "prevalence": "How common is this variant?",
+    "key_facts": ["Other important facts"],
+    "confidence": "How confident are you in this information? (high/medium/low)"
+}}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        print("\n" + "=" * 80)
+        print("LLM BASELINE KNOWLEDGE TEST (NO EVIDENCE PROVIDED)")
+        print(f"Gene: {gene}, Variant: {variant}, Tumor: {tumor_type or 'None'}")
+        print("=" * 80 + "\n")
+
+        try:
+            response = await acompletion(
+                model=self.model,
+                messages=messages,
+                temperature=0.0,
+                max_tokens=2000,
+            )
+
+            content = response.choices[0].message.content.strip()
+            print("RAW LLM RESPONSE:")
+            print(content)
+            print("=" * 80 + "\n")
+
+            data = self._parse_json_response(content)
+            return data if data else {"error": "Failed to parse response", "raw": content}
+
+        except Exception as e:
+            logger.error(f"Baseline knowledge test error: {e}")
+            return {"error": str(e)}
