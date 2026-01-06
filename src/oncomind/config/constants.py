@@ -272,45 +272,56 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
     'splice',
 }
 
-
-# =============================================================================
-# GENE CHROMOSOMES
-# =============================================================================
-# Gene to chromosome mapping for common cancer genes
-# Used for genomic coordinate lookups
-
 # =============================================================================
 # CBIOPORTAL STUDY MAPPINGS
 # =============================================================================
-# Maps tumor types to cBioPortal study IDs
-# First study in list is the primary study used for queries
-# TCGA PanCancer Atlas studies are preferred for broad coverage
-# MSK-IMPACT and institutional studies provide additional depth
-
 CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
-    # Lung / NSCLC – keep TCGA PanCan; consider adding msk_impact_2017 for pan‑solid prevalence if you want
-    "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
-    "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
-    "luad": ["luad_tcga_pan_can_atlas_2018"],
-    "lusc": ["lusc_tcga_pan_can_atlas_2018"],
-    "sclc": ["sclc_ucologne_2015"],
+    # Lung / NSCLC – prioritize recent MSK + GENIE BPC for clinical depth
+    "nsclc": [
+        "nsclc_msk_2023",                    # Large recent MSK-IMPACT NSCLC cohort
+        "lung_msk_2024",                     # Broader recent MSK lung
+        "nsclc_public_genie_bpc",            # GENIE BPC NSCLC v2.0-public (rich clinical annotations)
+        "genie_public",                      # Latest GENIE public release (18.0-public as of mid-2025)
+        "luad_tcga_pan_can_atlas_2018",       # Reliable harmonized fallback
+        "lusc_tcga_pan_can_atlas_2018"
+    ],
+    "lung": [
+        "lung_msk_2024",
+        "nsclc_public_genie_bpc",
+        "genie_public",
+        "luad_tcga_pan_can_atlas_2018",
+        "lusc_tcga_pan_can_atlas_2018"
+    ],
+    "luad": [
+        "lung_msk_2024",                     # Covers LUAD well in recent MSK
+        "nsclc_public_genie_bpc",
+        "luad_tcga_pan_can_atlas_2018"
+    ],
+    "lusc": [
+        "lusc_msk_2023",                     # Recent MSK squamous if available
+        "lusc_tcga_pan_can_atlas_2018"
+    ],
+    "sclc": [
+        "sclc_msk_2024",                     # Recent MSK SCLC if available
+        "sclc_ucologne_2015"                 # Classic small reference
+    ],
 
     # Melanoma
     "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018"],
     "skcm": ["skcm_tcga_pan_can_atlas_2018"],
 
-    # Colorectal
-    "colorectal": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
-    "crc": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
+    # Colorectal – replace old 2017 with TCGA (no major newer public MSK-specific)
+    "colorectal": ["coadread_tcga_pan_can_atlas_2018"],
+    "crc": ["coadread_tcga_pan_can_atlas_2018"],
     "colon": ["coadread_tcga_pan_can_atlas_2018"],
     "coad": ["coadread_tcga_pan_can_atlas_2018"],
     "rectal": ["coadread_tcga_pan_can_atlas_2018"],
 
-    # Breast – updated
+    # Breast
     "breast": ["breast_msk_2025", "brca_metabric", "brca_tcga_pan_can_atlas_2018"],
     "brca": ["breast_msk_2025", "brca_tcga_pan_can_atlas_2018"],
 
-    # Pancreatic – keep 2024 MSK cohorts
+    # Pancreatic
     "pancreatic": ["pdac_msk_2024", "pancreas_msk_2024", "paad_qcmg_uq_2016"],
     "paad": ["pdac_msk_2024", "pancreas_msk_2024"],
     "pancreas": ["pdac_msk_2024", "pancreas_msk_2024"],
@@ -325,7 +336,7 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "ovarian": ["ov_tcga_pan_can_atlas_2018"],
     "ov": ["ov_tcga_pan_can_atlas_2018"],
 
-    # Prostate – keep 2024 MSK cohort
+    # Prostate
     "prostate": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
     "prad": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
 
@@ -382,7 +393,7 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "sarcoma": ["sarc_tcga_pan_can_atlas_2018"],
     "sarc": ["sarc_tcga_pan_can_atlas_2018"],
 
-    # GIST – keep MSK GIST cohort
+    # GIST
     "gist": ["gist_msk_2023"],
     "gastrointestinal stromal": ["gist_msk_2023"],
 
@@ -419,6 +430,152 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     "dlbcl": ["dlbc_tcga_pan_can_atlas_2018"],
     "dlbc": ["dlbc_tcga_pan_can_atlas_2018"],
 }
+# =============================================================================
+# GENE CHROMOSOMES
+# =============================================================================
+# Gene to chromosome mapping for common cancer genes
+# Used for genomic coordinate lookups
+
+# =============================================================================
+# CBIOPORTAL STUDY MAPPINGS
+# =============================================================================
+# Maps tumor types to cBioPortal study IDs
+# First study in list is the primary study used for queries
+# TCGA PanCancer Atlas studies are preferred for broad coverage
+# MSK-IMPACT and institutional studies provide additional depth
+#
+# CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
+#     # Lung / NSCLC – keep TCGA PanCan; consider adding msk_impact_2017 for pan‑solid prevalence if you want
+#     "nsclc": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
+#     "lung": ["luad_tcga_pan_can_atlas_2018", "lusc_tcga_pan_can_atlas_2018"],
+#     "luad": ["luad_tcga_pan_can_atlas_2018"],
+#     "lusc": ["lusc_tcga_pan_can_atlas_2018"],
+#     "sclc": ["sclc_ucologne_2015"],
+#
+#     # Melanoma
+#     "melanoma": ["mel_mskimpact_2020", "skcm_tcga_pan_can_atlas_2018"],
+#     "skcm": ["skcm_tcga_pan_can_atlas_2018"],
+#
+#     # Colorectal
+#     "colorectal": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
+#     "crc": ["crc_msk_2017", "coadread_tcga_pan_can_atlas_2018"],
+#     "colon": ["coadread_tcga_pan_can_atlas_2018"],
+#     "coad": ["coadread_tcga_pan_can_atlas_2018"],
+#     "rectal": ["coadread_tcga_pan_can_atlas_2018"],
+#
+#     # Breast – updated
+#     "breast": ["breast_msk_2025", "brca_metabric", "brca_tcga_pan_can_atlas_2018"],
+#     "brca": ["breast_msk_2025", "brca_tcga_pan_can_atlas_2018"],
+#
+#     # Pancreatic – keep 2024 MSK cohorts
+#     "pancreatic": ["pdac_msk_2024", "pancreas_msk_2024", "paad_qcmg_uq_2016"],
+#     "paad": ["pdac_msk_2024", "pancreas_msk_2024"],
+#     "pancreas": ["pdac_msk_2024", "pancreas_msk_2024"],
+#
+#     # Brain
+#     "glioblastoma": ["gbm_tcga_pan_can_atlas_2018"],
+#     "gbm": ["gbm_tcga_pan_can_atlas_2018"],
+#     "glioma": ["lgg_tcga_pan_can_atlas_2018", "gbm_tcga_pan_can_atlas_2018"],
+#     "lgg": ["lgg_tcga_pan_can_atlas_2018"],
+#
+#     # Ovarian
+#     "ovarian": ["ov_tcga_pan_can_atlas_2018"],
+#     "ov": ["ov_tcga_pan_can_atlas_2018"],
+#
+#     # Prostate – keep 2024 MSK cohort
+#     "prostate": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
+#     "prad": ["prostate_msk_2024", "prad_tcga_pan_can_atlas_2018"],
+#
+#     # Bladder
+#     "bladder": ["blca_tcga_pan_can_atlas_2018"],
+#     "blca": ["blca_tcga_pan_can_atlas_2018"],
+#     "urothelial": ["blca_tcga_pan_can_atlas_2018"],
+#
+#     # Kidney
+#     "kidney": ["kirc_tcga_pan_can_atlas_2018", "kirp_tcga_pan_can_atlas_2018"],
+#     "renal": ["kirc_tcga_pan_can_atlas_2018"],
+#     "rcc": ["kirc_tcga_pan_can_atlas_2018"],
+#     "kirc": ["kirc_tcga_pan_can_atlas_2018"],
+#     "kirp": ["kirp_tcga_pan_can_atlas_2018"],
+#
+#     # Thyroid
+#     "thyroid": ["thca_tcga_pan_can_atlas_2018"],
+#     "thca": ["thca_tcga_pan_can_atlas_2018"],
+#
+#     # Head and Neck
+#     "head and neck": ["hnsc_tcga_pan_can_atlas_2018"],
+#     "hnsc": ["hnsc_tcga_pan_can_atlas_2018"],
+#
+#     # Liver
+#     "liver": ["lihc_tcga_pan_can_atlas_2018"],
+#     "lihc": ["lihc_tcga_pan_can_atlas_2018"],
+#     "hepatocellular": ["lihc_tcga_pan_can_atlas_2018"],
+#     "hcc": ["lihc_tcga_pan_can_atlas_2018"],
+#
+#     # Gastric/Stomach
+#     "gastric": ["stad_tcga_pan_can_atlas_2018"],
+#     "stomach": ["stad_tcga_pan_can_atlas_2018"],
+#     "stad": ["stad_tcga_pan_can_atlas_2018"],
+#
+#     # Esophageal
+#     "esophageal": ["esca_tcga_pan_can_atlas_2018"],
+#     "esca": ["esca_tcga_pan_can_atlas_2018"],
+#
+#     # Uterine/Endometrial
+#     "uterine": ["ucec_tcga_pan_can_atlas_2018"],
+#     "endometrial": ["ucec_tcga_pan_can_atlas_2018"],
+#     "ucec": ["ucec_tcga_pan_can_atlas_2018"],
+#
+#     # Cervical
+#     "cervical": ["cesc_tcga_pan_can_atlas_2018"],
+#     "cesc": ["cesc_tcga_pan_can_atlas_2018"],
+#
+#     # Cholangiocarcinoma
+#     "cholangiocarcinoma": ["chol_tcga_pan_can_atlas_2018"],
+#     "chol": ["chol_tcga_pan_can_atlas_2018"],
+#     "bile duct": ["chol_tcga_pan_can_atlas_2018"],
+#
+#     # Sarcoma
+#     "sarcoma": ["sarc_tcga_pan_can_atlas_2018"],
+#     "sarc": ["sarc_tcga_pan_can_atlas_2018"],
+#
+#     # GIST – keep MSK GIST cohort
+#     "gist": ["gist_msk_2023"],
+#     "gastrointestinal stromal": ["gist_msk_2023"],
+#
+#     # Mesothelioma
+#     "mesothelioma": ["meso_tcga_pan_can_atlas_2018"],
+#     "meso": ["meso_tcga_pan_can_atlas_2018"],
+#
+#     # Adrenocortical
+#     "adrenocortical": ["acc_tcga_pan_can_atlas_2018"],
+#     "acc": ["acc_tcga_pan_can_atlas_2018"],
+#
+#     # Pheochromocytoma
+#     "pheochromocytoma": ["pcpg_tcga_pan_can_atlas_2018"],
+#     "pcpg": ["pcpg_tcga_pan_can_atlas_2018"],
+#
+#     # Testicular
+#     "testicular": ["tgct_tcga_pan_can_atlas_2018"],
+#     "tgct": ["tgct_tcga_pan_can_atlas_2018"],
+#
+#     # Thymoma
+#     "thymoma": ["thym_tcga_pan_can_atlas_2018"],
+#     "thym": ["thym_tcga_pan_can_atlas_2018"],
+#
+#     # Uveal Melanoma
+#     "uveal melanoma": ["uvm_tcga_pan_can_atlas_2018"],
+#     "uvm": ["uvm_tcga_pan_can_atlas_2018"],
+#
+#     # AML
+#     "aml": ["laml_tcga_pan_can_atlas_2018"],
+#     "laml": ["laml_tcga_pan_can_atlas_2018"],
+#     "acute myeloid leukemia": ["laml_tcga_pan_can_atlas_2018"],
+#
+#     # Diffuse Large B-Cell Lymphoma
+#     "dlbcl": ["dlbc_tcga_pan_can_atlas_2018"],
+#     "dlbc": ["dlbc_tcga_pan_can_atlas_2018"],
+# }
 
 # Default pan-cancer study when no tumor-specific study is found
 CBIOPORTAL_DEFAULT_STUDY = "msk_impact_2017"
@@ -695,3 +852,5 @@ DEPMAP_SENSITIVE_LINES_DISPLAY = 5  # Max sensitive cell lines to display per dr
 
 # Gene dependency threshold
 DEPMAP_DEPENDENCY_THRESHOLD = -0.5  # Score below this = dependent
+
+

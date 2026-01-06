@@ -48,12 +48,14 @@ TUMOR MATCH (cancer specificity):
 
 Format therapeutic entries as: "drug (locus-level, approved for VARIANT, tumor-context)"
 IMPORTANT: When evidence says "approved for [VARIANT]", ALWAYS include the variant info.
+NEVER say "approved for any [GENE] mutation" - most targeted therapies are approved for SPECIFIC variants only.
 Examples:
-- "osimertinib (variant-level, NSCLC)" - best evidence, variant-specific
+- "osimertinib (variant-level, approved for T790M, NSCLC)" - best evidence, variant-specific
 - "sotorasib (gene-level, approved for G12C, NSCLC)" - G12C-specific drug used for other KRAS variant
 - "adagrasib (gene-level, approved for G12C, not pancreatic)" - different tumor AND different variant
 - "MEK inhibitors (codon-level from Q209P, melanoma)" - same codon, different AA
-- "erlotinib (gene-level, approved for any EGFR mutation, pan-cancer)" - gene-level, tumor-agnostic
+- "gefitinib (codon-level, approved for exon 19 del/L858R, NSCLC)" - approved for specific sensitizing mutations, NOT for T790M or other variants
+- "erlotinib (codon-level, approved for exon 19 del/L858R, NSCLC)" - same as gefitinib, specific variants only
 
 CODON-LEVEL EVIDENCE WARNING:
 When evidence comes from OTHER variants at the same codon (e.g., Q209P data applied to Q209L):
@@ -76,6 +78,7 @@ Distinguish expected biology from true conflicts:
 - Include resistance signals in therapeutic_landscape.resistance_mechanisms
 - Include sensitivity signals in therapeutic_landscape.clinical_evidence or preclinical
 - NEVER describe HOW a variant works mechanistically. Only state THAT it is oncogenic/pathogenic if evidence says so. Delete any phrases about membrane localization, pathway activation, signaling, or protein function mechanisms.
+- NEVER say "approved for any [GENE] mutation" - most targeted therapies are approved for SPECIFIC variants only. Read the indication text in the evidence and specify the exact approved variants.
 
 === CRITICAL: NO HALLUCINATION ===
 
