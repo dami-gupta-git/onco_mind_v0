@@ -1035,6 +1035,12 @@ BIOMARKER_SELECTION_DRUGS: dict[str, dict] = {
     # but targets VEGFR2, not EGFR
     "ramucirumab": {"target": "VEGFR2", "biomarker_genes": ["EGFR"]},
     "cyramza": {"target": "VEGFR2", "biomarker_genes": ["EGFR"]},
+    # PD-1 inhibitors - approved based on PD-L1 expression or TMB-high, not specific mutations
+    # These should not appear as "EGFR drugs" when querying EGFR variants
+    "pembrolizumab": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
+    "keytruda": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
+    "keytruda qlex": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
+    "pembrolizumab and hyaluronidase": {"target": "PD-1", "biomarker_genes": ["EGFR", "KRAS", "BRAF", "ALK", "ROS1", "RET", "MET", "NTRK1", "NTRK2", "NTRK3"]},
 }
 
 
