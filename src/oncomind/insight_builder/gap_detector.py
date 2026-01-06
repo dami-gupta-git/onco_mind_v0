@@ -840,19 +840,26 @@ def _check_discordant_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
 
 
 def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for prevalence/epidemiology data."""
+    """Check for prevalence/epidemiology data.
+
+    Note: We only flag missing prevalence as a gap if cBioPortal has data for the gene
+    but not the specific variant. If there's no cBioPortal data at all, we skip this
+    check entirely - this handles cases like acquired resistance mutations (e.g., T790M)
+    that won't appear in baseline sequencing datasets.
+    """
     cbio = evidence.cbioportal_evidence
 
+    # If no cBioPortal data at all, skip prevalence check entirely
+    # This handles acquired resistance mutations that won't be in baseline sequencing
+    if cbio is None or not cbio.has_data():
+        return
+
     # Only consider it "observed" if the variant was actually found in samples
-    has_variant_in_samples = (
-        cbio is not None and
-        cbio.has_data() and
-        cbio.samples_with_exact_variant > 0
-    )
+    has_variant_in_samples = cbio.samples_with_exact_variant > 0
 
     if has_variant_in_samples:
-        study = cbio.study_name if cbio else "cBioPortal"
-        pct = cbio.variant_prevalence_pct if cbio else 0
+        study = cbio.study_name
+        pct = cbio.variant_prevalence_pct
         ctx.add_well_characterized(
             f"observed in sample from study '{study}'",
             f"{pct:.1f}%",
@@ -861,11 +868,13 @@ def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
             tumor_match="Yes"  # cBioPortal data is already tumor-specific
         )
     else:
+        # We have gene-level data but not variant-specific data
+        # This IS a gap worth flagging (gene is in the dataset but this variant wasn't seen)
         severity = GapSeverity.SIGNIFICANT if (ctx.is_cancer_gene and ctx.has_clinical) else GapSeverity.MINOR
         ctx.add_gap(
             category=GapCategory.PREVALENCE,
             severity=severity,
-            description=f"Prevalence of {ctx.gene} {ctx.variant} in {ctx.tumor_type or 'cancer'} unknown",
+            description=f"Prevalence of {ctx.gene} {ctx.variant} in {ctx.tumor_type or 'cancer'} unknown (gene seen in {cbio.samples_with_gene_mutation}/{cbio.total_samples} samples, but not this variant)",
             suggested_studies=["Epidemiological study", "Registry analysis"],
             addressable_with=["cBioPortal", "COSMIC", "TCGA"]
         )
