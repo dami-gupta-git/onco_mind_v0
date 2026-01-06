@@ -46,6 +46,7 @@ from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.evidence_gaps import EvidenceGaps
 from oncomind.models.therapeutic_evidence import TherapeuticEvidence
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
+from oncomind.config.constants import is_biomarker_selection_drug, is_acquired_resistance_mutation
 
 # Backwards compatibility alias
 RecommendedTherapy = TherapeuticEvidence
@@ -738,6 +739,61 @@ class Evidence(BaseModel):
 
         return None
 
+    def _drug_has_sensitivity_for_gene(self, drug_name: str) -> bool:
+        """Check if a drug has sensitivity evidence for ANY variant in this gene.
+
+        Used to filter resistance evidence - only show resistance for drugs that
+        are actually relevant to this gene/tumor. For example, lapatinib resistance
+        for EGFR T790M in NSCLC should be filtered out because lapatinib has no
+        sensitivity evidence for any EGFR variant in NSCLC.
+
+        Args:
+            drug_name: Drug name (lowercase) to check
+
+        Returns:
+            True if drug has sensitivity evidence for any variant in this gene
+        """
+        drug_lower = drug_name.lower()
+
+        # Check FDA approvals - these are the strongest evidence
+        for approval in self.fda_approvals:
+            fda_drug = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
+            if drug_lower in fda_drug or fda_drug in drug_lower:
+                return True
+
+        # Check VICC sensitivity evidence (includes OncoKB, CIViC, CGI, etc.)
+        for vicc in self.vicc_evidence:
+            if vicc.is_sensitivity and vicc.drugs:
+                for d in vicc.drugs:
+                    if drug_lower in d.lower() or d.lower() in drug_lower:
+                        return True
+
+        # Check CIViC assertions for sensitivity
+        for assertion in self.civic_assertions:
+            if assertion.is_sensitivity and assertion.therapies:
+                for therapy in assertion.therapies:
+                    if drug_lower in therapy.lower() or therapy.lower() in drug_lower:
+                        return True
+
+        # Check CIViC evidence items for sensitivity
+        for evidence in self.civic_evidence:
+            if evidence.clinical_significance:
+                sig = evidence.clinical_significance.upper()
+                if "SENS" in sig or "RESPON" in sig:
+                    if evidence.drugs:
+                        for d in evidence.drugs:
+                            if drug_lower in d.lower() or d.lower() in drug_lower:
+                                return True
+
+        # Check CGI biomarkers for sensitivity
+        for biomarker in self.cgi_biomarkers:
+            if biomarker.association and "RESIST" not in biomarker.association.upper():
+                if biomarker.drug:
+                    if drug_lower in biomarker.drug.lower() or biomarker.drug.lower() in drug_lower:
+                        return True
+
+        return False
+
     def _get_fda_cancer_specificity(self, approval) -> str:
         """Determine cancer_specificity for an FDA approval.
 
@@ -946,6 +1002,14 @@ class Evidence(BaseModel):
                     if drug_lower not in resistance_drugs:
                         resistance_drugs[drug_lower] = set()
                     resistance_drugs[drug_lower].add(f"PubMed:{article.pmid}")
+
+        # Filter: only include resistance for drugs that have sensitivity evidence
+        # for some variant in this gene. This removes drugs like lapatinib that were
+        # tested as negative controls but have no clinical relevance for this gene/tumor.
+        resistance_drugs = {
+            drug: sources for drug, sources in resistance_drugs.items()
+            if self._drug_has_sensitivity_for_gene(drug)
+        }
 
         if not resistance_drugs:
             return ""
@@ -1156,10 +1220,15 @@ class Evidence(BaseModel):
         """Generate a compact evidence summary for LLM prompt consumption."""
         lines = []
         tumor_type = self.context.tumor_type
+        gene = self.identifiers.gene
 
         # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
+        # Filter out biomarker selection drugs (e.g., DATROWAY for EGFR - targets TROP2, not EGFR)
         fda_therapies = self.get_fda_approved_therapies()
-        fda_from_fda = [t for t in fda_therapies if t.source == "FDA"]
+        fda_from_fda = [
+            t for t in fda_therapies
+            if t.source == "FDA" and not is_biomarker_selection_drug(t.drug_name, gene)
+        ]
         if fda_from_fda:
             fda_drugs = []
             for therapy in fda_from_fda[:4]:
@@ -1191,9 +1260,12 @@ class Evidence(BaseModel):
                 fda_drugs.append(f"{drug} ({', '.join(parts)})" if parts else drug)
             lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
 
-        # CGI Biomarkers - compact
+        # CGI Biomarkers - compact (filter out biomarker selection drugs)
         if self.cgi_biomarkers:
-            approved = [b for b in self.cgi_biomarkers if b.fda_approved]
+            approved = [
+                b for b in self.cgi_biomarkers
+                if b.fda_approved and not is_biomarker_selection_drug(b.drug or "", gene)
+            ]
             if approved:
                 resistance = [b.drug for b in approved if b.association and 'RESIST' in b.association.upper()]
                 sensitivity = [b.drug for b in approved if b.association and 'RESIST' not in b.association.upper()]
@@ -1202,13 +1274,18 @@ class Evidence(BaseModel):
                 if sensitivity:
                     lines.append(f"CGI Sensitivity: {', '.join(sensitivity[:3])}")
 
-        # CIViC Assertions - compact
+        # CIViC Assertions - compact (filter out biomarker selection drugs)
         if self.civic_assertions:
             predictive = [a for a in self.civic_assertions if a.assertion_type == "PREDICTIVE"]
             if predictive:
                 civic_drugs = []
                 for a in predictive[:3]:
-                    therapies = ", ".join(a.therapies[:2]) if a.therapies else ""
+                    # Filter therapies that are biomarker selection drugs
+                    filtered_therapies = [
+                        t for t in (a.therapies or [])
+                        if not is_biomarker_selection_drug(t, gene)
+                    ]
+                    therapies = ", ".join(filtered_therapies[:2]) if filtered_therapies else ""
                     sig = "sens" if a.is_sensitivity else "res" if a.is_resistance else ""
                     if therapies:
                         civic_drugs.append(f"{therapies} ({sig})")
@@ -1216,11 +1293,15 @@ class Evidence(BaseModel):
                     lines.append(f"CIViC Assertions: {'; '.join(civic_drugs)}")
 
         # CIViC Evidence Items - compact (includes per-publication drug response data)
+        # Filter out biomarker selection drugs
         if self.civic_evidence:
             civic_eid_drugs = []
             for e in self.civic_evidence[:5]:
                 if e.drugs:
-                    drug_str = ", ".join(e.drugs[:2])
+                    filtered_drugs = [d for d in e.drugs if not is_biomarker_selection_drug(d, gene)]
+                    if not filtered_drugs:
+                        continue
+                    drug_str = ", ".join(filtered_drugs[:2])
                     sig = ""
                     if e.clinical_significance:
                         sig_upper = e.clinical_significance.upper()
@@ -1236,11 +1317,15 @@ class Evidence(BaseModel):
                 lines.append(f"CIViC Evidence: {'; '.join(civic_eid_drugs)}")
 
         # VICC MetaKB evidence - compact (aggregated from CIViC, CGI, JAX, OncoKB, PMKB)
+        # Filter out biomarker selection drugs
         if self.vicc_evidence:
             vicc_drugs = []
             for v in self.vicc_evidence[:5]:
                 if v.drugs:
-                    drug_str = ", ".join(v.drugs[:2])
+                    filtered_drugs = [d for d in v.drugs if not is_biomarker_selection_drug(d, gene)]
+                    if not filtered_drugs:
+                        continue
+                    drug_str = ", ".join(filtered_drugs[:2])
                     sig = ""
                     if v.is_resistance:
                         sig = "res"
@@ -1337,6 +1422,17 @@ class Evidence(BaseModel):
         # rather than misleading the LLM with "No data available"
         if self.cbioportal_evidence and self.cbioportal_evidence.has_data():
             lines.append(self.cbioportal_evidence.to_prompt_context())
+        else:
+            # Check if this is a known acquired resistance mutation
+            gene = self.identifiers.gene
+            variant = self.identifiers.variant
+            if gene and variant and is_acquired_resistance_mutation(gene, variant):
+                lines.append(
+                    f"PREVALENCE: {gene} {variant} is a known acquired resistance mutation. "
+                    "Prevalence data from baseline tumor sequencing databases (cBioPortal/TCGA) is not applicable "
+                    "as these mutations emerge under treatment pressure."
+                )
+                lines.append("")
 
         # DepMap data (gene dependencies and drug sensitivities)
         if self.depmap_evidence and self.depmap_evidence.has_data():
