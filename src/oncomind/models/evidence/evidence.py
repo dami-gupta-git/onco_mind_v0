@@ -1294,6 +1294,28 @@ class Evidence(BaseModel):
         if self.depmap_evidence and self.depmap_evidence.has_data():
             lines.append(self.depmap_evidence.to_prompt_context())
 
+            # Add oncogene driver context qualifier for pan-cancer dependency
+            # When gene is an oncogene with modest pan-cancer dependency but tumor-matched models exist,
+            # note that dependency may be higher in the relevant tumor context
+            if (self.context.gene_role == "oncogene" and
+                self.depmap_evidence.gene_dependency and
+                not self.depmap_evidence.is_essential() and
+                self.context.tumor_type):
+                # Check if we have tumor-matched cell line models
+                mutant_models = [cl for cl in self.depmap_evidence.cell_line_models if cl.has_mutation]
+                tumor_matched_models = [
+                    cl for cl in mutant_models
+                    if cl.primary_disease and tumor_types_match(cl.primary_disease, self.context.tumor_type)
+                ]
+                if tumor_matched_models:
+                    score = self.depmap_evidence.gene_dependency.mean_dependency_score
+                    lines.append(
+                        f"NOTE: Pan-cancer CERES ({score:.2f}) may underestimate {self.context.tumor_type}-specific "
+                        f"dependency for {self.identifiers.gene}, a known oncogene driver. "
+                        f"{len(tumor_matched_models)} {self.context.tumor_type} cell line model(s) available for validation."
+                    )
+                    lines.append("")
+
         # Mutation class (for oncogenes like BRAF)
         if self.context.mutation_class:
             lines.append(f"MUTATION CLASS: {self.context.mutation_class}")
