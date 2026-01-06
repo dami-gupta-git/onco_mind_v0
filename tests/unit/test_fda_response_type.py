@@ -34,6 +34,20 @@ class TestBiomarkerSelectionDrugs:
         assert "EGFR" in info["biomarker_genes"]
         assert "ALK" in info["biomarker_genes"]
 
+    def test_pembrolizumab_is_biomarker_selection_for_multiple_genes(self):
+        """Pembrolizumab targets PD-1, uses PD-L1/TMB as biomarker - not gene-specific."""
+        assert "pembrolizumab" in BIOMARKER_SELECTION_DRUGS
+        assert "keytruda" in BIOMARKER_SELECTION_DRUGS
+        assert "keytruda qlex" in BIOMARKER_SELECTION_DRUGS
+
+        info = BIOMARKER_SELECTION_DRUGS["pembrolizumab"]
+        assert info["target"] == "PD-1"
+        # Should be filtered for all common oncogene queries
+        assert "EGFR" in info["biomarker_genes"]
+        assert "KRAS" in info["biomarker_genes"]
+        assert "BRAF" in info["biomarker_genes"]
+        assert "ALK" in info["biomarker_genes"]
+
     def test_is_biomarker_selection_drug_helper(self):
         """Test the helper function logic used in the UI."""
         def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
@@ -51,6 +65,11 @@ class TestBiomarkerSelectionDrugs:
         assert is_biomarker_selection_drug("DATOPOTAMAB DERUXTECAN (DATROWAY)", "EGFR") is True
         assert is_biomarker_selection_drug("PEMETREXED DISODIUM (Pemetrexed)", "EGFR") is True
         assert is_biomarker_selection_drug("PEMETREXED DISODIUM (Pemetrexed)", "ALK") is True
+        # Pembrolizumab/Keytruda - PD-L1/TMB based, not gene-specific
+        assert is_biomarker_selection_drug("PEMBROLIZUMAB AND BERAHYALURONIDASE ALFA-PMPH (KEYTRUDA QLEX)", "EGFR") is True
+        assert is_biomarker_selection_drug("Keytruda", "EGFR") is True
+        assert is_biomarker_selection_drug("Pembrolizumab", "KRAS") is True
+        assert is_biomarker_selection_drug("Pembrolizumab", "BRAF") is True
 
         # Should NOT be filtered (direct target drugs)
         assert is_biomarker_selection_drug("OSIMERTINIB (TAGRISSO)", "EGFR") is False
