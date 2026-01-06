@@ -606,12 +606,22 @@ class Evidence(BaseModel):
 
                 cancer_specificity = self._get_fda_cancer_specificity(approval)
 
+                # Determine response_type based on whether variant is in indications
+                # Only say "Sensitivity" if FDA specifically approved for this variant
+                # For gene-level matches, check VICC for resistance data
+                response_type = None
+                if approval.variant_in_indications:
+                    response_type = "Sensitivity"
+                elif approval.locus_match in ("codon", "gene"):
+                    # Check if VICC shows resistance for this drug
+                    response_type = self._get_response_from_vicc(drug_key)
+
                 evidence_list.append(TherapeuticEvidence(
                     drug_name=drug_name,
                     evidence_level="FDA-approved",
                     approval_status="Approved in indication" if approval.variant_in_indications else "Approved",
                     clinical_context=self._extract_line_of_therapy(approval),
-                    response_type="Sensitivity",
+                    response_type=response_type,
                     mechanism=None,
                     tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
                     source="FDA",
@@ -684,6 +694,48 @@ class Evidence(BaseModel):
             parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
             if parsed.get('tumor_match'):
                 return parsed.get('line_of_therapy')
+        return None
+
+    def _get_response_from_vicc(self, drug_name: str) -> str | None:
+        """Check VICC evidence for response type for a drug.
+
+        For FDA approvals where the variant is not in the indication (gene-level match),
+        check if VICC evidence shows this variant causes resistance to the drug.
+
+        OncoKB is weighted higher (2x) as it's more carefully curated.
+
+        Args:
+            drug_name: Drug name (lowercase) to look up
+
+        Returns:
+            "Resistance" if VICC shows resistance, "Sensitivity" if sensitivity, None otherwise
+        """
+        drug_lower = drug_name.lower()
+        resistance_score = 0
+        sensitivity_score = 0
+
+        for vicc in self.vicc_evidence:
+            if not vicc.drugs:
+                continue
+            # Check if this VICC entry mentions the drug
+            vicc_drugs = [d.lower() for d in vicc.drugs]
+            if not any(drug_lower in d or d in drug_lower for d in vicc_drugs):
+                continue
+
+            # Weight OncoKB higher (more curated)
+            weight = 2 if vicc.source == "oncokb" else 1
+
+            if vicc.is_resistance:
+                resistance_score += weight
+            elif vicc.is_sensitivity:
+                sensitivity_score += weight
+
+        # If more resistance signals than sensitivity, call it resistance
+        if resistance_score > sensitivity_score and resistance_score > 0:
+            return "Resistance"
+        elif sensitivity_score > resistance_score and sensitivity_score > 0:
+            return "Sensitivity"
+
         return None
 
     def _get_fda_cancer_specificity(self, approval) -> str:
@@ -1105,42 +1157,38 @@ class Evidence(BaseModel):
         lines = []
         tumor_type = self.context.tumor_type
 
-        # FDA Approvals - include match level for LLM accuracy
-        if self.fda_approvals:
+        # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
+        fda_therapies = self.get_fda_approved_therapies()
+        fda_from_fda = [t for t in fda_therapies if t.source == "FDA"]
+        if fda_from_fda:
             fda_drugs = []
-            for approval in self.fda_approvals[:4]:
-                drug = approval.generic_name or approval.brand_name or approval.drug_name
-                locus_match = approval.locus_match  # "variant", "codon", or "gene"
+            for therapy in fda_from_fda[:4]:
+                drug = therapy.drug_name
 
                 # Build annotation parts
                 parts = []
-                if tumor_type:
-                    parsed = approval.parse_indication_for_tumor(tumor_type)
-                    if parsed['tumor_match']:
-                        parts.append(parsed['line_of_therapy'])
-                    else:
-                        # Explicitly state what cancer it IS approved for (not the queried tumor)
-                        approved_cancer = approval.extract_indication_cancer_type()
-                        if approved_cancer:
-                            parts.append(f"approved for {approved_cancer}, NOT {tumor_type}")
-                        else:
-                            parts.append(f"other indication, NOT {tumor_type}")
 
-                # Add match level - critical for LLM to know if this is variant-specific
-                # For gene-level matches, also show what variant the drug is approved for
-                if locus_match == "variant":
+                # Add response type (Sensitivity/Resistance) - critical for LLM
+                if therapy.response_type:
+                    parts.append(therapy.response_type.lower())
+
+                # Add clinical context if available
+                if therapy.clinical_context:
+                    parts.append(therapy.clinical_context)
+
+                # Add match level
+                if therapy.locus_match == "variant":
                     parts.append("variant-level")
-                else:
-                    # Try to extract what variant the drug is actually approved for
-                    approved_variant = approval.extract_approved_variant()
-                    if approved_variant and approved_variant != "any mutation":
-                        parts.append(f"{locus_match}-level, approved for {approved_variant}")
-                    elif approved_variant == "any mutation":
-                        parts.append(f"{locus_match}-level, approved for any {approval.gene} mutation")
-                    else:
-                        parts.append(f"{locus_match}-level")
+                elif therapy.locus_match:
+                    parts.append(f"{therapy.locus_match}-level")
 
-                fda_drugs.append(f"{drug} ({', '.join(parts)})")
+                # Add tumor match info
+                if therapy.cancer_specificity == "cancer_specific":
+                    parts.append(tumor_type)
+                elif therapy.cancer_specificity and therapy.cancer_specificity not in ("pan_cancer", "cancer_specific"):
+                    parts.append(f"approved for {therapy.cancer_specificity}")
+
+                fda_drugs.append(f"{drug} ({', '.join(parts)})" if parts else drug)
             lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
 
         # CGI Biomarkers - compact
