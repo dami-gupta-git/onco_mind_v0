@@ -869,10 +869,25 @@ with tab1:
                         # Only include therapies that are truly FDA-approved
                         # Sources: FDA (direct), CGI (curated), CIViC (Tier I with fda_companion_test)
                         # Exclude VICC "level A" which may include non-FDA sources like PMKB
+                        from oncomind.config.constants import BIOMARKER_SELECTION_DRUGS
+
+                        def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
+                            """Check if drug uses gene as biomarker but targets something else."""
+                            if not drug_name or not gene:
+                                return False
+                            drug_lower = drug_name.lower()
+                            # Check both full name and any parenthetical brand name
+                            for drug_key, info in BIOMARKER_SELECTION_DRUGS.items():
+                                if drug_key in drug_lower or drug_lower in drug_key:
+                                    if gene.upper() in [g.upper() for g in info.get("biomarker_genes", [])]:
+                                        return True
+                            return False
+
                         fda_approved = [
                             t for t in therapies
                             if t.get('evidence_level', '').lower() == 'fda-approved'
                             and t.get('source', '').upper() in ('FDA', 'CGI', 'CIVIC')
+                            and not is_biomarker_selection_drug(t.get('drug_name', ''), gene_display)
                         ]
                         # Clinical evidence includes Phase trials, case reports, AND VICC level A (which is clinical but not necessarily FDA)
                         clinical = [

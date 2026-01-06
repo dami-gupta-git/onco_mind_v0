@@ -889,3 +889,29 @@ FDA_EGFR_EXCLUSION_TERMS = [
     "glycemic", "glucose", "insulin", "sglt2", "metformin",
     "dapagliflozin", "empagliflozin", "canagliflozin",
 ]
+
+
+# =============================================================================
+# BIOMARKER SELECTION DRUGS
+# =============================================================================
+# Drugs where the queried gene is a PATIENT SELECTION BIOMARKER, not the drug target.
+# These drugs are approved for patients with mutations in certain genes, but the drug
+# mechanism targets a different protein.
+#
+# Example: DATROWAY (datopotamab deruxtecan) is a TROP2 ADC approved for EGFR-mutant
+# NSCLC patients who progressed on EGFR therapy. The drug targets TROP2, not EGFR.
+# Without this mapping, it would incorrectly appear as an "EGFR drug".
+#
+# Format: {drug_name_lowercase: {"target": actual_target, "biomarker_genes": [genes]}}
+#
+# TODO: Replace with DGIdb integration for comprehensive drug-target relationships.
+# See TODO.md for details.
+
+BIOMARKER_SELECTION_DRUGS: dict[str, dict] = {
+    # TROP2 ADCs - indicated for EGFR-mutant NSCLC but target TROP2
+    "datopotamab deruxtecan": {"target": "TROP2", "biomarker_genes": ["EGFR"]},
+    "datroway": {"target": "TROP2", "biomarker_genes": ["EGFR"]},
+    # Chemotherapies often indicated alongside biomarker-selected patients
+    "pemetrexed": {"target": "TYMS", "biomarker_genes": ["EGFR", "ALK"]},
+    "pemetrexed disodium": {"target": "TYMS", "biomarker_genes": ["EGFR", "ALK"]},
+}
