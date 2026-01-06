@@ -1331,12 +1331,12 @@ class Evidence(BaseModel):
                 lines.append(f"PATHWAY: {self.context.pathway}")
             lines.append("")
 
-        # cBioPortal data
+        # cBioPortal data - only include if we have data
+        # When no cBioPortal data exists (e.g., acquired resistance mutations like T790M
+        # that don't appear in baseline sequencing), skip prevalence section entirely
+        # rather than misleading the LLM with "No data available"
         if self.cbioportal_evidence and self.cbioportal_evidence.has_data():
             lines.append(self.cbioportal_evidence.to_prompt_context())
-        else:
-            lines.append("PREVALENCE: No cBioPortal data available")
-            lines.append("")
 
         # DepMap data (gene dependencies and drug sensitivities)
         if self.depmap_evidence and self.depmap_evidence.has_data():

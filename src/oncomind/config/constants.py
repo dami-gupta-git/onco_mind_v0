@@ -273,6 +273,123 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
 }
 
 # =============================================================================
+# ACQUIRED RESISTANCE MUTATIONS
+# =============================================================================
+# Mutations that arise under treatment pressure (not present at baseline).
+# These won't appear in cBioPortal/TCGA datasets (which sequence treatment-naive tumors).
+# Used to skip prevalence gap flagging and provide appropriate context to LLM.
+#
+# Format: {gene: [list of acquired resistance variants]}
+# References:
+#   - EGFR T790M: 50-60% of EGFR-TKI resistant NSCLC (PMID: 15737014, 16014882)
+#   - EGFR C797S: Osimertinib resistance (PMID: 26286086)
+#   - ALK resistance: Crizotinib/alectinib resistance (PMID: 24675041, 28425994)
+#   - ROS1 resistance: Crizotinib resistance (PMID: 26698910)
+#   - ESR1: Aromatase inhibitor resistance in breast cancer (PMID: 26698910)
+
+ACQUIRED_RESISTANCE_MUTATIONS: dict[str, list[str]] = {
+    # EGFR - TKI resistance mutations
+    "EGFR": [
+        "T790M",   # 1st/2nd-gen TKI resistance (gefitinib, erlotinib, afatinib)
+        "C797S",   # 3rd-gen TKI resistance (osimertinib)
+        "G724S",   # Osimertinib resistance
+        "L718Q",   # Osimertinib resistance
+        "L718V",   # Osimertinib resistance
+        "L792F",   # Osimertinib resistance
+        "G796D",   # Osimertinib resistance
+    ],
+    # ALK - ALK inhibitor resistance mutations
+    "ALK": [
+        "G1202R",  # Pan-ALK inhibitor resistance
+        "L1196M",  # Crizotinib resistance (gatekeeper)
+        "I1171T",  # Alectinib resistance
+        "I1171N",  # Alectinib resistance
+        "F1174L",  # Crizotinib resistance
+        "F1174C",  # Crizotinib resistance
+        "C1156Y",  # Crizotinib resistance
+        "L1152R",  # Crizotinib resistance
+        "G1269A",  # Crizotinib resistance
+    ],
+    # ROS1 - ROS1 inhibitor resistance mutations
+    "ROS1": [
+        "G2032R",  # Crizotinib resistance (solvent front)
+        "D2033N",  # Crizotinib resistance
+        "L2026M",  # Crizotinib resistance (gatekeeper)
+        "S1986F",  # Entrectinib/lorlatinib resistance
+        "S1986Y",  # Entrectinib/lorlatinib resistance
+    ],
+    # BRAF - Acquired splice variants and resistance mutations
+    "BRAF": [
+        # Splice variants causing vemurafenib/dabrafenib resistance
+        # Note: These are typically detected as RNA alterations
+    ],
+    # ESR1 - Aromatase inhibitor resistance in HR+ breast cancer
+    "ESR1": [
+        "D538G",   # Most common AI resistance mutation
+        "Y537S",   # AI resistance
+        "Y537N",   # AI resistance
+        "Y537C",   # AI resistance
+        "E380Q",   # AI resistance
+        "L536Q",   # AI resistance
+    ],
+    # KIT - Imatinib resistance in GIST (secondary mutations in exon 17)
+    "KIT": [
+        "D816V",   # Primary imatinib resistance (also germline in mastocytosis)
+        "D816H",   # Imatinib resistance
+        "D816Y",   # Imatinib resistance
+        "D820Y",   # Sunitinib resistance
+        "N822K",   # Imatinib resistance
+        "Y823D",   # Secondary imatinib resistance
+    ],
+    # FGFR2 - Acquired resistance to FGFR inhibitors
+    "FGFR2": [
+        "N549H",   # Pemigatinib/infigratinib resistance
+        "N549K",   # Pemigatinib/infigratinib resistance
+        "V564F",   # Gatekeeper - FGFR inhibitor resistance
+        "V564I",   # Gatekeeper
+        "E565A",   # FGFR inhibitor resistance
+        "L617V",   # FGFR inhibitor resistance
+        "K659M",   # FGFR inhibitor resistance
+    ],
+    # BTK - Ibrutinib resistance in CLL/lymphoma
+    "BTK": [
+        "C481S",   # Ibrutinib resistance (covalent binding site)
+        "C481R",   # Ibrutinib resistance
+        "C481F",   # Ibrutinib resistance
+    ],
+    # BCR-ABL1 - TKI resistance in CML
+    "ABL1": [
+        "T315I",   # Pan-TKI resistance (gatekeeper) - except ponatinib
+        "F317L",   # Dasatinib resistance
+        "V299L",   # Dasatinib resistance
+        "Y253H",   # Imatinib resistance
+        "E255K",   # Imatinib resistance
+        "E255V",   # Imatinib resistance
+    ],
+}
+
+# Flattened set for quick lookup: {(gene, variant), ...}
+ACQUIRED_RESISTANCE_MUTATIONS_SET: set[tuple[str, str]] = {
+    (gene.upper(), variant.upper())
+    for gene, variants in ACQUIRED_RESISTANCE_MUTATIONS.items()
+    for variant in variants
+}
+
+
+def is_acquired_resistance_mutation(gene: str, variant: str) -> bool:
+    """Check if a gene/variant is a known acquired resistance mutation.
+
+    Args:
+        gene: Gene symbol (e.g., "EGFR")
+        variant: Variant notation (e.g., "T790M")
+
+    Returns:
+        True if this is a known acquired resistance mutation
+    """
+    return (gene.upper(), variant.upper()) in ACQUIRED_RESISTANCE_MUTATIONS_SET
+
+
+# =============================================================================
 # CBIOPORTAL STUDY MAPPINGS
 # =============================================================================
 CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {

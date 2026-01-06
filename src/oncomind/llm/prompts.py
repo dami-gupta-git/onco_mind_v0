@@ -29,8 +29,9 @@ When overall_quality is "limited" or "minimal":
 - Keep sections brief (2-3 sentences), focus on what's UNKNOWN
 
 When has_tumor_specific_cbioportal_data is FALSE:
-- State: "Pan-cancer data; no {tumor_type}-specific prevalence available"
-- Do NOT extrapolate pan-cancer co-mutations to specific tumor context
+- Do NOT discuss prevalence or co-mutations - this data is simply not available
+- Do NOT say "Pan-cancer data" or "no prevalence available" - just skip this topic entirely
+- Focus on other evidence sources (FDA, CIViC, VICC, etc.) for therapeutic context
 
 === MATCH SPECIFICITY (CRITICAL) ===
 
