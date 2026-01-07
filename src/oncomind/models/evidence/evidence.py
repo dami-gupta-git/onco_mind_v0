@@ -1454,11 +1454,18 @@ class Evidence(BaseModel):
         gene = self.identifiers.gene
 
         # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
-        # Filter out biomarker selection drugs (e.g., DATROWAY for EGFR - targets TROP2, not EGFR)
+        # Filter out:
+        # 1. Biomarker selection drugs (e.g., DATROWAY for EGFR - targets TROP2, not EGFR)
+        # 2. Drugs approved for OTHER tumor types (e.g., RYDAPT approved for AML, not GIST)
+        #    - cancer_specific = matches queried tumor type
+        #    - pan_cancer = applies to all tumors
+        #    - Other values (e.g., "AML") = approved for different tumor type, EXCLUDE
         fda_therapies = self.get_fda_approved_therapies()
         fda_from_fda = [
             t for t in fda_therapies
-            if t.source == "FDA" and not is_biomarker_selection_drug(t.drug_name, gene)
+            if t.source == "FDA"
+            and not is_biomarker_selection_drug(t.drug_name, gene)
+            and t.cancer_specificity in ("cancer_specific", "pan_cancer")
         ]
         if fda_from_fda:
             fda_drugs = []

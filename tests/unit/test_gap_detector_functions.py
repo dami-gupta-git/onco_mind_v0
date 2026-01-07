@@ -302,22 +302,58 @@ class TestCheckGeneMechanism:
 class TestCheckClinicalEvidence:
     """Tests for _check_clinical_evidence function."""
 
-    def test_with_fda_approvals(self, mock_evidence, base_context):
-        """FDA approvals should mark as well-characterized."""
+    def test_with_fda_approvals_variant_level(self, mock_evidence, base_context):
+        """FDA approvals at VARIANT level should mark as well-characterized.
+
+        Only variant-level evidence is marked well-characterized for clinical actionability.
+        """
+        # Set up FDA approval with variant-level match
+        therapy = MagicMock()
+        therapy.source = "FDA"
+        therapy.locus_match = "variant"
+        therapy.cancer_specificity = "cancer_specific"
         mock_evidence.fda_approvals = [MagicMock()]
+        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
+        mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
 
         assert any("clinical" in w.lower() for w in base_context.well_characterized)
         assert base_context.has_clinical is True
 
-    def test_with_civic_assertions(self, mock_evidence, base_context):
-        """CIViC assertions should mark as well-characterized."""
+    def test_with_civic_assertions_variant_level(self, mock_evidence, base_context):
+        """CIViC assertions at VARIANT level should mark as well-characterized."""
+        therapy = MagicMock()
+        therapy.source = "CIViC"
+        therapy.locus_match = "variant"
+        therapy.cancer_specificity = "pan_cancer"
         mock_evidence.civic_assertions = [MagicMock(), MagicMock()]
+        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
+        mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
 
         assert any("clinical" in w.lower() for w in base_context.well_characterized)
+        assert base_context.has_clinical is True
+
+    def test_fda_approvals_gene_level_not_well_characterized(self, mock_evidence, base_context):
+        """FDA approvals at GENE level should NOT mark as well-characterized.
+
+        Gene-level extrapolation is a SIGNIFICANT gap, not well-characterized.
+        """
+        therapy = MagicMock()
+        therapy.source = "FDA"
+        therapy.locus_match = "gene"  # Gene-level, not variant
+        therapy.cancer_specificity = "cancer_specific"
+        mock_evidence.fda_approvals = [MagicMock()]
+        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
+        mock_evidence.context.tumor_type = "NSCLC"
+
+        _check_clinical_evidence(mock_evidence, base_context)
+
+        # Should NOT be marked well-characterized (gene-level extrapolation)
+        assert not any("clinical" in w.lower() for w in base_context.well_characterized)
+        # But has_clinical should still be True (there IS clinical data)
         assert base_context.has_clinical is True
 
     def test_no_clinical_evidence_adds_critical_gap(self, mock_evidence, base_context):
@@ -349,10 +385,14 @@ class TestCheckTumorTypeEvidence:
 
         assert len(base_context.gaps) == 0
 
-    def test_with_tumor_specific_civic(self, mock_evidence):
-        """Tumor-specific CIViC data should be well-characterized."""
+    def test_with_tumor_specific_civic_variant_level(self, mock_evidence):
+        """Tumor-specific CIViC data at VARIANT level should be well-characterized."""
         assertion = MagicMock()
         assertion.disease = "Non-Small Cell Lung Cancer"
+        assertion.tumor_match = True  # The tumor_match property is computed by API client
+        assertion.locus_match = "variant"  # Must be variant-level to be well-characterized
+        assertion.locus_variant_match = MagicMock()
+        assertion.locus_variant_match.level = "variant"
         mock_evidence.civic_assertions = [assertion]
 
         ctx = GapDetectionContext(
@@ -1066,24 +1106,73 @@ class TestCheckPrevalence:
 
         assert any("observed" in w.lower() for w in base_context.well_characterized)
 
-    def test_no_prevalence_minor_gap(self, mock_evidence, base_context):
-        """Missing prevalence for non-cancer gene should be MINOR gap."""
+    def test_no_prevalence_informational_gap(self, mock_evidence, base_context):
+        """Missing prevalence for non-cancer gene (in cBioPortal) is INFORMATIONAL.
+
+        Per levels.md: "Prevalence unknown (non-cancer gene)" is INFORMATIONAL.
+        Must have gene in cBioPortal but variant not seen.
+        """
+        # Set up cBioPortal evidence with gene data but no variant data
+        mock_evidence.cbioportal_evidence = MagicMock()
+        mock_evidence.cbioportal_evidence.has_data.return_value = True
+        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
+        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 50  # Gene is in dataset
+        mock_evidence.cbioportal_evidence.total_samples = 1000
+
         _check_prevalence(mock_evidence, base_context)
 
         prevalence_gaps = [g for g in base_context.gaps if g.category == GapCategory.PREVALENCE]
         assert len(prevalence_gaps) >= 1
+        assert prevalence_gaps[0].severity == GapSeverity.INFORMATIONAL
+
+    def test_no_prevalence_minor_for_cancer_gene_no_clinical(self, mock_evidence):
+        """Missing prevalence for cancer gene without clinical evidence is MINOR.
+
+        Per levels.md: "Prevalence unknown (cancer gene, no clinical)" is MINOR.
+        """
+        ctx = GapDetectionContext(
+            gene="BRAF",
+            variant="V600X",  # Not a known variant
+            tumor_type="Melanoma",
+            is_cancer_gene=True,
+            has_pathogenic_signal=True,
+            has_clinical=False,  # No clinical evidence
+        )
+
+        # Set up cBioPortal evidence with gene data but no variant data
+        mock_evidence.cbioportal_evidence = MagicMock()
+        mock_evidence.cbioportal_evidence.has_data.return_value = True
+        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
+        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 100  # Gene is in dataset
+        mock_evidence.cbioportal_evidence.total_samples = 1000
+
+        _check_prevalence(mock_evidence, ctx)
+
+        prevalence_gaps = [g for g in ctx.gaps if g.category == GapCategory.PREVALENCE]
+        assert len(prevalence_gaps) >= 1
         assert prevalence_gaps[0].severity == GapSeverity.MINOR
 
     def test_no_prevalence_significant_for_clinical_cancer_gene(self, mock_evidence):
-        """Missing prevalence for clinical cancer gene should be SIGNIFICANT."""
+        """Missing prevalence for clinical cancer gene is SIGNIFICANT.
+
+        Per levels.md: "Prevalence unknown (clinical cancer gene)" is SIGNIFICANT.
+        Requires: cancer gene + has clinical + gene in cBioPortal but variant not seen.
+        """
         ctx = GapDetectionContext(
             gene="BRAF",
             variant="V600E",
             tumor_type="Melanoma",
             is_cancer_gene=True,
             has_pathogenic_signal=True,
-            has_clinical=True,
+            has_clinical=True,  # Has clinical evidence
         )
+
+        # Set up cBioPortal evidence with gene data but no variant data
+        mock_evidence.cbioportal_evidence = MagicMock()
+        mock_evidence.cbioportal_evidence.has_data.return_value = True
+        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
+        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 100  # Gene is in dataset
+        mock_evidence.cbioportal_evidence.total_samples = 1000
 
         _check_prevalence(mock_evidence, ctx)
 
@@ -1108,8 +1197,11 @@ class TestCheckClinicalTrials:
 
         assert any("trial" in w.lower() for w in base_context.well_characterized)
 
-    def test_no_trials_with_clinical_adds_minor_gap(self, mock_evidence):
-        """Clinical variant without trials should add MINOR gap."""
+    def test_no_trials_with_clinical_adds_informational_gap(self, mock_evidence):
+        """Clinical variant without trials should add INFORMATIONAL gap.
+
+        Per levels.md: "No active clinical trials" with clinical/drug data is INFORMATIONAL.
+        """
         ctx = GapDetectionContext(
             gene="BRAF",
             variant="V600E",
@@ -1125,7 +1217,7 @@ class TestCheckClinicalTrials:
         clinical_gaps = [g for g in ctx.gaps if g.category == GapCategory.CLINICAL]
         trial_gaps = [g for g in clinical_gaps if "trial" in g.description.lower()]
         assert len(trial_gaps) >= 1
-        assert trial_gaps[0].severity == GapSeverity.MINOR
+        assert trial_gaps[0].severity == GapSeverity.INFORMATIONAL
 
     def test_no_trials_without_clinical_no_gap(self, mock_evidence, base_context):
         """Non-clinical variant without trials should NOT add gap."""

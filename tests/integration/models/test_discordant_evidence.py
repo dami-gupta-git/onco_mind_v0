@@ -264,7 +264,7 @@ class TestDiscordantEvidenceDetection:
         """Cross-source drug conflict at VARIANT level should flag HIGH conflict."""
         from oncomind.models.evidence import Evidence
         from oncomind.models.evidence.civic import CIViCEvidence
-        from oncomind.models.evidence.cgi import CGIBiomarker
+        from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
         from oncomind.models.evidence.evidence import VariantIdentifiers
         from oncomind.models.evidence.base import EvidenceLevel
 
@@ -282,7 +282,7 @@ class TestDiscordantEvidenceDetection:
                 ),
             ],
             cgi_biomarkers=[
-                CGIBiomarker(
+                CGIBiomarkerEvidence(
                     drug="Erlotinib",
                     association="Resistance",
                     locus_variant_match=EvidenceLevel(level="variant"),
@@ -307,7 +307,7 @@ class TestDiscordantEvidenceDetection:
         """
         from oncomind.models.evidence import Evidence
         from oncomind.models.evidence.civic import CIViCEvidence
-        from oncomind.models.evidence.cgi import CGIBiomarker
+        from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
         from oncomind.models.evidence.evidence import VariantIdentifiers
         from oncomind.models.evidence.base import EvidenceLevel
 
@@ -325,7 +325,7 @@ class TestDiscordantEvidenceDetection:
                 ),
             ],
             cgi_biomarkers=[
-                CGIBiomarker(
+                CGIBiomarkerEvidence(
                     drug="Erlotinib",
                     association="Resistance",
                     locus_variant_match=EvidenceLevel(level="gene"),  # Gene level
