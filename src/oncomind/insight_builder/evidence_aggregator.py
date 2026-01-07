@@ -349,6 +349,12 @@ class EvidenceAggregator:
         entries with fda_approved=True into FDAApproval objects for unified
         handling in gap detection and reporting.
 
+        When conflicting entries exist (same drug with different associations),
+        both are kept to show the full picture. For example, KIT D816V has:
+        - Exon range (788-828) → Imatinib Responsive (general exon approval)
+        - D816. → Imatinib Resistant (specific resistance mutation)
+        Both should be shown so users can see the conflicting evidence.
+
         Args:
             cgi_biomarkers: List of CGI biomarkers (already filtered to fda_approved=True)
 
@@ -779,7 +785,11 @@ class EvidenceAggregator:
 
         # Process standard results
         myvariant_evidence = tracker.handle_result(myvariant_result, "MyVariant")
-        fda_approvals_raw: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
+        # FDA Label API results - currently disabled in favor of CGI structured data
+        # FDA Label API can return false positives (e.g., RYDAPT for GIST when it's only
+        # approved for systemic mastocytosis, because both diseases have KIT D816V)
+        # fda_approvals_raw: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
+        _ = tracker.handle_result(fda_result, "FDA")  # Still track for logging but don't use
         all_cgi: list[CGIBiomarkerEvidence] = tracker.handle_result(cgi_result, "CGI") or []
         vicc_evidence: list[VICCEvidence] = tracker.handle_result(vicc_result, "VICC") or []
         civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_assertions_result, "CIViC") or []
@@ -822,9 +832,10 @@ class EvidenceAggregator:
             # than parsing free-text FDA labels
             cgi_fda_approvals = self._convert_cgi_to_fda_approvals(cgi_biomarkers)
 
-            # Merge FDA label approvals with CGI-derived approvals
-            # CGI entries come first as they are more structured/reliable
-            combined_fda_approvals = cgi_fda_approvals + fda_approvals_raw
+            # Use only CGI-derived approvals (FDA Label API disabled - see comment above)
+            # To re-enable FDA Label API, uncomment fda_approvals_raw and use:
+            # combined_fda_approvals = cgi_fda_approvals + fda_approvals_raw
+            combined_fda_approvals = cgi_fda_approvals
 
             # Enrich FDA approvals with cancer_type_match based on tumor type
             fda_approvals = self._enrich_fda_with_tumor_match(combined_fda_approvals, tumor)

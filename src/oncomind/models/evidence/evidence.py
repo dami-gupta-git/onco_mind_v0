@@ -593,13 +593,17 @@ class Evidence(BaseModel):
             List of TherapeuticEvidence with evidence_level="FDA-approved"
         """
         evidence_list: list[TherapeuticEvidence] = []
-        seen_drugs: set[str] = set()
+        # Use (drug, association) as key to allow same drug with different responses
+        # e.g., Imatinib Responsive + Imatinib Resistant should both appear
+        seen_entries: set[tuple[str, str]] = set()
 
         # From FDA approvals
         for approval in self.fda_approvals:
             drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
-            if drug_key and drug_key not in seen_drugs:
-                seen_drugs.add(drug_key)
+            assoc_key = (approval.association or "").lower()
+            entry_key = (drug_key, assoc_key)
+            if drug_key and entry_key not in seen_entries:
+                seen_entries.add(entry_key)
 
                 drug_name = approval.brand_name or approval.generic_name or approval.drug_name
                 if approval.generic_name and approval.brand_name:
@@ -607,16 +611,15 @@ class Evidence(BaseModel):
 
                 cancer_specificity = self._get_fda_cancer_specificity(approval)
 
-                # Determine response_type by checking CIViC/VICC/CGI evidence
-                # Even for variant-level FDA approvals, check for resistance signals
-                # (e.g., KIT D816V is imatinib-resistant despite gene-level approval)
-                response_type = self._get_response_type_from_evidence(drug_key)
-
-                # If no evidence found, default based on FDA approval level
-                if response_type is None:
-                    if approval.variant_in_indications:
+                # Determine response_type from CGI association (the source of truth for FDA approvals)
+                # CGI provides explicit Responsive/Resistant associations from FDA guidelines
+                response_type = None
+                if approval.association:
+                    assoc_upper = approval.association.upper()
+                    if "RESIST" in assoc_upper:
+                        response_type = "Resistance"
+                    elif "RESPONS" in assoc_upper or "SENSITIV" in assoc_upper:
                         response_type = "Sensitivity"
-                    # For gene/codon level, leave as None (unknown for this variant)
 
                 # Generate DailyMed URL for FDA drug label
                 # Use brand name if available, otherwise generic name
@@ -643,8 +646,11 @@ class Evidence(BaseModel):
             if assertion.amp_tier == "Tier I" and assertion.fda_companion_test and assertion.therapies:
                 for therapy in assertion.therapies:
                     drug_key = therapy.lower()
-                    if drug_key not in seen_drugs:
-                        seen_drugs.add(drug_key)
+                    # Determine response type for deduplication key
+                    civic_response = "sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else ""
+                    entry_key = (drug_key, civic_response)
+                    if entry_key not in seen_entries:
+                        seen_entries.add(entry_key)
 
                         cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
 
@@ -653,7 +659,7 @@ class Evidence(BaseModel):
                             evidence_level="FDA-approved",
                             approval_status="FDA Approved (CIViC)",
                             clinical_context=assertion.disease,
-                            response_type="Sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "Resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None,
+                            response_type="Sensitivity" if civic_response == "sensitivity" else "Resistance" if civic_response == "resistance" else None,
                             mechanism=None,
                             tumor_types_tested=[assertion.disease] if assertion.disease else [],
                             source="CIViC",
@@ -667,8 +673,10 @@ class Evidence(BaseModel):
         for biomarker in self.cgi_biomarkers:
             if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
                 drug_key = biomarker.drug.lower()
-                if drug_key not in seen_drugs:
-                    seen_drugs.add(drug_key)
+                assoc_key = (biomarker.association or "").lower()
+                entry_key = (drug_key, assoc_key)
+                if entry_key not in seen_entries:
+                    seen_entries.add(entry_key)
 
                     response_type = None
                     if biomarker.association:

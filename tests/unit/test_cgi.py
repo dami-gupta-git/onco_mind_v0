@@ -174,6 +174,32 @@ class TestCGIClient:
         assert client._variant_matches("EGFR:G719S", "EGFR", "p.G719S") is True
         assert client._variant_matches("BRAF:V600E", "BRAF", "p.V600E") is True
 
+    def test_variant_matches_range_pattern(self):
+        """Test matching variants against exon range patterns.
+
+        CGI uses range patterns like '449-514,788-828' to represent exons.
+        D816V (position 816) should match range 788-828 (exon 17).
+        """
+        client = CGIClient()
+
+        # KIT exon ranges from CGI: 449-514,550-592,627-664,664-714,788-828
+        kit_exon_range = "KIT:449-514,550-592,627-664,664-714,788-828"
+
+        # D816V (816) should match range 788-828
+        assert client._variant_matches(kit_exon_range, "KIT", "D816V") is True
+
+        # V560D (560) should match range 550-592
+        assert client._variant_matches(kit_exon_range, "KIT", "V560D") is True
+
+        # Position outside all ranges should not match
+        assert client._variant_matches(kit_exon_range, "KIT", "G100V") is False
+
+        # Edge cases - exact boundaries
+        assert client._variant_matches(kit_exon_range, "KIT", "X449Y") is True  # Start of first range
+        assert client._variant_matches(kit_exon_range, "KIT", "X828Y") is True  # End of last range
+        assert client._variant_matches(kit_exon_range, "KIT", "X448Y") is False  # Just before first range
+        assert client._variant_matches(kit_exon_range, "KIT", "X829Y") is False  # Just after last range
+
     def test_cache_is_valid_no_file(self):
         """Test cache validation when file doesn't exist."""
         client = CGIClient()

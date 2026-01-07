@@ -153,6 +153,7 @@ class CGIClient:
         - "EGFR:L858R" matches exactly L858R
         - "KRAS:.12.,.13." matches any mutation at position 12 or 13 (G12D, G13D, etc.)
         - "KRAS:." matches any KRAS mutation
+        - "KIT:449-514,788-828" matches any mutation in exon ranges (e.g., D816V is in 788-828)
 
         Args:
             cgi_alteration: CGI alteration string (e.g., "EGFR:G719.,L858R")
@@ -169,6 +170,12 @@ class CGIClient:
         # Handle both formats: "EGFR:V600E" and just "V600E" after gene match
         gene_upper = gene.upper()
         variant_upper = variant.upper().replace("P.", "")  # Remove p. prefix if present
+
+        # Extract variant position for range matching (e.g., 816 from D816V)
+        variant_position = None
+        variant_match = re.match(r'^([A-Z]?)(\d+)([A-Z]?)$', variant_upper)
+        if variant_match:
+            variant_position = int(variant_match.group(2))
 
         # Split by comma to get individual variants
         parts = cgi_alteration.replace(f"{gene_upper}:", "").split(",")
@@ -190,6 +197,15 @@ class CGIClient:
             if part == ".":
                 return True
 
+            # Range pattern: "449-514" or "788-828" matches positions in that range
+            # Used for exon-based patterns like "KIT:449-514,550-592,627-664,664-714,788-828"
+            range_match = re.match(r'^(\d+)-(\d+)$', part)
+            if range_match and variant_position is not None:
+                range_start = int(range_match.group(1))
+                range_end = int(range_match.group(2))
+                if range_start <= variant_position <= range_end:
+                    return True
+
             # Pattern match: "G719." matches G719S, G719A, etc.
             # The dot represents a wildcard for any amino acid
             if part.endswith(".") and not part.startswith("."):
@@ -210,10 +226,10 @@ class CGIClient:
                     position = position_str
                     # Extract position from variant (e.g., "13" from "G13D")
                     # Variant format: {ref_aa}{position}{alt_aa} like G13D
-                    variant_match = re.match(r'^([A-Z])(\d+)([A-Z])$', variant_upper)
-                    if variant_match:
-                        variant_position = variant_match.group(2)
-                        if variant_position == position:
+                    pos_match = re.match(r'^([A-Z])(\d+)([A-Z])$', variant_upper)
+                    if pos_match:
+                        var_pos = pos_match.group(2)
+                        if var_pos == position:
                             return True
 
         return False
@@ -224,6 +240,7 @@ class CGIClient:
         CGI-specific parsing handles:
         - Comma-separated patterns (e.g., "EGFR:G719.,L858R")
         - Wildcard patterns: "G719." for codon-level, "." for gene-level
+        - Range patterns: "449-514,788-828" for exon-based matching
 
         After parsing, delegates to the core determine_locus_match() function.
 
@@ -242,6 +259,11 @@ class CGIClient:
         variant_upper = variant.upper().replace("P.", "")
         queried_position = extract_variant_position(variant)
 
+        # Extract numeric position for range matching
+        variant_position_int = None
+        if queried_position and queried_position.isdigit():
+            variant_position_int = int(queried_position)
+
         # Split by comma to get individual variants
         parts = cgi_alteration.replace(f"{gene_upper}:", "").split(",")
 
@@ -258,6 +280,17 @@ class CGIClient:
             # Wildcard for any mutation: "." = gene level (skip, already default)
             if part == ".":
                 continue
+
+            # Range pattern: "449-514" or "788-828" = codon level (exon-based)
+            # Matches if variant position falls within the range
+            range_match = re.match(r'^(\d+)-(\d+)$', part)
+            if range_match and variant_position_int is not None:
+                range_start = int(range_match.group(1))
+                range_end = int(range_match.group(2))
+                if range_start <= variant_position_int <= range_end:
+                    if best_match != "variant":
+                        best_match = "codon"
+                    continue
 
             # CGI-specific: Pattern match "G719." = codon level (same position, any AA)
             if part.endswith(".") and not part.startswith("."):
