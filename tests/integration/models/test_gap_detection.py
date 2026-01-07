@@ -483,13 +483,15 @@ class TestDiscordantEvidenceDetection:
         # Should NOT flag conflict - different contexts (mono vs combo)
         assert len(conflicts) == 0, f"Combo therapy should not create conflict: {conflicts}"
 
-    def test_clinvar_benign_vs_civic_actionable_conflict(self):
-        """ClinVar benign + CIViC actionable evidence should flag conflict."""
+    def test_clinvar_benign_vs_civic_actionable_conflict_variant_level(self):
+        """ClinVar benign + CIViC actionable at VARIANT level should flag conflict."""
         from oncomind.models.evidence import Evidence
         from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
         from oncomind.models.evidence.clinvar import ClinVarEvidence
         from oncomind.models.evidence.evidence import VariantIdentifiers
+        from oncomind.models.evidence.base import EvidenceLevel
 
+        # Both ClinVar and CIViC at variant level - should flag conflict
         evidence = Evidence(
             identifiers=VariantIdentifiers(
                 variant_id="TEST:V123M",
@@ -497,7 +499,10 @@ class TestDiscordantEvidenceDetection:
                 variant="V123M"
             ),
             clinvar_entries=[
-                ClinVarEvidence(clinical_significance="Benign"),
+                ClinVarEvidence(
+                    clinical_significance="Benign",
+                    locus_variant_match=EvidenceLevel(level="variant"),
+                ),
             ],
             clinvar_significance="Benign",
             civic_assertions=[
@@ -505,16 +510,62 @@ class TestDiscordantEvidenceDetection:
                     assertion_type="PREDICTIVE",
                     therapies=["Erlotinib"],
                     is_sensitivity=True,
+                    locus_variant_match=EvidenceLevel(level="variant"),
                 ),
             ]
         )
 
         conflicts = _detect_discordant_evidence_internal(evidence)
 
-        # Should flag ClinVar benign vs CIViC actionable conflict
-        assert len(conflicts) >= 1, "Should flag ClinVar benign vs CIViC actionable conflict"
+        # Should flag ClinVar benign vs CIViC actionable conflict at variant level
+        assert len(conflicts) >= 1, "Should flag ClinVar benign vs CIViC actionable conflict at variant level"
         assert any("benign" in c.lower() and "civic" in c.lower() for c in conflicts), \
             f"Should mention ClinVar benign vs CIViC conflict: {conflicts}"
+        # Should mention it's at variant level
+        assert any("variant level" in c.lower() for c in conflicts), \
+            f"Should mention 'variant level' in conflict: {conflicts}"
+
+    def test_clinvar_benign_gene_level_no_civic_conflict(self):
+        """ClinVar benign at GENE level + CIViC actionable at VARIANT level should NOT flag conflict.
+
+        Gene-level benign doesn't mean THIS variant is benign - it could be a different variant.
+        """
+        from oncomind.models.evidence import Evidence
+        from oncomind.models.evidence.civic import CIViCAssertionEvidence
+        from oncomind.models.evidence.clinvar import ClinVarEvidence
+        from oncomind.models.evidence.evidence import VariantIdentifiers
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        # ClinVar at gene level, CIViC at variant level - should NOT flag conflict
+        evidence = Evidence(
+            identifiers=VariantIdentifiers(
+                variant_id="TEST:V123M",
+                gene="TEST",
+                variant="V123M"
+            ),
+            clinvar_entries=[
+                ClinVarEvidence(
+                    clinical_significance="Benign",
+                    locus_variant_match=EvidenceLevel(level="gene"),  # Gene level - different variant
+                ),
+            ],
+            clinvar_significance="Benign",
+            civic_assertions=[
+                CIViCAssertionEvidence(
+                    assertion_type="PREDICTIVE",
+                    therapies=["Erlotinib"],
+                    is_sensitivity=True,
+                    locus_variant_match=EvidenceLevel(level="variant"),  # Variant level
+                ),
+            ]
+        )
+
+        conflicts = _detect_discordant_evidence_internal(evidence)
+
+        # Should NOT flag ClinVar vs CIViC conflict - different locus levels
+        clinvar_civic_conflicts = [c for c in conflicts if "benign" in c.lower() and "civic" in c.lower()]
+        assert len(clinvar_civic_conflicts) == 0, \
+            f"Gene-level ClinVar benign should not conflict with variant-level CIViC: {conflicts}"
 
     def test_clinvar_pathogenic_no_civic_conflict(self):
         """ClinVar pathogenic should NOT conflict with CIViC actionable."""
@@ -522,6 +573,7 @@ class TestDiscordantEvidenceDetection:
         from oncomind.models.evidence.civic import CIViCEvidence
         from oncomind.models.evidence.clinvar import ClinVarEvidence
         from oncomind.models.evidence.evidence import VariantIdentifiers
+        from oncomind.models.evidence.base import EvidenceLevel
 
         evidence = Evidence(
             identifiers=VariantIdentifiers(
@@ -530,7 +582,10 @@ class TestDiscordantEvidenceDetection:
                 variant="V123M"
             ),
             clinvar_entries=[
-                ClinVarEvidence(clinical_significance="Pathogenic"),
+                ClinVarEvidence(
+                    clinical_significance="Pathogenic",
+                    locus_variant_match=EvidenceLevel(level="variant"),
+                ),
             ],
             clinvar_significance="Pathogenic",
             civic_evidence=[
@@ -538,6 +593,7 @@ class TestDiscordantEvidenceDetection:
                     evidence_type="PREDICTIVE",
                     drugs=["Erlotinib"],
                     clinical_significance="Sensitivity",
+                    locus_variant_match=EvidenceLevel(level="variant"),
                 ),
             ]
         )
@@ -548,6 +604,76 @@ class TestDiscordantEvidenceDetection:
         clinvar_civic_conflicts = [c for c in conflicts if "benign" in c.lower() and "civic" in c.lower()]
         assert len(clinvar_civic_conflicts) == 0, \
             f"Pathogenic ClinVar should not conflict with CIViC: {conflicts}"
+
+    def test_clinvar_internal_conflict_variant_level(self):
+        """ClinVar pathogenic + benign at VARIANT level should flag internal conflict."""
+        from oncomind.models.evidence import Evidence
+        from oncomind.models.evidence.clinvar import ClinVarEvidence
+        from oncomind.models.evidence.evidence import VariantIdentifiers
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        evidence = Evidence(
+            identifiers=VariantIdentifiers(
+                variant_id="TEST:V123M",
+                gene="TEST",
+                variant="V123M"
+            ),
+            clinvar_entries=[
+                ClinVarEvidence(
+                    clinical_significance="Pathogenic",
+                    locus_variant_match=EvidenceLevel(level="variant"),
+                ),
+                ClinVarEvidence(
+                    clinical_significance="Benign",
+                    locus_variant_match=EvidenceLevel(level="variant"),
+                ),
+            ],
+        )
+
+        conflicts = _detect_discordant_evidence_internal(evidence)
+
+        # Should flag ClinVar internal conflict at variant level
+        clinvar_conflicts = [c for c in conflicts if "clinvar" in c.lower() and "conflicting" in c.lower()]
+        assert len(clinvar_conflicts) >= 1, \
+            f"Should flag ClinVar internal conflict: {conflicts}"
+        # Should mention variant level
+        assert any("variant level" in c.lower() for c in clinvar_conflicts), \
+            f"Should mention 'variant level' in conflict: {conflicts}"
+
+    def test_clinvar_internal_conflict_gene_level_not_flagged(self):
+        """ClinVar pathogenic + benign at GENE level (different variants) should NOT flag conflict.
+
+        Different variants in the same gene can legitimately have different pathogenicity.
+        """
+        from oncomind.models.evidence import Evidence
+        from oncomind.models.evidence.clinvar import ClinVarEvidence
+        from oncomind.models.evidence.evidence import VariantIdentifiers
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        evidence = Evidence(
+            identifiers=VariantIdentifiers(
+                variant_id="TEST:V123M",
+                gene="TEST",
+                variant="V123M"
+            ),
+            clinvar_entries=[
+                ClinVarEvidence(
+                    clinical_significance="Pathogenic",
+                    locus_variant_match=EvidenceLevel(level="gene"),  # Different variant
+                ),
+                ClinVarEvidence(
+                    clinical_significance="Benign",
+                    locus_variant_match=EvidenceLevel(level="gene"),  # Different variant
+                ),
+            ],
+        )
+
+        conflicts = _detect_discordant_evidence_internal(evidence)
+
+        # Should NOT flag ClinVar internal conflict - gene-level means different variants
+        clinvar_conflicts = [c for c in conflicts if "clinvar" in c.lower() and "conflicting" in c.lower()]
+        assert len(clinvar_conflicts) == 0, \
+            f"Gene-level ClinVar should not flag conflict (different variants): {conflicts}"
 
 
 # =============================================================================

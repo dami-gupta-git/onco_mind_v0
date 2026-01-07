@@ -1240,7 +1240,14 @@ with tab1:
                 if gaps:
                     for gap in gaps:
                         severity = gap.get('severity', 'unknown')
-                        severity_icon = {"critical": "🔴", "significant": "🟠", "minor": "🟡"}.get(severity, "⚪")
+                        severity_icon = {
+                            "critical": "🔴",
+                            "high": "🟠",
+                            "significant": "🟡",
+                            "moderate": "🔵",
+                            "minor": "⚪",
+                            "informational": "ℹ️",
+                        }.get(severity, "⚪")
                         desc = gap.get('description', '')
                         desc = re.sub(r'\s+for\s+\w+\s+\S+$', '', desc)
                         desc = re.sub(r'\s+of\s+\w+\s+\S+\s+in\s+\S+$', '', desc)

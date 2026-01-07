@@ -282,7 +282,9 @@ def insight(
             # Evidence gaps by severity
             from oncomind.models.evidence.evidence_gaps import GapSeverity
             critical_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.CRITICAL)
+            high_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.HIGH)
             significant_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
+            moderate_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.MODERATE)
 
             if critical_gaps:
                 gap_lines.append("")
@@ -290,10 +292,22 @@ def insight(
                 for g in critical_gaps[:3]:
                     gap_lines.append(f"   • {g.description}")
 
+            if high_gaps:
+                gap_lines.append("")
+                gap_lines.append(f"[bright_red]🟠 High Gaps ({len(high_gaps)}):[/bright_red]")
+                for g in high_gaps[:3]:
+                    gap_lines.append(f"   • {g.description}")
+
             if significant_gaps:
                 gap_lines.append("")
-                gap_lines.append(f"[yellow]🟠 Significant Gaps ({len(significant_gaps)}):[/yellow]")
+                gap_lines.append(f"[yellow]🟡 Significant Gaps ({len(significant_gaps)}):[/yellow]")
                 for g in significant_gaps[:3]:
+                    gap_lines.append(f"   • {g.description}")
+
+            if moderate_gaps:
+                gap_lines.append("")
+                gap_lines.append(f"[blue]🔵 Moderate Gaps ({len(moderate_gaps)}):[/blue]")
+                for g in moderate_gaps[:3]:
                     gap_lines.append(f"   • {g.description}")
 
             if gap_lines:
