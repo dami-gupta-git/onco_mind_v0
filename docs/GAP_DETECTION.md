@@ -12,82 +12,245 @@ For well-characterized variants like BRAF V600E or EGFR L858R, the clinical answ
 
 ---
 
-## How It Works
+## Gap Severity Levels
 
-OncoMind analyzes evidence across 10 gap categories with context-aware severity ratings:
+OncoMind uses a 6-level severity scale to classify evidence gaps, from most urgent to least:
 
-| Category | What We Check | Gap Example |
-|----------|---------------|-------------|
-| **FUNCTIONAL** | AlphaMissense, CADD, PolyPhen2, gene mechanism | "Functional impact of R248W on TP53 protein unknown" |
-| **CLINICAL** | CIViC assertions, FDA approvals | "No curated clinical evidence for MAP2K1 K57N" |
-| **TUMOR_TYPE** | Evidence specific to queried tumor | "No evidence specific to cholangiocarcinoma for IDH1 R132H" |
-| **DRUG_RESPONSE** | CGI, VICC, DepMap drug sensitivity | "No drug sensitivity/resistance data for ARID1A Q1328*" |
-| **RESISTANCE** | Resistance literature, CGI resistance markers | "Resistance mechanisms for ALK G1202R not well characterized" |
-| **PREVALENCE** | cBioPortal mutation frequency | "Prevalence of FGFR2 S252W in bladder cancer unknown" |
-| **PRECLINICAL** | DepMap cell line models | "No cell line models identified for NF1 R1513*" |
-| **PROGNOSTIC** | Survival/outcome data | "Prognostic impact unknown" |
-| **DISCORDANT** | Conflicting evidence between sources | "Conflicting drug response for imatinib: sensitive (CIViC) vs resistant (CGI)" |
-| **VALIDATION** | Strong oncogenic signal but limited therapeutic evidence | "Strong oncogenic signal but limited therapeutic validation" |
+| Level | Multiplier | Meaning | Icon |
+|-------|-----------|---------|------|
+| **CRITICAL** | 4.0 | No data for actionable/clinically relevant variant | 🔴 |
+| **HIGH** | 3.0 | Conflicting data, or data exists but unreliable/outdated | 🟠 |
+| **SIGNIFICANT** | 2.0 | Limited data, clear research opportunity | 🟡 |
+| **MODERATE** | 1.5 | Some data but gaps in specific contexts (tumor type, extrapolation) | 🔵 |
+| **MINOR** | 1.0 | Well-characterized overall, minor enrichment possible | ⚪ |
+| **INFORMATIONAL** | 0.5 | Not a true gap, just noting a limitation | ℹ️ |
 
 ---
 
-## Severity Levels
+## Severity Assignment Logic
 
-| Severity | Meaning | Weighted Score |
-|----------|---------|----------------|
-| **CRITICAL** | No data at all in a key area | ×3.0 |
-| **SIGNIFICANT** | Limited data, needs more research | ×2.0 |
-| **MINOR** | Some data exists but could be deeper | ×1.0 |
+### CRITICAL (🔴)
 
-Severity is now **context-aware**:
-- Pathogenic signal (AlphaMissense, CADD ≥20, ClinVar pathogenic) increases gap severity
-- Known cancer genes get higher severity ratings than unknown genes
-- Tumor-type gaps are CRITICAL for cancer genes with pathogenic variants but no clinical evidence
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| No clinical evidence | No CIViC assertions, no FDA approvals | "No curated clinical evidence for {gene} {variant}" |
+| No tumor-specific evidence | Cancer gene + no clinical + pathogenic signal + no tumor data | "No evidence specific to {tumor_type}" |
+| No literature | Cancer gene + literature searched + 0 papers | "No published literature found" |
+| No therapeutic validation | Cancer gene + strong oncogenic signal + no CIViC/FDA/VICC | "Strong oncogenic signal but limited therapeutic validation" |
+
+### HIGH (🟠)
+
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| Cross-source drug conflict (variant-level) | Different sources disagree on drug response AT VARIANT LEVEL | "Conflicting drug response for {drug} at variant level: sensitive (Source1) vs resistant (Source2)" |
+| ClinVar conflicts (variant-level) | Both pathogenic and benign submissions at variant level | "ClinVar has conflicting interpretations at variant level: both pathogenic and benign submissions for this exact variant" |
+| ClinVar conflicts (codon-level) | Both pathogenic and benign submissions at codon level | "ClinVar has conflicting interpretations at codon level: both pathogenic and benign submissions for variants at this position" |
+| ClinVar vs CIViC conflict (variant-level) | ClinVar benign at variant level + CIViC actionable at variant level | "ClinVar classifies as benign at variant level but {source} suggests clinical relevance for this exact variant" |
+
+**Important notes for HIGH severity:**
+- Gene-level ClinVar "conflicts" are NOT flagged — different variants in the same gene can legitimately have different pathogenicity classifications
+- Cross-source drug conflicts only fire when BOTH sensitive AND resistant sources have variant-level evidence (gene/codon-level conflicts could be for different variants)
+- The ClinVar vs CIViC conflict only fires when BOTH sources have variant-level evidence for the exact same variant
+
+### SIGNIFICANT (🟡)
+
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| **FDA vs VICC conflict (variant-level)** | FDA approves drug (sensitive) but VICC reports resistance, both at variant level | "FDA approves {drug} (sensitive) at variant level but VICC reports resistance at variant level — requires validation" |
+| **No variant-specific drug approvals (gene-level)** | FDA therapies exist for gene but NO variant-level match | "No variant-specific drug approvals for {gene} {variant} (gene-level evidence only)" |
+| **No variant-specific drug approvals (codon-level)** | FDA therapies exist for codon but not this exact variant | "No variant-specific drug approvals for {gene} {variant} (codon N evidence only)" |
+| FDA approval in other cancers only | FDA exists but not tumor-matched or pan-cancer | "FDA-approved therapies exist only in other cancers" |
+| Rare near-hotspot | Variant within N codons of known hotspot | "Rare variant near known hotspot — functional characterization needed" |
+| No pathogenicity predictions | No AlphaMissense, CADD, PolyPhen2, SIFT | "No computational pathogenicity predictions" |
+| No functional mechanism | No gene role + no DepMap essentiality | "Functional impact unknown" |
+| No drug sensitivity data | No CGI + no VICC + no FDA drug data | "No drug sensitivity/resistance data" |
+| Resistance not characterized | Has clinical/drug data but no resistance signals | "Resistance mechanisms not well characterized" |
+| Prevalence unknown (clinical cancer gene) | Cancer gene + has clinical + gene in cBioPortal but variant not seen | "Prevalence unknown" |
+| No tumor-specific evidence (cancer gene) | Cancer gene OR pathogenic signal, but NO tumor data at any level | "No evidence specific to {tumor_type}" |
+| Preclinical models in wrong tumor | Models exist but none match queried tumor type | "Models exist but none in {tumor_type}" |
+| No literature (non-cancer gene) | Non-cancer gene + literature searched + 0 papers | "No published literature found" |
+| No therapeutic validation (non-cancer gene) | Non-cancer gene + strong oncogenic signal + no validation | "Strong oncogenic signal but limited therapeutic validation" |
+
+**Important:** Gene/codon-level drug approvals are NOT marked as "well-characterized for clinical actionability" — only variant-level matches are. This ensures users clearly see when drug evidence is extrapolated.
+
+### MODERATE (🔵)
+
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| Drug response in other tumors | Drug data exists but only in non-matching tumor types | "Drug response data exists only in other cancers, not {tumor_type}" |
+| Gene-level drug extrapolation | Drug data (CGI/VICC) exists for gene but not variant-specific | "Drug response data exists for {gene} but not specifically for {variant}" |
+| Codon-level drug extrapolation | Drug data (CGI/VICC) exists for codon but not this exact variant | "Drug response data exists for codon {N} variants but not specifically for {variant}" |
+| **Tumor evidence at gene-level only** | Tumor evidence exists but only at gene level (not variant) | "Evidence in {tumor_type} exists for {gene} but not specifically for {variant} (gene-level only)" |
+| **Tumor evidence at codon-level only** | Tumor evidence exists but only at codon level (not variant) | "Evidence in {tumor_type} exists for {gene} codon {N} but not specifically for {variant}" |
+| Preclinical biomarkers in other tumors | Preclinical data exists but only in non-matching tumors | "Preclinical biomarker data exists only in other cancers" |
+| Resistance data in other tumors | Resistance signals exist but only in non-matching tumors | "Resistance data exists only in other cancers" |
+
+**Note:** FDA/clinical drug approvals at gene/codon level are SIGNIFICANT (above), not MODERATE. MODERATE is for CGI/VICC drug response data that's extrapolated — lower clinical relevance than FDA approvals.
+
+### MINOR (⚪)
+
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| Prevalence unknown (cancer gene, no clinical) | Cancer gene but no clinical evidence | "Prevalence unknown" |
+| No cell line models | Has drug/clinical data but no DepMap cell lines with mutation | "No cell line models identified" or "DepMap has N cell lines but none with {variant}" |
+| No tumor-specific evidence (non-cancer gene) | Non-cancer gene + no pathogenic signal + no tumor data | "No evidence specific to {tumor_type}" |
+
+### INFORMATIONAL (ℹ️)
+
+| Gap Type | Condition | Description |
+|----------|-----------|-------------|
+| Prevalence unknown (non-cancer gene) | Non-cancer gene + gene in cBioPortal but variant not seen | "Prevalence unknown" |
+| No active clinical trials | Has clinical/drug data but no trials found | "No active clinical trials" |
+| Literature not in databases | Literature mentions drug signals not curated in CIViC/CGI/VICC | "Literature mentions drug signals not in curated databases" |
 
 ---
 
-## Research-Oriented Weighted Scoring
-
-Gap categories are weighted by research value (biological gaps > clinical gaps):
-
-| Category | Weight | Rationale |
-|----------|--------|-----------|
-| **VALIDATION** | 3.5 | Strong signal + no validation = prime research target |
-| **FUNCTIONAL** | 3.0 | Mechanism unknown = high research value |
-| **PRECLINICAL** | 2.5 | No models to test hypotheses |
-| **RESISTANCE** | 2.0 | Resistance mechanisms unknown |
-| **DISCORDANT** | 2.0 | Conflicting evidence needs resolution |
-| **DRUG_RESPONSE** | 1.5 | Drug sensitivity unknown |
-| **TUMOR_TYPE** | 1.5 | Not studied in this tumor |
-| **PREVALENCE** | 1.0 | Epidemiology unknown |
-| **CLINICAL** | 1.0 | Lower weight for research context |
-| **PROGNOSTIC** | 1.0 | Prognostic impact unknown |
-
-**Overall Quality** uses net scoring (gap penalty minus well-characterized credit):
+## Decision Tree Summary
 
 ```
-net_score = gap_score - (well_characterized_count × 1.5)
+Is there NO data at all for a key area?
+├─ Yes → Is it a cancer gene or actionable?
+│        ├─ Yes → CRITICAL
+│        └─ No  → SIGNIFICANT
+└─ No  → Is the data CONFLICTING?
+         ├─ Yes → HIGH
+         └─ No  → Is the data LIMITED (needs more research)?
+                  ├─ Yes → SIGNIFICANT
+                  └─ No  → Is data in WRONG CONTEXT (other tumor, gene-level)?
+                           ├─ Yes → MODERATE
+                           └─ No  → Is it a MINOR enrichment opportunity?
+                                    ├─ Yes → MINOR
+                                    └─ No  → INFORMATIONAL (just noting)
 ```
-
-| Net Score | Quality |
-|-----------|---------|
-| < 0 | `comprehensive` |
-| 0–6 | `moderate` |
-| 6–12 | `limited` |
-| ≥ 12 | `minimal` |
 
 ---
 
-## Research Priority Levels
+## Gap Categories
 
-| Priority | Criteria | Icon |
-|----------|----------|------|
-| **very_high** | Strong oncogenic signal (pathogenic + essential gene) + biological gaps; OR hotspot-adjacent + pathogenic + biological gaps | 🔥 |
-| **high** | Cancer gene with critical gaps; OR hotspot-adjacent in cancer gene | 🔴 |
-| **medium** | Any critical gaps; OR cancer gene with significant gaps | 🟡 |
-| **low** | Comprehensive evidence quality AND no critical/significant gaps | 🟢 |
+Each gap has a category (orthogonal to severity):
+
+| Category | Description | Weight |
+|----------|-------------|--------|
+| `VALIDATION` | Strong oncogenic signal but lacks therapeutic validation | 3.5 |
+| `FUNCTIONAL` | Mechanism unknown | 3.0 |
+| `PRECLINICAL` | No cell line/model data | 2.5 |
+| `RESISTANCE` | Resistance mechanisms unknown | 2.0 |
+| `DISCORDANT` | Conflicting evidence between sources | 2.0 |
+| `DRUG_RESPONSE` | No drug sensitivity data | 1.5 |
+| `TUMOR_TYPE` | Not studied in this tumor type | 1.5 |
+| `CLINICAL` | No clinical trials/outcomes | 1.0 |
+| `PREVALENCE` | Frequency unknown | 1.0 |
+| `PROGNOSTIC` | Survival impact unknown | 1.0 |
+
+---
+
+## How Severity Affects Scoring
+
+### Overall Evidence Quality
+
+Quality is computed in two steps:
+
+**Step 1: Base quality from net score**
+
+`net_score = gap_score - (well_characterized_count × 1.5)`
+
+Where `gap_score = Σ (category_weight × severity_multiplier)` for each gap.
+
+| Net Score | Base Quality |
+|-----------|--------------|
+| ≥ 12.0 | minimal |
+| ≥ 6.0 | limited |
+| ≥ 0.0 | moderate |
+| < 0.0 | comprehensive |
+
+**Step 2: Apply floor caps (severity-based limits)**
+
+High-severity gaps prevent "comprehensive" classification regardless of well-characterized count:
+
+| Gap Severity Present | Maximum Quality |
+|---------------------|-----------------|
+| Any CRITICAL gap | limited (cannot be comprehensive or moderate) |
+| Any HIGH gap | moderate (cannot be comprehensive) |
+| Any SIGNIFICANT gap | moderate (cannot be comprehensive) |
+| Only MODERATE/MINOR/INFORMATIONAL | comprehensive (no cap) |
+
+**Rationale:** A variant with SIGNIFICANT knowledge gaps (e.g., "No variant-specific drug approvals") should not be classified as "comprehensive" even if it has many well-characterized aspects. The severity caps ensure quality ratings honestly reflect the presence of important gaps.
+
+### Research Priority
+
+| Priority | Condition | Icon |
+|----------|-----------|------|
+| `very_high` | Strong oncogenic signal + biological gaps, OR hotspot-adjacent + pathogenic | 🔥 |
+| `high` | Cancer gene with CRITICAL gaps, OR hotspot-adjacent cancer gene, OR any HIGH gaps | 🔴 |
+| `medium` | Any CRITICAL gaps, OR cancer gene with SIGNIFICANT gaps | 🟡 |
+| `low` | Everything else (comprehensive quality with no significant gaps) | 🟢 |
 
 **Biological gaps** = gaps in VALIDATION, FUNCTIONAL, or PRECLINICAL categories.
+
+---
+
+## Locus Match Levels
+
+Evidence is tracked at three levels of specificity:
+
+| Level | Meaning | Example |
+|-------|---------|---------|
+| `variant` | Exact variant match | BRAF V600E → evidence specifically for V600E |
+| `codon` | Same position, different AA | BRAF V600K → evidence for "V600 mutations" |
+| `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
+
+**Why this matters:**
+- Cross-source conflicts are only flagged at **variant level** — gene/codon conflicts could be for different variants
+- Drug approvals at gene/codon level are flagged as **SIGNIFICANT gaps** (extrapolation needed)
+- Only **variant-level** evidence qualifies as "well-characterized" for clinical actionability
+
+---
+
+## Discordant Evidence Detection
+
+OncoMind detects conflicts between data sources with locus-level awareness:
+
+### Drug Response Conflicts (HIGH)
+
+Only flagged when **both** sensitive and resistant sources have **variant-level** evidence:
+
+```
+Conflicting drug response for imatinib at variant level:
+sensitive (CIViC) vs resistant (CGI)
+```
+
+Sources checked: CIViC, CGI, VICC MetaKB, FDA
+
+### FDA vs VICC Conflicts (SIGNIFICANT)
+
+When FDA approves a drug but VICC reports resistance, both at variant level:
+
+```
+FDA approves imatinib (sensitive) at variant level but VICC reports resistance
+at variant level — requires validation
+```
+
+VICC data is less reliable than FDA, so this is SIGNIFICANT (not HIGH).
+
+### ClinVar Internal Conflicts (HIGH)
+
+When both pathogenic and benign submissions exist at the **same locus level**:
+
+```
+ClinVar has conflicting interpretations at variant level: both pathogenic
+and benign submissions for this exact variant
+```
+
+**Note:** Gene-level ClinVar "conflicts" are NOT flagged — different variants in the same gene can legitimately have different pathogenicity.
+
+### ClinVar vs CIViC Conflicts (HIGH)
+
+When ClinVar classifies as benign but CIViC suggests actionability, **both at variant level**:
+
+```
+ClinVar classifies as benign at variant level but CIViC assertion suggests
+clinical relevance for this exact variant
+```
 
 ---
 
@@ -115,24 +278,6 @@ OncoMind detects variant proximity to known cancer hotspots (source: cancerhotsp
 
 ---
 
-## Discordant Evidence Detection
-
-OncoMind detects conflicts between data sources:
-
-### Drug Response Conflicts
-```
-Conflicting drug response for imatinib: sensitive (CIViC) vs resistant (CGI)
-```
-
-Checks across: CIViC, CGI biomarkers, VICC MetaKB
-
-### ClinVar Conflicts
-```
-ClinVar has conflicting interpretations: both pathogenic and benign submissions
-```
-
----
-
 ## Validation Gap (Oncogenicity Potential)
 
 A special gap category for high-potential research targets:
@@ -146,24 +291,9 @@ A special gap category for high-potential research targets:
 
 ---
 
-## Cross-Histology Preclinical Models
-
-When cell line models exist with the mutation but NOT in the queried tumor type:
-
-```
-Models with V600E exist but none in Cholangiocarcinoma — cross-histology testing possible
-```
-
-**Suggested studies:**
-- Test in cholangiocarcinoma-derived organoids
-- Compare drug response vs other histologies
-- Generate isogenic model in cholangiocarcinoma background
-
----
-
 ## Other Cancer Evidence Gaps
 
-When evidence exists for a variant but only in **other cancer types** (not the queried tumor and not pan-cancer), OncoMind surfaces this as a **SIGNIFICANT gap** in the Evidence Gaps table.
+When evidence exists for a variant but only in **other cancer types** (not the queried tumor and not pan-cancer):
 
 ### When This Gap Fires
 
@@ -171,12 +301,6 @@ The gap is created when **ALL** of the following are true:
 1. Evidence exists for the variant (FDA approvals, drug response data, preclinical biomarkers, or resistance data)
 2. Zero evidence matches the queried tumor type
 3. Zero pan-cancer evidence exists
-
-### When This Gap Does NOT Fire
-
-The gap will **not** appear when:
-- Evidence exists that matches the queried tumor type (even if other-cancer evidence also exists)
-- Pan-cancer evidence exists (e.g., "Solid Tumor" indications)
 
 ### Example: Gap Fires
 
@@ -205,81 +329,42 @@ Evidence found:
 
 Result: No "other cancer" gap created
 Because pan-cancer evidence exists, the gap doesn't fire.
-The Clinical Actionability row shows: "3 pan-cancer, ⚠️ 11 other"
 ```
-
-### Affected Categories
-
-This gap logic applies to four categories:
-
-| Category | Gap Description Pattern |
-|----------|------------------------|
-| **CLINICAL** | "FDA-approved therapies for {gene} {variant} exist only in other cancers ({cancers}), not {tumor}" |
-| **DRUG_RESPONSE** | "Drug response data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
-| **PRECLINICAL** | "Preclinical biomarker data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
-| **RESISTANCE** | "Resistance data for {gene} {variant} exists only in other cancers ({cancers}), not {tumor}" |
-
-### Suggested Studies
-
-When this gap fires, suggested studies include:
-- Basket trial enrollment
-- Off-label use case series
-- Tumor-specific drug screens
-- ClinicalTrials.gov search for expansion studies
 
 ---
 
-## LLM Research Hypothesis Generation
+## Match Level and Tumor Match Tracking
 
-Gap detection feeds into LLM-powered hypothesis generation:
+Each `CharacterizedAspect` in `well_characterized_detailed` includes granular tracking:
 
 ```python
-# In LLM output
-{
-    "research_hypotheses": [
-        "Given the lack of functional data for JAK1 V657F despite its recurrence in T-ALL, isogenic knock-in models could determine whether this variant causes gain- or loss-of-function signaling.",
-        "The absence of preclinical drug sensitivity data for this variant, combined with its structural similarity to JAK2 V617F, suggests testing JAK inhibitor panels in cell lines harboring this mutation."
-    ]
-}
+class CharacterizedAspect(BaseModel):
+    aspect: str           # "drug response", "resistance mechanisms", etc.
+    basis: str            # "2 CGI + 3 VICC + 1 FDA"
+    category: GapCategory # For grouping (DRUG_RESPONSE, RESISTANCE, etc.)
+    matches_on: str | None    # "3 variant, 0 codon, 2 gene"
+    tumor_match: str | None   # "4 tumor, 1 other"
 ```
 
-Hypotheses are:
-- Specific and testable (not vague)
-- Connect multiple evidence elements (gap + existing data)
-- Focus on biological mechanism, preclinical testing, co-mutation effects
-- Avoid clinical treatment recommendations
+### matches_on: Locus Level Tracking
 
----
+Shows how precisely each evidence item matches the query variant:
 
-## Example: Hotspot-Adjacent Rare Variant
-
+**Format**: Always shows all three levels, even when 0:
 ```
-$ mind KRAS G14D --tumor NSCLC
+"3 variant, 0 codon, 2 gene"
 ```
 
-**Evidence Quality: limited**
+### tumor_match: Tumor Type Matching
 
-**Well Characterized:**
-- near hotspot codon 12 — structural hypothesis likely
-- computational pathogenicity (CADD: 28)
-- gene role (oncogene)
+Shows how many evidence items match the queried tumor type:
 
-**Gaps Detected:**
-
-| Gap | Severity | Description |
-|-----|----------|-------------|
-| Functional | SIGNIFICANT | Rare variant near known hotspot (codon 12) — functional characterization needed |
-| Clinical | CRITICAL | No curated clinical evidence for KRAS G14D |
-| Drug Response | SIGNIFICANT | No drug sensitivity/resistance data |
-
-**Suggested Studies:**
-- Compare to nearby hotspot KRAS codon 12
-- Structural modeling to assess activation mechanism
-- Functional assay (transformation, signaling)
-
-**Research Priority: very_high** 🔥
-
-This is a rare variant adjacent to the most common KRAS hotspot. Structural similarity to G12 mutations suggests potential activating function, but it lacks characterization.
+**Format**: Always shows tumor count (even 0), shows "other" only if > 0:
+```
+"4 tumor, 1 other"  # 4 match queried tumor, 1 for different tumor
+"0 tumor, 5 other"  # No matches for queried tumor
+"3 tumor"           # All 3 match queried tumor
+```
 
 ---
 
@@ -327,20 +412,33 @@ is_hotspot_adjacent("BRAF", "V598E", window=5)     # (True, 600)
 
 ---
 
-## Gap Categories Reference
+## Example: Hotspot-Adjacent Rare Variant
 
-| Category | Checks For | Sources Used | Weight |
-|----------|------------|--------------|--------|
-| `FUNCTIONAL` | Pathogenicity predictions, protein impact, hotspot context | MyVariant, VEP, DepMap, Hotspot DB | 3.0 |
-| `CLINICAL` | Clinical assertions, FDA approvals | CIViC, FDA, CGI | 1.0 |
-| `TUMOR_TYPE` | Tumor-specific evidence | CIViC, VICC, CGI (all tiers), FDA | 1.5 |
-| `DRUG_RESPONSE` | Sensitivity/resistance data | CGI (FDA tier), VICC, FDA | 1.5 |
-| `RESISTANCE` | Known resistance mechanisms | PubMed, CGI, CIViC, VICC | 2.0 |
-| `PRECLINICAL` | Cell line models (tumor-specific) + CGI preclinical/early phase | DepMap, CGI | 2.5 |
-| `PREVALENCE` | Mutation frequency | cBioPortal | 1.0 |
-| `PROGNOSTIC` | Survival/outcome data | CIViC, Literature | 1.0 |
-| `DISCORDANT` | Conflicting drug response, ClinVar conflicts | Cross-source comparison | 2.0 |
-| `VALIDATION` | Strong oncogenic signal, limited therapeutic validation | DepMap essentiality + pathogenicity | 3.5 |
+```
+$ mind KRAS G14D --tumor NSCLC
+```
+
+**Evidence Quality: limited**
+
+**Well Characterized:**
+- near hotspot codon 12 — structural hypothesis likely
+- computational pathogenicity (CADD: 28)
+- gene role (oncogene)
+
+**Gaps Detected:**
+
+| Gap | Severity | Description |
+|-----|----------|-------------|
+| Functional | SIGNIFICANT | Rare variant near known hotspot (codon 12) — functional characterization needed |
+| Clinical | CRITICAL | No curated clinical evidence for KRAS G14D |
+| Drug Response | SIGNIFICANT | No drug sensitivity/resistance data |
+
+**Suggested Studies:**
+- Compare to nearby hotspot KRAS codon 12
+- Structural modeling to assess activation mechanism
+- Functional assay (transformation, signaling)
+
+**Research Priority: very_high** 🔥
 
 ---
 
@@ -348,147 +446,13 @@ is_hotspot_adjacent("BRAF", "V598E", window=5)     # (True, 600)
 
 1. **Gaps over facts** — Prioritize surfacing what's unknown
 2. **Severity is context-aware** — Pathogenic signals and cancer genes increase severity
-3. **Research-weighted scoring** — Biological gaps weighted higher than clinical gaps
-4. **Hotspot context matters** — Rare variants near hotspots are research opportunities
-5. **Conflicts are valuable** — Discordant evidence highlights unresolved questions
-6. **Actionable recommendations** — Every gap includes suggested studies and data sources
-7. **Honest uncertainty** — If we don't know, we say so explicitly
-8. **Research-first** — Optimize for hypothesis generation, not clinical decisions
-
----
-
-## Match Level and Tumor Match Tracking
-
-Each `CharacterizedAspect` in `well_characterized_detailed` includes granular tracking fields for transparency:
-
-### CharacterizedAspect Fields
-
-```python
-class CharacterizedAspect(BaseModel):
-    aspect: str           # "drug response", "resistance mechanisms", etc.
-    basis: str            # "2 CGI + 3 VICC + 1 FDA"
-    category: GapCategory # For grouping (DRUG_RESPONSE, RESISTANCE, etc.)
-    matches_on: str | None    # "3 variant, 0 codon, 2 gene"
-    tumor_match: str | None   # "4 tumor, 1 other"
-```
-
-**Note**: When evidence exists only in other tumors (not the queried tumor), a SIGNIFICANT gap is created instead of using a `cancer_mismatch` field. This surfaces the information more prominently in the Evidence Gaps table.
-
-### matches_on: Locus Level Tracking
-
-Shows how precisely each evidence item matches the query variant:
-
-| Level | Meaning | Example |
-|-------|---------|---------|
-| `variant` | Exact variant match | BRAF V600E → evidence for V600E specifically |
-| `codon` | Same position, different AA | BRAF V600K → evidence for "V600 mutations" |
-| `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
-
-**Format**: Always shows all three levels, even when 0:
-```
-"3 variant, 0 codon, 2 gene"
-```
-
-### tumor_match: Tumor Type Matching
-
-Shows how many evidence items match the queried tumor type:
-
-| Field | Meaning |
-|-------|---------|
-| `X tumor` | Items matching the queried tumor type (substring match) |
-| `Y other` | Items for different tumor types |
-
-**Format**: Always shows tumor count (even 0), shows "other" only if > 0:
-```
-"4 tumor, 1 other"  # 4 match queried tumor, 1 for different tumor
-"0 tumor, 5 other"  # No matches for queried tumor
-"3 tumor"           # All 3 match queried tumor
-```
-
-**Tumor matching logic**: Uses substring matching (`tumor_lower in disease.lower()`), so "Lung" matches "Lung Cancer", "Lung adenocarcinoma", etc.
-
----
-
-## Data Sources by Well-Characterized Row
-
-### Drug Response
-**Sources counted**: CGI biomarkers (FDA-approved tier only), VICC evidence, FDA approvals
-
-| Source | Field Checked |
-|--------|---------------|
-| CGI | `cgi_biomarkers` |
-| VICC | `vicc_evidence` |
-| FDA | `fda_approvals` |
-
-**Excludes**: `preclinical_biomarkers`, `early_phase_biomarkers` (tracked separately)
-
-### Preclinical/Early Phase Biomarkers
-**Sources counted**: CGI preclinical and early phase tiers
-
-| Source | Field Checked |
-|--------|---------------|
-| Preclinical | `preclinical_biomarkers` |
-| Early Phase | `early_phase_biomarkers` |
-
-### Resistance Mechanisms
-**Sources counted**: Literature, CGI, CIViC, VICC
-
-| Source | Resistance Check |
-|--------|-----------------|
-| PubMed | `article.is_resistance_evidence()` |
-| CGI | `biomarker.association == "Resistance"` |
-| CIViC | `assertion.is_resistance` |
-| VICC | `evidence.response_type == "RESISTANCE"` |
-
-### Evidence In [Tumor]
-**Sources counted**: All tumor-specific evidence across sources
-
-| Source | Evidence Type |
-|--------|---------------|
-| CIViC Assertions | `civic_assertions` with matching disease |
-| CIViC Evidence | `civic_evidence` with matching disease |
-| FDA Approvals | `fda_approvals` with matching indication |
-| VICC | `vicc_evidence` with matching disease |
-| CGI (all tiers) | `cgi_biomarkers` + `preclinical_biomarkers` + `early_phase_biomarkers` with matching tumor_type |
-
-**Note**: "Evidence In [Tumor]" includes ALL CGI tiers (FDA-approved, preclinical, and early phase) because all represent tumor-specific evidence, even if at different validation levels.
-
-### Clinical Actionability
-**Sources counted**: FDA approvals, CIViC assertions
-
-Tracks `tumor_match` to show tumor-specific vs other-tumor counts. When FDA approvals exist only for other cancers (not the queried tumor), a SIGNIFICANT gap is created to surface this prominently.
-
----
-
-## Example Output
-
-For EGFR L858R in NSCLC:
-
-```python
-well_characterized_detailed = [
-    CharacterizedAspect(
-        aspect="Drug Response",
-        basis="5 CGI + 8 VICC + 3 FDA",
-        category=GapCategory.DRUG_RESPONSE,
-        matches_on="12 variant, 2 codon, 2 gene",
-        tumor_match="14 tumor, 2 other"
-    ),
-    CharacterizedAspect(
-        aspect="Resistance Mechanisms",
-        basis="2 PubMed + 3 CGI + 1 CIViC + 4 VICC",
-        category=GapCategory.RESISTANCE,
-        matches_on="8 variant, 0 codon, 2 gene",
-        tumor_match="7 tumor, 3 other"
-    ),
-    CharacterizedAspect(
-        aspect="Evidence In NSCLC",
-        basis="3 CIViC Assertions, 2 FDA, 5 VICC, 2 CGI",
-        category=GapCategory.TUMOR_TYPE,
-        matches_on="10 variant, 1 codon, 1 gene",
-        tumor_match="12 tumor"
-    ),
-]
-```
+3. **Locus-level awareness** — Only flag conflicts when evidence is at the same specificity level
+4. **Research-weighted scoring** — Biological gaps weighted higher than clinical gaps
+5. **Hotspot context matters** — Rare variants near hotspots are research opportunities
+6. **Conflicts are valuable** — Discordant evidence highlights unresolved questions
+7. **Actionable recommendations** — Every gap includes suggested studies and data sources
+8. **Honest uncertainty** — If we don't know, we say so explicitly
+9. **Research-first** — Optimize for hypothesis generation, not clinical decisions
 
 ---
 
@@ -497,7 +461,5 @@ well_characterized_detailed = [
 - **Gap detector**: [gap_detector.py](../src/oncomind/insight_builder/gap_detector.py)
 - **EvidenceGaps model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py)
 - **CharacterizedAspect model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py) — `CharacterizedAspect` class
-- **TumorEvidenceMatch model**: [tumor_evidence.py](../src/oncomind/models/evidence/tumor_evidence.py) — aggregates tumor-specific evidence
 - **Hotspot detection**: [gene_context.py](../src/oncomind/models/gene_context.py) — `is_hotspot_variant()`, `is_hotspot_adjacent()`
 - **LLM integration**: [prompts.py](../src/oncomind/llm/prompts.py) — gaps and hypotheses in LLM context
-- **LLMInsight model**: [llm_insight.py](../src/oncomind/models/llm_insight.py) — `research_hypotheses` field

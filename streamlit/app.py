@@ -14,6 +14,8 @@ from oncomind.config.constants import (
     UI_MAX_REFERENCES,
     CADD_DELETERIOUS_THRESHOLD,
     GNOMAD_RARE_THRESHOLD,
+    LOCUS_MATCH_DESCRIPTIONS,
+    get_locus_match_description,
 )
 
 # Initialize logging from environment variable (ONCOMIND_LOG_LEVEL=DEBUG|INFO|WARN|ERROR)
@@ -434,6 +436,11 @@ with tab1:
     - **B**: Well-powered studies with consensus
     - **C**: Case studies or small studies
     - **D**: Preclinical or inferential evidence
+
+    **Match Level:**
+    - 🎯 **Variant** — Direct evidence for this exact variant
+    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
+    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
     """)
                         if civic_assertions:
                             st.markdown("**Curated Assertions:**")
@@ -497,7 +504,10 @@ with tab1:
     - **4/D**: Preclinical or computational evidence
     - **R1/R2**: Resistance evidence (strong/emerging)
 
-    **Match Level:** 🎯 = variant-specific, 📍 = codon-level, 🧬 = gene-level
+    **Match Level:**
+    - 🎯 **Variant** — Direct evidence for this exact variant
+    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
+    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
     """)
                         # Use markdown table for clickable source links
                         rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease | Level |",
@@ -651,6 +661,13 @@ with tab1:
                 if preclinical or early_phase:
                     with tabs[tab_idx]:
                         st.warning("⚠️ [CGI](https://www.cancergenomeinterpreter.org/) biomarker entries that are NOT FDA-approved and are from early clinical trials, late trials, case reports, or preclinical studies.")
+                        with st.expander("📖 Match Level Guide", expanded=False):
+                            st.markdown("""
+    **Match Level:**
+    - 🎯 **Variant** — Direct evidence for this exact variant
+    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
+    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
+    """)
                         if preclinical:
                             st.markdown("**Preclinical (Cell Line/Animal Models):**")
                             rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
@@ -865,6 +882,19 @@ with tab1:
                         if therapy_match_parts:
                             therapy_match_parts.append(tumor_filter_note) if tumor_filter_note else None
                             st.caption(" &nbsp;|&nbsp; ".join([p for p in therapy_match_parts if p]))
+
+                        with st.expander("📖 Match Level Guide", expanded=False):
+                            st.markdown("""
+    **Match Level:**
+    - 🎯 **Variant** — Direct evidence for this exact variant
+    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
+    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
+
+    **Tumor Match:**
+    - ✅ **Yes** — Evidence specific to your queried tumor type
+    - 🌐 **Pan-cancer** — Tumor-agnostic indication (applies broadly)
+    - ⚠️ **Other** — Evidence for a different cancer type
+    """)
 
                         # Only include therapies that are truly FDA-approved
                         # Sources: FDA (direct), CGI (curated), CIViC (Tier I with fda_companion_test)
@@ -1225,6 +1255,8 @@ with tab1:
                     </table>
                     """
                     st.markdown(html_table, unsafe_allow_html=True)
+                    # Legend for locus match icons
+                    st.caption("**Locus Match:** 🎯 Direct evidence for this variant | 📍 Evidence for other variants at this codon | 🧬 Evidence for other gene variants")
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
