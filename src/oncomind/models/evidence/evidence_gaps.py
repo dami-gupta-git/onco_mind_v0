@@ -9,10 +9,22 @@ from enum import Enum
 
 
 class GapSeverity(str, Enum):
-    """How significant is this evidence gap?"""
-    CRITICAL = "critical"      # No data at all in key area
-    SIGNIFICANT = "significant"  # Limited data, needs more research
-    MINOR = "minor"            # Some data exists but could be deeper
+    """How significant is this evidence gap?
+
+    Severity levels (highest to lowest):
+    - CRITICAL: No data for actionable/clinically relevant variant
+    - HIGH: Conflicting data, or data exists but unreliable/outdated
+    - SIGNIFICANT: Limited data, clear research opportunity
+    - MODERATE: Some data but gaps in specific contexts (tumor type, extrapolation)
+    - MINOR: Well-characterized overall, minor enrichment possible
+    - INFORMATIONAL: Not a true gap, just noting a limitation
+    """
+    CRITICAL = "critical"          # No data for actionable/clinically relevant variant
+    HIGH = "high"                  # Conflicting data, or data exists but unreliable/outdated
+    SIGNIFICANT = "significant"    # Limited data, clear research opportunity
+    MODERATE = "moderate"          # Some data but gaps in specific contexts
+    MINOR = "minor"                # Well-characterized overall, minor enrichment possible
+    INFORMATIONAL = "informational"  # Not a true gap, just noting a limitation
 
 
 class GapCategory(str, Enum):
@@ -122,17 +134,17 @@ class EvidenceGaps(BaseModel):
         if self.poorly_characterized:
             lines.append(f"Needs research: {', '.join(self.poorly_characterized)}")
 
-        critical = self.get_gaps_by_severity(GapSeverity.CRITICAL)
-        if critical:
-            lines.append(f"\nCritical gaps ({len(critical)}):")
-            for g in critical:
-                lines.append(f"  • {g.description}")
-
-        significant = self.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
-        if significant:
-            lines.append(f"\nSignificant gaps ({len(significant)}):")
-            for g in significant:
-                lines.append(f"  • {g.description}")
+        # Show gaps by severity (critical and high first, then significant)
+        for severity, label in [
+            (GapSeverity.CRITICAL, "Critical"),
+            (GapSeverity.HIGH, "High"),
+            (GapSeverity.SIGNIFICANT, "Significant"),
+        ]:
+            gaps_at_level = self.get_gaps_by_severity(severity)
+            if gaps_at_level:
+                lines.append(f"\n{label} gaps ({len(gaps_at_level)}):")
+                for g in gaps_at_level:
+                    lines.append(f"  • {g.description}")
 
         return "\n".join(lines)
 
@@ -150,6 +162,10 @@ class EvidenceGaps(BaseModel):
                 {"description": g.description, "suggested_studies": g.suggested_studies}
                 for g in self.get_gaps_by_severity(GapSeverity.CRITICAL)
             ],
+            "high_gaps": [
+                {"description": g.description, "suggested_studies": g.suggested_studies}
+                for g in self.get_gaps_by_severity(GapSeverity.HIGH)
+            ],
             "significant_gaps": [
                 {"description": g.description, "suggested_studies": g.suggested_studies}
                 for g in self.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
@@ -163,13 +179,16 @@ class EvidenceGaps(BaseModel):
             n: Maximum number of gaps to return (default 3)
 
         Returns:
-            List of up to N gaps, prioritized by severity (CRITICAL > SIGNIFICANT > MINOR)
+            List of up to N gaps, prioritized by severity (CRITICAL > HIGH > SIGNIFICANT > MODERATE > MINOR > INFORMATIONAL)
         """
-        # Define severity order
+        # Define severity order (lower = higher priority)
         severity_order = {
             GapSeverity.CRITICAL: 0,
-            GapSeverity.SIGNIFICANT: 1,
-            GapSeverity.MINOR: 2,
+            GapSeverity.HIGH: 1,
+            GapSeverity.SIGNIFICANT: 2,
+            GapSeverity.MODERATE: 3,
+            GapSeverity.MINOR: 4,
+            GapSeverity.INFORMATIONAL: 5,
         }
 
         # Sort by severity (critical first)

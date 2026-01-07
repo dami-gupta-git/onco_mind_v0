@@ -468,13 +468,40 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 tumor_parts.append(f"{tumor_match_counts['other']} other")
             tumor_match_str = ", ".join(tumor_parts) if tumor_parts else None
 
-        ctx.add_well_characterized(
-            "clinical actionability",
-            " + ".join(parts) if parts else "Clinical evidence exists",
-            category=GapCategory.CLINICAL,
-            matches_on=matches_on,
-            tumor_match=tumor_match_str,
-        )
+        # Only mark as well-characterized if we have VARIANT-level evidence
+        # Gene/codon-level extrapolation is NOT well-characterized — it's a significant gap
+        if match_counts["variant"] > 0:
+            ctx.add_well_characterized(
+                "clinical actionability",
+                " + ".join(parts) if parts else "Clinical evidence exists",
+                category=GapCategory.CLINICAL,
+                matches_on=matches_on,
+                tumor_match=tumor_match_str,
+            )
+        else:
+            # No variant-level evidence — add SIGNIFICANT gap for extrapolation
+            if match_counts["gene"] > 0 and match_counts["codon"] == 0:
+                # Only gene-level (weakest extrapolation)
+                ctx.add_gap(
+                    category=GapCategory.CLINICAL,
+                    severity=GapSeverity.SIGNIFICANT,  # Real research gap — drug may not work for this variant
+                    description=f"No variant-specific drug approvals for {ctx.gene} {ctx.variant} (gene-level evidence only)",
+                    suggested_studies=["Variant-specific efficacy analysis", "Case series for this variant"],
+                    addressable_with=["ClinicalTrials.gov variant-specific arms", "Real-world evidence databases"]
+                )
+                ctx.add_poorly_characterized("variant-specific drug response")
+            elif match_counts["codon"] > 0:
+                # Codon-level (moderate extrapolation, e.g., V600E approval applied to V600K)
+                from oncomind.models.evidence.base import extract_variant_position
+                codon_pos = extract_variant_position(ctx.variant) or ""
+                ctx.add_gap(
+                    category=GapCategory.CLINICAL,
+                    severity=GapSeverity.SIGNIFICANT,  # Still a real gap — different variants at same codon can behave differently
+                    description=f"No variant-specific drug approvals for {ctx.gene} {ctx.variant} (codon {codon_pos} evidence only)",
+                    suggested_studies=["Variant-specific response comparison"],
+                    addressable_with=["Published case reports", "Basket trial subgroup analyses"]
+                )
+                ctx.add_poorly_characterized("variant-specific drug response")
 
         # Add gap if evidence exists only in other cancers (not tumor-matched or pan-cancer)
         if other_cancers and tumor_match_counts["tumor"] == 0 and tumor_match_counts["pan_cancer"] == 0:
@@ -486,30 +513,6 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 suggested_studies=["Basket trial", "Off-label use case series"],
                 addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
             )
-
-        # Add gap if FDA approval exists but not for this specific variant (extrapolated evidence)
-        if match_counts["variant"] == 0 and (match_counts["gene"] > 0 or match_counts["codon"] > 0):
-            # Evidence exists but only at gene or codon level, not variant-specific
-            if match_counts["gene"] > 0 and match_counts["codon"] == 0:
-                # Only gene-level (weakest extrapolation)
-                ctx.add_gap(
-                    category=GapCategory.CLINICAL,
-                    severity=GapSeverity.SIGNIFICANT,
-                    description=f"FDA-approved therapies exist for {ctx.gene} but not specifically for {ctx.variant} (gene-level extrapolation)",
-                    suggested_studies=["Variant-specific efficacy analysis", "Case series for this variant"],
-                    addressable_with=["ClinicalTrials.gov variant-specific arms", "Real-world evidence databases"]
-                )
-            elif match_counts["codon"] > 0:
-                # Codon-level (moderate extrapolation, e.g., V600E approval applied to V600K)
-                from oncomind.models.evidence.base import extract_variant_position
-                codon_pos = extract_variant_position(ctx.variant) or ""
-                ctx.add_gap(
-                    category=GapCategory.CLINICAL,
-                    severity=GapSeverity.MINOR,
-                    description=f"FDA-approved therapies exist for {ctx.gene} codon {codon_pos} variants but not specifically for {ctx.variant} (codon-level extrapolation)",
-                    suggested_studies=["Variant-specific response comparison"],
-                    addressable_with=["Published case reports", "Basket trial subgroup analyses"]
-                )
     elif ctx.has_clinical:
         # Has CIViC evidence but no FDA-approved therapies
         ctx.add_well_characterized(
@@ -536,15 +539,45 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
     tumor_match = _check_tumor_specific_evidence(evidence, ctx.tumor_type)
 
     if tumor_match.has_tumor_evidence:
-        ctx.add_well_characterized(
-            f"evidence in {ctx.tumor_type}",
-            tumor_match.sources_str,
-            category=GapCategory.TUMOR_TYPE,
-            matches_on=tumor_match.matches_on_str,
-            tumor_match=tumor_match.tumor_count_str
-        )
+        # Only mark as well-characterized if we have VARIANT-level tumor-matched evidence
+        if tumor_match.total_variant_level > 0:
+            ctx.add_well_characterized(
+                f"evidence in {ctx.tumor_type}",
+                tumor_match.sources_str,
+                category=GapCategory.TUMOR_TYPE,
+                matches_on=tumor_match.matches_on_str,
+                tumor_match=tumor_match.tumor_count_str
+            )
+        else:
+            # Tumor evidence exists but only at gene/codon level — MODERATE gap
+            if tumor_match.total_gene_level > 0 and tumor_match.total_codon_level == 0:
+                ctx.add_gap(
+                    category=GapCategory.TUMOR_TYPE,
+                    severity=GapSeverity.MODERATE,
+                    description=f"Evidence in {ctx.tumor_type} exists for {ctx.gene} but not specifically for {ctx.variant} (gene-level only)",
+                    suggested_studies=[
+                        f"Variant-specific case series in {ctx.tumor_type}",
+                        "Retrospective analysis of variant outcomes"
+                    ],
+                    addressable_with=["ClinicalTrials.gov", "Real-world evidence databases"]
+                )
+                ctx.add_poorly_characterized(f"variant-specific {ctx.tumor_type} data")
+            elif tumor_match.total_codon_level > 0:
+                from oncomind.models.evidence.base import extract_variant_position
+                codon_pos = extract_variant_position(ctx.variant) or ""
+                ctx.add_gap(
+                    category=GapCategory.TUMOR_TYPE,
+                    severity=GapSeverity.MODERATE,
+                    description=f"Evidence in {ctx.tumor_type} exists for {ctx.gene} codon {codon_pos} but not specifically for {ctx.variant}",
+                    suggested_studies=[
+                        "Variant-specific response comparison",
+                        f"Case series of {ctx.variant} in {ctx.tumor_type}"
+                    ],
+                    addressable_with=["Published case reports", "Basket trial subgroup analyses"]
+                )
+                ctx.add_poorly_characterized(f"variant-specific {ctx.tumor_type} data")
     else:
-        # Severity depends on gene importance and pathogenic signal
+        # No tumor-specific evidence at all — severity depends on gene importance
         if ctx.is_cancer_gene and not ctx.has_clinical and ctx.has_pathogenic_signal:
             severity = GapSeverity.CRITICAL
         elif ctx.is_cancer_gene or ctx.has_pathogenic_signal:
@@ -613,7 +646,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
             other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
             ctx.add_gap(
                 category=GapCategory.DRUG_RESPONSE,
-                severity=GapSeverity.SIGNIFICANT,
+                severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
                 description=f"Drug response data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
                 suggested_studies=["Tumor-specific drug screen", "Basket trial analysis"],
                 addressable_with=["Literature search", "Clinical trial databases"]
@@ -622,10 +655,10 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
         # Add gap if drug response data exists but not for this specific variant (extrapolated)
         if counts.variant == 0 and (counts.gene > 0 or counts.codon > 0):
             if counts.gene > 0 and counts.codon == 0:
-                # Only gene-level (weakest extrapolation)
+                # Only gene-level (weakest extrapolation) - data exists but not variant-specific
                 ctx.add_gap(
                     category=GapCategory.DRUG_RESPONSE,
-                    severity=GapSeverity.SIGNIFICANT,
+                    severity=GapSeverity.MODERATE,  # Data exists, just not variant-specific
                     description=f"Drug response data exists for {ctx.gene} but not specifically for {ctx.variant} (gene-level extrapolation)",
                     suggested_studies=["Variant-specific drug sensitivity assay", "Isogenic cell line comparison"],
                     addressable_with=["DepMap variant-specific analysis", "GDSC mutation annotations"]
@@ -636,7 +669,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
                 codon_pos = extract_variant_position(ctx.variant) or ""
                 ctx.add_gap(
                     category=GapCategory.DRUG_RESPONSE,
-                    severity=GapSeverity.MINOR,
+                    severity=GapSeverity.MODERATE,  # Codon-level is close, just noting limitation
                     description=f"Drug response data exists for {ctx.gene} codon {codon_pos} variants but not specifically for {ctx.variant} (codon-level extrapolation)",
                     suggested_studies=["Variant-specific response comparison"],
                     addressable_with=["Published case series", "Functional assay data"]
@@ -694,7 +727,7 @@ def _check_preclinical_biomarkers(evidence: "Evidence", ctx: GapDetectionContext
         other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
         ctx.add_gap(
             category=GapCategory.PRECLINICAL,
-            severity=GapSeverity.SIGNIFICANT,
+            severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
             description=f"Preclinical biomarker data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
             suggested_studies=["Tumor-specific cell line studies", "PDX models"],
             addressable_with=["DepMap", "GDSC", "Literature search"]
@@ -808,7 +841,7 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
             other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
             ctx.add_gap(
                 category=GapCategory.RESISTANCE,
-                severity=GapSeverity.SIGNIFICANT,
+                severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
                 description=f"Resistance data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
                 suggested_studies=["Tumor-specific resistance screen", "Serial biopsy study"],
                 addressable_with=["Literature search", "CIViC"]
@@ -831,7 +864,7 @@ def _check_discordant_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
     for finding in discordant_findings:
         ctx.add_gap(
             category=GapCategory.DISCORDANT,
-            severity=GapSeverity.SIGNIFICANT,
+            severity=GapSeverity.HIGH,  # Conflicting data deserves high urgency
             description=finding,
             suggested_studies=["Meta-analysis", "Prospective validation study"],
             addressable_with=["Literature review", "Expert consensus"]
@@ -870,7 +903,12 @@ def _check_prevalence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     else:
         # We have gene-level data but not variant-specific data
         # This IS a gap worth flagging (gene is in the dataset but this variant wasn't seen)
-        severity = GapSeverity.SIGNIFICANT if (ctx.is_cancer_gene and ctx.has_clinical) else GapSeverity.MINOR
+        if ctx.is_cancer_gene and ctx.has_clinical:
+            severity = GapSeverity.SIGNIFICANT
+        elif ctx.is_cancer_gene:
+            severity = GapSeverity.MINOR
+        else:
+            severity = GapSeverity.INFORMATIONAL  # Minor limitation for non-cancer genes
         ctx.add_gap(
             category=GapCategory.PREVALENCE,
             severity=severity,
@@ -929,7 +967,7 @@ def _check_clinical_trials(evidence: "Evidence", ctx: GapDetectionContext) -> No
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
             category=GapCategory.CLINICAL,
-            severity=GapSeverity.MINOR,
+            severity=GapSeverity.INFORMATIONAL,  # Not a true gap, just noting no active trials
             description=f"No active clinical trials for {ctx.gene} {ctx.variant}",
             suggested_studies=["Clinical trial design", "Basket trial proposal"],
             addressable_with=["ClinicalTrials.gov"]
@@ -1115,7 +1153,7 @@ def _check_literature_database_integration(evidence: "Evidence", ctx: GapDetecti
 
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
-            severity=GapSeverity.MINOR,
+            severity=GapSeverity.INFORMATIONAL,  # Curation opportunity, not research gap
             description=f"Literature mentions drug signals not in curated databases: {drug_list}{more_str}",
             suggested_studies=[
                 "Submit to CIViC for curation",
@@ -1646,63 +1684,78 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
                 f"resistant ({', '.join(sorted(resist_sources))})"
             )
 
-    # Check ClinVar significance conflicts (internal)
-    clinvar_sigs = set()
+    # Check ClinVar significance conflicts (internal) - differentiate by locus level
+    # Only flag as a true conflict if both pathogenic and benign exist at the SAME locus level
+    # (different variants in the same gene can legitimately have different pathogenicity)
+    clinvar_by_locus: dict[str, set[str]] = {
+        "variant": set(),
+        "codon": set(),
+        "gene": set(),
+    }
     for entry in evidence.clinvar_entries:
         if entry.clinical_significance:
             sig = entry.clinical_significance.lower()
+            locus = entry.locus_match  # "variant", "codon", or "gene"
             if "pathogenic" in sig and "benign" not in sig:
-                clinvar_sigs.add("pathogenic")
+                clinvar_by_locus[locus].add("pathogenic")
             elif "benign" in sig and "pathogenic" not in sig:
-                clinvar_sigs.add("benign")
+                clinvar_by_locus[locus].add("benign")
 
-    if "pathogenic" in clinvar_sigs and "benign" in clinvar_sigs:
+    # Check for conflicts at each locus level (most specific first)
+    # Variant-level conflict is most concerning
+    if "pathogenic" in clinvar_by_locus["variant"] and "benign" in clinvar_by_locus["variant"]:
         conflicts.append(
-            "ClinVar has conflicting interpretations: both pathogenic and benign submissions"
+            "ClinVar has conflicting interpretations at variant level: both pathogenic and benign submissions for this exact variant"
         )
+    elif "pathogenic" in clinvar_by_locus["codon"] and "benign" in clinvar_by_locus["codon"]:
+        conflicts.append(
+            "ClinVar has conflicting interpretations at codon level: both pathogenic and benign submissions for variants at this position"
+        )
+    # Note: gene-level "conflicts" are not flagged — different variants legitimately differ
 
     # Check ClinVar vs CIViC pathogenicity conflicts (cross-source)
-    # ClinVar benign but CIViC has actionable/oncogenic evidence = conflict
-    clinvar_is_benign = "benign" in clinvar_sigs and "pathogenic" not in clinvar_sigs
-    if evidence.clinvar_significance:
-        sig_lower = evidence.clinvar_significance.lower()
-        if "benign" in sig_lower and "pathogenic" not in sig_lower:
-            clinvar_is_benign = True
+    # Only flag if BOTH are at variant level — gene-level ClinVar benign doesn't conflict with
+    # variant-level CIViC actionable (different variants can have different significance)
+    clinvar_benign_at_variant = "benign" in clinvar_by_locus["variant"] and "pathogenic" not in clinvar_by_locus["variant"]
 
-    if clinvar_is_benign:
-        civic_actionable_sources: list[str] = []
+    if clinvar_benign_at_variant:
+        civic_actionable_at_variant: list[str] = []
 
-        # Check CIViC assertions for ONCOGENIC type or actionable evidence
+        # Check CIViC assertions at variant level for ONCOGENIC type or actionable evidence
         for assertion in evidence.civic_assertions:
+            if assertion.locus_match != "variant":
+                continue
             if assertion.assertion_type and assertion.assertion_type.upper() == "ONCOGENIC":
-                civic_actionable_sources.append("CIViC assertion (oncogenic)")
+                civic_actionable_at_variant.append("CIViC assertion (oncogenic)")
                 break
             if assertion.significance and "ONCOGENIC" in assertion.significance.upper():
-                civic_actionable_sources.append("CIViC assertion (oncogenic)")
+                civic_actionable_at_variant.append("CIViC assertion (oncogenic)")
                 break
             # Predictive assertions with therapies suggest actionability
             if assertion.assertion_type and assertion.assertion_type.upper() == "PREDICTIVE":
                 if assertion.therapies:
-                    civic_actionable_sources.append("CIViC assertion (predictive)")
+                    civic_actionable_at_variant.append("CIViC assertion (predictive)")
                     break
 
-        # Check CIViC evidence items for PREDISPOSING/ONCOGENIC types
+        # Check CIViC evidence items at variant level for PREDISPOSING/ONCOGENIC types
         for evi in evidence.civic_evidence:
+            if evi.locus_match != "variant":
+                continue
             if evi.evidence_type:
                 etype = evi.evidence_type.upper()
                 if etype in ("PREDISPOSING", "ONCOGENIC"):
-                    civic_actionable_sources.append(f"CIViC evidence ({etype.lower()})")
+                    civic_actionable_at_variant.append(f"CIViC evidence ({etype.lower()})")
                     break
             # Predictive evidence with drugs suggests actionability
             if evi.evidence_type and evi.evidence_type.upper() == "PREDICTIVE":
                 if evi.drugs:
-                    civic_actionable_sources.append("CIViC evidence (predictive)")
+                    civic_actionable_at_variant.append("CIViC evidence (predictive)")
                     break
 
-        if civic_actionable_sources:
-            source_str = civic_actionable_sources[0]
+        if civic_actionable_at_variant:
+            source_str = civic_actionable_at_variant[0]
             conflicts.append(
-                f"ClinVar classifies as benign but {source_str} suggests clinical relevance"
+                f"ClinVar classifies as benign at variant level but {source_str} suggests clinical relevance for this exact variant"
             )
 
     return conflicts
@@ -1727,9 +1780,12 @@ GAP_CATEGORY_WEIGHTS: dict[GapCategory, float] = {
 }
 
 SEVERITY_MULTIPLIERS: dict[GapSeverity, float] = {
-    GapSeverity.CRITICAL: 3.0,
+    GapSeverity.CRITICAL: 4.0,
+    GapSeverity.HIGH: 3.0,
     GapSeverity.SIGNIFICANT: 2.0,
+    GapSeverity.MODERATE: 1.5,
     GapSeverity.MINOR: 1.0,
+    GapSeverity.INFORMATIONAL: 0.5,
 }
 
 
@@ -1791,10 +1847,11 @@ def _compute_research_priority(
 
     # Count gaps first
     critical_count = sum(1 for g in gaps if g.severity == GapSeverity.CRITICAL)
+    high_count = sum(1 for g in gaps if g.severity == GapSeverity.HIGH)
     significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
 
-    # Only return low if comprehensive AND no significant/critical gaps
-    if overall_quality == "comprehensive" and critical_count == 0 and significant_count == 0:
+    # Only return low if comprehensive AND no significant/critical/high gaps
+    if overall_quality == "comprehensive" and critical_count == 0 and high_count == 0 and significant_count == 0:
         return "low"
 
     gene = evidence.identifiers.gene
@@ -1827,6 +1884,10 @@ def _compute_research_priority(
 
     # High: hotspot-adjacent variant in cancer gene
     if is_adjacent and is_cancer_gene:
+        return "high"
+
+    # High: any HIGH severity gaps (conflicting evidence)
+    if high_count > 0:
         return "high"
 
     # Medium: any critical gaps OR cancer gene with significant gaps
