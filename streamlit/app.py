@@ -298,8 +298,8 @@ with tab1:
         # EVIDENCE SOURCES (tabs) - in bordered card
         # ==============================================
         with st.container(border=True):
-            st.markdown("<span style='font-size: 1.5rem; font-weight: 600;'>📚 Evidence Sources</span>", unsafe_allow_html=True)
             st.caption("Curated clinical and research evidence from cancer knowledge bases, clinical trials, and literature.")
+            st.markdown("<span style='font-size: 1.5rem; font-weight: 600;'>📚 Evidence Sources</span>", unsafe_allow_html=True)
 
             # Collect available sources
             fda_approvals = result.get('fda_approvals', [])
@@ -437,11 +437,8 @@ with tab1:
     - **C**: Case studies or small studies
     - **D**: Preclinical or inferential evidence
 
-    **Match Level:**
-    - 🎯 **Variant** — Direct evidence for this exact variant
-    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
-    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
     """)
+                        st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
                         if civic_assertions:
                             st.markdown("**Curated Assertions:**")
                             rows = ["| ID | Locus Match | Tumor Match | Therapies | Significance | Disease | AMP Level |",
@@ -459,7 +456,7 @@ with tab1:
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 tumor_match = a.get('tumor_match')
-                                tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
+                                tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
                                 rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {therapies_str} | {sig} | {disease} | {amp} |")
                             scrollable_table("\n".join(rows))
 
@@ -485,7 +482,7 @@ with tab1:
                                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
                                 # Tumor match indicator
                                 tumor_match = e.get('tumor_match')
-                                tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
+                                tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
                                 rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
                             scrollable_table("\n".join(rows))
                     tab_idx += 1
@@ -503,12 +500,8 @@ with tab1:
     - **3/C**: Case reports or limited evidence
     - **4/D**: Preclinical or computational evidence
     - **R1/R2**: Resistance evidence (strong/emerging)
-
-    **Match Level:**
-    - 🎯 **Variant** — Direct evidence for this exact variant
-    - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
-    - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
     """)
+                        st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
                         # Use markdown table for clickable source links
                         rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease | Level |",
                                 "|--------|-------------|-------------|-------|----------|---------|-------|"]
@@ -523,7 +516,7 @@ with tab1:
                             match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "")
                             # Tumor match indicator
                             tumor_match = v.get('tumor_match')
-                            tumor_match_cell = "✅ Yes" if tumor_match else "⚠️ Other"
+                            tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
                             drugs = ", ".join(v.get('drugs', [])) or "N/A"
                             drugs = drugs[:30] if len(drugs) > 30 else drugs
                             response = v.get('response_type', 'Unknown')
@@ -597,11 +590,12 @@ with tab1:
                         if len(specific_trials) > 0:
                             count_parts.append(f"🎯 **{len(specific_trials)}** variant")
                         if len(ambiguous_trials) > 0:
-                            count_parts.append(f"⚠️ **{len(ambiguous_trials)}** broad")
+                            count_parts.append(f"📌 **{len(ambiguous_trials)}** broad")
                         if len(gene_only_trials) > 0:
                             count_parts.append(f"🧬 **{len(gene_only_trials)}** gene")
                         count_parts.append(tumor_filter_note)
                         st.caption(" &nbsp;|&nbsp; ".join(count_parts))
+                        st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📌 Broad | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
 
                         # Use markdown table for clickable NCT IDs
                         rows = ["| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |",
@@ -612,7 +606,7 @@ with tab1:
 
                             # Build display string with icons
                             if match_scope == 'ambiguous':
-                                match_display = f"⚠️ {matched_biomarker}" if matched_biomarker else "⚠️ Broad"
+                                match_display = f"📌 {matched_biomarker}" if matched_biomarker else "📌 Broad"
                             elif match_scope == 'specific':
                                 match_display = f"🎯 {matched_biomarker}" if matched_biomarker else "🎯 Variant"
                             elif t.get('variant_specific', False):
@@ -625,7 +619,7 @@ with tab1:
                             if tumor_match is True:
                                 tumor_match_display = "✅ Yes"
                             elif tumor_match is False:
-                                tumor_match_display = "⚠️ Other"
+                                tumor_match_display = "🔸 Other"
                             else:
                                 tumor_match_display = "-"
 
@@ -668,6 +662,7 @@ with tab1:
     - 📍 **Codon** — Evidence for other variants at this codon (extrapolation from similar position)
     - 🧬 **Gene** — Evidence for other variants in this gene (may not apply to this variant)
     """)
+                        st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
                         if preclinical:
                             st.markdown("**Preclinical (Cell Line/Animal Models):**")
                             rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
@@ -685,7 +680,7 @@ with tab1:
                                 if tumor_lower and tumor_lower in cgi_tumor_lower:
                                     tumor_match_cell = "✅ Yes"
                                 elif cgi_tumor_lower:
-                                    tumor_match_cell = "⚠️ Other"
+                                    tumor_match_cell = "🔸 Other"
                                 else:
                                     tumor_match_cell = "-"
                                 rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
@@ -709,7 +704,7 @@ with tab1:
                                 if tumor_lower and tumor_lower in cgi_tumor_lower:
                                     tumor_match_cell = "✅ Yes"
                                 elif cgi_tumor_lower:
-                                    tumor_match_cell = "⚠️ Other"
+                                    tumor_match_cell = "🔸 Other"
                                 else:
                                     tumor_match_cell = "-"
                                 rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
@@ -840,7 +835,7 @@ with tab1:
                                     if tumor_lower and tumor_lower in cl_disease:
                                         tumor_match_cell = "✅ Yes"
                                     elif tumor_lower and cl_disease:
-                                        tumor_match_cell = "⚠️ Other"
+                                        tumor_match_cell = "🔸 Other"
                                     else:
                                         tumor_match_cell = "-"
                                     cl_rows.append({
@@ -895,6 +890,7 @@ with tab1:
     - 🌐 **Pan-cancer** — Tumor-agnostic indication (applies broadly)
     - ⚠️ **Other** — Evidence for a different cancer type
     """)
+                        st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
 
                         # Only include therapies that are truly FDA-approved
                         # Sources: FDA (direct), CGI (curated), CIViC (Tier I with fda_companion_test)
@@ -948,7 +944,7 @@ with tab1:
                                 elif cancer_spec == 'pan_cancer':
                                     tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_match_cell = "⚠️ Other"
+                                    tumor_match_cell = "🔸 Other"
                                 else:
                                     tumor_match_cell = "-"
 
@@ -978,7 +974,7 @@ with tab1:
                                 elif cancer_spec == 'pan_cancer':
                                     tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_match_cell = "⚠️ Other"
+                                    tumor_match_cell = "🔸 Other"
                                 else:
                                     tumor_match_cell = "-"
 
@@ -1008,7 +1004,7 @@ with tab1:
                                 elif cancer_spec == 'pan_cancer':
                                     tumor_match_cell = "🌐 Pan-cancer"
                                 elif cancer_spec:
-                                    tumor_match_cell = "⚠️ Other"
+                                    tumor_match_cell = "🔸 Other"
                                 else:
                                     tumor_match_cell = "-"
 
@@ -1042,15 +1038,15 @@ with tab1:
             priority_badge = priority_colors.get(research_priority.lower(), "⚪")
             display_priority = research_priority.replace("_", " ").title()
 
-            # Title with badges on the right
+            # Description above title, then title with badges on the right
+            st.caption("What's known vs. unknown about this variant — identifying opportunities for further research.")
             st.markdown(
                 f"<div style='display: flex; justify-content: space-between; align-items: flex-start;'>"
                 f"<span style='font-size: 1.5rem; font-weight: 600;'>🔍 Gap Analysis</span>"
                 f"<span style='font-size: 0.9rem; text-align: right;'>"
                 f"<strong>Evidence Quality:</strong> {badge} {evidence_quality.capitalize()} &nbsp;&nbsp; "
                 f"<strong>Research Priority:</strong> {priority_badge} {display_priority}"
-                f"</span></div>"
-                f"<p style='color: rgba(49, 51, 63, 0.6); font-size: 0.875rem; margin-top: 0.25rem;'>What's known vs. unknown about this variant — identifying opportunities for further research.</p>",
+                f"</span></div>",
                 unsafe_allow_html=True
             )
 
@@ -1058,6 +1054,10 @@ with tab1:
             table_cols = st.columns([7, 4])
 
             with table_cols[0]:
+                st.markdown("**✅ Well Characterized** — _what we know_")
+                # Legend for locus match icons
+                st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
+
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
 
                 # Compute trial match breakdown once using match_scope
@@ -1228,7 +1228,6 @@ with tab1:
                         })
 
                 if wc_rows:
-                    st.markdown("**✅ Well Characterized** — _what we know_")
                     # Use HTML table for column width control
                     html_rows = []
                     for row in wc_rows:
@@ -1255,17 +1254,18 @@ with tab1:
                     </table>
                     """
                     st.markdown(html_table, unsafe_allow_html=True)
-                    # Legend for locus match icons
-                    st.caption("**Locus Match:** 🎯 Direct evidence for this variant | 📍 Evidence for other variants at this codon | 🧬 Evidence for other gene variants")
                 else:
                     well_characterized = evidence_gaps.get('well_characterized', [])
                     if well_characterized:
-                        st.markdown("**✅ Well Characterized** — _what we know_")
                         wc_df = pd.DataFrame({"Aspect": well_characterized})
                         st.dataframe(wc_df, width="stretch", hide_index=True, height=min(300, 35 * (len(well_characterized) + 1)))
 
             with table_cols[1]:
                 gaps = evidence_gaps.get('gaps', [])
+
+                st.markdown("**❓ Evidence Gaps** — _what we don't know_")
+                # Spacer to align with Locus Match legend in left column
+                st.markdown("&nbsp;", unsafe_allow_html=True)
 
                 # Build gaps rows
                 gaps_data = []
@@ -1294,7 +1294,6 @@ with tab1:
                             "Matches On": trial_match_str if is_trial_gap else "",
                         })
 
-                st.markdown("**❓ Evidence Gaps** — _what we don't know_")
                 if gaps_data:
                     # Use HTML table for column width control
                     html_rows = []
@@ -1347,6 +1346,7 @@ with tab1:
         if llm_narrative and not (llm_rationale and llm_rationale.startswith("LLM narrative generation failed:")):
             with st.container(border=True):
                 st.markdown("### 🤖 LLM Research Synthesis")
+                st.markdown("<span style='font-size: 0.875rem;'>**Locus Match:** 🎯 Variant | 📍 Codon | 🧬 Gene &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; **Tumor Match:** ✅ Yes | 🔸 Other</span>", unsafe_allow_html=True)
 
                 functional_summary = result['insight'].get('functional_summary')
                 biological_context = result['insight'].get('biological_context')
