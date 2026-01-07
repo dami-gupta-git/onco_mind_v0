@@ -339,6 +339,31 @@ class EvidenceAggregator:
         ]
         return fda_approved, preclinical, early_phase
 
+    def _convert_cgi_to_fda_approvals(
+        self, cgi_biomarkers: list[CGIBiomarkerEvidence]
+    ) -> list[FDAApproval]:
+        """Convert CGI FDA-approved biomarkers to FDAApproval objects.
+
+        CGI provides structured variant-level FDA approval data which is more
+        reliable than parsing free-text FDA labels. This method converts CGI
+        entries with fda_approved=True into FDAApproval objects for unified
+        handling in gap detection and reporting.
+
+        Args:
+            cgi_biomarkers: List of CGI biomarkers (already filtered to fda_approved=True)
+
+        Returns:
+            List of FDAApproval objects derived from CGI data
+        """
+        fda_approvals = []
+        for cgi in cgi_biomarkers:
+            try:
+                fda_approval = cgi.to_fda_approval()
+                fda_approvals.append(fda_approval)
+            except Exception as e:
+                logger.warning(f"Failed to convert CGI biomarker to FDA approval: {e}")
+        return fda_approvals
+
     def _process_cbioportal_result(
         self, result: Any, tracker: FetchResults
     ) -> CBioPortalEvidence | None:
@@ -761,8 +786,17 @@ class EvidenceAggregator:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
             fda_approvals: list[FDAApproval] = []
         else:
+            # Convert CGI FDA-approved biomarkers to FDAApproval objects
+            # CGI provides structured variant-level FDA data which is more reliable
+            # than parsing free-text FDA labels
+            cgi_fda_approvals = self._convert_cgi_to_fda_approvals(cgi_biomarkers)
+
+            # Merge FDA label approvals with CGI-derived approvals
+            # CGI entries come first as they are more structured/reliable
+            combined_fda_approvals = cgi_fda_approvals + fda_approvals_raw
+
             # Enrich FDA approvals with cancer_type_match based on tumor type
-            fda_approvals = self._enrich_fda_with_tumor_match(fda_approvals_raw, tumor)
+            fda_approvals = self._enrich_fda_with_tumor_match(combined_fda_approvals, tumor)
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
