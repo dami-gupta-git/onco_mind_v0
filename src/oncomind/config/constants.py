@@ -1091,3 +1091,58 @@ def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
             if gene_upper in [g.upper() for g in info.get("biomarker_genes", [])]:
                 return True
     return False
+
+
+# =============================================================================
+# LOCUS MATCH LEVEL DESCRIPTIONS
+# =============================================================================
+# Human-readable descriptions for locus match levels (variant, codon, gene)
+# Used for hover text/tooltips in the UI to explain what each level means
+#
+# These descriptions make clear that codon/gene level matches are EXTRAPOLATIONS
+# from different variants, not direct evidence for the queried variant.
+
+def get_locus_match_description(
+    level: str,
+    gene: str | None = None,
+    variant: str | None = None,
+    codon: str | int | None = None,
+) -> str:
+    """Get human-readable description for a locus match level.
+
+    Args:
+        level: The locus match level ("variant", "codon", or "gene")
+        gene: Gene symbol for substitution in description
+        variant: Variant notation for substitution in description
+        codon: Codon number for substitution in codon-level description
+
+    Returns:
+        Human-readable description suitable for hover text/tooltip
+    """
+    if level == "variant":
+        if variant:
+            return f"Direct evidence for {variant}"
+        return "Direct evidence for this exact variant"
+
+    if level == "codon":
+        if codon:
+            return f"Evidence for other variants at codon {codon} — extrapolation from similar position"
+        return "Evidence for other variants at this codon — extrapolation from similar position"
+
+    if level == "gene":
+        if gene and variant:
+            return f"Evidence for other {gene} variants — may not apply to {variant}"
+        if gene:
+            return f"Evidence for other {gene} variants — may not apply to this variant"
+        return "Evidence for other variants in this gene — may not apply to this variant"
+
+    # Fallback for unknown levels
+    return f"Evidence at {level} level"
+
+
+# Static descriptions for use in documentation/UI without dynamic substitution
+LOCUS_MATCH_DESCRIPTIONS: dict[str, str] = {
+    "variant": "Direct evidence for this exact variant",
+    "codon": "Evidence for other variants at this codon — extrapolation from similar position",
+    "gene": "Evidence for other variants in this gene — may not apply to this variant",
+}
