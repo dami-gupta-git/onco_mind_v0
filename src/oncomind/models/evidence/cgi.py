@@ -54,6 +54,8 @@ class CGIBiomarkerEvidence(EvidenceItemBase):
             # Preserve locus and cancer match from CGI
             locus_variant_match=self.locus_variant_match,
             cancer_type_match=self.cancer_type_match,
+            # Drug response association (Responsive, Resistant, etc.)
+            association=self.association,
         )
 
 

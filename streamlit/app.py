@@ -915,6 +915,15 @@ with tab1:
                             and t.get('source', '').upper() in ('FDA', 'CGI', 'CIVIC')
                             and not is_biomarker_selection_drug(t.get('drug_name', ''), gene_display)
                         ]
+                        # Sort by response: Sensitivity first, Resistance last
+                        def response_sort_key(t):
+                            resp = (t.get('response_type') or '').lower()
+                            if resp in ('sensitivity', 'responsive', 'sensitive'):
+                                return 0
+                            elif resp in ('resistance', 'resistant'):
+                                return 2
+                            return 1
+                        fda_approved = sorted(fda_approved, key=response_sort_key)
                         # Clinical evidence includes Phase trials, case reports, AND VICC level A (which is clinical but not necessarily FDA)
                         clinical = [
                             t for t in therapies
@@ -932,7 +941,14 @@ with tab1:
                                 drug = t.get('drug_name', 'Unknown')
                                 source_url = t.get('source_url', '')
                                 drug_display = f"[{drug}]({source_url})" if source_url else drug
-                                response = t.get('response_type', '') or "Sensitivity"
+                                response_raw = t.get('response_type', '') or "Sensitivity"
+                                # Color code response: green for sensitivity, red for resistance
+                                if response_raw.lower() in ('sensitivity', 'responsive', 'sensitive'):
+                                    response = f":green[{response_raw}]"
+                                elif response_raw.lower() in ('resistance', 'resistant'):
+                                    response = f":red[{response_raw}]"
+                                else:
+                                    response = response_raw
                                 source = t.get('source', '')
                                 match = t.get('locus_match', '')
                                 locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")

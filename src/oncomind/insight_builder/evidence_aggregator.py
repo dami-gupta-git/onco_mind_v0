@@ -591,6 +591,37 @@ class EvidenceAggregator:
 
         return approvals
 
+    def _sort_fda_by_association(
+        self,
+        approvals: list[FDAApproval],
+    ) -> list[FDAApproval]:
+        """Sort FDA approvals by association: Responsive/Sensitive first, Resistant last.
+
+        Sort order:
+        1. Responsive/Sensitivity (drug works for this variant)
+        2. None/Unknown (from FDA labels without CGI association data)
+        3. Resistant (drug does NOT work for this variant)
+
+        This ensures that when displaying FDA approvals, the drugs most likely
+        to be effective appear first, with resistance mutations clearly shown last.
+
+        Args:
+            approvals: List of FDAApproval objects
+
+        Returns:
+            Sorted list with Responsive first, Resistant last
+        """
+        def sort_key(approval: FDAApproval) -> int:
+            assoc = (approval.association or "").lower()
+            if assoc in ("responsive", "sensitivity", "sensitive"):
+                return 0  # Best - drug works
+            elif assoc in ("resistant", "resistance"):
+                return 2  # Worst - drug doesn't work
+            else:
+                return 1  # Unknown - from FDA labels
+
+        return sorted(approvals, key=sort_key)
+
     # -------------------------------------------------------------------------
     # Main Build Method
     # -------------------------------------------------------------------------
@@ -797,6 +828,9 @@ class EvidenceAggregator:
 
             # Enrich FDA approvals with cancer_type_match based on tumor type
             fda_approvals = self._enrich_fda_with_tumor_match(combined_fda_approvals, tumor)
+
+            # Sort by association: Responsive/Sensitive first, Resistant last
+            fda_approvals = self._sort_fda_by_association(fda_approvals)
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
