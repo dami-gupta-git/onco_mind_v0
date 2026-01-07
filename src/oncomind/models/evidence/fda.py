@@ -21,6 +21,8 @@ class FDAApproval(EvidenceItemBase):
     companion_diagnostic: str | None = None
     black_box_warning: str | None = None
     dosing_for_variant: str | None = None
+    # Drug response association from CGI (Responsive, Resistant, etc.)
+    association: str | None = None
 
     def extract_approved_variant(self) -> str | None:
         """Extract the specific variant(s) the drug is approved for from indication text.
