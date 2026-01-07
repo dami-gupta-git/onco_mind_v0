@@ -329,6 +329,59 @@ class TestCGIClient:
         assert biomarkers[0].drug == "Binimetinib"
 
 
+class TestCGIBiomarkerEvidence:
+    """Tests for CGIBiomarkerEvidence model."""
+
+    def test_to_fda_approval_conversion(self):
+        """Test converting CGI biomarker to FDAApproval object."""
+        from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        cgi = CGIBiomarkerEvidence(
+            gene="EGFR",
+            alteration="G719S",
+            drug="Afatinib",
+            drug_status="Approved",
+            association="Responsive",
+            evidence_level="FDA guidelines",
+            source="FDA",
+            tumor_type="NSCLC",
+            fda_approved=True,
+            locus_variant_match=EvidenceLevel(level="variant", scope="specific", origin="kb"),
+            cancer_type_match=EvidenceLevel(level="cancer_specific", scope="specific", origin="kb"),
+        )
+
+        fda = cgi.to_fda_approval()
+
+        assert fda.drug_name == "Afatinib"
+        assert fda.generic_name == "Afatinib"
+        assert fda.gene == "EGFR"
+        assert fda.variant_in_indications is True
+        assert "EGFR G719S" in fda.indication
+        assert "(Responsive)" in fda.indication
+        assert "in NSCLC" in fda.indication
+        # Verify locus/cancer match are preserved
+        assert fda.locus_variant_match.level == "variant"
+        assert fda.cancer_type_match.level == "cancer_specific"
+
+    def test_to_fda_approval_with_missing_fields(self):
+        """Test conversion handles missing optional fields gracefully."""
+        from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+
+        cgi = CGIBiomarkerEvidence(
+            gene="BRAF",
+            alteration="V600E",
+            drug="Dabrafenib",
+            fda_approved=True,
+        )
+
+        fda = cgi.to_fda_approval()
+
+        assert fda.drug_name == "Dabrafenib"
+        assert fda.gene == "BRAF"
+        assert "BRAF V600E" in fda.indication
+
+
 class TestCGIClientIntegration:
     """Integration tests for CGI client (requires network)."""
 
