@@ -1007,6 +1007,22 @@ FDA_EGFR_EXCLUSION_TERMS = [
     "dapagliflozin", "empagliflozin", "canagliflozin",
 ]
 
+# Terms indicating non-oncology context for KIT gene
+# "kit" is a common English word that appears in many drug labels
+# (e.g., "Kit for the preparation of...", "test kit", "diagnostic kit")
+# Only exclude if these patterns appear WITHOUT oncology context
+FDA_KIT_EXCLUSION_PATTERNS = [
+    "kit for the preparation",
+    "diagnostic kit",
+    "test kit",
+    "reagent kit",
+    "assay kit",
+    "collection kit",
+    "constipation",  # Lubiprostone
+    "irritable bowel",
+    "opioid-induced",
+]
+
 
 # =============================================================================
 # BIOMARKER SELECTION DRUGS

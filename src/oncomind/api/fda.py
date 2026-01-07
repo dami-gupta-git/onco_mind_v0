@@ -25,6 +25,7 @@ from oncomind.config.constants import (
     GENE_ALIASES,
     FDA_ONCOLOGY_TERMS,
     FDA_EGFR_EXCLUSION_TERMS,
+    FDA_KIT_EXCLUSION_PATTERNS,
 )
 
 
@@ -111,6 +112,33 @@ class FDAClient:
         combined_text = indication_text + " " + pharm_class
         has_oncology_term = any(term in combined_text for term in FDA_ONCOLOGY_TERMS)
 
+        # Check for FALSE POSITIVE patterns where oncology terms appear in non-oncology contexts
+        # e.g., "non-cancer pain" or "prior cancer" in opioid-related drugs
+        false_positive_patterns = [
+            "non-cancer pain",
+            "non-cancer-related",
+            "chronic non-cancer",
+            "prior cancer",  # patient history, not treatment
+            "history of cancer",
+            "cancer-related pain",  # supportive care, not cancer treatment
+            "cancer pain",  # supportive care
+            "not indicated for breast cancer",  # diagnostic imaging agents
+            "not indicated for cancer",
+            "cancer screening",  # screening tools, not treatment
+        ]
+        has_false_positive = any(pattern in combined_text for pattern in false_positive_patterns)
+
+        # If "cancer" only appears in false positive contexts, check if there are OTHER oncology terms
+        if has_false_positive:
+            # Check if there are oncology terms OTHER than just "cancer" and cancer-related terms
+            # "breast cancer" etc. can also appear in false positive contexts like "not indicated for breast cancer"
+            cancer_related_terms = {"cancer", "breast cancer", "prostate cancer", "lung cancer"}
+            non_cancer_oncology_terms = [t for t in FDA_ONCOLOGY_TERMS if t not in cancer_related_terms]
+            has_other_oncology_term = any(term in combined_text for term in non_cancer_oncology_terms)
+            if not has_other_oncology_term:
+                # "cancer" only appears in non-treatment context, not an oncology drug
+                has_oncology_term = False
+
         # For EGFR specifically, check for false positives from kidney/diabetes drugs
         # "eGFR" (estimated glomerular filtration rate) is a kidney function metric
         if gene.upper() == "EGFR":
@@ -118,6 +146,15 @@ class FDAClient:
 
             # If it has kidney/diabetes terms and no oncology terms, exclude it
             if is_kidney_diabetes and not has_oncology_term:
+                return False
+
+        # For KIT specifically, check for false positives from diagnostic/preparation kits
+        # "kit" is a common English word (e.g., "Kit for the preparation of Technetium...")
+        if gene.upper() == "KIT":
+            is_diagnostic_kit = any(pattern in combined_text for pattern in FDA_KIT_EXCLUSION_PATTERNS)
+
+            # If it has diagnostic kit terms and no oncology terms, exclude it
+            if is_diagnostic_kit and not has_oncology_term:
                 return False
 
         # If we found oncology terms, include the drug
@@ -137,6 +174,45 @@ class FDAClient:
         has_biomarker_context = any(p in indication_text for p in biomarker_patterns)
 
         return has_biomarker_context
+
+    def _has_negative_indication(self, record: dict[str, Any], condition: str) -> bool:
+        """Check if an FDA record explicitly states the drug is NOT indicated for a condition.
+
+        Some drugs mention conditions in "Limitations of Use" sections where they state
+        efficacy has NOT been demonstrated. For example, pazopanib's label says:
+        "The efficacy of pazopanib tablets for the treatment of patients with adipocytic
+        soft tissue sarcoma or gastrointestinal stromal tumors has not been demonstrated."
+
+        Args:
+            record: FDA label API response record
+            condition: The condition to check (e.g., "GIST", "gastrointestinal stromal")
+
+        Returns:
+            True if the drug has a negative indication for this condition, False otherwise
+        """
+        indications = record.get("indications_and_usage", [])
+        if isinstance(indications, list):
+            indication_text = " ".join(indications).lower()
+        else:
+            indication_text = str(indications).lower()
+
+        condition_lower = condition.lower()
+
+        # Patterns indicating the drug is NOT effective for this condition
+        negative_patterns = [
+            f"efficacy of .* for .* {condition_lower}.* has not been demonstrated",
+            f"efficacy .* {condition_lower}.* has not been demonstrated",
+            f"{condition_lower}.* has not been demonstrated",
+            f"not indicated for .* {condition_lower}",
+            f"excluding .* {condition_lower}",
+        ]
+
+        import re
+        for pattern in negative_patterns:
+            if re.search(pattern, indication_text):
+                return True
+
+        return False
 
     @retry(
         retry=retry_if_exception_type((httpx.HTTPError, httpx.TimeoutException)),
@@ -218,6 +294,16 @@ class FDAClient:
                     if variant_clean.startswith(prefix):
                         variant_clean = variant_clean[2:]
 
+            # Helper: Check if we should include this drug based on negative indications
+            # This filters out drugs that mention the search term in a NEGATIVE context
+            # (e.g., "efficacy has not been demonstrated", "not indicated for")
+            def should_include_drug(record: dict, search_terms: list[str]) -> bool:
+                """Return True if drug should be included (no negative indications found)."""
+                for term in search_terms:
+                    if self._has_negative_indication(record, term):
+                        return False
+                return True
+
             # Strategy 1: Search for gene + variant together (full-text search across all fields)
             # This finds variants in clinical_studies, indications, and other label sections
             if variant_clean:
@@ -243,6 +329,9 @@ class FDAClient:
                         for r in result.get("results", []):
                             drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
                             if drug_id and drug_id not in seen_drugs:
+                                # Check for negative indications for gene and variant
+                                if not should_include_drug(r, [search_gene.lower(), search_var.lower()]):
+                                    continue
                                 seen_drugs.add(drug_id)
                                 approvals.append(r)
 
@@ -258,6 +347,9 @@ class FDAClient:
                         # Filter out non-oncology drugs that mention gene names in unrelated contexts
                         # e.g., "eGFR" (kidney function) vs "EGFR" (cancer gene)
                         if self._is_oncology_related(r, search_gene):
+                            # Check for negative indications for gene
+                            if not should_include_drug(r, [search_gene.lower()]):
+                                continue
                             seen_drugs.add(drug_id)
                             approvals.append(r)
 
@@ -274,6 +366,9 @@ class FDAClient:
                     for r in result.get("results", []):
                         drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
                         if drug_id and drug_id not in seen_drugs:
+                            # Check for negative indications for GIST
+                            if not should_include_drug(r, ["gist", "gastrointestinal stromal"]):
+                                continue
                             seen_drugs.add(drug_id)
                             approvals.append(r)
 
@@ -292,6 +387,9 @@ class FDAClient:
                     for r in result.get("results", []):
                         drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
                         if drug_id and drug_id not in seen_drugs:
+                            # Check for negative indications for MPN terms
+                            if not should_include_drug(r, ["myelofibrosis", "polycythemia vera", "myeloproliferative"]):
+                                continue
                             seen_drugs.add(drug_id)
                             approvals.append(r)
 
@@ -312,6 +410,9 @@ class FDAClient:
                     for r in result.get("results", []):
                         drug_id = r.get("openfda", {}).get("brand_name", [""])[0]
                         if drug_id and drug_id not in seen_drugs:
+                            # Check for negative indications for MSI/dMMR terms
+                            if not should_include_drug(r, ["microsatellite instability", "msi-h", "mismatch repair", "dmmr"]):
+                                continue
                             seen_drugs.add(drug_id)
                             approvals.append(r)
 

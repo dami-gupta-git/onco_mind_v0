@@ -1736,6 +1736,11 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
         resist_only = resist_sources - sens_sources
 
         if sens_only and resist_only:
+            # FDA vs VICC conflicts are handled separately (SIGNIFICANT, not HIGH)
+            # because VICC data is less reliable than FDA
+            if sens_only == {"FDA"} and resist_only == {"VICC"}:
+                continue  # Will be caught in FDA vs VICC check below
+
             high_conflicts.append(
                 f"Conflicting drug response for {drug} at variant level: "
                 f"sensitive ({', '.join(sorted(sens_sources))}) vs "
