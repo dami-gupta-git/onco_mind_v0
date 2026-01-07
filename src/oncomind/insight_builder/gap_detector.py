@@ -859,15 +859,27 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
 
 def _check_discordant_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for conflicting evidence between sources."""
-    discordant_findings = _detect_discordant_evidence_internal(evidence)
+    high_conflicts, significant_conflicts = _detect_discordant_evidence_internal(evidence)
 
-    for finding in discordant_findings:
+    # HIGH severity conflicts (cross-source drug response, ClinVar conflicts)
+    for finding in high_conflicts:
         ctx.add_gap(
             category=GapCategory.DISCORDANT,
             severity=GapSeverity.HIGH,  # Conflicting data deserves high urgency
             description=finding,
             suggested_studies=["Meta-analysis", "Prospective validation study"],
             addressable_with=["Literature review", "Expert consensus"]
+        )
+        ctx.add_poorly_characterized("conflicting evidence")
+
+    # SIGNIFICANT severity conflicts (FDA vs VICC at variant level)
+    for finding in significant_conflicts:
+        ctx.add_gap(
+            category=GapCategory.DISCORDANT,
+            severity=GapSeverity.SIGNIFICANT,  # VICC is less reliable than FDA
+            description=finding,
+            suggested_studies=["Independent validation study", "Case series analysis"],
+            addressable_with=["Literature review", "Clinical correlative data"]
         )
         ctx.add_poorly_characterized("conflicting evidence")
 
@@ -1571,7 +1583,7 @@ def _normalize_source(source: str) -> str:
     return source
 
 
-def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
+def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str], list[str]]:
     """Detect conflicting evidence between different sources.
 
     Only flags TRUE cross-source conflicts (e.g., CGI says sensitive, CIViC says resistant).
@@ -1579,19 +1591,35 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
     often represent context-dependent responses (different tumor types, combinations, etc.)
     rather than genuine discordance.
 
-    Returns list of human-readable conflict descriptions.
+    Returns:
+        Tuple of (high_severity_conflicts, significant_severity_conflicts)
+        - high: Cross-source drug conflicts, ClinVar internal/external conflicts
+        - significant: FDA sensitive vs VICC resistant at variant level (VICC less reliable)
     """
-    conflicts: list[str] = []
+    high_conflicts: list[str] = []
+    significant_conflicts: list[str] = []
 
     # Collect drug response signals from different sources
-    sensitive_drugs: dict[str, set[str]] = {}
-    resistant_drugs: dict[str, set[str]] = {}
+    # We track BOTH all evidence AND variant-level-only evidence
+    # Cross-source conflicts are only flagged when BOTH sides have variant-level evidence
+    sensitive_drugs: dict[str, set[str]] = {}  # All evidence (any locus level)
+    resistant_drugs: dict[str, set[str]] = {}  # All evidence (any locus level)
+    sensitive_variant_level: dict[str, set[str]] = {}  # Variant-level only
+    resistant_variant_level: dict[str, set[str]] = {}  # Variant-level only
+
+    # Track FDA approvals at variant level for FDA vs VICC conflict detection
+    fda_sensitive_variant_level: dict[str, bool] = {}
 
     # Check FDA approvals (always sensitivity)
     for approval in evidence.fda_approvals:
         drug = approval.generic_name or approval.brand_name or approval.drug_name
         if drug:
-            sensitive_drugs.setdefault(drug.lower(), set()).add("FDA")
+            drug_lower = drug.lower()
+            sensitive_drugs.setdefault(drug_lower, set()).add("FDA")
+            # Track if variant-level
+            if approval.locus_match == "variant":
+                fda_sensitive_variant_level[drug_lower] = True
+                sensitive_variant_level.setdefault(drug_lower, set()).add("FDA")
 
     # Check CGI biomarkers (FDA-approved)
     for cgi in evidence.cgi_biomarkers:
@@ -1602,8 +1630,12 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             assoc_upper = cgi.association.upper()
             if "RESIST" in assoc_upper:
                 resistant_drugs.setdefault(drug, set()).add("CGI")
+                if cgi.locus_match == "variant":
+                    resistant_variant_level.setdefault(drug, set()).add("CGI")
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI")
+                if cgi.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug, set()).add("CGI")
 
     # Check CGI preclinical biomarkers
     for cgi in evidence.preclinical_biomarkers:
@@ -1614,8 +1646,12 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             assoc_upper = cgi.association.upper()
             if "RESIST" in assoc_upper:
                 resistant_drugs.setdefault(drug, set()).add("CGI (preclinical)")
+                if cgi.locus_match == "variant":
+                    resistant_variant_level.setdefault(drug, set()).add("CGI (preclinical)")
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI (preclinical)")
+                if cgi.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug, set()).add("CGI (preclinical)")
 
     # Check CGI early-phase biomarkers
     for cgi in evidence.early_phase_biomarkers:
@@ -1626,8 +1662,15 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             assoc_upper = cgi.association.upper()
             if "RESIST" in assoc_upper:
                 resistant_drugs.setdefault(drug, set()).add("CGI (early phase)")
+                if cgi.locus_match == "variant":
+                    resistant_variant_level.setdefault(drug, set()).add("CGI (early phase)")
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI (early phase)")
+                if cgi.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug, set()).add("CGI (early phase)")
+
+    # Track VICC resistance at variant level for FDA vs VICC conflict detection
+    vicc_resistant_variant_level: dict[str, bool] = {}
 
     # Check VICC evidence
     for vicc in evidence.vicc_evidence:
@@ -1639,8 +1682,14 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             source_name = _normalize_source(f"VICC/{vicc.source}" if vicc.source else "VICC")
             if "RESIST" in resp_upper:
                 resistant_drugs.setdefault(drug_lower, set()).add(source_name)
+                # Track if variant-level
+                if vicc.locus_match == "variant":
+                    vicc_resistant_variant_level[drug_lower] = True
+                    resistant_variant_level.setdefault(drug_lower, set()).add(source_name)
             elif "SENS" in resp_upper or "RESPON" in resp_upper:
                 sensitive_drugs.setdefault(drug_lower, set()).add(source_name)
+                if vicc.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug_lower, set()).add(source_name)
 
     # Check CIViC assertions
     for assertion in evidence.civic_assertions:
@@ -1650,8 +1699,12 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             drug_lower = therapy.lower()
             if assertion.is_resistance:
                 resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
+                if assertion.locus_match == "variant":
+                    resistant_variant_level.setdefault(drug_lower, set()).add("CIViC")
             elif assertion.is_sensitivity:
                 sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
+                if assertion.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug_lower, set()).add("CIViC")
 
     # Check CIViC evidence items
     for civic in evidence.civic_evidence:
@@ -1662,13 +1715,18 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
             sig_upper = civic.clinical_significance.upper()
             if "RESIST" in sig_upper:
                 resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
+                if civic.locus_match == "variant":
+                    resistant_variant_level.setdefault(drug_lower, set()).add("CIViC")
             elif "SENS" in sig_upper or "RESPON" in sig_upper:
                 sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
+                if civic.locus_match == "variant":
+                    sensitive_variant_level.setdefault(drug_lower, set()).add("CIViC")
 
-    # Find drugs with TRUE CROSS-SOURCE conflicts only
-    for drug in set(sensitive_drugs.keys()) & set(resistant_drugs.keys()):
-        sens_sources = sensitive_drugs[drug]
-        resist_sources = resistant_drugs[drug]
+    # Find drugs with TRUE CROSS-SOURCE conflicts at VARIANT LEVEL only
+    # Gene/codon-level conflicts are not flagged as different variants can behave differently
+    for drug in set(sensitive_variant_level.keys()) & set(resistant_variant_level.keys()):
+        sens_sources = sensitive_variant_level[drug]
+        resist_sources = resistant_variant_level[drug]
 
         # Only flag if sources are truly different (cross-source conflict)
         if sens_sources == resist_sources:
@@ -1678,10 +1736,18 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
         resist_only = resist_sources - sens_sources
 
         if sens_only and resist_only:
-            conflicts.append(
-                f"Conflicting drug response for {drug}: "
+            high_conflicts.append(
+                f"Conflicting drug response for {drug} at variant level: "
                 f"sensitive ({', '.join(sorted(sens_sources))}) vs "
                 f"resistant ({', '.join(sorted(resist_sources))})"
+            )
+
+    # Check FDA (sensitive) vs VICC (resistant) at variant level
+    # This is SIGNIFICANT (not HIGH) because VICC data is less reliable than FDA
+    for drug in fda_sensitive_variant_level.keys():
+        if drug in vicc_resistant_variant_level:
+            significant_conflicts.append(
+                f"FDA approves {drug} (sensitive) at variant level but VICC reports resistance at variant level — requires validation"
             )
 
     # Check ClinVar significance conflicts (internal) - differentiate by locus level
@@ -1704,11 +1770,11 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
     # Check for conflicts at each locus level (most specific first)
     # Variant-level conflict is most concerning
     if "pathogenic" in clinvar_by_locus["variant"] and "benign" in clinvar_by_locus["variant"]:
-        conflicts.append(
+        high_conflicts.append(
             "ClinVar has conflicting interpretations at variant level: both pathogenic and benign submissions for this exact variant"
         )
     elif "pathogenic" in clinvar_by_locus["codon"] and "benign" in clinvar_by_locus["codon"]:
-        conflicts.append(
+        high_conflicts.append(
             "ClinVar has conflicting interpretations at codon level: both pathogenic and benign submissions for variants at this position"
         )
     # Note: gene-level "conflicts" are not flagged — different variants legitimately differ
@@ -1754,11 +1820,11 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> list[str]:
 
         if civic_actionable_at_variant:
             source_str = civic_actionable_at_variant[0]
-            conflicts.append(
+            high_conflicts.append(
                 f"ClinVar classifies as benign at variant level but {source_str} suggests clinical relevance for this exact variant"
             )
 
-    return conflicts
+    return high_conflicts, significant_conflicts
 
 
 # =============================================================================
@@ -1795,6 +1861,11 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     A variant with many well-characterized aspects and few gaps scores better than
     one with few well-characterized aspects and the same gaps.
 
+    FLOOR RULES (severity-based caps):
+    - Any CRITICAL gap → cannot be better than "limited"
+    - Any HIGH gap → cannot be better than "moderate"
+    - Any SIGNIFICANT gap → cannot be better than "moderate"
+
     Args:
         gaps: List of evidence gaps found
         well_characterized_count: Number of well-characterized aspects
@@ -1802,6 +1873,11 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     Returns:
         Quality rating: "comprehensive" | "moderate" | "limited" | "minimal"
     """
+    # Check for severity-based floor caps FIRST
+    has_critical = any(g.severity == GapSeverity.CRITICAL for g in gaps)
+    has_high = any(g.severity == GapSeverity.HIGH for g in gaps)
+    has_significant = any(g.severity == GapSeverity.SIGNIFICANT for g in gaps)
+
     # Calculate gap penalty score
     gap_score = 0.0
     for gap in gaps:
@@ -1815,15 +1891,32 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     # Net score: higher gap_score is worse, positive_credit offsets it
     net_score = gap_score - positive_credit
 
-    # Apply thresholds to net score
+    # Compute base quality from net score
     if net_score >= 12.0:
-        return "minimal"
+        base_quality = "minimal"
     elif net_score >= 6.0:
-        return "limited"
+        base_quality = "limited"
     elif net_score >= 0.0:
-        return "moderate"
+        base_quality = "moderate"
     else:
-        return "comprehensive"
+        base_quality = "comprehensive"
+
+    # Apply floor caps: high-severity gaps prevent "comprehensive" classification
+    # Order matters: quality levels are minimal < limited < moderate < comprehensive
+    quality_order = ["minimal", "limited", "moderate", "comprehensive"]
+    base_idx = quality_order.index(base_quality)
+
+    if has_critical:
+        # CRITICAL gaps → cannot be better than "limited" (index 1)
+        max_idx = 1
+    elif has_high or has_significant:
+        # HIGH or SIGNIFICANT gaps → cannot be better than "moderate" (index 2)
+        max_idx = 2
+    else:
+        max_idx = 3  # No cap
+
+    final_idx = min(base_idx, max_idx)
+    return quality_order[final_idx]
 
 
 def _compute_research_priority(

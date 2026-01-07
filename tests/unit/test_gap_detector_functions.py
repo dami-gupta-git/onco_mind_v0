@@ -1534,28 +1534,49 @@ class TestComputeOverallQuality:
         quality_order = ["comprehensive", "moderate", "limited", "minimal"]
         assert quality_order.index(result_with_credit) <= quality_order.index(result_no_credit)
 
-    def test_many_well_characterized_yields_comprehensive(self):
-        """Many well-characterized aspects should yield comprehensive even with gaps."""
+    def test_many_well_characterized_with_minor_gap_yields_comprehensive(self):
+        """Many well-characterized aspects should yield comprehensive with only MINOR gaps."""
+        minor_gap = EvidenceGap(
+            category=GapCategory.CLINICAL,
+            severity=GapSeverity.MINOR,
+            description="Test gap",
+        )
+        # 1 minor gap with 10 well-characterized aspects
+        result = _compute_overall_quality([minor_gap], 10)
+        assert result == "comprehensive"
+
+    def test_significant_gap_caps_quality_at_moderate(self):
+        """SIGNIFICANT gaps should cap quality at 'moderate' regardless of well-characterized count."""
         significant_gap = EvidenceGap(
             category=GapCategory.CLINICAL,
             severity=GapSeverity.SIGNIFICANT,
             description="Test gap",
         )
-        # 1 significant gap but 10 well-characterized aspects
+        # Even with 10 well-characterized aspects, SIGNIFICANT gap caps at moderate
         result = _compute_overall_quality([significant_gap], 10)
-        assert result == "comprehensive"
+        assert result == "moderate"
 
-    def test_critical_gaps_hard_to_overcome(self):
-        """Critical gaps in high-weight categories should be hard to overcome."""
-        # VALIDATION has weight 3.5, critical multiplier 3.0 = 10.5 points
+    def test_critical_gaps_cap_quality_at_limited(self):
+        """CRITICAL gaps should cap quality at 'limited' regardless of well-characterized count."""
         critical_gap = EvidenceGap(
             category=GapCategory.VALIDATION,
             severity=GapSeverity.CRITICAL,
             description="Critical validation gap",
         )
-        # 3 well-characterized = 4.5 credit, net = 6.0 -> limited
-        result = _compute_overall_quality([critical_gap], 3)
-        assert result in ("moderate", "limited", "minimal")
+        # Even with 20 well-characterized aspects, CRITICAL gap caps at limited
+        result = _compute_overall_quality([critical_gap], 20)
+        assert result == "limited"
+
+    def test_high_gaps_cap_quality_at_moderate(self):
+        """HIGH gaps should cap quality at 'moderate' regardless of well-characterized count."""
+        high_gap = EvidenceGap(
+            category=GapCategory.DISCORDANT,
+            severity=GapSeverity.HIGH,
+            description="High severity gap",
+        )
+        # Even with 20 well-characterized aspects, HIGH gap caps at moderate
+        result = _compute_overall_quality([high_gap], 20)
+        assert result == "moderate"
 
     def test_many_gaps_yields_poor_quality(self):
         """Many gaps should yield poor quality even with some well-characterized."""
