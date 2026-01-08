@@ -1792,7 +1792,10 @@ class Evidence(BaseModel):
             lines.append("")
 
         # Cancer Hotspots data (mutation recurrence across cancers)
-        if self.hotspots_evidence and self.hotspots_evidence.has_data():
+        # Include both direct hotspot matches AND adjacent hotspots
+        if self.hotspots_evidence and (
+            self.hotspots_evidence.has_data() or self.hotspots_evidence.is_adjacent_to_hotspot()
+        ):
             hotspot_context = self.hotspots_evidence.to_prompt_context()
             if hotspot_context:
                 lines.append(hotspot_context)

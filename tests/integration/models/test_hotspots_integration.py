@@ -57,6 +57,86 @@ class TestHotspotsAPI:
         # BRAF position 100 is not a known hotspot
         assert is_hotspot_variant("BRAF", "A100T") is False
 
+    # -------------------------------------------------------------------------
+    # ADJACENT HOTSPOT TESTS
+    # -------------------------------------------------------------------------
+
+    def test_fetch_hotspot_evidence_adjacent_kras_g14d(self):
+        """KRAS G14D (1 codon from G13) should detect adjacent hotspot."""
+        client = HotspotsClient()
+        evidence = client.fetch_hotspot_evidence("KRAS", "G14D")
+
+        assert evidence is not None
+        assert evidence.is_hotspot is False, "G14 is not itself a hotspot"
+        assert evidence.is_adjacent_to_hotspot() is True, "G14D should be adjacent to G13 hotspot"
+        assert evidence.adjacent_hotspot is not None
+        assert evidence.adjacent_distance == 1, "G14 is 1 codon from G13"
+        assert "13" in evidence.adjacent_hotspot.residue, "Adjacent hotspot should be G13"
+
+    def test_fetch_hotspot_evidence_adjacent_kras_g15a(self):
+        """KRAS G15A (2 codons from G13) should detect adjacent hotspot."""
+        client = HotspotsClient()
+        evidence = client.fetch_hotspot_evidence("KRAS", "G15A")
+
+        assert evidence is not None
+        assert evidence.is_hotspot is False, "G15 is not itself a hotspot"
+        assert evidence.is_adjacent_to_hotspot() is True, "G15A should be adjacent to G13 hotspot"
+        assert evidence.adjacent_distance == 2
+
+    def test_fetch_hotspot_evidence_adjacent_prioritizes_closest(self):
+        """Adjacent hotspot detection should prioritize closest hotspot."""
+        client = HotspotsClient()
+        # KRAS has hotspots at G12 and G13 - a variant at position 11 should find closest
+        # A11 is actually a minor hotspot, so use position 10
+        evidence = client.fetch_hotspot_evidence("KRAS", "G10A")
+
+        assert evidence is not None
+        if evidence.is_adjacent_to_hotspot():
+            # Should find G12 (distance 2) not Q61 (distance 51)
+            assert evidence.adjacent_distance <= 3
+
+    def test_fetch_hotspot_evidence_no_adjacent_far_away(self):
+        """Variants far from any hotspot should not have adjacent_hotspot."""
+        client = HotspotsClient()
+        # KRAS position 100 is far from any hotspot (G12, G13, Q61, A146, etc.)
+        evidence = client.fetch_hotspot_evidence("KRAS", "A100T")
+
+        assert evidence is not None
+        assert evidence.is_hotspot is False
+        assert evidence.is_adjacent_to_hotspot() is False, "A100 is too far from any hotspot"
+        assert evidence.adjacent_hotspot is None
+
+    def test_fetch_hotspot_evidence_exact_match_no_adjacent(self):
+        """Exact hotspot matches should not have adjacent_hotspot set."""
+        client = HotspotsClient()
+        evidence = client.fetch_hotspot_evidence("BRAF", "V600E")
+
+        assert evidence is not None
+        assert evidence.is_hotspot is True
+        assert evidence.is_adjacent_to_hotspot() is False, "Exact hotspot should not be 'adjacent'"
+        assert evidence.adjacent_hotspot is None
+
+    def test_adjacent_hotspot_window_default(self):
+        """Default adjacency window is 5 codons."""
+        client = HotspotsClient()
+        # KRAS G17 is 5 codons from G12, should be detected with default window
+        evidence = client.fetch_hotspot_evidence("KRAS", "G17A")
+
+        assert evidence is not None
+        if evidence.is_adjacent_to_hotspot():
+            assert evidence.adjacent_distance <= 5
+
+    def test_adjacent_hotspot_custom_window(self):
+        """Custom adjacency window should be respected."""
+        client = HotspotsClient()
+        # KRAS G15A with window=1 should NOT find adjacent (distance is 2 from G13)
+        evidence_narrow = client.fetch_hotspot_evidence("KRAS", "G15A", adjacency_window=1)
+        assert evidence_narrow.is_adjacent_to_hotspot() is False, "Window=1 should not find G13 (2 codons away)"
+
+        # Same variant with window=2 should find adjacent
+        evidence_wide = client.fetch_hotspot_evidence("KRAS", "G15A", adjacency_window=2)
+        assert evidence_wide.is_adjacent_to_hotspot() is True, "Window=2 should find G13"
+
     def test_fetch_hotspot_evidence_braf_v600e(self):
         """fetch_hotspot_evidence should return detailed evidence for BRAF V600E."""
         client = HotspotsClient()
@@ -198,6 +278,100 @@ class TestHotspotsIntegration:
         if hotspots is not None:
             assert hotspots.is_hotspot is False or hotspots.has_data() is False, \
                 "CHEK2 I157T should not be a cancer hotspot"
+
+    # -------------------------------------------------------------------------
+    # ADJACENT HOTSPOT INTEGRATION TESTS
+    # -------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_kras_g14d_adjacent_hotspot_in_pipeline(self):
+        """KRAS G14D should have adjacent hotspot evidence in the pipeline."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G14D", tumor_type="Colorectal Cancer")
+
+        hotspots = result.evidence.hotspots_evidence
+        assert hotspots is not None, "Should have hotspots_evidence"
+        assert hotspots.is_hotspot is False, "G14D is not itself a hotspot"
+        assert hotspots.is_adjacent_to_hotspot() is True, "G14D should be adjacent to G13"
+        assert hotspots.adjacent_hotspot is not None
+        assert hotspots.adjacent_distance == 1, "G14 is 1 codon from G13"
+
+    @pytest.mark.asyncio
+    async def test_adjacent_hotspot_in_biological_context(self):
+        """Adjacent hotspots should appear in biological context for LLM."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G14D", tumor_type="Colorectal Cancer")
+
+        bio_context = result.evidence.get_biological_context_for_llm()
+
+        # Should include near-hotspot information
+        assert "NEAR HOTSPOT" in bio_context, \
+            f"Biological context should include NEAR HOTSPOT for adjacent variant, got:\n{bio_context}"
+        assert "G14D" in bio_context
+        assert "G13" in bio_context  # Adjacent to G13 hotspot
+
+    @pytest.mark.asyncio
+    async def test_adjacent_hotspot_prompt_context_format(self):
+        """Adjacent hotspot to_prompt_context should return well-formatted string."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G14D", tumor_type="Colorectal Cancer")
+
+        hotspots = result.evidence.hotspots_evidence
+        assert hotspots is not None
+
+        prompt_context = hotspots.to_prompt_context()
+        assert "NEAR HOTSPOT" in prompt_context
+        assert "codon(s)" in prompt_context
+        assert "cancer samples" in prompt_context
+        assert "Hotspot tumor distribution" in prompt_context
+        assert "requires validation" in prompt_context
+        assert "cancerhotspots.org" in prompt_context
+
+    @pytest.mark.asyncio
+    async def test_adjacent_hotspot_serialization(self):
+        """Adjacent hotspot evidence should serialize correctly."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G14D", tumor_type="Colorectal Cancer")
+
+        hotspots = result.evidence.hotspots_evidence
+        assert hotspots is not None
+
+        # Test to_dict
+        data = hotspots.to_dict()
+        assert data["is_hotspot"] is False
+        assert data["is_adjacent_to_hotspot"] is True
+        assert data["adjacent_distance"] == 1, "G14 is 1 codon from G13"
+        assert "adjacent_hotspot" in data
+        assert data["adjacent_hotspot"] is not None
+        assert "residue" in data["adjacent_hotspot"]
+        assert "tumor_type_composition" in data["adjacent_hotspot"]
+
+    @pytest.mark.asyncio
+    async def test_adjacent_hotspot_in_gap_analysis(self):
+        """Adjacent hotspots should create gaps and well-characterized items."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G14D", tumor_type="Colorectal Cancer")
+
+        # Access gap analysis from evidence
+        gap_result = result.evidence.evidence_gaps
+        assert gap_result is not None, "evidence_gaps should be computed"
+
+        # Should have "near hotspot codon X" in well-characterized
+        well_char = gap_result.well_characterized
+        near_hotspot_items = [w for w in well_char if "hotspot" in w.lower()]
+        assert len(near_hotspot_items) > 0, \
+            f"Should have near-hotspot in well_characterized, got: {well_char}"
+
+        # Should have a functional gap about being near hotspot
+        gap_descriptions = [g.description for g in gap_result.gaps]
+        near_hotspot_gaps = [d for d in gap_descriptions if "near" in d.lower() and "hotspot" in d.lower()]
+        assert len(near_hotspot_gaps) > 0, \
+            f"Should have near-hotspot gap, got: {gap_descriptions}"
 
 
 # =============================================================================

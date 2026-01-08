@@ -106,9 +106,17 @@ class HotspotsEvidence(EvidenceItemBase):
     is_hotspot: bool = False  # True if variant is at a known hotspot
     is_exact_variant_match: bool = False  # True if exact AA change is in hotspot data
 
+    # Adjacent hotspot data (for variants within ±5 codons of a hotspot)
+    adjacent_hotspot: HotspotEntry | None = None  # Nearest hotspot if variant is not at one
+    adjacent_distance: int | None = None  # Distance in codons to the adjacent hotspot
+
     def has_data(self) -> bool:
         """Check if there is meaningful hotspot data."""
         return self.hotspot is not None
+
+    def is_adjacent_to_hotspot(self) -> bool:
+        """Check if variant is adjacent to (but not at) a hotspot."""
+        return self.adjacent_hotspot is not None and not self.is_hotspot
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -118,6 +126,8 @@ class HotspotsEvidence(EvidenceItemBase):
             "queried_residue": self.queried_residue,
             "is_hotspot": self.is_hotspot,
             "is_exact_variant_match": self.is_exact_variant_match,
+            "is_adjacent_to_hotspot": self.is_adjacent_to_hotspot(),
+            "adjacent_distance": self.adjacent_distance,
         }
         if self.hotspot:
             result["hotspot"] = {
@@ -125,13 +135,28 @@ class HotspotsEvidence(EvidenceItemBase):
                 "hotspot_type": self.hotspot.hotspot_type,
                 "q_value": self.hotspot.q_value,
                 "total_samples": self.hotspot.total_samples,
-                "top_variants": [
+                "variants": [
                     {"amino_acid": v.amino_acid, "count": v.count}
-                    for v in self.hotspot.get_top_variants(5)
+                    for v in self.hotspot.variants
                 ],
-                "top_tumor_types": [
+                "tumor_type_composition": [
                     {"tumor_type": t.tumor_type, "count": t.count}
-                    for t in self.hotspot.get_top_tumor_types(5)
+                    for t in self.hotspot.tumor_type_composition
+                ],
+            }
+        if self.adjacent_hotspot:
+            result["adjacent_hotspot"] = {
+                "residue": self.adjacent_hotspot.residue,
+                "hotspot_type": self.adjacent_hotspot.hotspot_type,
+                "q_value": self.adjacent_hotspot.q_value,
+                "total_samples": self.adjacent_hotspot.total_samples,
+                "variants": [
+                    {"amino_acid": v.amino_acid, "count": v.count}
+                    for v in self.adjacent_hotspot.variants
+                ],
+                "tumor_type_composition": [
+                    {"tumor_type": t.tumor_type, "count": t.count}
+                    for t in self.adjacent_hotspot.tumor_type_composition
                 ],
             }
         return result
@@ -146,39 +171,62 @@ class HotspotsEvidence(EvidenceItemBase):
         Returns:
             Formatted string with hotspot context
         """
-        if not self.has_data() or not self.hotspot:
-            return ""
-
         lines = []
-        h = self.hotspot
 
-        # Header with match status
-        if self.is_exact_variant_match:
+        # Direct hotspot match
+        if self.hotspot:
+            h = self.hotspot
+
+            # Header with match status
+            if self.is_exact_variant_match:
+                lines.append(
+                    f"CANCER HOTSPOT: {self.gene} {h.residue} is a known cancer hotspot "
+                    f"(exact variant match, q={h.q_value:.2e})"
+                )
+            else:
+                lines.append(
+                    f"CANCER HOTSPOT: {self.gene} {h.residue} is a known cancer hotspot "
+                    f"(codon-level match, q={h.q_value:.2e})"
+                )
+
+            # Sample count
+            lines.append(f"  Observed in {h.total_samples} cancer samples")
+
+            # Top variants at this residue
+            top_vars = h.get_top_variants(4)
+            if top_vars:
+                var_strs = [f"{h.residue[0]}{h.residue[1:]}{v.amino_acid}:{v.count}" for v in top_vars]
+                lines.append(f"  Common changes: {', '.join(var_strs)}")
+
+            # Top tumor types
+            top_tumors = h.get_top_tumor_types(4)
+            if top_tumors:
+                tumor_strs = [f"{t.tumor_type}:{t.count}" for t in top_tumors]
+                lines.append(f"  Tumor distribution: {', '.join(tumor_strs)}")
+
+            lines.append(f"  Source: [cancerhotspots.org]({self.get_source_url()})")
+
+        # Adjacent hotspot (not at hotspot, but near one)
+        elif self.is_adjacent_to_hotspot() and self.adjacent_hotspot:
+            h = self.adjacent_hotspot
+
             lines.append(
-                f"CANCER HOTSPOT: {self.gene} {h.residue} is a known cancer hotspot "
-                f"(exact variant match, q={h.q_value:.2e})"
+                f"NEAR HOTSPOT: {self.gene} {self.variant} is {self.adjacent_distance} codon(s) "
+                f"from known hotspot {h.residue}"
             )
-        else:
             lines.append(
-                f"CANCER HOTSPOT: {self.gene} {h.residue} is a known cancer hotspot "
-                f"(codon-level match, q={h.q_value:.2e})"
+                f"  The nearby {h.residue} hotspot is observed in {h.total_samples} cancer samples (q={h.q_value:.2e})"
             )
 
-        # Sample count
-        lines.append(f"  Observed in {h.total_samples} cancer samples")
+            # Top tumor types for the nearby hotspot
+            top_tumors = h.get_top_tumor_types(4)
+            if top_tumors:
+                tumor_strs = [f"{t.tumor_type}:{t.count}" for t in top_tumors]
+                lines.append(f"  Hotspot tumor distribution: {', '.join(tumor_strs)}")
 
-        # Top variants at this residue
-        top_vars = h.get_top_variants(4)
-        if top_vars:
-            var_strs = [f"{h.residue[0]}{h.residue[1:]}{v.amino_acid}:{v.count}" for v in top_vars]
-            lines.append(f"  Common changes: {', '.join(var_strs)}")
-
-        # Top tumor types
-        top_tumors = h.get_top_tumor_types(4)
-        if top_tumors:
-            tumor_strs = [f"{t.tumor_type}:{t.count}" for t in top_tumors]
-            lines.append(f"  Tumor distribution: {', '.join(tumor_strs)}")
-
-        lines.append(f"  Source: [cancerhotspots.org]({self.get_source_url()})")
+            lines.append(
+                f"  Note: Proximity to hotspot suggests possible functional relevance, but requires validation"
+            )
+            lines.append(f"  Source: [cancerhotspots.org]({self.get_source_url()})")
 
         return "\n".join(lines)

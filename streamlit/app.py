@@ -108,6 +108,7 @@ EXAMPLE_VARIANTS = {
     "-- Select an example --": ("", "", ""),
     "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+    "EGFR K601E - Brain (near-hotspot)": ("EGFR", "K601E", "Brain"),
     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
@@ -353,7 +354,7 @@ with tab1:
                 tab_names.append("cBioPortal")
             if depmap:
                 tab_names.append("🧬 DepMap")
-            if hotspots and hotspots.get('is_hotspot'):
+            if hotspots and (hotspots.get('is_hotspot') or hotspots.get('is_adjacent_to_hotspot')):
                 tab_names.append("🔥 Hotspots")
 
             if tab_names:
@@ -880,68 +881,38 @@ with tab1:
                     tab_idx += 1
 
                 # Hotspots tab
-                if hotspots and hotspots.get('is_hotspot'):
+                if hotspots and (hotspots.get('is_hotspot') or hotspots.get('is_adjacent_to_hotspot')):
                     with tabs[tab_idx]:
-                        hotspot_data = hotspots.get('hotspot', {})
-                        is_exact = hotspots.get('is_exact_variant_match', False)
+                        is_at_hotspot = hotspots.get('is_hotspot', False)
+                        is_adjacent = hotspots.get('is_adjacent_to_hotspot', False)
 
-                        # Header with match status
-                        residue = hotspot_data.get('residue', '')
-                        q_value = hotspot_data.get('q_value', 0)
-                        total_samples = hotspot_data.get('total_samples', 0)
+                        # Helper to build one-line hotspot summary
+                        def hotspot_summary(residue: str, hotspot_data: dict, total_samples: int) -> str:
+                            tumor_types = hotspot_data.get('tumor_type_composition', [])
+                            sorted_tumors = sorted(tumor_types, key=lambda x: x.get('count', 0), reverse=True)[:3]
+                            if sorted_tumors:
+                                tumor_strs = [t['tumor_type'].replace('_', ' ').title() for t in sorted_tumors]
+                                return f"The {residue} hotspot has {total_samples:,} samples, most common in {', '.join(tumor_strs)}."
+                            return f"The {residue} hotspot has {total_samples:,} samples."
 
-                        match_type = "✅ Exact variant match" if is_exact else "🔸 Codon-level match"
-                        st.markdown(f"**{gene_display} {residue}** is a known cancer hotspot ({match_type})")
-                        st.markdown(f"Observed in **{total_samples:,}** cancer samples (q-value: {q_value:.2e})")
+                        if is_at_hotspot:
+                            hotspot_data = hotspots.get('hotspot', {})
+                            residue = hotspot_data.get('residue', '')
+                            total_samples = hotspot_data.get('total_samples', 0)
 
-                        # Variants table
-                        variants = hotspot_data.get('variants', [])
-                        if variants:
-                            st.markdown("**Amino Acid Changes at this Position:**")
-                            var_rows = []
-                            for v in sorted(variants, key=lambda x: x.get('count', 0), reverse=True)[:10]:
-                                aa = v.get('amino_acid', '')
-                                count = v.get('count', 0)
-                                pct = (count / total_samples * 100) if total_samples > 0 else 0
-                                # Highlight the queried variant
-                                variant_notation = f"{residue}{aa}"
-                                is_match = variant_display.upper().endswith(aa.upper()) if aa else False
-                                highlight = "→ " if is_match else ""
-                                var_rows.append({
-                                    "": highlight,
-                                    "Change": variant_notation,
-                                    "Samples": count,
-                                    "Frequency": f"{pct:.1f}%",
-                                })
-                            st.dataframe(
-                                pd.DataFrame(var_rows),
-                                hide_index=True,
-                                width=400,
-                                height=min(300, 35 * (len(var_rows) + 1)),
-                            )
+                            st.markdown(f"**This variant is at known cancer hotspot {gene_display} {residue}.**")
+                            st.caption(hotspot_summary(residue, hotspot_data, total_samples))
 
-                        # Tumor type distribution
-                        tumor_types = hotspot_data.get('tumor_type_composition', [])
-                        if tumor_types:
-                            st.markdown("**Tumor Type Distribution:**")
-                            tumor_rows = []
-                            for t in sorted(tumor_types, key=lambda x: x.get('count', 0), reverse=True)[:10]:
-                                tumor = t.get('tumor_type', '')
-                                count = t.get('count', 0)
-                                pct = (count / total_samples * 100) if total_samples > 0 else 0
-                                tumor_rows.append({
-                                    "Tumor Type": tumor.replace('_', ' ').title(),
-                                    "Samples": count,
-                                    "Frequency": f"{pct:.1f}%",
-                                })
-                            st.dataframe(
-                                pd.DataFrame(tumor_rows),
-                                hide_index=True,
-                                width=400,
-                                height=min(300, 35 * (len(tumor_rows) + 1)),
-                            )
+                        elif is_adjacent:
+                            adjacent_data = hotspots.get('adjacent_hotspot', {})
+                            adjacent_distance = hotspots.get('adjacent_distance', 0)
+                            residue = adjacent_data.get('residue', '')
+                            total_samples = adjacent_data.get('total_samples', 0)
 
-                        st.markdown("[🔗 Cancer Hotspots](https://www.cancerhotspots.org/) (Chang et al., Cancer Discovery 2017)")
+                            st.markdown(f"**This variant is ±{adjacent_distance} codons from known hotspot {gene_display} {residue}.**")
+                            st.caption(hotspot_summary(residue, adjacent_data, total_samples))
+
+                        st.caption("[Cancer Hotspots](https://www.cancerhotspots.org/) (Chang et al., Cancer Discovery 2017)")
                     tab_idx += 1
 
             else:
