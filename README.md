@@ -3,26 +3,33 @@
 ---
 **Research intelligence for cancer variants. Find the gaps, not just the facts.**
 
+
+
 For BRAF V600E, databases already agree. For the next 10,000 variants, the key question is **"what don't we know yet?"**
 
 OncoMind is a research intelligence platform that identifies evidence gaps in cancer variant knowledge—surfacing where research is thin, conflicting, or missing entirely. It's built for translational teams and small biotechs deciding *which variants are worth a project*, not for treating individual patients.
 
 > **Status: Proof-of-Concept / Architectural Demo**
 > 
-> This demonstrates an approach to systematic evidence gap detection. It is **research use only** — not for diagnosis, treatment selection, or any clinical decision-making.
-
+> This demonstrates an approach to systematic evidence gap detection. It is **research use only** — not for diagnosis, treatment selection, or any clinical decision-making.  
+>   
+> ⚠️ **SNPs and small indels only.** Fusions, amplifications, and copy-number variants are not yet supported.
 ---
 
 ## What Makes It Different
 
-| Feature | Typical tools | OncoMind |
-|---------|---------------|----------|
-| Primary question | "What is this variant?" | "What don't we know yet?" |
-| Knowledge gaps | Rarely explicit | First-class outputs with severity scoring |
-| Co-mutation patterns | Raw prevalence tables | Used to drive mechanistic hypotheses |
-| Source conflicts | Buried in details | Detected, surfaced, and explained |
-| Output | Static clinical-style notes | Research-ready, gap-focused variant briefs |
-| Evidence quality | Implicit | Explicit per-variant grading and rationale |
+| Feature                        | Typical tools | OncoMind |
+|--------------------------------|---------------|----------|
+| Primary question               | "What is this variant?" | "What don't we know yet?" |
+| Knowledge gaps                 | Rarely explicit | First-class outputs with severity scoring |
+| Source conflicts               | Buried in details | Detected, surfaced, and explained |
+| Match specificity              | Not tracked | Variant vs codon vs gene-level evidence labeled |
+| Source attribution             | Often missing | Every claim linked to PMID, FDA label, or DB entry |
+| Cancer hotspots                | Binary yes/no | + Adjacent hotspot detection (±5 codons) |
+| Research hypotheses            | None | Generated with evidence basis tags |
+| LLM synthesis                  | Generic summaries | Grounded in structured evidence backbone |
+| LLM Cross-source drug analysis | Manual comparison | Corroboration, conflicts, and emerging targets surfaced |
+| Output                         | Static clinical-style notes | LLM-ready context blocks with receipts |
 
 ---
 
@@ -52,6 +59,8 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 
 This is a proof-of-concept, not production-ready software. Known issues include:
 
+- **Validatin**: Needs systematic validation, at the technical level, as well as will as by a SME expert.
+- **SNPs and small indels only**: Fusions, amplifications, and copy-number variants are not yet supported.
 - **Negation detection:** FDA label parsing may miss negative indicators ("not demonstrated", "not approved")
 - **Edge cases:** Rare variant-disease pairings may have inconsistent evidence grading
 - **Display formatting:** Some compound identifiers (CAS numbers) may appear in clinical evidence sections

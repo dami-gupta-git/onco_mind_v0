@@ -2,6 +2,8 @@
 
 Clean, single-container Streamlit implementation of OncoMind variant insight generation.
 
+> ⚠️ **SNPs and small indels only.** Fusions, amplifications, and copy-number variants are not yet supported.
+
 ## Quick Start
 
 1. **Set up environment variables:**
@@ -38,15 +40,18 @@ Two modes available:
 - Database identifiers (COSMIC, ClinVar, dbSNP)
 - HGVS notations
 - Functional annotations (AlphaMissense, CADD, PolyPhen2)
+- Cancer hotspot detection (MSK Cancer Hotspots) with adjacent hotspot flagging
 - cBioPortal co-mutation patterns
-- 🧬 DepMap preclinical data (gene essentiality, drug sensitivity, cell line models)
+- DepMap preclinical data (gene essentiality, drug sensitivity, cell line models)
+- Evidence from CIViC, VICC MetaKB, CGI with match specificity tracking
 
 **LLM Mode** adds:
 - Literature search via Semantic Scholar
 - AI-powered research synthesis
-- Evidence gap analysis
-- Knowledge gaps identification
+- Evidence gap analysis with severity scoring
+- Well-characterized aspects with basis explanations
 - Research implications and hypothesis generation
+- Cross-source drug analysis (corroboration, conflicts, emerging targets)
 
 ### 📊 Batch Upload
 - Upload CSV with variant data
