@@ -228,6 +228,60 @@ Flag true conflicts explicitly."
   - Gap severity being addressed
 - Surface top 3 hypotheses with feasibility assessment
 
+### Ensemble LLM Extraction
+**Goal:** Run extraction across multiple LLMs for high-stakes calls
+
+**When to use:**
+| Use Case | Ensemble Worth It? |
+|----------|-------------------|
+| Resistance/sensitivity extraction | Yes |
+| Paper relevance scoring | Maybe |
+| Narrative generation | No |
+| Trial eligibility parsing | Yes |
+
+**Implementation:**
+```python
+async def extract_with_confidence(paper, variant):
+    results = await asyncio.gather(
+        extract_with_model("gpt-4o-mini", paper, variant),
+        extract_with_model("claude-haiku", paper, variant),
+    )
+    if results[0].signal == results[1].signal:
+        return {"signal": results[0].signal, "confidence": "high"}
+    else:
+        return {"signal": "uncertain", "confidence": "low", "disagreement": results}
+```
+
+### Variant-to-Phenotype (V2P) Inference
+**Goal:** Rule-based phenotype inference from variants
+
+**Well-established mappings:**
+- MSI-H from MMR gene mutations (MLH1, MSH2, MSH6, PMS2)
+- HRD from BRCA1/2 loss
+- Hypermutation from POLE/POLD1 mutations
+
+**Output model:**
+```python
+class PhenotypeInference(BaseModel):
+    msi_status: Literal["MSI-H", "MSS", "unknown"]
+    hrd_status: Literal["HRD", "HRP", "unknown"]
+    hypermutated: bool
+    actionable_phenotypes: list[str]  # ["immunotherapy_responsive", "PARP_sensitive"]
+    inferred_from: list[str]
+    confidence: float
+```
+
+### Synthetic Lethality Mapping
+**Goal:** Surface established synthetic lethal relationships
+
+**Well-established pairs:**
+| Context | Vulnerability | Drug Class | Evidence |
+|---------|--------------|------------|----------|
+| BRCA1/2 loss | PARP dependency | PARP inhibitors | FDA-approved |
+| MSI-H | Immune evasion | Checkpoint inhibitors | FDA-approved |
+| ATM loss | DNA repair | PARP/ATR inhibitors | Emerging |
+| MTAP loss | Methionine salvage | MAT2A inhibitors | Emerging |
+
 ---
 
 ## Mid-Term (Q2-Q3 2025)
@@ -335,6 +389,72 @@ GET https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi
 ---
 
 ## Long-Term (2025+)
+
+### Multi-Variant Reasoning
+**Goal:** "I have these 3 variants together, what does that mean?"
+
+Current tools annotate variants independently. Real tumors have multiple variants that interact.
+
+**Concrete examples:**
+- EGFR L858R + TP53 → worse prognosis, shorter TKI response
+- EGFR L858R + MET amp → potential primary resistance, consider combo
+- BRAF V600E + PIK3CA → may reduce BRAF inhibitor efficacy
+
+**Implementation:**
+1. Annotate each variant individually
+2. Search literature for co-occurrence patterns
+3. LLM synthesis of combined implications
+4. Surface known interaction patterns (can curate top combinations)
+
+### Resistance Escape Routes
+**Goal:** Most tools tell you what the variant *is*. OncoMind tells you what happens *next*.
+
+```python
+result = await oncomind.get_escape_routes(
+    target="BRAF V600E",
+    therapy="vemurafenib",
+    tumor="melanoma"
+)
+
+# Returns:
+# - bypass_pathways: ["PI3K/AKT", "NRAS reactivation"]
+# - gatekeeper_mutations: ["BRAF amp", "MEK1 mutations"]
+# - frequencies: {"PI3K activation": "10-15%", "NRAS": "20%"}
+# - countermeasures: ["Add MEK inhibitor", "Consider immunotherapy"]
+```
+
+### Clinical Question Answering
+**Goal:** Not a report, but an answer to a specific question.
+
+Instead of: "Here's everything about BRAF V600E"
+Answer: "Should I try pembrolizumab given BRAF V600E and melanoma?"
+
+**Question types:**
+- "Should I try [drug] given [variant] and [tumor]?"
+- "What's the expected response duration for [variant] on [drug]?"
+- "What should I monitor for resistance?"
+- "Is this patient eligible for [trial NCT#]?"
+
+**Risk:** Close to clinical decision support. Requires strong disclaimers.
+
+### Contextual Query with Treatment History
+**Goal:** "What does this variant mean for a patient who already failed X therapy?"
+
+**Example:**
+- Input: "EGFR L858R, failed erlotinib (8mo), now failed osimertinib (14mo)"
+- Reasoning:
+  1. T790M likely emerged after erlotinib
+  2. Osimertinib failure suggests C797S or bypass (MET, HER2)
+  3. Check resistance mechanism to guide next therapy
+- Output: Ranked options with rationale specific to treatment history
+
+### Dynamic Evidence Synthesis with Temporal Weighting
+**Goal:** Evidence has a temporal dimension. A 2018 FDA approval doesn't account for 2024 resistance reports.
+
+**Features:**
+- Weight by recency, evidence level, tumor specificity
+- Surface temporal trends: "Older sources say sensitive, newer sources report resistance"
+- Conflict resolution with rationale
 
 ### Research Tracking & Alerts
 **Goal:** Longitudinal evidence monitoring
