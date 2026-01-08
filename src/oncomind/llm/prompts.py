@@ -141,7 +141,8 @@ Conflicts: {conflicting_evidence_text}
 Respond with valid JSON only:
 {{
   "functional_summary": "Gene function. If quality is limited/minimal: generic only. If moderate/comprehensive: variant-specific with citations.",
-  "biological_context": "2-3 sentences. Start with 'As per [STUDY] - '. If no tumor-specific data, state 'Pan-cancer data shown.'",
+  "biological_context": "3-4 sentences covering: (1) If CANCER HOTSPOT data exists: mention hotspot status, q-value, sample count, variant distribution, top tumor types. (2) cBioPortal prevalence if available. (3) Co-mutations/mutual exclusivity if relevant. Example: 'BRAF V600 is a statistically significant cancer hotspot (q<1e-10, 897 samples) with V600E being the dominant change (93%). Per cBioPortal, V600E occurs in 24.7% of melanoma samples with mutual exclusivity to NRAS.'",
+  "therapeutic_summary": "3-5 sentences synthesizing the therapeutic landscape. Cover: (1) FDA-approved drugs with their specific indications from DATABASE EVIDENCE. (2) Key resistance mechanisms if any. (3) Active clinical trials if relevant. (4) Level of evidence (variant-specific vs gene-level). Use ONLY drugs mentioned in DATABASE EVIDENCE - do NOT add drugs from your training. Example: 'Multiple BRAF/MEK inhibitor combinations are FDA-approved for V600E melanoma including dabrafenib+trametinib and vemurafenib+cobimetinib (variant-level evidence). Resistance mechanisms include NRAS mutations and MEK amplification. Several Phase 2-3 trials are actively recruiting.'",
   "therapeutic_landscape": {{
     "fda_approved": ["drug (locus-level, approved for VARIANT if gene/codon-level, tumor)"],
     "clinical_evidence": ["drug (locus-level, tumor) - source"],

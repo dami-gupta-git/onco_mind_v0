@@ -22,6 +22,10 @@ class LLMInsight(BaseModel):
     # Raw component fields (UI layer handles formatting)
     functional_summary: str | None = Field(None, description="Functional impact of the variant")
     biological_context: str | None = Field(None, description="Biological context and mechanism")
+    therapeutic_summary: str | None = Field(
+        None,
+        description="Prose summary of the therapeutic landscape"
+    )
     therapeutic_landscape: dict | None = Field(
         None,
         description="Therapeutic landscape: fda_approved, clinical_evidence, preclinical, resistance_mechanisms"

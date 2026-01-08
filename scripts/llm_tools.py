@@ -7,6 +7,7 @@ that feeds into the LLM for variant annotation.
 Commands:
     baseline  - Test LLM baseline knowledge (no evidence provided)
     data      - Show all data that would be sent to the LLM prompt
+    prompt    - Generate and optionally run the full LLM prompt
 
 Usage:
     # Run from the project root directory
@@ -24,6 +25,15 @@ Usage:
     # Save output to file
     python scripts/llm_tools.py data EGFR T790M NSCLC > data/egfr_t790m_nsclc.txt
 
+    # Generate the full prompt (but don't run LLM)
+    python scripts/llm_tools.py prompt BRAF V600E Melanoma
+
+    # Generate and RUN the prompt through the LLM
+    python scripts/llm_tools.py prompt BRAF V600E Melanoma --run
+
+    # Run with a specific model
+    python scripts/llm_tools.py prompt AKT1 E17K "Breast Cancer" --run --model gpt-4o-mini
+
 The 'data' command outputs:
     - DATA AVAILABILITY FLAGS: What data sources have evidence
     - EVIDENCE ASSESSMENT: Overall quality, well-characterized aspects, gaps
@@ -33,6 +43,11 @@ The 'data' command outputs:
     - BIOLOGICAL CONTEXT: Gene role, pathway, cBioPortal, DepMap, hotspots data
     - EVIDENCE SUMMARY: Compact therapeutic evidence from FDA, CIViC, VICC, CGI
     - LITERATURE SUMMARY: PubMed articles and extracted knowledge
+
+The 'prompt' command outputs:
+    - The full system prompt
+    - The full user prompt (with all evidence inserted)
+    - Optionally: the LLM response (with --run flag)
 """
 
 import asyncio
@@ -173,27 +188,166 @@ def _check_tumor_specific_cbioportal(evidence, tumor_type: str | None) -> bool:
     return False
 
 
+async def generate_and_run_prompt(
+    gene: str,
+    variant: str,
+    tumor_type: str | None,
+    run_llm: bool = False,
+    model: str | None = None,
+):
+    """Generate the full LLM prompt and optionally run it.
+
+    This is useful for iterating on prompt design - you can see exactly what
+    the LLM receives and what it outputs.
+    """
+    from oncomind.config.constants import TUMOR_TYPE_MAPPINGS
+    from oncomind.insight_builder.conductor import Conductor, ConductorConfig
+    from oncomind.llm.prompts import create_synthesis_prompt
+
+    # Run with LLM disabled initially - we build the prompt ourselves
+    config = ConductorConfig(enable_llm=False)
+
+    variant_str = f"{gene} {variant}"
+
+    print(f"\n{'='*80}")
+    print(f"GATHERING EVIDENCE FOR: {gene} {variant} ({tumor_type or 'Pan-cancer'})")
+    print("="*80)
+
+    async with Conductor(config) as conductor:
+        result = await conductor.run(variant_str, tumor_type)
+
+    evidence = result.evidence
+
+    # Compute all the data needed for the prompt
+    evidence_gaps = evidence.compute_evidence_gaps()
+    evidence_summary = evidence.get_evidence_summary_for_llm()
+    biological_context = evidence.get_biological_context_for_llm()
+    literature_summary = evidence.get_literature_summary_for_llm()
+    evidence_assessment = evidence_gaps.to_dict_for_llm()
+    resistance_summary = evidence.get_resistance_summary()
+    sensitivity_summary = evidence.get_sensitivity_summary()
+    locus_match_summary = evidence.get_locus_match_summary()
+    tumor_match_summary = evidence.get_tumor_match_summary()
+
+    # Compute data availability flags
+    data_availability = {
+        "has_tumor_specific_cbioportal": _check_tumor_specific_cbioportal(
+            evidence, tumor_type
+        ),
+        "has_civic_assertions": bool(evidence.civic_assertions),
+        "has_fda_approvals": bool(evidence.fda_approvals),
+        "has_vicc_evidence": bool(evidence.get_vicc_unique()),
+    }
+
+    # Build the prompt
+    messages = create_synthesis_prompt(
+        gene=gene,
+        variant=variant,
+        tumor_type=tumor_type,
+        biological_context=biological_context or "",
+        evidence_summary=evidence_summary or "",
+        evidence_assessment=evidence_assessment,
+        literature_summary=literature_summary or "",
+        data_availability=data_availability,
+        resistance_summary=resistance_summary or "",
+        sensitivity_summary=sensitivity_summary or "",
+        locus_match_summary=locus_match_summary,
+        tumor_match_summary=tumor_match_summary,
+    )
+
+    # Print the prompt
+    print("\n" + "="*80)
+    print("SYSTEM PROMPT")
+    print("="*80)
+    print(messages[0]["content"])
+
+    print("\n" + "="*80)
+    print("USER PROMPT")
+    print("="*80)
+    print(messages[1]["content"])
+
+    # Optionally run through LLM
+    if run_llm:
+        print("\n" + "="*80)
+        print(f"RUNNING LLM ({model or 'default model'})...")
+        print("="*80)
+
+        from oncomind.llm.service import LLMService
+
+        service = LLMService()
+        if model:
+            service.model = model
+
+        # Call the LLM directly with our messages
+        response = await service._call_llm(messages)
+
+        print("\n" + "="*80)
+        print("LLM RAW RESPONSE")
+        print("="*80)
+        print(response)
+
+        # Try to parse as JSON
+        try:
+            import re
+            # Extract JSON from response (handle markdown code blocks)
+            json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
+            if json_match:
+                json_str = json_match.group(1)
+            else:
+                json_str = response
+
+            parsed = json.loads(json_str)
+            print("\n" + "="*80)
+            print("PARSED JSON RESPONSE")
+            print("="*80)
+            print(json.dumps(parsed, indent=2))
+        except json.JSONDecodeError as e:
+            print(f"\n(Could not parse response as JSON: {e})")
+
+    print("\n" + "="*80)
+
+
 def main():
-    if len(sys.argv) < 4:
-        print(__doc__)
-        print("\nExamples:")
-        print("  python scripts/llm_tools.py baseline BRAF V600E")
-        print("  python scripts/llm_tools.py data EGFR T790M NSCLC")
-        sys.exit(1)
+    import argparse
 
-    command = sys.argv[1]
-    gene = sys.argv[2]
-    variant = sys.argv[3]
-    tumor_type = sys.argv[4] if len(sys.argv) > 4 else None
+    parser = argparse.ArgumentParser(
+        description="LLM debugging and inspection tools",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/llm_tools.py baseline BRAF V600E
+  python scripts/llm_tools.py data EGFR T790M NSCLC
+  python scripts/llm_tools.py prompt BRAF V600E Melanoma
+  python scripts/llm_tools.py prompt AKT1 E17K "Breast Cancer" --run
+  python scripts/llm_tools.py prompt KRAS G12D --run --model gpt-4o-mini
+        """
+    )
 
-    if command == "baseline":
-        asyncio.run(run_baseline(gene, variant, tumor_type))
-    elif command == "data":
-        asyncio.run(show_prompt_data(gene, variant, tumor_type))
-    else:
-        print(f"Unknown command: {command}")
-        print("Available commands: baseline, data")
-        sys.exit(1)
+    parser.add_argument(
+        "command",
+        choices=["baseline", "data", "prompt"],
+        help="Command to run: baseline (test LLM knowledge), data (show evidence), prompt (generate/run prompt)"
+    )
+    parser.add_argument("gene", help="Gene symbol (e.g., BRAF)")
+    parser.add_argument("variant", help="Variant notation (e.g., V600E)")
+    parser.add_argument("tumor_type", nargs="?", default=None, help="Tumor type (optional)")
+    parser.add_argument("--run", action="store_true", help="Run the prompt through the LLM (for 'prompt' command)")
+    parser.add_argument("--model", type=str, default=None, help="LLM model to use (for 'prompt --run')")
+
+    args = parser.parse_args()
+
+    if args.command == "baseline":
+        asyncio.run(run_baseline(args.gene, args.variant, args.tumor_type))
+    elif args.command == "data":
+        asyncio.run(show_prompt_data(args.gene, args.variant, args.tumor_type))
+    elif args.command == "prompt":
+        asyncio.run(generate_and_run_prompt(
+            args.gene,
+            args.variant,
+            args.tumor_type,
+            run_llm=args.run,
+            model=args.model,
+        ))
 
 
 if __name__ == "__main__":

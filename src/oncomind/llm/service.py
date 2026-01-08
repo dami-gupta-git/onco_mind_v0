@@ -269,6 +269,7 @@ class LLMService:
         # Extract synthesis components
         functional_summary = synthesis_data.get("functional_summary", "")
         biological_context_text = synthesis_data.get("biological_context", "")
+        therapeutic_summary = synthesis_data.get("therapeutic_summary", "")
         therapeutic = synthesis_data.get("therapeutic_landscape", {})
         evidence_assess = synthesis_data.get("evidence_assessment", {})
         evidence_tags = synthesis_data.get("evidence_tags", [])
@@ -338,6 +339,7 @@ class LLMService:
             # Raw component data for UI formatting
             functional_summary=functional_summary or None,
             biological_context=biological_context_text or None,
+            therapeutic_summary=therapeutic_summary or None,
             therapeutic_landscape=therapeutic or None,
             # Research assessment fields
             evidence_quality=evidence_assess.get("overall_quality"),
