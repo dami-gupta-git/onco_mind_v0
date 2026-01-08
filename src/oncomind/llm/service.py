@@ -27,7 +27,7 @@ from oncomind.config.constants import (
     LLM_TIMEOUT_DEFAULT,
 )
 from oncomind.config.debug import get_logger
-from oncomind.llm.prompts import create_hypothesis_prompt, create_synthesis_prompt
+from oncomind.llm.prompts import create_cross_source_prompt, create_hypothesis_prompt, create_synthesis_prompt
 from oncomind.models.llm_insight import LLMInsight
 
 logger = get_logger(__name__)
@@ -350,6 +350,62 @@ class LLMService:
             evidence_tags=evidence_tags,
             research_hypotheses=research_hypotheses,
         )
+
+    async def get_cross_source_analysis(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+        gene_context: str,
+        cross_source_synthesis: str,
+        sensitivity_summary: str = "",
+        resistance_summary: str = "",
+    ) -> dict | None:
+        """Generate cross-source synthesis analysis.
+
+        This is a separate LLM call focused specifically on analyzing
+        drug evidence across CGI, CIViC, VICC, and Literature sources.
+
+        Args:
+            gene: Gene symbol
+            variant: Variant notation
+            tumor_type: Tumor type context
+            gene_context: Gene role, pathway, function information
+            cross_source_synthesis: Pre-computed cross-source drug grouping
+            sensitivity_summary: Summary of sensitivity signals
+            resistance_summary: Summary of resistance signals
+
+        Returns:
+            Dict with keys: strongest_evidence, conflicting_signals,
+            emerging_targets, key_gaps, summary. Or None on error.
+        """
+        if not cross_source_synthesis or cross_source_synthesis == "No cross-source synthesis available.":
+            logger.debug("Skipping cross-source analysis - no synthesis data")
+            return None
+
+        logger.info(f"Generating cross-source analysis for {gene} {variant}")
+
+        messages = create_cross_source_prompt(
+            gene=gene,
+            variant=variant,
+            tumor_type=tumor_type,
+            gene_context=gene_context,
+            cross_source_synthesis=cross_source_synthesis,
+            sensitivity_summary=sensitivity_summary,
+            resistance_summary=resistance_summary,
+        )
+
+        result = await self._call_llm(messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
+
+        if result is None:
+            logger.warning("Cross-source analysis LLM call failed")
+            return None
+
+        logger.info(f"Cross-source analysis complete: {len(result.get('strongest_evidence', []))} strong, "
+                   f"{len(result.get('conflicting_signals', []))} conflicts, "
+                   f"{len(result.get('emerging_targets', []))} emerging")
+
+        return result
 
     async def score_paper_relevance(
         self,

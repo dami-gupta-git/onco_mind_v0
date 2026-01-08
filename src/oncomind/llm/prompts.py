@@ -76,6 +76,27 @@ When evidence comes from OTHER variants at the same codon (e.g., Q209P data appl
 
 If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type})", report it as approved for that other cancer, NOT {tumor_type}.
 
+=== CROSS-SOURCE SYNTHESIS (CRITICAL) ===
+
+You will receive a CROSS-SOURCE DRUG EVIDENCE SYNTHESIS section that groups evidence by drug across all sources.
+Use this to:
+
+1. **Highlight corroborated findings**: When CGI, CIViC, VICC, and/or Literature all point to the same drug with the same signal, this is HIGH CONFIDENCE. State: "Multiple independent sources (CGI, CIViC, Literature) consistently show [drug] sensitivity, providing strong evidence for therapeutic relevance."
+
+2. **Flag conflicts for investigation**: When sources disagree (e.g., CGI says Responsive but Literature mentions resistance), explain the likely reason:
+   - Different tumor types?
+   - Resistance mutation vs. sensitizing mutation?
+   - Different lines of therapy?
+
+3. **Connect biology to therapy**: Use GENE ROLE and PATHWAY info to explain WHY certain drugs are being studied:
+   - "AKT1 is an oncogene in the PI3K/AKT pathway, making AKT inhibitors a logical therapeutic target"
+   - "BRCA1 loss creates synthetic lethality with PARP inhibition"
+
+4. **Prioritize actionability**: End therapeutic_summary with a clear statement:
+   - What has STRONGEST evidence (FDA-approved, multiple sources agree)
+   - What is PROMISING but needs validation (preclinical, single source)
+   - What GAPS exist (no FDA approval despite preclinical activity)
+
 === CONFLICTING EVIDENCE ===
 
 Distinguish expected biology from true conflicts:
@@ -128,6 +149,9 @@ Resistance: {resistance_summary}
 
 ## DATABASE EVIDENCE
 {evidence_summary}
+
+## CROSS-SOURCE DRUG SYNTHESIS
+{cross_source_synthesis}
 
 ## LITERATURE
 {literature_summary}
@@ -249,6 +273,7 @@ def create_synthesis_prompt(
     sensitivity_summary: str = "",
     locus_match_summary: dict | None = None,
     tumor_match_summary: dict | None = None,
+    cross_source_synthesis: str = "",
 ) -> list[dict]:
     """Create prompt for stage 1: evidence synthesis."""
     tumor_display = tumor_type or "Pan-cancer"
@@ -298,6 +323,7 @@ def create_synthesis_prompt(
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
         evidence_summary=(evidence_summary or "No database evidence.").strip()[:4000],
+        cross_source_synthesis=cross_source_synthesis or "No cross-source synthesis available.",
         literature_summary=literature_summary or "No literature search performed.",
         overall_quality=overall_quality,
         well_characterized_text="; ".join(well_char) or "None.",
@@ -356,6 +382,148 @@ def create_hypothesis_prompt(
 
     return [
         {"role": "system", "content": HYPOTHESIS_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+    ]
+
+
+# =============================================================================
+# STAGE 3: CROSS-SOURCE SYNTHESIS
+# =============================================================================
+
+CROSS_SOURCE_SYSTEM_PROMPT = """You are an expert cancer genomics researcher analyzing therapeutic evidence across multiple independent databases.
+
+Your task is to synthesize drug evidence from CGI, CIViC, VICC, and Literature into a coherent analysis that:
+1. Highlights when multiple sources agree (high confidence)
+2. Flags when sources disagree and explains why
+3. Connects therapeutic targets to underlying biology
+4. Prioritizes what's actionable vs speculative
+
+=== OUTPUT STRUCTURE ===
+
+Generate a structured analysis with these sections:
+
+1. **STRONGEST EVIDENCE** - Drugs with corroboration across multiple sources
+   - What: The drug and its therapeutic signal (sensitivity/resistance)
+   - Why: The biological rationale (pathway, gene function)
+   - Confidence: Which sources agree and at what evidence level
+
+2. **CONFLICTING SIGNALS** - Drugs where sources disagree
+   - Explain the likely reason for conflict:
+     * Different tumor types (e.g., V600E sensitive in melanoma, context-dependent elsewhere)
+     * Sequential therapy (e.g., T790M resistant to erlotinib, sensitive to osimertinib)
+     * Acquired vs primary mutations
+   - Research question this raises
+
+3. **EMERGING TARGETS** - Single-source evidence worth noting
+   - Preclinical or early-phase data
+   - Why it's biologically plausible
+   - What validation is needed
+
+4. **KEY GAPS** - What's missing
+   - Expected drugs not found in evidence
+   - Tumor type extrapolation concerns
+
+=== RULES ===
+
+- Use ONLY the evidence provided. Do NOT add drugs from training knowledge.
+- Cite sources (CGI, CIViC, VICC, Literature) for each claim
+- Connect biology to therapy where possible
+- Be concise but substantive (aim for 200-400 words total)
+"""
+
+CROSS_SOURCE_USER_PROMPT = """Analyze the cross-source therapeutic evidence for this variant.
+
+Gene: {gene}
+Variant: {variant}
+Tumor Type: {tumor_type}
+
+## GENE CONTEXT
+{gene_context}
+
+## CROSS-SOURCE DRUG SYNTHESIS
+{cross_source_synthesis}
+
+## THERAPEUTIC SIGNALS SUMMARY
+Sensitivity: {sensitivity_summary}
+Resistance: {resistance_summary}
+
+Respond with valid JSON only:
+{{
+  "strongest_evidence": [
+    {{
+      "drug": "drug name",
+      "signal": "sensitivity|resistance",
+      "sources": ["CGI", "CIViC", ...],
+      "evidence_level": "FDA-approved|clinical|preclinical",
+      "rationale": "Why this drug is relevant based on gene function/pathway"
+    }}
+  ],
+  "conflicting_signals": [
+    {{
+      "drug": "drug name",
+      "conflict": "Brief description of conflict",
+      "likely_reason": "tumor type difference|sequential therapy|acquired mutation|other",
+      "research_question": "What needs investigation"
+    }}
+  ],
+  "emerging_targets": [
+    {{
+      "drug": "drug name",
+      "source": "single source",
+      "evidence_level": "preclinical|early_phase",
+      "biological_rationale": "Why plausible",
+      "validation_needed": "What studies needed"
+    }}
+  ],
+  "key_gaps": [
+    "Gap 1 description",
+    "Gap 2 description"
+  ],
+  "summary": "2-3 sentence executive summary of the therapeutic landscape"
+}}
+"""
+
+
+def create_cross_source_prompt(
+    gene: str,
+    variant: str,
+    tumor_type: str | None,
+    gene_context: str,
+    cross_source_synthesis: str,
+    sensitivity_summary: str = "",
+    resistance_summary: str = "",
+) -> list[dict]:
+    """Create prompt for cross-source synthesis analysis.
+
+    This is a separate LLM call that focuses specifically on synthesizing
+    drug evidence across CGI, CIViC, VICC, and Literature sources.
+
+    Args:
+        gene: Gene symbol
+        variant: Variant notation
+        tumor_type: Tumor type context
+        gene_context: Gene role, pathway, function information
+        cross_source_synthesis: Pre-computed cross-source drug grouping
+        sensitivity_summary: Summary of sensitivity signals
+        resistance_summary: Summary of resistance signals
+
+    Returns:
+        List of message dicts for LLM call
+    """
+    tumor_display = tumor_type or "Pan-cancer"
+
+    user_content = CROSS_SOURCE_USER_PROMPT.format(
+        gene=gene,
+        variant=variant,
+        tumor_type=tumor_display,
+        gene_context=gene_context or "No gene context available.",
+        cross_source_synthesis=cross_source_synthesis or "No cross-source synthesis available.",
+        sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
+        resistance_summary=resistance_summary or "No resistance signals.",
+    )
+
+    return [
+        {"role": "system", "content": CROSS_SOURCE_SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
 

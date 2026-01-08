@@ -29,6 +29,9 @@ class Result(BaseModel):
     llm: LLMInsight | None = Field(
         default=None, description="LLM-generated narrative insight"
     )
+    cross_source_analysis: dict | None = Field(
+        default=None, description="LLM-analyzed cross-source drug evidence synthesis"
+    )
 
     @property
     def identifiers(self):

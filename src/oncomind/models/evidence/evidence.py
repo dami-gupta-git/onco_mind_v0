@@ -1888,6 +1888,239 @@ class Evidence(BaseModel):
 
         return "\n".join(lines)
 
+    def get_gene_context_for_llm(self) -> str:
+        """Get gene context (role, pathway) formatted for LLM prompt.
+
+        Returns:
+            Formatted string with gene role and pathway information
+        """
+        lines = []
+
+        if self.context.gene_role:
+            role_descriptions = {
+                "oncogene": "an oncogene (gain-of-function mutations drive cancer)",
+                "TSG": "a tumor suppressor gene (loss-of-function mutations drive cancer)",
+                "tumor_suppressor": "a tumor suppressor gene (loss-of-function mutations drive cancer)",
+                "tsg_pathway_actionable": "a pathway-actionable tumor suppressor (loss activates druggable pathway)",
+                "ddr": "a DNA damage repair gene (loss creates synthetic lethality with PARP inhibitors)",
+            }
+            role_desc = role_descriptions.get(self.context.gene_role, self.context.gene_role)
+            lines.append(f"GENE ROLE: {self.identifiers.gene} is {role_desc}")
+
+            if self.context.pathway:
+                lines.append(f"PATHWAY: {self.context.pathway}")
+
+        return "\n".join(lines) if lines else ""
+
+    def get_cross_source_synthesis_for_llm(self) -> str:
+        """Generate cross-source synthesis grouping evidence by drug/drug-class.
+
+        This method identifies:
+        1. Corroboration - when multiple sources agree on a drug's effect
+        2. Conflicts - when sources disagree on the same drug
+        3. Unique insights - evidence only found in one source
+
+        Returns:
+            Formatted string showing drug-centric evidence synthesis
+        """
+        from collections import defaultdict
+
+        gene = self.identifiers.gene
+
+        # Structure: drug_name -> {sources: [], signals: [], pmids: [], locus_levels: []}
+        drug_evidence: dict[str, dict] = defaultdict(lambda: {
+            "sources": [],
+            "signals": [],  # "sensitivity", "resistance", "unknown"
+            "pmids": [],
+            "locus_levels": [],  # "variant", "codon", "gene"
+            "tumor_types": [],
+            "evidence_levels": [],  # "FDA", "clinical", "preclinical"
+        })
+
+        # Normalize drug names for grouping
+        def normalize_drug(name: str) -> str:
+            if not name:
+                return ""
+            # Lowercase, strip common suffixes
+            n = name.lower().strip()
+            # Remove parenthetical info
+            if "(" in n:
+                n = n.split("(")[0].strip()
+            return n
+
+        def get_signal(is_sens: bool | None, is_res: bool | None, assoc: str | None) -> str:
+            if is_res or (assoc and "resist" in assoc.lower()):
+                return "resistance"
+            if is_sens or (assoc and ("sens" in assoc.lower() or "respon" in assoc.lower())):
+                return "sensitivity"
+            return "unknown"
+
+        # 1. CGI Biomarkers (FDA-approved)
+        for b in (self.cgi_biomarkers or []):
+            if b.drug and not is_biomarker_selection_drug(b.drug, gene):
+                key = normalize_drug(b.drug)
+                if key:
+                    drug_evidence[key]["sources"].append("CGI")
+                    drug_evidence[key]["signals"].append(get_signal(None, None, b.association))
+                    drug_evidence[key]["locus_levels"].append(b.locus_match or "gene")
+                    if b.tumor_type:
+                        drug_evidence[key]["tumor_types"].append(b.tumor_type)
+                    drug_evidence[key]["evidence_levels"].append("FDA" if b.fda_approved else "clinical")
+
+        # 2. CGI Preclinical/Early Phase
+        for b in (self.preclinical_biomarkers or []) + (self.early_phase_biomarkers or []):
+            if b.drug and not is_biomarker_selection_drug(b.drug, gene):
+                key = normalize_drug(b.drug)
+                if key:
+                    drug_evidence[key]["sources"].append("CGI")
+                    drug_evidence[key]["signals"].append(get_signal(None, None, b.association))
+                    drug_evidence[key]["locus_levels"].append(b.locus_match or "gene")
+                    if b.tumor_type:
+                        drug_evidence[key]["tumor_types"].append(b.tumor_type)
+                    level = "preclinical" if b in (self.preclinical_biomarkers or []) else "clinical"
+                    drug_evidence[key]["evidence_levels"].append(level)
+
+        # 3. CIViC Evidence
+        for e in (self.civic_evidence or []):
+            for drug in (e.drugs or []):
+                if not is_biomarker_selection_drug(drug, gene):
+                    key = normalize_drug(drug)
+                    if key:
+                        drug_evidence[key]["sources"].append("CIViC")
+                        sig = get_signal(
+                            "sens" in (e.clinical_significance or "").lower(),
+                            "resist" in (e.clinical_significance or "").lower(),
+                            e.clinical_significance
+                        )
+                        drug_evidence[key]["signals"].append(sig)
+                        drug_evidence[key]["locus_levels"].append(
+                            getattr(e, 'locus_variant_match', None) and
+                            e.locus_variant_match.level if hasattr(e, 'locus_variant_match') and e.locus_variant_match else "variant"
+                        )
+                        if e.pmid:
+                            drug_evidence[key]["pmids"].append(e.pmid)
+                        drug_evidence[key]["evidence_levels"].append(
+                            "clinical" if e.evidence_level in ("A", "B") else "preclinical"
+                        )
+
+        # 4. VICC Evidence
+        for v in (self.vicc_evidence or []):
+            for drug in (v.drugs or []):
+                if not is_biomarker_selection_drug(drug, gene):
+                    key = normalize_drug(drug)
+                    if key:
+                        drug_evidence[key]["sources"].append(f"VICC:{v.source}" if v.source else "VICC")
+                        drug_evidence[key]["signals"].append(get_signal(v.is_sensitivity, v.is_resistance, None))
+                        locus = "variant"
+                        if hasattr(v, 'locus_variant_match') and v.locus_variant_match:
+                            locus = v.locus_variant_match.level
+                        drug_evidence[key]["locus_levels"].append(locus)
+                        drug_evidence[key]["evidence_levels"].append("clinical")
+
+        # 5. Literature (PubMed)
+        for article in (self.pubmed_articles or []):
+            for drug in (article.drugs_mentioned or []):
+                if not is_biomarker_selection_drug(drug, gene):
+                    key = normalize_drug(drug)
+                    if key:
+                        drug_evidence[key]["sources"].append("Literature")
+                        sig = "resistance" if article.is_resistance_evidence() else (
+                            "sensitivity" if article.is_sensitivity_evidence() else "unknown"
+                        )
+                        drug_evidence[key]["signals"].append(sig)
+                        drug_evidence[key]["pmids"].append(article.pmid)
+                        drug_evidence[key]["locus_levels"].append("variant")  # Literature is usually variant-specific
+                        drug_evidence[key]["evidence_levels"].append("literature")
+
+        # Now analyze and format output
+        if not drug_evidence:
+            return ""
+
+        lines = []
+        lines.append("CROSS-SOURCE DRUG EVIDENCE SYNTHESIS:")
+        lines.append("(Drugs mentioned across multiple sources with corroboration/conflict analysis)")
+        lines.append("")
+
+        # Sort by number of sources (most corroborated first)
+        sorted_drugs = sorted(
+            drug_evidence.items(),
+            key=lambda x: (len(set(x[1]["sources"])), len(x[1]["sources"])),
+            reverse=True
+        )
+
+        corroborated = []
+        conflicting = []
+        single_source = []
+
+        for drug, data in sorted_drugs:
+            unique_sources = set(data["sources"])
+            unique_signals = set(s for s in data["signals"] if s != "unknown")
+
+            # Classify
+            if len(unique_sources) >= 2:
+                if len(unique_signals) > 1:
+                    # Has both sensitivity and resistance signals
+                    conflicting.append((drug, data))
+                else:
+                    corroborated.append((drug, data))
+            else:
+                single_source.append((drug, data))
+
+        # Corroborated evidence (multiple sources agree)
+        if corroborated:
+            lines.append("**CORROBORATED (multiple sources agree):**")
+            for drug, data in corroborated[:10]:  # Limit to top 10
+                sources = sorted(set(data["sources"]))
+                signal = next((s for s in data["signals"] if s != "unknown"), "unknown")
+                locus = "variant" if "variant" in data["locus_levels"] else (
+                    "codon" if "codon" in data["locus_levels"] else "gene"
+                )
+                pmids = list(set(data["pmids"]))[:3]
+                pmid_str = f" (PMIDs: {', '.join(pmids)})" if pmids else ""
+
+                lines.append(f"  • {drug.upper()}: {signal} signal")
+                lines.append(f"    Sources: {', '.join(sources)} | Locus: {locus}{pmid_str}")
+            lines.append("")
+
+        # Conflicting evidence (sources disagree)
+        if conflicting:
+            lines.append("**CONFLICTING (sources disagree - requires investigation):**")
+            for drug, data in conflicting[:5]:  # Limit to top 5
+                sources = sorted(set(data["sources"]))
+                signals = sorted(set(s for s in data["signals"] if s != "unknown"))
+                pmids = list(set(data["pmids"]))[:3]
+                pmid_str = f" (PMIDs: {', '.join(pmids)})" if pmids else ""
+
+                lines.append(f"  • {drug.upper()}: MIXED signals ({', '.join(signals)})")
+                lines.append(f"    Sources: {', '.join(sources)}{pmid_str}")
+                lines.append(f"    ⚠️ Review evidence for context (resistance mutation? different tumor?)")
+            lines.append("")
+
+        # Single source (unique insights, lower confidence)
+        # Only show if notable (FDA or has PMID)
+        notable_single = [
+            (d, data) for d, data in single_source
+            if "FDA" in data["evidence_levels"] or data["pmids"]
+        ]
+        if notable_single:
+            lines.append("**SINGLE SOURCE (lower confidence, needs validation):**")
+            for drug, data in notable_single[:8]:
+                source = data["sources"][0] if data["sources"] else "Unknown"
+                signal = next((s for s in data["signals"] if s != "unknown"), "unknown")
+                level = data["evidence_levels"][0] if data["evidence_levels"] else "unknown"
+                pmids = list(set(data["pmids"]))[:2]
+                pmid_str = f" (PMID: {', '.join(pmids)})" if pmids else ""
+
+                lines.append(f"  • {drug.upper()}: {signal} ({source}, {level}){pmid_str}")
+            lines.append("")
+
+        # Summary statistics
+        lines.append(f"Summary: {len(corroborated)} drugs with corroborated evidence, "
+                    f"{len(conflicting)} with conflicting signals, "
+                    f"{len(single_source)} from single source only")
+
+        return "\n".join(lines)
+
     def _count_locus_matches(self, items: list, attr: str = 'locus_match') -> dict[str, int]:
         """Count items by locus match level.
 

@@ -228,6 +228,7 @@ async def generate_and_run_prompt(
     sensitivity_summary = evidence.get_sensitivity_summary()
     locus_match_summary = evidence.get_locus_match_summary()
     tumor_match_summary = evidence.get_tumor_match_summary()
+    cross_source_synthesis = evidence.get_cross_source_synthesis_for_llm()
 
     # Compute data availability flags
     data_availability = {
@@ -253,6 +254,7 @@ async def generate_and_run_prompt(
         sensitivity_summary=sensitivity_summary or "",
         locus_match_summary=locus_match_summary,
         tumor_match_summary=tumor_match_summary,
+        cross_source_synthesis=cross_source_synthesis or "",
     )
 
     # Print the prompt
