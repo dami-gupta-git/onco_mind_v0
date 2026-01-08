@@ -130,6 +130,7 @@ Features:
 - Browse evidence by source (CIViC, VICC, CGI, FDA, DepMap, etc.)
 - View gap analysis with severity scoring
 - See match specificity (variant vs codon vs gene level)
+- Cross-source drug analysis identifying corroboration and conflicts
 - Export results to JSON
 
 ### CLI
@@ -195,6 +196,17 @@ When enabled, OncoMind adds a research card on top of the evidence backbone:
 - `knowledge_gaps` / `well_characterized` – structured view of what's missing vs solid
 - `research_implications` – short, testable hypotheses
 - `key_references` – PMIDs, trials, and KB IDs supporting the card
+
+### Cross-Source Drug Analysis (LLM Layer)
+
+A separate LLM analysis that synthesizes therapeutic evidence across CGI, CIViC, VICC, and Literature sources:
+
+- **Strongest Evidence** – Drugs with corroboration across multiple independent sources, with biological rationale
+- **Conflicting Signals** – Drugs where sources disagree, with likely explanations (tumor type differences, sequential therapy, acquired mutations)
+- **Emerging Targets** – Single-source preclinical or early-phase evidence worth investigating
+- **Key Gaps** – Expected drugs not found, tumor type extrapolation concerns
+
+This runs in parallel with the main LLM synthesis for faster response times.
 
 ---
 

@@ -166,22 +166,21 @@ class Conductor:
         evidence.compute_evidence_gaps()
         timings["gap_computation"] = time.time() - t0
 
-        # Step 3: Generate LLM narrative if enabled
+        # Step 3: Generate LLM narrative and cross-source analysis in parallel
         llm_insight = None
         cross_source_analysis = None
         if self.config.enable_llm:
             logger.debug(f"Generating LLM insight with model={self.config.llm_model}")
             t0 = time.time()
-            llm_insight = await self._generate_llm_insight(evidence)
-            timings["llm_generation"] = time.time() - t0
-            logger.debug(f"LLM generation completed in {timings['llm_generation']:.2f}s")
 
-            # Step 4: Generate cross-source analysis (separate LLM call)
-            t0 = time.time()
-            cross_source_analysis = await self._generate_cross_source_analysis(evidence)
-            timings["cross_source_analysis"] = time.time() - t0
-            if cross_source_analysis:
-                logger.debug(f"Cross-source analysis completed in {timings['cross_source_analysis']:.2f}s")
+            # Run both LLM calls in parallel - they are independent
+            llm_insight, cross_source_analysis = await asyncio.gather(
+                self._generate_llm_insight(evidence),
+                self._generate_cross_source_analysis(evidence),
+            )
+
+            timings["llm_parallel"] = time.time() - t0
+            logger.debug(f"LLM calls (parallel) completed in {timings['llm_parallel']:.2f}s")
 
         timings["total"] = time.time() - total_start
         logger.debug(f"Total processing time for {gene_variant}: {timings['total']:.2f}s")
@@ -191,10 +190,8 @@ class Conductor:
             print(f"\n⏱️  Timing breakdown for {gene_variant}:")
             print(f"   Evidence aggregation: {timings['evidence_aggregation']:.2f}s")
             print(f"   Gap computation:      {timings['gap_computation']:.2f}s")
-            if "llm_generation" in timings:
-                print(f"   LLM generation:       {timings['llm_generation']:.2f}s")
-            if "cross_source_analysis" in timings:
-                print(f"   Cross-source analysis:{timings['cross_source_analysis']:.2f}s")
+            if "llm_parallel" in timings:
+                print(f"   LLM calls (parallel): {timings['llm_parallel']:.2f}s")
             print(f"   Total:                {timings['total']:.2f}s")
 
         return Result(evidence=evidence, llm=llm_insight, cross_source_analysis=cross_source_analysis)

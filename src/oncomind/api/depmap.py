@@ -350,10 +350,17 @@ class DepMapClient:
             mutations_df = pd.concat(gene_mutations, ignore_index=True)
 
             # Filter for variant if specified
+            # Use precise matching to avoid substring false positives:
+            # - S1982R should NOT match S1982RfsTer22 (frameshift)
+            # - V600E should match p.V600E but not V600Efs
             if variant:
+                import re
                 variant_upper = variant.upper()
+                # Escape regex special chars, then require word boundary or end after variant
+                # This ensures S1982R matches "p.S1982R" but not "p.S1982RfsTer22"
+                pattern = re.escape(variant_upper) + r"(?:[^A-Z]|$)"
                 mutations_df = mutations_df[
-                    mutations_df["ProteinChange"].fillna("").str.upper().str.contains(variant_upper)
+                    mutations_df["ProteinChange"].fillna("").str.upper().str.contains(pattern, regex=True)
                 ]
 
             if mutations_df.empty:
