@@ -1351,6 +1351,82 @@ with tab1:
                 st.caption("_Synthesis incorporates established domain knowledge beyond queried databases._")
 
         # ==============================================
+        # LLM CROSS-SOURCE DRUG ANALYSIS (after LLM Research Synthesis)
+        # ==============================================
+        cross_source = result.get('cross_source_analysis')
+        if cross_source:
+            with st.container(border=True):
+                st.markdown("### 🔬 LLM Cross-Source Drug Analysis")
+                st.caption("AI synthesis of drug evidence across CGI, CIViC, VICC, and Literature sources")
+
+                # Summary at top
+                summary = cross_source.get('summary', '')
+                if summary:
+                    st.markdown(f"**Summary:** {summary}")
+                    st.markdown("---")
+
+                # Create columns for structured display
+                col1, col2 = st.columns(2)
+
+                # Strongest Evidence (corroborated across sources)
+                with col1:
+                    strongest = cross_source.get('strongest_evidence', [])
+                    if strongest:
+                        st.markdown("**💪 Strongest Evidence**")
+                        for item in strongest[:5]:  # Limit to top 5
+                            drug = item.get('drug', 'Unknown')
+                            signal = item.get('signal', '')
+                            sources = ", ".join(item.get('sources', []))
+                            level = item.get('evidence_level', '')
+                            rationale = item.get('rationale', '')
+                            signal_emoji = "🟢" if signal == "sensitivity" else "🔴" if signal == "resistance" else "⚪"
+                            st.markdown(f"{signal_emoji} **{drug}** ({level})")
+                            st.markdown(f"   Sources: {sources}")
+                            if rationale:
+                                st.markdown(f"   _{rationale}_")
+
+                # Conflicting Signals
+                with col2:
+                    conflicts = cross_source.get('conflicting_signals', [])
+                    if conflicts:
+                        st.markdown("**⚠️ Conflicting Signals**")
+                        for item in conflicts[:5]:
+                            drug = item.get('drug', 'Unknown')
+                            conflict = item.get('conflict', '')
+                            reason = item.get('likely_reason', '')
+                            question = item.get('research_question', '')
+                            st.markdown(f"**{drug}**: {conflict}")
+                            if reason:
+                                st.markdown(f"   _Likely reason: {reason}_")
+                            if question:
+                                st.markdown(f"   ❓ {question}")
+
+                # Emerging Targets (single-source, needs validation)
+                emerging = cross_source.get('emerging_targets', [])
+                if emerging:
+                    st.markdown("---")
+                    st.markdown("**🌱 Emerging Targets** (single-source, needs validation)")
+                    for item in emerging[:3]:  # Limit to top 3
+                        drug = item.get('drug', 'Unknown')
+                        source = item.get('source', '')
+                        level = item.get('evidence_level', '')
+                        rationale = item.get('biological_rationale', '')
+                        validation = item.get('validation_needed', '')
+                        st.markdown(f"• **{drug}** ({source}, {level})")
+                        if rationale:
+                            st.markdown(f"  _{rationale}_")
+                        if validation:
+                            st.markdown(f"  📋 Needs: {validation}")
+
+                # Key Gaps
+                gaps = cross_source.get('key_gaps', [])
+                if gaps:
+                    st.markdown("---")
+                    st.markdown("**🔍 Key Gaps**")
+                    for gap in gaps[:3]:
+                        st.markdown(f"• {gap}")
+
+        # ==============================================
         # FOOTER: Download & Clear
         # ==============================================
         st.markdown("---")

@@ -168,12 +168,20 @@ class Conductor:
 
         # Step 3: Generate LLM narrative if enabled
         llm_insight = None
+        cross_source_analysis = None
         if self.config.enable_llm:
             logger.debug(f"Generating LLM insight with model={self.config.llm_model}")
             t0 = time.time()
             llm_insight = await self._generate_llm_insight(evidence)
             timings["llm_generation"] = time.time() - t0
             logger.debug(f"LLM generation completed in {timings['llm_generation']:.2f}s")
+
+            # Step 4: Generate cross-source analysis (separate LLM call)
+            t0 = time.time()
+            cross_source_analysis = await self._generate_cross_source_analysis(evidence)
+            timings["cross_source_analysis"] = time.time() - t0
+            if cross_source_analysis:
+                logger.debug(f"Cross-source analysis completed in {timings['cross_source_analysis']:.2f}s")
 
         timings["total"] = time.time() - total_start
         logger.debug(f"Total processing time for {gene_variant}: {timings['total']:.2f}s")
@@ -185,9 +193,11 @@ class Conductor:
             print(f"   Gap computation:      {timings['gap_computation']:.2f}s")
             if "llm_generation" in timings:
                 print(f"   LLM generation:       {timings['llm_generation']:.2f}s")
+            if "cross_source_analysis" in timings:
+                print(f"   Cross-source analysis:{timings['cross_source_analysis']:.2f}s")
             print(f"   Total:                {timings['total']:.2f}s")
 
-        return Result(evidence=evidence, llm=llm_insight)
+        return Result(evidence=evidence, llm=llm_insight, cross_source_analysis=cross_source_analysis)
 
     async def run_batch(
         self,
@@ -311,6 +321,51 @@ class Conductor:
             sensitivity_summary=sensitivity_summary,
             locus_match_summary=locus_match_summary,
             tumor_match_summary=tumor_match_summary,
+        )
+
+    async def _generate_cross_source_analysis(self, evidence: Evidence) -> dict | None:
+        """Generate cross-source drug evidence synthesis using LLM.
+
+        This is a separate LLM call that analyzes drug evidence across CGI, CIViC,
+        VICC, and Literature sources to identify corroboration, conflicts, and gaps.
+
+        Args:
+            evidence: Evidence with aggregated data
+
+        Returns:
+            Dict with strongest_evidence, conflicting_signals, emerging_targets,
+            key_gaps, summary. Or None if no cross-source data available.
+        """
+        from oncomind.llm.service import LLMService
+
+        # Get the cross-source synthesis data
+        cross_source_synthesis = evidence.get_cross_source_synthesis_for_llm()
+
+        # Skip if no cross-source data
+        if not cross_source_synthesis:
+            logger.debug("No cross-source data available for analysis")
+            return None
+
+        llm_service = LLMService(
+            model=self.config.llm_model,
+            temperature=self.config.llm_temperature,
+        )
+
+        # Get gene context (role, pathway, etc.)
+        gene_context = evidence.get_gene_context_for_llm()
+
+        # Get therapeutic signal summaries
+        resistance_summary = evidence.get_resistance_summary()
+        sensitivity_summary = evidence.get_sensitivity_summary()
+
+        return await llm_service.get_cross_source_analysis(
+            gene=evidence.identifiers.gene,
+            variant=evidence.identifiers.variant,
+            tumor_type=evidence.context.tumor_type,
+            gene_context=gene_context,
+            cross_source_synthesis=cross_source_synthesis,
+            sensitivity_summary=sensitivity_summary,
+            resistance_summary=resistance_summary,
         )
 
 
