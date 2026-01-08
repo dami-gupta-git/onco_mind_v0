@@ -161,14 +161,20 @@ class AttributedClaim(BaseModel):
 
 Known cancer hotspots (BRAF V600, KRAS G12, etc.) are well-characterized. But what about a rare variant 3 codons away from a hotspot?
 
+OncoMind uses data from MSK Cancer Hotspots (cancerhotspots.org) to detect:
+- **Direct hotspots**: Variants at statistically significant recurrent mutation sites
+- **Adjacent hotspots**: Variants within ±5 codons of a known hotspot
+
 ```
-BRAF V598E (near hotspot codon 600):
-- Within 5 codons of known hotspot — structural similarity likely
-- Research opportunity: Compare to nearby hotspot BRAF codon 600
-- Functional characterization needed despite structural similarity to V600E
+KRAS G14D (1 codon from hotspot G13):
+NEAR HOTSPOT: KRAS G14D is 1 codon(s) from known hotspot G13
+  The nearby G13 hotspot is observed in 1234 cancer samples (q=1.23e-50)
+  Hotspot tumor distribution: bowel:456, lung:234, pancreas:123, unk:89
+  Note: Proximity to hotspot suggests possible functional relevance, but requires validation
+  Source: cancerhotspots.org
 ```
 
-**Why it matters:** Near-hotspot variants are high-value research targets. They may share functional properties with the hotspot but lack clinical validation.
+**Why it matters:** Near-hotspot variants are high-value research targets. They may share functional properties with the hotspot but lack clinical validation. The LLM receives this context to inform its analysis.
 
 ### 8. We Focus on What Happens Next
 
