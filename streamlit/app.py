@@ -317,6 +317,7 @@ with tab1:
             annotations = result.get('annotations', {})
             cbioportal = result.get('cbioportal_evidence')
             depmap = result.get('depmap_evidence')
+            hotspots = result.get('hotspots_evidence')
             therapies = result.get('recommended_therapies', [])
 
             # Build tab names
@@ -335,8 +336,10 @@ with tab1:
                 tab_names.append(f"CIViC ({len(civic_assertions) + len(civic_evidence)})")
             if vicc:
                 tab_names.append(f"VICC ({len(vicc)})")
-            if cgi_biomarkers:
-                tab_names.append(f"CGI ({len(cgi_biomarkers)})")
+            # CGI tab - shows ALL CGI biomarkers organized by evidence level
+            all_cgi_count = len(cgi_biomarkers) + len(preclinical) + len(early_phase)
+            if all_cgi_count > 0:
+                tab_names.append(f"CGI ({all_cgi_count})")
             if clinvar_entries or clinvar_sig:
                 tab_names.append("ClinVar")
             if cosmic_id:
@@ -345,14 +348,13 @@ with tab1:
                 tab_names.append(f"Trials ({len(trials)})")
             if articles:
                 tab_names.append(f"Literature ({len(articles)})")
-            if preclinical or early_phase:
-                tab_names.append(f"Research ({len(preclinical) + len(early_phase)})")
+            # Research tab removed - CGI preclinical/early_phase data now shown in CGI Therapies tab
             if cbioportal:
                 tab_names.append("cBioPortal")
             if depmap:
                 tab_names.append("🧬 DepMap")
-            if therapies:
-                tab_names.append(f"Therapies ({len(therapies)})")
+            if hotspots and hotspots.get('is_hotspot'):
+                tab_names.append("🔥 Hotspots")
 
             if tab_names:
                 tabs = st.tabs(tab_names)
@@ -540,23 +542,84 @@ with tab1:
                             scrollable_table("\n".join(rows))
                     tab_idx += 1
 
-                # CGI tab
-                if cgi_biomarkers:
+                # CGI tab - shows ALL CGI data organized by evidence level
+                if all_cgi_count > 0:
                     with tabs[tab_idx]:
-                        # Use markdown table with links to CGI database
-                        rows = ["| Drug | Association | Tumor Type | Level |",
-                                "|------|-------------|------------|-------|"]
-                        for b in cgi_biomarkers:
-                            drug = b.get('drug', 'Unknown')
-                            gene = b.get('gene', gene_display)
-                            # Link to CGI biomarkers search for this gene
-                            cgi_url = f"https://www.cancergenomeinterpreter.org/biomarkers?gene={gene}"
-                            drug_link = f"[{drug}]({cgi_url})"
-                            association = b.get('association', 'Unknown')
-                            tumor = (b.get('tumor_type', '') or '')[:25]
-                            level = b.get('evidence_level', '')
-                            rows.append(f"| {drug_link} | {association} | {tumor} | {level} |")
-                        scrollable_table("\n".join(rows))
+                        # Use columns: tables on left, legend on right
+                        table_col, legend_col = st.columns([4, 1])
+
+                        # Render legend
+                        legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 85px;'>
+<b>Locus Match:</b><br/>
+🎯 Variant (exact locus match)<br/>
+📍 Codon (other variants in this codon)<br/>
+🧬 Gene (other variants in this gene)<br/><br/>
+<b>Association:</b><br/>
+:green[Responsive] - drug works<br/>
+:red[Resistant] - drug doesn't work
+</div>""", unsafe_allow_html=True)
+
+                        with table_col:
+                            # Sort FDA-approved: Responsive first, Resistant last
+                            def assoc_sort_key(b):
+                                assoc = (b.get('association') or '').lower()
+                                if 'respons' in assoc or 'sensitiv' in assoc:
+                                    return 0
+                                elif 'resist' in assoc:
+                                    return 2
+                                return 1
+
+                            # Helper to render a CGI table
+                            def render_cgi_table(biomarkers: list, show_level: bool = False):
+                                if show_level:
+                                    rows = ["| Drug | Locus Match | Association | Tumor Type | Level |",
+                                            "|------|-------------|-------------|------------|-------|"]
+                                else:
+                                    rows = ["| Drug | Locus Match | Association | Tumor Type |",
+                                            "|------|-------------|-------------|------------|"]
+                                for b in biomarkers:
+                                    drug = b.get('drug', 'Unknown')
+                                    gene_val = b.get('gene', gene_display)
+                                    cgi_url = f"https://www.cancergenomeinterpreter.org/biomarkers?gene={gene_val}"
+                                    drug_link = f"[{drug}]({cgi_url})"
+                                    # Locus match
+                                    match = b.get('locus_match', '')
+                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
+                                    # Association with color
+                                    assoc_raw = b.get('association', 'Unknown')
+                                    if 'respons' in assoc_raw.lower() or 'sensitiv' in assoc_raw.lower():
+                                        association = f":green[{assoc_raw}]"
+                                    elif 'resist' in assoc_raw.lower():
+                                        association = f":red[{assoc_raw}]"
+                                    else:
+                                        association = assoc_raw
+                                    tumor = (b.get('tumor_type', '') or '')[:25]
+                                    if show_level:
+                                        level = b.get('evidence_level', '')
+                                        rows.append(f"| {drug_link} | {locus_display} | {association} | {tumor} | {level} |")
+                                    else:
+                                        rows.append(f"| {drug_link} | {locus_display} | {association} | {tumor} |")
+                                scrollable_table("\n".join(rows))
+
+                            # 1. FDA-Approved (from cgi_biomarkers which only contains fda_approved=True)
+                            if cgi_biomarkers:
+                                cgi_fda_sorted = sorted(cgi_biomarkers, key=assoc_sort_key)
+                                st.markdown("**✅ FDA-Approved:**")
+                                render_cgi_table(cgi_fda_sorted, show_level=False)
+
+                            # 2. Early Phase (clinical trials, late trials, case reports)
+                            if early_phase:
+                                if cgi_biomarkers:
+                                    st.markdown("---")
+                                st.markdown("**🔬 Clinical Trials / Case Reports:**")
+                                render_cgi_table(early_phase, show_level=True)
+
+                            # 3. Preclinical (cell line, pre-clinical)
+                            if preclinical:
+                                if cgi_biomarkers or early_phase:
+                                    st.markdown("---")
+                                st.markdown("**🧪 Preclinical:**")
+                                render_cgi_table(preclinical, show_level=True)
                     tab_idx += 1
 
                 # ClinVar tab
@@ -666,75 +729,6 @@ with tab1:
                             title = (a.get('title', '') or '')[:80] + "..."
                             rows.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")
                         scrollable_table("\n".join(rows))
-                    tab_idx += 1
-
-                # Research tab
-                if preclinical or early_phase:
-                    with tabs[tab_idx]:
-                        # Use columns: tables on left, legend on right
-                        table_col, legend_col = st.columns([4, 1])
-
-                        # Render legend first, with padding to align with first data row
-                        legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 85px;'>
-<b>Locus Match:</b><br/>
-🎯 Variant (exact locus match)<br/>
-📍 Codon (other variants in this codon)<br/>
-🧬 Gene (other variants in this gene)<br/><br/>
-<b>Tumor Match:</b><br/>
-✅ Yes (match on specified tumor)<br/>
-🔸 Other (match on other tumor)<br/>
-🌐 Pan-cancer
-</div>""", unsafe_allow_html=True)
-
-                        with table_col:
-                            st.warning("⚠️ [CGI](https://www.cancergenomeinterpreter.org/) biomarker entries that are NOT FDA-approved and are from early clinical trials, late trials, case reports, or preclinical studies.")
-                            if preclinical:
-                                st.write("")  # Empty line before Preclinical section
-                                st.markdown("**Preclinical (Cell Line/Animal Models):**")
-                                rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
-                                        "|------|-------------|-------------|-------------|------------|"]
-                                for b in preclinical:
-                                    drug = b.get('drug', 'Unknown')
-                                    assoc = b.get('association', 'Unknown')
-                                    cgi_tumor = b.get('tumor_type', '') or ''
-                                    # Locus match
-                                    match = b.get('locus_match', '')
-                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-                                    # Tumor match
-                                    cgi_tumor_lower = cgi_tumor.lower()
-                                    tumor_lower = (tumor_display or '').lower() if tumor_display else ''
-                                    if tumor_lower and tumor_lower in cgi_tumor_lower:
-                                        tumor_match_cell = "✅ Yes"
-                                    elif cgi_tumor_lower:
-                                        tumor_match_cell = "🔸 Other"
-                                    else:
-                                        tumor_match_cell = "-"
-                                    rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
-                                scrollable_table("\n".join(rows))
-                            if early_phase:
-                                if preclinical:
-                                    st.markdown("---")
-                                st.markdown("**Early Phase/Case Reports:**")
-                                rows = ["| Drug | Locus Match | Tumor Match | Association | Tumor Type |",
-                                        "|------|-------------|-------------|-------------|------------|"]
-                                for b in early_phase:
-                                    drug = b.get('drug', 'Unknown')
-                                    assoc = b.get('association', 'Unknown')
-                                    cgi_tumor = b.get('tumor_type', '') or ''
-                                    # Locus match
-                                    match = b.get('locus_match', '')
-                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-                                    # Tumor match
-                                    cgi_tumor_lower = cgi_tumor.lower()
-                                    tumor_lower = (tumor_display or '').lower() if tumor_display else ''
-                                    if tumor_lower and tumor_lower in cgi_tumor_lower:
-                                        tumor_match_cell = "✅ Yes"
-                                    elif cgi_tumor_lower:
-                                        tumor_match_cell = "🔸 Other"
-                                    else:
-                                        tumor_match_cell = "-"
-                                    rows.append(f"| {drug} | {locus_display} | {tumor_match_cell} | {assoc} | {cgi_tumor[:20]} |")
-                                scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # cBioPortal tab
@@ -885,160 +879,71 @@ with tab1:
                         st.markdown(f"[🔗 Explore on DepMap Portal](https://depmap.org/portal/gene/{gene_display})")
                     tab_idx += 1
 
-                # Therapies tab
-                if therapies:
+                # Hotspots tab
+                if hotspots and hotspots.get('is_hotspot'):
                     with tabs[tab_idx]:
-                        # Use columns: tables on left, legend on right
-                        table_col, legend_col = st.columns([4, 1])
+                        hotspot_data = hotspots.get('hotspot', {})
+                        is_exact = hotspots.get('is_exact_variant_match', False)
 
-                        # Render legend first, with padding to align with first data row (skip header)
-                        legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 85px;'>
-<b>Locus Match:</b><br/>
-🎯 Variant (exact locus match)<br/>
-📍 Codon (other variants in this codon)<br/>
-🧬 Gene (other variants in this gene)<br/><br/>
-<b>Tumor Match:</b><br/>
-✅ Yes (match on specified tumor)<br/>
-🔸 Other (match on other tumor)<br/>
-🌐 Pan-cancer
-</div>""", unsafe_allow_html=True)
+                        # Header with match status
+                        residue = hotspot_data.get('residue', '')
+                        q_value = hotspot_data.get('q_value', 0)
+                        total_samples = hotspot_data.get('total_samples', 0)
 
-                        with table_col:
-                            # Only include therapies that are truly FDA-approved
-                            # Sources: FDA (direct), CGI (curated), CIViC (Tier I with fda_companion_test)
-                            # Exclude VICC "level A" which may include non-FDA sources like PMKB
-                            from oncomind.config.constants import BIOMARKER_SELECTION_DRUGS
+                        match_type = "✅ Exact variant match" if is_exact else "🔸 Codon-level match"
+                        st.markdown(f"**{gene_display} {residue}** is a known cancer hotspot ({match_type})")
+                        st.markdown(f"Observed in **{total_samples:,}** cancer samples (q-value: {q_value:.2e})")
 
-                            def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
-                                """Check if drug uses gene as biomarker but targets something else."""
-                                if not drug_name or not gene:
-                                    return False
-                                drug_lower = drug_name.lower()
-                                # Check both full name and any parenthetical brand name
-                                for drug_key, info in BIOMARKER_SELECTION_DRUGS.items():
-                                    if drug_key in drug_lower or drug_lower in drug_key:
-                                        if gene.upper() in [g.upper() for g in info.get("biomarker_genes", [])]:
-                                            return True
-                                return False
+                        # Variants table
+                        variants = hotspot_data.get('variants', [])
+                        if variants:
+                            st.markdown("**Amino Acid Changes at this Position:**")
+                            var_rows = []
+                            for v in sorted(variants, key=lambda x: x.get('count', 0), reverse=True)[:10]:
+                                aa = v.get('amino_acid', '')
+                                count = v.get('count', 0)
+                                pct = (count / total_samples * 100) if total_samples > 0 else 0
+                                # Highlight the queried variant
+                                variant_notation = f"{residue}{aa}"
+                                is_match = variant_display.upper().endswith(aa.upper()) if aa else False
+                                highlight = "→ " if is_match else ""
+                                var_rows.append({
+                                    "": highlight,
+                                    "Change": variant_notation,
+                                    "Samples": count,
+                                    "Frequency": f"{pct:.1f}%",
+                                })
+                            st.dataframe(
+                                pd.DataFrame(var_rows),
+                                hide_index=True,
+                                width=400,
+                                height=min(300, 35 * (len(var_rows) + 1)),
+                            )
 
-                            fda_approved = [
-                                t for t in therapies
-                                if t.get('evidence_level', '').lower() == 'fda-approved'
-                                and t.get('source', '').upper() in ('FDA', 'CGI', 'CIVIC')
-                                and not is_biomarker_selection_drug(t.get('drug_name', ''), gene_display)
-                            ]
-                            # Sort by response: Sensitivity first, Resistance last
-                            def response_sort_key(t):
-                                resp = (t.get('response_type') or '').lower()
-                                if resp in ('sensitivity', 'responsive', 'sensitive'):
-                                    return 0
-                                elif resp in ('resistance', 'resistant'):
-                                    return 2
-                                return 1
-                            fda_approved = sorted(fda_approved, key=response_sort_key)
-                            # Clinical evidence includes Phase trials, case reports, AND VICC level A (which is clinical but not necessarily FDA)
-                            clinical = [
-                                t for t in therapies
-                                if t.get('evidence_level', '').lower() in ('phase 3', 'phase 2', 'phase 1', 'case report')
-                                or (t.get('evidence_level', '').lower() == 'fda-approved' and t.get('source', '').upper() not in ('FDA', 'CGI', 'CIVIC'))
-                            ]
-                            preclinical_therapies = [t for t in therapies if t.get('evidence_level', '').lower() in ('preclinical', 'in vitro')]
+                        # Tumor type distribution
+                        tumor_types = hotspot_data.get('tumor_type_composition', [])
+                        if tumor_types:
+                            st.markdown("**Tumor Type Distribution:**")
+                            tumor_rows = []
+                            for t in sorted(tumor_types, key=lambda x: x.get('count', 0), reverse=True)[:10]:
+                                tumor = t.get('tumor_type', '')
+                                count = t.get('count', 0)
+                                pct = (count / total_samples * 100) if total_samples > 0 else 0
+                                tumor_rows.append({
+                                    "Tumor Type": tumor.replace('_', ' ').title(),
+                                    "Samples": count,
+                                    "Frequency": f"{pct:.1f}%",
+                                })
+                            st.dataframe(
+                                pd.DataFrame(tumor_rows),
+                                hide_index=True,
+                                width=400,
+                                height=min(300, 35 * (len(tumor_rows) + 1)),
+                            )
 
-                            if fda_approved:
-                                st.markdown("**✅ FDA-Approved:**")
-                                # Use markdown table for clickable links
-                                rows = ["| Drug | Locus Match | Tumor Match | Response | Source |",
-                                        "|------|-------------|-------------|----------|--------|"]
-                                for t in fda_approved:
-                                    drug = t.get('drug_name', 'Unknown')
-                                    source_url = t.get('source_url', '')
-                                    drug_display = f"[{drug}]({source_url})" if source_url else drug
-                                    response_raw = t.get('response_type', '') or "Sensitivity"
-                                    # Color code response: green for sensitivity, red for resistance
-                                    if response_raw.lower() in ('sensitivity', 'responsive', 'sensitive'):
-                                        response = f":green[{response_raw}]"
-                                    elif response_raw.lower() in ('resistance', 'resistant'):
-                                        response = f":red[{response_raw}]"
-                                    else:
-                                        response = response_raw
-                                    source = t.get('source', '')
-                                    match = t.get('locus_match', '')
-                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-
-                                    # Tumor match column
-                                    cancer_spec = t.get('cancer_specificity', '')
-                                    if cancer_spec == 'cancer_specific':
-                                        tumor_match_cell = "✅ Yes"
-                                    elif cancer_spec == 'pan_cancer':
-                                        tumor_match_cell = "🌐 Pan-cancer"
-                                    elif cancer_spec:
-                                        tumor_match_cell = "🔸 Other"
-                                    else:
-                                        tumor_match_cell = "-"
-
-                                    rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
-                                scrollable_table("\n".join(rows))
-
-                            if clinical:
-                                if fda_approved:
-                                    st.markdown("---")
-                                st.markdown("**🔬 Clinical Evidence:**")
-                                rows = ["| Drug | Locus Match | Tumor Match | Level | Response | Source |",
-                                        "|------|-------------|-------------|-------|----------|--------|"]
-                                for t in clinical:
-                                    drug = t.get('drug_name', 'Unknown')
-                                    source_url = t.get('source_url', '')
-                                    drug_display = f"[{drug}]({source_url})" if source_url else drug
-                                    level = t.get('evidence_level', '')
-                                    response = t.get('response_type', '') or "-"
-                                    source = t.get('source', '')
-                                    match = t.get('locus_match', '')
-                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-
-                                    # Tumor match column
-                                    cancer_spec = t.get('cancer_specificity', '')
-                                    if cancer_spec == 'cancer_specific':
-                                        tumor_match_cell = "✅ Yes"
-                                    elif cancer_spec == 'pan_cancer':
-                                        tumor_match_cell = "🌐 Pan-cancer"
-                                    elif cancer_spec:
-                                        tumor_match_cell = "🔸 Other"
-                                    else:
-                                        tumor_match_cell = "-"
-
-                                    rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {level} | {response} | {source} |")
-                                scrollable_table("\n".join(rows))
-
-                            if preclinical_therapies:
-                                if fda_approved or clinical:
-                                    st.markdown("---")
-                                st.markdown("**🧪 Preclinical:**")
-                                st.warning("⚠️ Preclinical data - not validated in humans")
-                                rows = ["| Drug | Locus Match | Tumor Match | Response | Source |",
-                                        "|------|-------------|-------------|----------|--------|"]
-                                for t in preclinical_therapies:
-                                    drug = t.get('drug_name', 'Unknown')
-                                    source_url = t.get('source_url', '')
-                                    drug_display = f"[{drug}]({source_url})" if source_url else drug
-                                    response = t.get('response_type', '') or "-"
-                                    source = t.get('source', '')
-                                    match = t.get('locus_match', '')
-                                    locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-
-                                    # Tumor match column
-                                    cancer_spec = t.get('cancer_specificity', '')
-                                    if cancer_spec == 'cancer_specific':
-                                        tumor_match_cell = "✅ Yes"
-                                    elif cancer_spec == 'pan_cancer':
-                                        tumor_match_cell = "🌐 Pan-cancer"
-                                    elif cancer_spec:
-                                        tumor_match_cell = "🔸 Other"
-                                    else:
-                                        tumor_match_cell = "-"
-
-                                    rows.append(f"| {drug_display} | {locus_display} | {tumor_match_cell} | {response} | {source} |")
-                                scrollable_table("\n".join(rows))
+                        st.markdown("[🔗 Cancer Hotspots](https://www.cancerhotspots.org/) (Chang et al., Cancer Discovery 2017)")
                     tab_idx += 1
+
             else:
                 st.info("No evidence found from any source")
 
@@ -1386,30 +1291,17 @@ with tab1:
 
                 functional_summary = result['insight'].get('functional_summary')
                 biological_context = result['insight'].get('biological_context')
-                therapeutic_landscape = result['insight'].get('therapeutic_landscape')
 
                 if functional_summary:
                     st.markdown(f"**Functional Impact:** {functional_summary}")
                 if biological_context:
                     st.markdown(f"**Biological Context:** {biological_context}")
-                if therapeutic_landscape:
-                    tl_parts = []
-                    if therapeutic_landscape.get("fda_approved"):
-                        tl_parts.append(f"**FDA-approved:** {', '.join(therapeutic_landscape['fda_approved'])}")
-                    if therapeutic_landscape.get("clinical_evidence"):
-                        tl_parts.append(f"**Clinical evidence:** {', '.join(therapeutic_landscape['clinical_evidence'])}")
-                    if therapeutic_landscape.get("preclinical"):
-                        tl_parts.append(f"**Preclinical:** {', '.join(therapeutic_landscape['preclinical'])}")
-                    if therapeutic_landscape.get("resistance_mechanisms"):
-                        tl_parts.append(f"**Resistance:** {', '.join(therapeutic_landscape['resistance_mechanisms'])}")
-                    if tl_parts:
-                        st.markdown("**Therapeutic Landscape:**")
-                        for part in tl_parts:
-                            st.markdown(f"- {part}")
-                    # NOTE: match_level_note removed from LLM output
-                    # Match level info is shown in Evidence Specificity panel instead
 
-                if not any([functional_summary, biological_context, therapeutic_landscape]):
+                # NOTE: Therapeutic Landscape removed from LLM output
+                # This data is already shown in the Therapies tab with accurate source attribution
+                # LLM was adding context from training knowledge (hallucination risk)
+
+                if not any([functional_summary, biological_context]):
                     st.markdown(llm_narrative)
 
                 conflicting_evidence = result['insight'].get('conflicting_evidence', [])

@@ -16,7 +16,7 @@ SYNTHESIS_SYSTEM_PROMPT = """You are an expert cancer genomics researcher synthe
 
 Generate a RESEARCH-ORIENTED synthesis (not clinical recommendations) covering:
 1. FUNCTIONAL IMPACT - how the variant alters protein activity
-2. BIOLOGICAL CONTEXT - prevalence, co-mutations, pathway effects
+2. BIOLOGICAL CONTEXT - prevalence, co-mutations, pathway effects, hotspot status
 3. THERAPEUTIC LANDSCAPE - FDA-approved, clinical, preclinical, resistance
 4. EVIDENCE QUALITY - what's established vs sparse vs conflicting
 
@@ -32,6 +32,15 @@ When has_tumor_specific_cbioportal_data is FALSE:
 - Do NOT discuss prevalence or co-mutations - this data is simply not available
 - Do NOT say "Pan-cancer data" or "no prevalence available" - just skip this topic entirely
 - Focus on other evidence sources (FDA, CIViC, VICC, etc.) for therapeutic context
+
+=== CANCER HOTSPOTS DATA ===
+
+When BIOLOGICAL CONTEXT contains "CANCER HOTSPOT" data:
+- This is from cancerhotspots.org (MSK) - statistically significant recurrent mutation sites
+- Use this to contextualize the variant's frequency across cancer types
+- Note if queried variant is "exact variant match" (most common change) vs "codon-level match" (same position, different AA)
+- Include top tumor types where this hotspot is most frequent
+- Example synthesis: "BRAF V600 is a statistically significant cancer hotspot (q<1e-10) with V600E being the dominant change (93% of 897 samples). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
 
 === MATCH SPECIFICITY (CRITICAL) ===
 

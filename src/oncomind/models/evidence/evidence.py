@@ -39,6 +39,7 @@ from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
 from oncomind.models.evidence.fda import FDAApproval
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
+from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.pubmed import PubMedEvidence
@@ -241,6 +242,11 @@ class Evidence(BaseModel):
         None, description="DepMap gene dependency and drug sensitivity data"
     )
 
+    # Cancer Hotspots (MSK recurrent mutation sites)
+    hotspots_evidence: HotspotsEvidence | None = Field(
+        None, description="Cancer hotspots data from cancerhotspots.org"
+    )
+
     # Evidence gaps (computed, not fetched)
     evidence_gaps: EvidenceGaps | None = Field(
         None, description="Detected evidence gaps for research prioritization"
@@ -420,6 +426,44 @@ class Evidence(BaseModel):
                             source_url=assertion.civic_url,
                             confidence="high" if assertion.amp_tier == "Tier I" else "moderate",
                             locus_match=assertion.locus_match,
+                            cancer_specificity=cancer_specificity,
+                        ))
+
+        # From CIViC evidence items (individual evidence, not curated assertions)
+        for civic in self.civic_evidence:
+            if civic.drugs:
+                for drug in civic.drugs:
+                    drug_key = drug.lower()
+                    if drug_key not in seen_drugs:
+                        seen_drugs.add(drug_key)
+
+                        # Determine cancer specificity
+                        cancer_specificity = self._get_cancer_specificity_from_disease(civic.disease)
+
+                        # Map CIViC evidence level (A-E) to standard format
+                        evidence_level = self._civic_level_to_evidence_level(civic.evidence_level)
+
+                        # Determine response type from clinical_significance
+                        response_type = None
+                        if civic.clinical_significance:
+                            sig_upper = civic.clinical_significance.upper()
+                            if "SENSITIV" in sig_upper or "RESPONSE" in sig_upper:
+                                response_type = "Sensitivity"
+                            elif "RESIST" in sig_upper:
+                                response_type = "Resistance"
+
+                        evidence_list.append(TherapeuticEvidence(
+                            drug_name=drug,
+                            evidence_level=evidence_level,
+                            approval_status=self._get_approval_from_civic_level(civic.evidence_level),
+                            clinical_context=civic.disease,
+                            response_type=response_type,
+                            mechanism=None,
+                            tumor_types_tested=[civic.disease] if civic.disease else [],
+                            source="CIViC",
+                            source_url=civic.civic_url,
+                            confidence="moderate" if civic.evidence_level in ("A", "B") else "low",
+                            locus_match=civic.locus_match,
                             cancer_specificity=cancer_specificity,
                         ))
 
@@ -957,6 +1001,42 @@ class Evidence(BaseModel):
         elif level == "D":
             return "Preclinical"
         return "Unknown"
+
+    def _civic_level_to_evidence_level(self, level: str | None) -> str:
+        """Map CIViC evidence level (A-E) to standard format.
+
+        CIViC evidence levels:
+        - A: Validated association (FDA-approved or professional guidelines)
+        - B: Clinical evidence (well-powered studies with consensus)
+        - C: Case study (limited clinical evidence)
+        - D: Preclinical (in vivo/in vitro models)
+        - E: Inferential (indirect evidence)
+        """
+        if not level:
+            return "Unknown"
+        level_upper = level.upper()
+        if level_upper == "A":
+            return "FDA-approved"
+        elif level_upper == "B":
+            return "Phase 3"
+        elif level_upper == "C":
+            return "Case report"
+        elif level_upper == "D":
+            return "Preclinical"
+        elif level_upper == "E":
+            return "Preclinical"  # Inferential treated as preclinical
+        return "Unknown"
+
+    def _get_approval_from_civic_level(self, level: str | None) -> str:
+        """Get approval status from CIViC evidence level."""
+        if not level:
+            return "Investigational"
+        level_upper = level.upper()
+        if level_upper == "A":
+            return "FDA Approved"
+        elif level_upper == "B":
+            return "Clinical trials"
+        return "Investigational"
 
     def _get_approval_from_vicc(self, vicc) -> str:
         """Get approval status from VICC evidence."""
@@ -1710,6 +1790,13 @@ class Evidence(BaseModel):
         if self.context.mutation_class:
             lines.append(f"MUTATION CLASS: {self.context.mutation_class}")
             lines.append("")
+
+        # Cancer Hotspots data (mutation recurrence across cancers)
+        if self.hotspots_evidence and self.hotspots_evidence.has_data():
+            hotspot_context = self.hotspots_evidence.to_prompt_context()
+            if hotspot_context:
+                lines.append(hotspot_context)
+                lines.append("")
 
         return "\n".join(lines)
 

@@ -915,50 +915,27 @@ def get_lof_assessment(
 # =============================================================================
 # CANCER HOTSPOTS
 # =============================================================================
-# Known cancer hotspot codons from cancerhotspots.org, COSMIC, and OncoKB.
-# These are positions where recurrent oncogenic mutations cluster.
+# Cancer hotspot data is now loaded from data/hotspots_msk/hotspots.txt
+# Source: https://www.cancerhotspots.org/ (MSK Cancer Hotspots)
+# Publication: Chang et al., Cancer Discovery 2017, 2018
+#
+# Use the hotspots API for hotspot lookups:
+#   from oncomind.api.hotspots import is_hotspot_variant, get_cancer_hotspots
 
-CANCER_HOTSPOTS: dict[str, list[int]] = {
-    # Major oncogenes with well-characterized hotspots
-    "BRAF": [600, 469, 601, 594, 597],
-    "KRAS": [12, 13, 61, 117, 146],
-    "NRAS": [12, 13, 61],
-    "HRAS": [12, 13, 61],
-    "EGFR": [719, 746, 790, 858, 861],
-    "PIK3CA": [545, 542, 1047, 1049, 420],
-    "TP53": [175, 245, 248, 249, 273, 282],
-    "IDH1": [132],
-    "IDH2": [140, 172],
-    "KIT": [816, 560, 576],
-    "PDGFRA": [842, 560],
-    "FLT3": [835, 842],
-    "JAK2": [617],
-    "MPL": [515],
-    "CALR": [367],  # Frameshift hotspot region
-    "NPM1": [288],  # Insertion hotspot
-    "DNMT3A": [882],
-    "SF3B1": [700, 666, 622, 625],
-    "U2AF1": [34, 157],
-    "SRSF2": [95],
-    "MYD88": [265],
-    "CXCR4": [338, 343],
-    "EZH2": [646, 682],
-    "CTNNB1": [33, 34, 37, 41, 45],
-    "AKT1": [17],
-    "ERBB2": [776, 842, 869],
-    "MET": [1010, 1094, 1253],
-    "RET": [634, 918],
-    "ALK": [1174, 1196, 1202, 1269],  # Resistance hotspots
-    "FGFR2": [252, 253, 310, 549],
-    "FGFR3": [249, 373, 380, 746],
-    "GNA11": [209],
-    "GNAQ": [209, 183],
-    "MAP2K1": [56, 57, 124],
-    "SMAD4": [361],
-    "ARID1A": [1847],  # Truncation hotspot
-    "FBXW7": [465, 479, 505],
-    "NOTCH1": [1575, 1601],  # PEST domain hotspots
-}
+
+def _get_hotspot_codons(gene: str) -> list[int]:
+    """Get hotspot codon positions for a gene from the TSV data.
+
+    This is a lazy-loading wrapper that imports the hotspots API on first use.
+
+    Args:
+        gene: Gene symbol (case-insensitive)
+
+    Returns:
+        List of codon positions that are hotspots for this gene
+    """
+    from oncomind.api.hotspots import get_cancer_hotspots
+    return get_cancer_hotspots(gene)
 
 
 def _extract_codon_position(variant: str) -> int | None:
@@ -989,6 +966,8 @@ def _extract_codon_position(variant: str) -> int | None:
 def is_hotspot_variant(gene: str, variant: str) -> bool:
     """Check if a variant is at a known cancer hotspot.
 
+    Data source: MSK Cancer Hotspots (cancerhotspots.org)
+
     Args:
         gene: Gene symbol (case-insensitive)
         variant: Variant notation (e.g., V600E, G12D)
@@ -996,8 +975,7 @@ def is_hotspot_variant(gene: str, variant: str) -> bool:
     Returns:
         True if variant is at a known hotspot codon
     """
-    gene_upper = gene.upper()
-    hotspots = CANCER_HOTSPOTS.get(gene_upper)
+    hotspots = _get_hotspot_codons(gene)
     if not hotspots:
         return False
 
@@ -1198,6 +1176,8 @@ def is_variant_not_actionable(
 def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool, int | None]:
     """Check if a variant is near (but not at) a known cancer hotspot.
 
+    Data source: MSK Cancer Hotspots (cancerhotspots.org)
+
     Args:
         gene: Gene symbol (case-insensitive)
         variant: Variant notation (e.g., V598E)
@@ -1207,8 +1187,7 @@ def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool,
         Tuple of (is_adjacent, nearest_hotspot_codon)
         If variant is AT a hotspot, returns (False, None) - use is_hotspot_variant for that
     """
-    gene_upper = gene.upper()
-    hotspots = CANCER_HOTSPOTS.get(gene_upper)
+    hotspots = _get_hotspot_codons(gene)
     if not hotspots:
         return False, None
 

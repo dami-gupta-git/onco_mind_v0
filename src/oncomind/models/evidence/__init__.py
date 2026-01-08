@@ -12,6 +12,12 @@ from oncomind.models.evidence.depmap import (
     DrugSensitivity,
     CellLineModel,
 )
+from oncomind.models.evidence.hotspots import (
+    HotspotsEvidence,
+    HotspotEntry,
+    HotspotVariant,
+    HotspotTumorType,
+)
 from oncomind.models.evidence.evidence import (
     # Core model
     Evidence,
@@ -65,6 +71,10 @@ __all__ = [
     "DrugSensitivity",
     "CellLineModel",
     "FDAApproval",
+    "HotspotsEvidence",
+    "HotspotEntry",
+    "HotspotVariant",
+    "HotspotTumorType",
     "LiteratureKnowledge",
     "PubMedEvidence",
     "VICCEvidence",
