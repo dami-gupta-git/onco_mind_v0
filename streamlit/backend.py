@@ -410,6 +410,28 @@ def _build_response(result) -> Dict[str, Any]:
             "is_essential": evidence.depmap_evidence.is_essential(),
             "n_cell_lines_screened": evidence.depmap_evidence.n_cell_lines_screened,
         } if evidence.depmap_evidence and evidence.depmap_evidence.has_data() else None,
+        "hotspots_evidence": {
+            "gene": evidence.hotspots_evidence.gene,
+            "variant": evidence.hotspots_evidence.variant,
+            "queried_residue": evidence.hotspots_evidence.queried_residue,
+            "is_hotspot": evidence.hotspots_evidence.is_hotspot,
+            "is_exact_variant_match": evidence.hotspots_evidence.is_exact_variant_match,
+            "hotspot": {
+                "gene": evidence.hotspots_evidence.hotspot.gene,
+                "residue": evidence.hotspots_evidence.hotspot.residue,
+                "hotspot_type": evidence.hotspots_evidence.hotspot.hotspot_type,
+                "q_value": evidence.hotspots_evidence.hotspot.q_value,
+                "total_samples": evidence.hotspots_evidence.hotspot.total_samples,
+                "variants": [
+                    {"amino_acid": v.amino_acid, "count": v.count}
+                    for v in evidence.hotspots_evidence.hotspot.variants
+                ],
+                "tumor_type_composition": [
+                    {"tumor_type": t.tumor_type, "count": t.count}
+                    for t in evidence.hotspots_evidence.hotspot.tumor_type_composition
+                ],
+            } if evidence.hotspots_evidence.hotspot else None,
+        } if evidence.hotspots_evidence and evidence.hotspots_evidence.has_data() else None,
         "recommended_therapies": [
             {
                 "drug_name": t.drug_name,

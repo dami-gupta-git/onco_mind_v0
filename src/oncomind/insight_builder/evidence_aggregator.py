@@ -36,6 +36,7 @@ from oncomind.api.vicc import VICCClient
 from oncomind.api.civic import CIViCClient
 from oncomind.api.cbioportal import CBioPortalClient
 from oncomind.api.depmap import DepMapClient
+from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
@@ -52,6 +53,7 @@ from oncomind.models.evidence import (
     CIViCEvidence,
     ClinicalTrialEvidence,
     FDAApproval,
+    HotspotsEvidence,
     PubMedEvidence,
     VICCEvidence,
 )
@@ -170,6 +172,7 @@ class EvidenceAggregator:
         self.oncotree_client = OncoTreeClient()
         self.cbioportal_client = CBioPortalClient()
         self.depmap_client = DepMapClient()
+        self.hotspots_client = HotspotsClient()  # File-based, no async needed
 
         # Optional clients based on config
         self.vicc_client = VICCClient() if self.config.enable_vicc else None
@@ -807,6 +810,11 @@ class EvidenceAggregator:
             depmap_result, cell_line_models, gene, normalized_variant, tracker
         )
 
+        # Fetch hotspots data (synchronous - reads from local file)
+        hotspots_evidence = self.hotspots_client.fetch_hotspot_evidence(gene, normalized_variant)
+        if hotspots_evidence and hotspots_evidence.has_data():
+            tracker.sources_with_data.append("CancerHotspots")
+
         # Extract MyVariant data (CIViC evidence now comes from CIViC client directly)
         (
             functional_scores, identifiers_data, clinvar_significance,
@@ -873,6 +881,7 @@ class EvidenceAggregator:
             early_phase_biomarkers=early_phase_biomarkers,
             cbioportal_evidence=cbioportal_evidence,
             depmap_evidence=depmap_evidence,
+            hotspots_evidence=hotspots_evidence,
             literature_searched=self.config.enable_literature,
         )
 

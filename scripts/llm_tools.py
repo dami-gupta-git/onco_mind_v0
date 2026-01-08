@@ -1,13 +1,38 @@
 #!/usr/bin/env python3
 """LLM debugging and inspection tools.
 
+This script provides utilities for debugging and inspecting the data pipeline
+that feeds into the LLM for variant annotation.
+
 Commands:
-    baseline  - Test LLM baseline knowledge (no evidence)
+    baseline  - Test LLM baseline knowledge (no evidence provided)
     data      - Show all data that would be sent to the LLM prompt
 
 Usage:
+    # Run from the project root directory
+
+    # Test what the LLM knows from training data alone (no database evidence)
     python scripts/llm_tools.py baseline PIK3CA H1047R "Thyroid Cancer"
-    python scripts/llm_tools.py data BRAF V600E "Melanoma"
+
+    # Show all evidence data that would be sent to the LLM prompt
+    # This runs the full pipeline but does NOT call the LLM
+    python scripts/llm_tools.py data BRAF V600E Melanoma
+
+    # Without tumor type (pan-cancer context)
+    python scripts/llm_tools.py data KRAS G12D
+
+    # Save output to file
+    python scripts/llm_tools.py data EGFR T790M NSCLC > data/egfr_t790m_nsclc.txt
+
+The 'data' command outputs:
+    - DATA AVAILABILITY FLAGS: What data sources have evidence
+    - EVIDENCE ASSESSMENT: Overall quality, well-characterized aspects, gaps
+    - LOCUS MATCH SUMMARY: Variant vs codon vs gene-level evidence breakdown
+    - TUMOR MATCH SUMMARY: Tumor-specific vs pan-cancer evidence breakdown
+    - THERAPEUTIC SIGNALS: Sensitivity and resistance summaries
+    - BIOLOGICAL CONTEXT: Gene role, pathway, cBioPortal, DepMap, hotspots data
+    - EVIDENCE SUMMARY: Compact therapeutic evidence from FDA, CIViC, VICC, CGI
+    - LITERATURE SUMMARY: PubMed articles and extracted knowledge
 """
 
 import asyncio
