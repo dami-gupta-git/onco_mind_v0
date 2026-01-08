@@ -240,17 +240,21 @@ class VICCClient:
             assoc = hit.get("association", {})
             features = hit.get("features", [])
 
-            # Extract gene from features
+            # Extract gene and variant from features
             gene = ""
             variant = None
             for feature in features:
                 if feature.get("geneSymbol"):
                     gene = feature["geneSymbol"]
                 if feature.get("name"):
-                    # Extract variant from name like "BRAF V600E"
+                    # VICC returns variant in 'name' field (e.g., "V600E", not "BRAF V600E")
                     name = feature["name"]
                     if gene and gene in name:
+                        # Handle cases like "BRAF V600E" -> "V600E"
                         variant = name.replace(gene, "").strip()
+                    elif name and not variant:
+                        # Use name directly as variant (e.g., "V600E")
+                        variant = name.strip()
 
             # Extract disease
             disease = hit.get("diseases", "") or ""

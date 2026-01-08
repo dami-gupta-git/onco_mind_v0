@@ -318,17 +318,41 @@ class Evidence(BaseModel):
         return drugs
 
     def get_vicc_unique(self) -> list[VICCEvidence]:
-        """Get VICC evidence excluding sources that have dedicated tabs.
+        """Get VICC evidence, filtering duplicates intelligently.
 
         VICC MetaKB aggregates from CIViC, CGI, JAX-CKB, OncoKB, PMKB, MolecularMatch.
-        Since we have dedicated tabs for CIViC and CGI, we filter those out here
-        to avoid double-counting in summaries and gap detection.
+
+        Filtering logic:
+        - If we have variant-level CIViC assertions/evidence, filter out CIViC-sourced VICC
+        - If we have variant-level CGI biomarkers, filter out CGI-sourced VICC
+        - If we have NO variant-level data from a source, keep its gene-level VICC entries
+
+        This ensures gene-level evidence is shown for rare variants that have no
+        variant-specific annotations.
 
         Returns:
-            List of VICCEvidence items from non-duplicate sources (JAX, OncoKB, PMKB, etc.)
+            List of VICCEvidence items (deduplicated against direct source data)
         """
-        from oncomind.config.constants import VICC_DUPLICATE_SOURCES
-        return [v for v in self.vicc_evidence if v.source.lower() not in VICC_DUPLICATE_SOURCES]
+        result = []
+
+        # Check if we have variant-level data from each source
+        has_civic_data = len(self.civic_assertions) > 0 or len(self.civic_evidence) > 0
+        has_cgi_data = len(self.cgi_biomarkers) > 0
+
+        for v in self.vicc_evidence:
+            source_lower = v.source.lower()
+
+            # Filter CIViC-sourced entries only if we have direct CIViC data
+            if source_lower == "civic" and has_civic_data:
+                continue
+
+            # Filter CGI-sourced entries only if we have direct CGI data
+            if source_lower == "cgi" and has_cgi_data:
+                continue
+
+            result.append(v)
+
+        return result
 
     def get_summary(self) -> str:
         """Generate a summary of the variant evidence."""
