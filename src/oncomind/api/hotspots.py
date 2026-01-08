@@ -290,12 +290,14 @@ class HotspotsClient:
         self,
         gene: str,
         variant: str | None = None,
+        adjacency_window: int = 5,
     ) -> HotspotsEvidence | None:
         """Fetch hotspot evidence for a gene/variant.
 
         Args:
             gene: Gene symbol (e.g., "BRAF")
             variant: Optional variant notation (e.g., "V600E")
+            adjacency_window: Number of codons to consider for adjacent hotspot detection
 
         Returns:
             HotspotsEvidence if hotspot data exists, None otherwise
@@ -330,8 +332,9 @@ class HotspotsClient:
             )
 
         queried_residue = f"{ref_aa}{position}" if ref_aa else position
+        query_pos_int = int(position)
 
-        # Find matching hotspot entry
+        # Find matching hotspot entry (exact position match)
         matching_hotspot: HotspotEntry | None = None
         is_exact_match = False
 
@@ -354,6 +357,33 @@ class HotspotsClient:
 
                 break  # Found the hotspot at this position
 
+        # If not at a hotspot, check for adjacent hotspot
+        # Prioritize by: 1) closest distance, 2) highest sample count (for ties)
+        adjacent_hotspot: HotspotEntry | None = None
+        adjacent_distance: int | None = None
+
+        if matching_hotspot is None:
+            candidates: list[tuple[int, HotspotEntry]] = []  # (distance, entry)
+
+            for entry in entries:
+                hotspot_ref, hotspot_pos, _ = _extract_residue(entry.residue)
+                if not hotspot_pos:
+                    continue
+
+                try:
+                    hotspot_pos_int = int(hotspot_pos)
+                    distance = abs(query_pos_int - hotspot_pos_int)
+
+                    if distance <= adjacency_window:
+                        candidates.append((distance, entry))
+                except ValueError:
+                    continue
+
+            if candidates:
+                # Sort by distance first, then by sample count (descending) for ties
+                candidates.sort(key=lambda x: (x[0], -x[1].total_samples))
+                adjacent_distance, adjacent_hotspot = candidates[0]
+
         return HotspotsEvidence(
             gene=gene_upper,
             variant=variant,
@@ -361,6 +391,8 @@ class HotspotsClient:
             hotspot=matching_hotspot,
             is_hotspot=matching_hotspot is not None,
             is_exact_variant_match=is_exact_match,
+            adjacent_hotspot=adjacent_hotspot,
+            adjacent_distance=adjacent_distance,
         )
 
 

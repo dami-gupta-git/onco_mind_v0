@@ -60,7 +60,7 @@ OncoMind uses a 6-level severity scale to classify evidence gaps, from most urge
 | **No variant-specific drug approvals (gene-level)** | FDA therapies exist for gene but NO variant-level match | "No variant-specific drug approvals for {gene} {variant} (gene-level evidence only)" |
 | **No variant-specific drug approvals (codon-level)** | FDA therapies exist for codon but not this exact variant | "No variant-specific drug approvals for {gene} {variant} (codon N evidence only)" |
 | FDA approval in other cancers only | FDA exists but not tumor-matched or pan-cancer | "FDA-approved therapies exist only in other cancers" |
-| Rare near-hotspot | Variant within N codons of known hotspot | "Rare variant near known hotspot — functional characterization needed" |
+| Near-hotspot | Variant within N codons of known hotspot | "Variant near known hotspot — functional characterization needed" |
 | No pathogenicity predictions | No AlphaMissense, CADD, PolyPhen2, SIFT | "No computational pathogenicity predictions" |
 | No functional mechanism | No gene role + no DepMap essentiality | "Functional impact unknown" |
 | No drug sensitivity data | No CGI + no VICC + no FDA drug data | "No drug sensitivity/resistance data" |
@@ -429,7 +429,7 @@ $ mind KRAS G14D --tumor NSCLC
 
 | Gap | Severity | Description |
 |-----|----------|-------------|
-| Functional | SIGNIFICANT | Rare variant near known hotspot (codon 12) — functional characterization needed |
+| Functional | SIGNIFICANT | Variant near known hotspot (codon 12) — functional characterization needed |
 | Clinical | CRITICAL | No curated clinical evidence for KRAS G14D |
 | Drug Response | SIGNIFICANT | No drug sensitivity/resistance data |
 

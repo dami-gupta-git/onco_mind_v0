@@ -298,7 +298,7 @@ def _check_hotspot_context(evidence: "Evidence", ctx: GapDetectionContext) -> No
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
             severity=GapSeverity.SIGNIFICANT,
-            description=f"Rare variant near known hotspot (codon {nearest_hotspot}) — functional characterization needed",
+            description=f"Variant near known hotspot (codon {nearest_hotspot}) — functional characterization needed",
             suggested_studies=[
                 f"Compare to nearby hotspot {ctx.gene} codon {nearest_hotspot}",
                 "Structural modeling to assess activation mechanism",
