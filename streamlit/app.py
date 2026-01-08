@@ -1291,17 +1291,21 @@ with tab1:
 
                 functional_summary = result['insight'].get('functional_summary')
                 biological_context = result['insight'].get('biological_context')
+                therapeutic_summary = result['insight'].get('therapeutic_summary')
 
                 if functional_summary:
                     st.markdown(f"**Functional Impact:** {functional_summary}")
                 if biological_context:
                     st.markdown(f"**Biological Context:** {biological_context}")
+                if therapeutic_summary:
+                    st.markdown(f"**Therapeutic Landscape:** {therapeutic_summary}")
 
-                # NOTE: Therapeutic Landscape removed from LLM output
+                # NOTE: Therapeutic Landscape (structured dict) removed from LLM output
                 # This data is already shown in the Therapies tab with accurate source attribution
                 # LLM was adding context from training knowledge (hallucination risk)
+                # But we now show therapeutic_summary (prose) which is constrained to provided evidence
 
-                if not any([functional_summary, biological_context]):
+                if not any([functional_summary, biological_context, therapeutic_summary]):
                     st.markdown(llm_narrative)
 
                 conflicting_evidence = result['insight'].get('conflicting_evidence', [])

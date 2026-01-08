@@ -193,6 +193,7 @@ def _build_response(result) -> Dict[str, Any]:
             # Raw component fields for UI formatting
             "functional_summary": llm.functional_summary if llm else None,
             "biological_context": llm.biological_context if llm else None,
+            "therapeutic_summary": llm.therapeutic_summary if llm else None,
             "therapeutic_landscape": llm.therapeutic_landscape if llm else None,
             # Research-focused fields
             "evidence_quality": llm.evidence_quality if llm else None,

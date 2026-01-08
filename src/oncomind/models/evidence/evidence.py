@@ -1707,12 +1707,15 @@ class Evidence(BaseModel):
             else:
                 lines.append(f"Clinical Trials: {len(self.clinical_trials)} found (not recruiting)")
 
-        # PubMed Literature - compact
+        # PubMed Literature - compact with links
         if self.pubmed_articles:
             resistance_articles = [a for a in self.pubmed_articles if a.is_resistance_evidence()]
             if resistance_articles:
-                pmids = [a.pmid for a in resistance_articles[:3]]
-                lines.append(f"Literature (resistance): PMIDs {', '.join(pmids)}")
+                pmid_links = [
+                    f"[{a.pmid}](https://pubmed.ncbi.nlm.nih.gov/{a.pmid}/)"
+                    for a in resistance_articles[:3]
+                ]
+                lines.append(f"Literature (resistance): PMIDs {', '.join(pmid_links)}")
 
         return "\n".join(lines) if lines else ""
 
@@ -1828,7 +1831,8 @@ class Evidence(BaseModel):
                     summary = article.get_best_summary(200)
                     impact = article.get_impact_indicator()
                     impact_str = f" [{impact}]" if impact else ""
-                    lines.append(f"  - PMID {article.pmid}: {article.title[:80]}...")
+                    pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
+                    lines.append(f"  - {pmid_link}: {article.title[:80]}...")
                     lines.append(f"    Signal: {article.signal_type}{drugs_str}{impact_str}")
                     if summary:
                         lines.append(f"    Summary: {summary}")
@@ -1839,7 +1843,8 @@ class Evidence(BaseModel):
                 for article in sensitivity_articles[:5]:
                     drugs_str = f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]" if article.drugs_mentioned else ""
                     summary = article.get_best_summary(200)
-                    lines.append(f"  - PMID {article.pmid}: {article.title[:80]}...")
+                    pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
+                    lines.append(f"  - {pmid_link}: {article.title[:80]}...")
                     lines.append(f"    Signal: {article.signal_type}{drugs_str}")
                     if summary:
                         lines.append(f"    Summary: {summary}")
@@ -1849,7 +1854,8 @@ class Evidence(BaseModel):
                 lines.append(f"OTHER RELEVANT LITERATURE ({len(other_articles)} articles):")
                 for article in other_articles[:3]:
                     summary = article.get_best_summary(150)
-                    lines.append(f"  - PMID {article.pmid}: {article.title[:80]}...")
+                    pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
+                    lines.append(f"  - {pmid_link}: {article.title[:80]}...")
                     if summary:
                         lines.append(f"    Summary: {summary}")
                 lines.append("")
