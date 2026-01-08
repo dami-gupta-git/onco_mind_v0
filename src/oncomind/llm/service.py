@@ -28,7 +28,7 @@ from oncomind.config.constants import (
 )
 from oncomind.config.debug import get_logger
 from oncomind.llm.prompts import create_cross_source_prompt, create_hypothesis_prompt, create_synthesis_prompt
-from oncomind.models.llm_insight import LLMInsight
+from oncomind.llm.llm_insight import LLMInsight
 
 logger = get_logger(__name__)
 

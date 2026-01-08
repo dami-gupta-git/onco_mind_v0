@@ -43,14 +43,11 @@ from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.pubmed import PubMedEvidence
-from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
-from oncomind.models.evidence.evidence_gaps import EvidenceGaps
-from oncomind.models.therapeutic_evidence import TherapeuticEvidence
+from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
+from oncomind.models.extracted.evidence_gaps import EvidenceGaps
+from oncomind.models.extracted.therapeutic_data import TherapeuticData
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 from oncomind.config.constants import is_biomarker_selection_drug, is_acquired_resistance_mutation
-
-# Backwards compatibility alias
-RecommendedTherapy = TherapeuticEvidence
 
 
 class VariantIdentifiers(BaseModel):
@@ -372,7 +369,7 @@ class Evidence(BaseModel):
     def get_therapeutic_evidence(
         self,
         include_preclinical: bool = True,
-    ) -> list[TherapeuticEvidence]:
+    ) -> list[TherapeuticData]:
         """Get all therapeutic evidence at all evidence levels.
 
         This replaces get_recommended_therapies() with a research-focused method
@@ -385,10 +382,10 @@ class Evidence(BaseModel):
             include_preclinical: Include preclinical/in vitro evidence (default True)
 
         Returns:
-            List of TherapeuticEvidence sorted by evidence tier
+            List of TherapeuticData sorted by evidence tier
         """
         # Start with FDA-approved therapies (single source of truth)
-        evidence_list: list[TherapeuticEvidence] = list(self.get_fda_approved_therapies())
+        evidence_list: list[TherapeuticData] = list(self.get_fda_approved_therapies())
         seen_drugs: set[str] = {e.drug_name.lower() for e in evidence_list}
 
         # From CIViC assertions - non-FDA (Tier I without fda_companion_test, Tier II+)
@@ -414,7 +411,7 @@ class Evidence(BaseModel):
                         # Determine cancer specificity
                         cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=therapy,
                             evidence_level=evidence_level,
                             approval_status=self._get_approval_status_from_tier(assertion.amp_tier),
@@ -452,7 +449,7 @@ class Evidence(BaseModel):
                             elif "RESIST" in sig_upper:
                                 response_type = "Resistance"
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=drug,
                             evidence_level=evidence_level,
                             approval_status=self._get_approval_from_civic_level(civic.evidence_level),
@@ -481,7 +478,7 @@ class Evidence(BaseModel):
                         # Determine cancer specificity
                         cancer_specificity = self._get_cancer_specificity_from_disease(vicc.disease)
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=drug,
                             evidence_level=self._vicc_level_to_evidence_level(vicc.evidence_level),
                             approval_status=self._get_approval_from_vicc(vicc),
@@ -515,7 +512,7 @@ class Evidence(BaseModel):
                         # Determine cancer specificity
                         cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=biomarker.drug,
                             evidence_level="Preclinical",
                             approval_status="Investigational",
@@ -545,7 +542,7 @@ class Evidence(BaseModel):
 
                         cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=biomarker.drug,
                             evidence_level=biomarker.evidence_level or "Early Phase",
                             approval_status="Investigational",
@@ -578,7 +575,7 @@ class Evidence(BaseModel):
                         # Use the tumor_match property already set by the API client
                         cancer_specificity = "cancer_specific" if trial.tumor_match else "pan_cancer"
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=drug,
                             evidence_level=evidence_level,
                             approval_status="Clinical Trial",
@@ -598,7 +595,7 @@ class Evidence(BaseModel):
 
         return evidence_list
 
-    def get_therapeutic_evidence_by_level(self) -> dict[str, list[TherapeuticEvidence]]:
+    def get_therapeutic_evidence_by_level(self) -> dict[str, list[TherapeuticData]]:
         """Group therapeutic evidence by evidence level.
 
         Returns:
@@ -612,17 +609,17 @@ class Evidence(BaseModel):
             "preclinical": [e for e in all_evidence if e.is_preclinical_evidence()],
         }
 
-    def get_resistance_evidence(self) -> list[TherapeuticEvidence]:
+    def get_resistance_evidence(self) -> list[TherapeuticData]:
         """Get therapeutic evidence specifically for resistance."""
         all_evidence = self.get_therapeutic_evidence(include_preclinical=True)
         return [e for e in all_evidence if e.is_resistance()]
 
-    def get_sensitivity_evidence(self) -> list[TherapeuticEvidence]:
+    def get_sensitivity_evidence(self) -> list[TherapeuticData]:
         """Get therapeutic evidence specifically for sensitivity."""
         all_evidence = self.get_therapeutic_evidence(include_preclinical=True)
         return [e for e in all_evidence if e.is_sensitivity()]
 
-    def get_fda_approved_therapies(self) -> list[TherapeuticEvidence]:
+    def get_fda_approved_therapies(self) -> list[TherapeuticData]:
         """Get all FDA-approved therapies with no limit.
 
         Sources:
@@ -634,9 +631,9 @@ class Evidence(BaseModel):
         Used by both the Therapies tab and Gap Analysis.
 
         Returns:
-            List of TherapeuticEvidence with evidence_level="FDA-approved"
+            List of TherapeuticData with evidence_level="FDA-approved"
         """
-        evidence_list: list[TherapeuticEvidence] = []
+        evidence_list: list[TherapeuticData] = []
         # Use (drug, association) as key to allow same drug with different responses
         # e.g., Imatinib Responsive + Imatinib Resistant should both appear
         seen_entries: set[tuple[str, str]] = set()
@@ -670,7 +667,7 @@ class Evidence(BaseModel):
                 dailymed_search = approval.brand_name or approval.generic_name or approval.drug_name
                 dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={dailymed_search.replace(' ', '+')}" if dailymed_search else None
 
-                evidence_list.append(TherapeuticEvidence(
+                evidence_list.append(TherapeuticData(
                     drug_name=drug_name,
                     evidence_level="FDA-approved",
                     approval_status="Approved in indication" if approval.variant_in_indications else "Approved",
@@ -698,7 +695,7 @@ class Evidence(BaseModel):
 
                         cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
 
-                        evidence_list.append(TherapeuticEvidence(
+                        evidence_list.append(TherapeuticData(
                             drug_name=therapy,
                             evidence_level="FDA-approved",
                             approval_status="FDA Approved (CIViC)",
@@ -734,7 +731,7 @@ class Evidence(BaseModel):
                     # Generate DailyMed URL for CGI-sourced FDA approvals
                     dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={biomarker.drug.replace(' ', '+')}"
 
-                    evidence_list.append(TherapeuticEvidence(
+                    evidence_list.append(TherapeuticData(
                         drug_name=biomarker.drug,
                         evidence_level="FDA-approved",
                         approval_status="FDA Approved (CGI)",
@@ -1265,7 +1262,7 @@ class Evidence(BaseModel):
         # Check for conflicting evidence
         conflicting_drugs: dict[str, str] = {}  # drug -> conflict description
         if self.evidence_gaps:
-            from oncomind.models.evidence.evidence_gaps import GapCategory
+            from oncomind.models.extracted.evidence_gaps import GapCategory
             discordant_gaps = self.evidence_gaps.get_gaps_by_category(GapCategory.DISCORDANT)
             for gap in discordant_gaps:
                 if "Conflicting drug response for" in gap.description:

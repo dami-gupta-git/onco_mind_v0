@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, Field
 
-from oncomind.models.therapeutic_evidence import TherapeuticEvidence
+from oncomind.models.extracted.therapeutic_data import TherapeuticData
 
 
 class LLMInsight(BaseModel):
@@ -32,7 +32,7 @@ class LLMInsight(BaseModel):
     )
 
     # Changed from recommended_therapies to therapeutic_evidence
-    therapeutic_evidence: list[TherapeuticEvidence] = Field(
+    therapeutic_evidence: list[TherapeuticData] = Field(
         default_factory=list,
         description="Therapeutic evidence at all levels"
     )
@@ -71,6 +71,6 @@ class LLMInsight(BaseModel):
 
     # Backwards compatibility
     @property
-    def recommended_therapies(self) -> list[TherapeuticEvidence]:
+    def recommended_therapies(self) -> list[TherapeuticData]:
         """Backwards-compatible alias."""
         return self.therapeutic_evidence

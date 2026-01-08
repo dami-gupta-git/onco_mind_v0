@@ -20,10 +20,9 @@ This document describes each external data source OncoMind fetches from, what da
 12. [OncoTree](#oncotree)
 13. [cBioPortal](#cbioportal)
 14. [DepMap (Cancer Dependency Map)](#depmap)
-15. [Evidence Gap Detection](#evidence-gap-detection)
-16. [LLM Research Synthesis](#llm-research-synthesis)
-17. [Therapeutic Evidence Model](#therapeutic-evidence-model)
-18. [Literature Knowledge Model](#literature-knowledge-model)
+15. [Cancer Hotspots](#cancer-hotspots)
+16. [Evidence Gap Detection](#evidence-gap-detection) → [GAP_DETECTION.md](GAP_DETECTION.md)
+17. [LLM Integration](#llm-integration) → [LLM.md](LLM.md)
 
 ---
 
@@ -52,6 +51,7 @@ OncoMind uses a layered evidence architecture that separates deterministic annot
 │       ├── functional (AlphaMissense, CADD)     │                   │
 │       ├── clinical (FDA, CIViC, VICC, CGI)     │                   │
 │       ├── biological (cBioPortal, DepMap)      │                   │
+│       ├── hotspots (Cancer Hotspots MSK)       │                   │
 │       ├── literature (PubMed, Semantic Scholar)│                   │
 │       └── evidence_gaps (computed)             │                   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -67,7 +67,7 @@ All evidence items track how precisely they match the query variant:
 | `codon` | Same position, different change | BRAF V600K → evidence for "V600 mutations" |
 | `gene` | Gene-level only | BRAF V600E → evidence for "BRAF mutations" |
 
-This is tracked via the `match_level` field on `TherapeuticEvidence`, `CIViCAssertionEvidence`, `VICCEvidence`, `CGIBiomarkerEvidence`, and `FDAApproval`.
+This is tracked via the `locus_match` field on `TherapeuticData`, `CIViCAssertionEvidence`, `VICCEvidence`, `CGIBiomarkerEvidence`, and `FDAApproval`.
 
 ### Evidence Model Structure
 
@@ -96,6 +96,7 @@ class Evidence(BaseModel):
     # Rich context sources
     cbioportal_evidence: CBioPortalEvidence | None
     depmap_evidence: DepMapEvidence | None
+    hotspots_evidence: HotspotsEvidence | None
     literature_knowledge: LiteratureKnowledge | None
 
     # Computed analysis
@@ -108,7 +109,7 @@ The `Evidence` model provides methods for downstream consumption:
 
 | Method | Purpose |
 |--------|---------|
-| `get_therapeutic_evidence()` | Returns `list[TherapeuticEvidence]` sorted by evidence tier |
+| `get_therapeutic_evidence()` | Returns `list[TherapeuticData]` sorted by evidence tier |
 | `get_resistance_summary()` | Synthesized narrative of resistance signals |
 | `get_sensitivity_summary()` | Synthesized narrative of sensitivity signals |
 | `get_evidence_summary_for_llm()` | Compact text for LLM prompt |
@@ -884,476 +885,120 @@ If DepMap data is missing for a clinically relevant variant, gaps are flagged:
 
 ---
 
+## Cancer Hotspots
+
+**Data Source:** `cancerhotspots.org` (Memorial Sloan Kettering) - Local TSV file
+
+**Purpose:** Identify statistically significant recurrent mutation sites across large-scale cancer genomics data to contextualize variant significance.
+
+### Data Source
+
+Cancer Hotspots is a resource that identifies recurrent mutations (hotspots) from aggregated sequencing data across thousands of cancer samples.
+
+- **Publication:** Chang et al., Cancer Discovery 2017, 2018
+- **Data file:** `data/hotspots_msk/hotspots.txt` (bundled with OncoMind)
+- **Format:** Tab-separated values
+
+### Data Retrieved
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `gene` | `str` | Gene symbol (e.g., "BRAF") |
+| `residue` | `str` | Hotspot residue position (e.g., "V600") |
+| `hotspot_type` | `str` | "single residue" or "in-frame indel" |
+| `q_value` | `float` | Statistical significance (smaller = more significant) |
+| `total_samples` | `int` | Number of samples with mutations at this residue |
+| `variants` | `list[HotspotVariant]` | Breakdown of specific AA changes (e.g., E:833, K:24) |
+| `tumor_type_composition` | `list[HotspotTumorType]` | Tumor type distribution (e.g., skin:357, thyroid:316) |
+
+### Match Types
+
+| Field | Description |
+|-------|-------------|
+| `is_hotspot` | True if variant is at a known hotspot residue |
+| `is_exact_variant_match` | True if the exact amino acid change is documented in hotspot data |
+
+**Example:** For BRAF V600E:
+- `is_hotspot: true` - V600 is a known hotspot
+- `is_exact_variant_match: true` - V600E specifically is documented with 833 samples
+- `q_value: 5.2e-54` - Highly statistically significant
+
+### How Hotspot Data Flows to LLM
+
+The `HotspotsEvidence.to_prompt_context()` method formats data for LLM:
+
+```
+CANCER HOTSPOT: BRAF V600 is a known cancer hotspot (exact variant match, q=5.2e-54)
+  Observed in 893 cancer samples
+  Common changes: V600E:833, V600M:29, V600K:24, V600R:4
+  Tumor distribution: skin:357, thyroid:316, bowel:113, lung:33
+  Source: [cancerhotspots.org](https://www.cancerhotspots.org/)
+```
+
+The LLM uses this to:
+1. **Calibrate significance**: Hotspot variants are more likely to be drivers
+2. **Provide context**: Compare queried variant to other changes at same residue
+3. **Guide research questions**: Less common variants at hotspot residues may have distinct biology
+
+### Evidence Gap Detection
+
+Hotspot data contributes to gap detection:
+
+| Scenario | Impact |
+|----------|--------|
+| Variant at hotspot (exact match) | Supports "known driver mutation" assessment |
+| Variant at hotspot residue (codon match) | May warrant functional investigation |
+| Not at hotspot | No penalty; many drivers are not at statistical hotspots |
+
+### Data Model
+
+```python
+class HotspotsEvidence(EvidenceItemBase):
+    gene: str
+    variant: str | None
+    queried_residue: str | None  # e.g., "V600"
+
+    hotspot: HotspotEntry | None  # The matching hotspot if found
+
+    is_hotspot: bool  # True if variant at known hotspot
+    is_exact_variant_match: bool  # True if exact AA change documented
+```
+
+### Code References
+
+- **Model**: [hotspots.py](src/oncomind/models/evidence/hotspots.py) - `HotspotsEvidence`, `HotspotEntry`
+- **Client**: [hotspots.py](src/oncomind/api/hotspots.py) - `HotspotsClient`
+- **Data file**: `data/hotspots_msk/hotspots.txt`
+
+---
+
 ## Evidence Gap Detection
 
-**Purpose:** Identify what's unknown or understudied about a variant to guide research priorities.
+Gap detection identifies what's unknown or understudied about a variant to guide research priorities.
 
-### Gap Categories
+**→ See [GAP_DETECTION.md](GAP_DETECTION.md) for complete documentation including:**
+- Gap categories and severity levels
+- Well-characterized aspect tracking
+- Gap detection checks (13 different checks)
+- Context-aware study suggestions
+- Evidence quality scoring algorithm
+- Research priority determination
+- EvidenceGaps model reference
 
-| Category | Description | Example Gap |
-|----------|-------------|-------------|
-| `FUNCTIONAL` | Mechanism unknown | "Functional impact of V657F on JAK1 protein is unknown" |
-| `CLINICAL` | No clinical trials/outcomes | "No curated clinical evidence for JAK1 V657F" |
-| `TUMOR_TYPE` | Not studied in this tumor type | "No evidence specific to T-ALL for JAK1 V657F" |
-| `DRUG_RESPONSE` | No drug sensitivity data | "No drug sensitivity/resistance data" |
-| `RESISTANCE` | Resistance mechanisms unknown | "Resistance mechanisms not well characterized" |
-| `PRECLINICAL` | No cell line/model data | "No cell line models identified" |
-| `PREVALENCE` | Frequency unknown | "Prevalence in T-ALL unknown" |
-| `PROGNOSTIC` | Survival impact unknown | "Prognostic impact not characterized" |
-| `DISCORDANT` | Conflicting evidence between sources | "Conflicting drug response for osimertinib" |
-| `VALIDATION` | Strong oncogenic signal but lacks therapeutic validation | "Strong oncogenic signal but limited therapeutic validation" |
-
-### Gap Severity Levels
-
-| Severity | Weight | Meaning |
-|----------|--------|---------|
-| `CRITICAL` | 3.0 | No data at all in key area |
-| `SIGNIFICANT` | 2.0 | Limited data, needs more research |
-| `MINOR` | 1.0 | Some data exists but could be deeper |
-
-### Well-Characterized Aspects
-
-The gap detector also identifies what IS well-characterized, with structured basis:
-
-```python
-class CharacterizedAspect(BaseModel):
-    aspect: str      # "clinical actionability"
-    basis: str       # "3 FDA approvals + 5 CIViC assertions"
-    category: GapCategory | None  # For grouped display
-```
-
-Example output:
-```
-well_characterized_detailed = [
-    CharacterizedAspect(
-        aspect="Clinical Actionability",
-        basis="3 FDA approvals + 5 CIViC assertions",
-        category=GapCategory.CLINICAL
-    ),
-    CharacterizedAspect(
-        aspect="Computational Pathogenicity",
-        basis="AlphaMissense=0.99 | CADD=32.5 | PolyPhen2=D",
-        category=GapCategory.FUNCTIONAL
-    ),
-]
-```
-
-### Gap Detection Checks
-
-The `detect_evidence_gaps()` function ([gap_detector.py](src/oncomind/insight_builder/gap_detector.py)) runs these checks:
-
-1. **Hotspot context** - Is variant at or near a known cancer hotspot?
-2. **Functional predictions** - AlphaMissense, CADD, PolyPhen2 available?
-3. **Gene mechanism** - Gene role, pathway, DepMap essentiality known?
-4. **Clinical evidence** - FDA approvals, CIViC assertions present?
-5. **Tumor-type evidence** - Evidence specific to query tumor type?
-6. **Drug response** - CGI, VICC, preclinical biomarkers present?
-7. **Resistance mechanisms** - Resistance signals from any source?
-8. **Discordant evidence** - Cross-source conflicts detected?
-9. **Prevalence** - cBioPortal data available?
-10. **Clinical trials** - Active trials found?
-11. **Preclinical models** - Cell lines with mutation in DepMap?
-12. **Literature depth** - PubMed articles found (if searched)?
-13. **Validation gap** - Strong oncogenic signal but no therapeutic validation?
-
-### Context-Aware Suggestions
-
-Gaps are enriched with dynamic, evidence-aware study suggestions:
-
-```python
-# If resistance gap + primary drug known:
-"Test bypass mechanisms for vemurafenib resistance in BRAF-mutant models"
-"ctDNA monitoring for BRAF V600E emergence under vemurafenib treatment"
-
-# If preclinical gap + DepMap drugs known:
-"Validate sensitivity to trametinib, cobimetinib in isogenic BRAF V600E models"
-
-# If validation gap + strong co-occurrence:
-"Investigate synthetic lethality with CDKN2A co-mutation"
-"CRISPR screen in BRAF/CDKN2A double-mutant background"
-```
-
-### Overall Quality Scoring
-
-Evidence quality uses net scoring (gaps minus well-characterized):
-
-```python
-gap_score = sum(
-    GAP_CATEGORY_WEIGHTS[gap.category] * SEVERITY_MULTIPLIERS[gap.severity]
-    for gap in gaps
-)
-positive_credit = well_characterized_count * 1.5
-net_score = gap_score - positive_credit
-
-# Thresholds
-if net_score >= 12.0: return "minimal"
-elif net_score >= 6.0: return "limited"
-elif net_score >= 0.0: return "moderate"
-else: return "comprehensive"
-```
-
-### Research Priority
-
-Research priority considers gene importance and gap profile:
-
-| Priority | Criteria |
-|----------|----------|
-| `very_high` | Strong oncogenic signal (pathogenic + essential) + biological gaps |
-| `very_high` | Hotspot-adjacent variant with pathogenic signal + biological gaps |
-| `high` | Cancer gene with critical gaps |
-| `high` | Hotspot-adjacent variant in cancer gene |
-| `medium` | Any critical gaps OR cancer gene with significant gaps |
-| `low` | Comprehensive evidence with no significant gaps |
-
-### EvidenceGaps Model
-
-```python
-class EvidenceGaps(BaseModel):
-    gaps: list[EvidenceGap]
-    overall_evidence_quality: str  # "comprehensive" | "moderate" | "limited" | "minimal"
-    well_characterized: list[str]  # Simple strings (legacy)
-    well_characterized_detailed: list[CharacterizedAspect]  # With basis
-    poorly_characterized: list[str]
-    research_priority: str  # "very_high" | "high" | "medium" | "low"
-
-    def to_dict_for_llm(self) -> dict:
-        """Format for LLM prompt with knowledge_gaps key."""
-
-    def top_gaps(self, n: int = 3) -> list[EvidenceGap]:
-        """Get N most important gaps sorted by severity."""
-```
+**Code Reference:** [gap_detector.py](src/oncomind/insight_builder/gap_detector.py)
 
 ---
 
-## LLM Research Synthesis
+## LLM Integration
 
-**Purpose:** Generate research-focused narrative synthesis calibrated to evidence quality.
+OncoMind uses LLMs for evidence synthesis and research analysis. LLM functionality is optional and runs in parallel for performance.
 
-### Multi-Provider Support
+**→ See [LLM.md](LLM.md) for complete documentation including:**
+- LLM Research Synthesis with evidence quality calibration
+- Cross-Source Drug Analysis with conflict detection
+- Paper relevance scoring
+- Variant knowledge extraction
+- Parallel execution model
+- LLMInsight and Result models
 
-OncoMind uses [litellm](https://github.com/BerriAI/litellm) for multi-provider LLM support:
-
-```python
-# Supported models
-"claude-sonnet-4-20250514"  # Default, recommended
-"claude-3-5-haiku-20241022" # Faster, lower cost
-"gpt-4o-mini"               # OpenAI
-"gpt-4o"                    # OpenAI
-"gpt-4-turbo"               # OpenAI
-```
-
-### Research-Oriented Prompt Design
-
-The LLM receives structured context with explicit data availability flags:
-
-```
-## DATA AVAILABILITY FLAGS
-has_tumor_specific_cbioportal_data: TRUE/FALSE
-has_civic_assertions: TRUE/FALSE
-has_fda_approvals: TRUE/FALSE
-has_vicc_evidence: TRUE/FALSE
-
-## BIOLOGICAL CONTEXT
-{cBioPortal prevalence, co-mutations, DepMap essentiality}
-
-## THERAPEUTIC SIGNALS
-Sensitivity: {synthesized from Evidence.get_sensitivity_summary()}
-Resistance: {synthesized from Evidence.get_resistance_summary()}
-
-## DATABASE EVIDENCE
-{compact summary from Evidence.get_evidence_summary_for_llm()}
-
-## LITERATURE FINDINGS
-{from Evidence.get_literature_summary_for_llm()}
-
-## EVIDENCE GAPS
-{from EvidenceGaps.to_dict_for_llm()}
-```
-
-### Evidence Quality Calibration
-
-The LLM is instructed to calibrate confidence based on evidence quality:
-
-| Quality | LLM Behavior |
-|---------|--------------|
-| `limited` / `minimal` | Generic gene function only, no variant-specific claims |
-| No tumor-specific cBioPortal | Must state "pan-cancer data; no {tumor}-specific data" |
-| No CIViC/FDA/VICC | Must NOT use "direct clinical data" evidence tag |
-
-### Research Hypothesis Generation
-
-The LLM generates 2-3 testable hypotheses, each with an evidence basis tag:
-
-| Tag | Meaning |
-|-----|---------|
-| `[Direct Clinical Data]` | Builds on FDA/CIViC/Phase 2-3 for THIS variant |
-| `[Preclinical Data]` | Builds on DepMap/cell line/in vitro data |
-| `[Pan-Cancer Extrapolation]` | Extrapolates from other tumor types |
-| `[Nearby-Variant Inference]` | Extrapolates from other variants in same gene |
-| `[Pathway-Level Inference]` | Infers from general pathway biology |
-
-Example hypotheses:
-```
-[Preclinical Data] Given the lack of functional data for JAK1 V657F despite
-its recurrence in T-ALL, isogenic knock-in models could determine whether
-this variant causes gain- or loss-of-function signaling.
-
-[Pan-Cancer Extrapolation] While EGFR L858R shows sensitivity to osimertinib
-in NSCLC, testing this response in breast cancer models would determine
-cross-histology applicability.
-```
-
-### LLMInsight Model
-
-The LLM returns structured insight via the `LLMInsight` model:
-
-```python
-class LLMInsight(BaseModel):
-    llm_summary: str                    # Combined narrative
-    rationale: str                      # Research implications
-    clinical_trials_available: bool
-    therapeutic_evidence: list          # Empty (comes from Evidence)
-    references: list[str]               # PMIDs, trial IDs, sources
-
-    # Raw component data for UI formatting
-    functional_summary: str | None
-    biological_context: str | None
-    therapeutic_landscape: dict | None  # fda_approved, clinical_evidence, preclinical, resistance_mechanisms
-
-    # Research assessment fields
-    evidence_quality: str | None        # "comprehensive" | "moderate" | "limited" | "minimal"
-    knowledge_gaps: list[str]
-    well_characterized: list[str]
-    conflicting_evidence: list[str]
-    research_implications: str
-    evidence_tags: list[str]            # Transparency tags
-    research_hypotheses: list[str]      # With evidence basis tags
-```
-
-### Paper Relevance Scoring
-
-The LLM service also scores individual papers for relevance:
-
-```python
-async def score_paper_relevance(
-    title: str,
-    abstract: str | None,
-    tldr: str | None,
-    gene: str,
-    variant: str,
-    tumor_type: str | None,
-) -> dict:
-    """
-    Returns:
-        relevance_score: float 0-1
-        is_relevant: bool (True if >= 0.6)
-        signal_type: "resistance" | "sensitivity" | "mixed" | "prognostic" | "unclear"
-        drugs_mentioned: list[str]
-        key_finding: str
-        confidence: float 0-1
-    """
-```
-
-### Variant Knowledge Extraction
-
-Extracts structured knowledge from multiple papers:
-
-```python
-async def extract_variant_knowledge(
-    gene: str,
-    variant: str,
-    tumor_type: str,
-    paper_contents: list[dict],
-) -> dict:
-    """
-    Returns:
-        mutation_type: "primary" | "secondary" | "both" | "unknown"
-        resistant_to: list[{drug, evidence, mechanism}]
-        sensitive_to: list[{drug, evidence}]
-        clinical_significance: str
-        evidence_level: str
-        key_findings: list[str]
-        confidence: float
-    """
-```
-
----
-
-## Therapeutic Evidence Model
-
-**Purpose:** Unified model for therapeutic evidence at all evidence levels (FDA → preclinical).
-
-### TherapeuticEvidence Fields
-
-```python
-class TherapeuticEvidence(BaseModel):
-    # Core fields (from legacy RecommendedTherapy)
-    drug_name: str
-    evidence_level: str | None   # "FDA-approved" | "Phase 3" | "Phase 2" | "Preclinical" | etc.
-    approval_status: str | None  # "Approved in indication" | "Investigational" | etc.
-    clinical_context: str | None # "first-line", "resistance setting", etc.
-
-    # Research-focused fields
-    response_type: str | None    # "Sensitivity" | "Resistance" | "Mixed"
-    mechanism: str | None        # "Constitutive kinase activation"
-    tumor_types_tested: list[str]
-    cell_lines_tested: list[str]
-    ic50_nm: float | None
-    response_rate_pct: float | None
-
-    # Source attribution
-    source: str | None           # "CIViC" | "CGI" | "VICC" | "FDA" | "DepMap"
-    source_url: str | None
-    pmids: list[str]
-    confidence: str              # "high" | "moderate" | "low"
-
-    # Match specificity
-    match_level: str | None      # "variant" | "codon" | "gene"
-```
-
-### Evidence Tier Ranking
-
-```python
-def get_evidence_tier(self) -> int:
-    """
-    1: FDA-approved
-    2: Phase 3
-    3: Phase 2
-    4: Phase 1 / Case reports
-    5: Preclinical
-    6: In vitro / Computational
-    7: Unknown
-    """
-```
-
-### Getting Therapeutic Evidence
-
-```python
-# From Evidence model:
-result.evidence.get_therapeutic_evidence(
-    include_preclinical=True,  # Include DepMap/CGI preclinical
-    max_results=20
-) -> list[TherapeuticEvidence]
-
-# Grouped by level:
-result.evidence.get_therapeutic_evidence_by_level() -> {
-    "fda_approved": [...],
-    "clinical": [...],
-    "preclinical": [...]
-}
-
-# Filtered by response:
-result.evidence.get_resistance_evidence() -> list[TherapeuticEvidence]
-result.evidence.get_sensitivity_evidence() -> list[TherapeuticEvidence]
-```
-
-### Source Priority
-
-When building therapeutic evidence, sources are processed in order:
-
-1. **FDA approvals** (Tier 1) - `source="FDA"`
-2. **CIViC assertions** (Tier 1-2) - `source="CIViC"`
-3. **CGI FDA-approved biomarkers** (Tier 1) - `source="CGI"`
-4. **VICC evidence** (Tier 1-3) - `source="VICC ({original_source})"`
-5. **CGI preclinical biomarkers** (Tier 5) - `source="CGI (preclinical)"`
-
-Duplicates are removed by drug name (case-insensitive).
-
----
-
-## Literature Knowledge Model
-
-**Purpose:** Structured knowledge extracted from literature via LLM.
-
-### LiteratureKnowledge Fields
-
-```python
-class LiteratureKnowledge(BaseModel):
-    mutation_type: str           # "primary" | "secondary" | "both" | "unknown"
-    is_prognostic_only: bool     # True if variant only prognostic, not predictive
-
-    resistant_to: list[DrugResistance]
-    sensitive_to: list[DrugSensitivity]
-
-    clinical_significance: str
-    evidence_level: str          # "FDA-approved" | "Phase 3" | ... | "None"
-    references: list[str]        # PMIDs
-    key_findings: list[str]
-    confidence: float            # 0-1
-```
-
-### Predictive vs Prognostic Distinction
-
-```python
-class DrugResistance(BaseModel):
-    drug: str
-    evidence: str                # "in vitro" | "preclinical" | "clinical" | "FDA-labeled"
-    mechanism: str | None
-    is_predictive: bool          # True = affects drug selection, False = just prognostic
-
-# Usage:
-literature_knowledge.get_resistance_drugs(predictive_only=True)
-literature_knowledge.is_resistance_marker(predictive_only=True)
-```
-
----
-
-## Evidence Flow Summary
-
-```
-User Query (gene, variant, tumor_type)
-           │
-           ├──► MyVariant.info ──► ClinVar, COSMIC, gnomAD, CADD, AlphaMissense
-           │         │
-           │         └──► VEP (fallback) ──► Functional predictions
-           │
-           ├──► CIViC GraphQL ──► AMP/ASCO/CAP assertions
-           │
-           ├──► VICC MetaKB ──► Harmonized evidence from OncoKB, CIViC, CGI, JAX
-           │
-           ├──► CGI Biomarkers ──► FDA/NCCN approval status
-           │
-           ├──► FDA OpenFDA ──► Drug approval indications
-           │
-           ├──► ClinicalTrials.gov ──► Active clinical trials
-           │
-           ├──► Semantic Scholar ──► Literature with citations, TLDR
-           │
-           ├──► PubMed ──► Research articles
-           │
-           ├──► OncoTree ──► Standardized tumor type
-           │
-           ├──► cBioPortal ──► Prevalence, co-mutations, biological context
-           │
-           └──► DepMap ──► Gene essentiality, drug sensitivity, cell line models
-                   │
-                   ▼
-           ┌───────────────────────────────────────────┐
-           │           Evidence Model                  │
-           │  ├── identifiers, functional, context     │
-           │  ├── clinical evidence lists              │
-           │  ├── cbioportal_evidence, depmap_evidence │
-           │  └── literature_knowledge                 │
-           └───────────────────────────────────────────┘
-                   │
-                   ▼
-           ┌───────────────────────────────────────────┐
-           │         Gap Detection                     │
-           │  detect_evidence_gaps(evidence) →         │
-           │  EvidenceGaps with research_priority      │
-           └───────────────────────────────────────────┘
-                   │
-                   ▼
-           ┌───────────────────────────────────────────┐
-           │      LLM Research Synthesis (optional)    │
-           │  Calibrated narrative + hypotheses →      │
-           │  LLMInsight with evidence_tags            │
-           └───────────────────────────────────────────┘
-                   │
-                   ▼
-           ┌───────────────────────────────────────────┐
-           │              Result                       │
-           │  evidence: Evidence                       │
-           │  llm: LLMInsight | None                   │
-           └───────────────────────────────────────────┘
-```
+**Code Reference:** [service.py](src/oncomind/llm/service.py), [prompts.py](src/oncomind/llm/prompts.py)

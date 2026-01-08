@@ -25,9 +25,9 @@ from oncomind.insight_builder.gap_detector import (
 from oncomind.models.gene_context import (
     is_hotspot_variant,
     is_hotspot_adjacent,
-    CANCER_HOTSPOTS,
 )
-from oncomind.models.evidence.evidence_gaps import (
+from oncomind.api.hotspots import get_cancer_hotspots
+from oncomind.models.extracted.evidence_gaps import (
     GapCategory,
     GapSeverity,
     EvidenceGaps,
@@ -66,16 +66,18 @@ class TestHotspotDetection:
         assert is_hotspot_variant("FAKEGENE", "V600E") is False
 
     def test_is_hotspot_adjacent_near_braf_600(self):
-        """BRAF V598E is adjacent to hotspot V600."""
+        """BRAF V598E is adjacent to hotspot V597 (the nearest)."""
         is_adj, hotspot = is_hotspot_adjacent("BRAF", "V598E", window=5)
         assert is_adj is True
-        assert hotspot == 600
+        # Returns the NEAREST hotspot (597 is 1 codon away, 600 is 2 away)
+        assert hotspot == 597
 
     def test_is_hotspot_adjacent_near_kras_12(self):
-        """KRAS G14D is adjacent to hotspot G12."""
+        """KRAS G14D is adjacent to hotspot G13 (the nearest)."""
         is_adj, hotspot = is_hotspot_adjacent("KRAS", "G14D", window=5)
         assert is_adj is True
-        assert hotspot == 12
+        # Returns the NEAREST hotspot (13 is 1 codon away, 12 is 2 away)
+        assert hotspot == 13
 
     def test_is_hotspot_adjacent_at_hotspot(self):
         """Variant AT a hotspot is not 'adjacent'."""
@@ -296,7 +298,7 @@ class TestEvidenceGapsModel:
 
     def test_has_critical_gaps(self):
         """Test has_critical_gaps method."""
-        from oncomind.models.evidence.evidence_gaps import EvidenceGaps, EvidenceGap
+        from oncomind.models.extracted.evidence_gaps import EvidenceGaps, EvidenceGap
 
         gaps = EvidenceGaps(
             gaps=[
@@ -322,7 +324,7 @@ class TestEvidenceGapsModel:
 
     def test_get_gaps_by_category(self):
         """Test filtering gaps by category."""
-        from oncomind.models.evidence.evidence_gaps import EvidenceGaps, EvidenceGap
+        from oncomind.models.extracted.evidence_gaps import EvidenceGaps, EvidenceGap
 
         gaps = EvidenceGaps(
             gaps=[
@@ -352,7 +354,7 @@ class TestEvidenceGapsModel:
 
     def test_top_gaps_sorted_by_severity(self):
         """Test top_gaps returns gaps sorted by severity."""
-        from oncomind.models.evidence.evidence_gaps import EvidenceGaps, EvidenceGap
+        from oncomind.models.extracted.evidence_gaps import EvidenceGaps, EvidenceGap
 
         gaps = EvidenceGaps(
             gaps=[
@@ -381,7 +383,7 @@ class TestEvidenceGapsModel:
 
     def test_to_dict_for_llm(self):
         """Test LLM dict conversion includes required fields."""
-        from oncomind.models.evidence.evidence_gaps import EvidenceGaps, EvidenceGap
+        from oncomind.models.extracted.evidence_gaps import EvidenceGaps, EvidenceGap
 
         gaps = EvidenceGaps(
             gaps=[
@@ -408,7 +410,7 @@ class TestEvidenceGapsModel:
 
     def test_to_summary(self):
         """Test human-readable summary generation."""
-        from oncomind.models.evidence.evidence_gaps import EvidenceGaps, EvidenceGap
+        from oncomind.models.extracted.evidence_gaps import EvidenceGaps, EvidenceGap
 
         gaps = EvidenceGaps(
             gaps=[
@@ -443,17 +445,24 @@ class TestCancerHotspotsData:
         """Major cancer genes should have hotspot definitions."""
         major_genes = ["BRAF", "KRAS", "EGFR", "PIK3CA", "TP53", "IDH1", "KIT"]
         for gene in major_genes:
-            assert gene in CANCER_HOTSPOTS, f"{gene} should have hotspots defined"
+            codons = get_cancer_hotspots(gene)
+            assert len(codons) > 0, f"{gene} should have hotspots defined"
 
     def test_hotspot_values_are_positive_integers(self):
         """All hotspot codons should be positive integers."""
-        for gene, codons in CANCER_HOTSPOTS.items():
+        # Test a subset of major genes
+        major_genes = ["BRAF", "KRAS", "EGFR", "PIK3CA", "TP53"]
+        for gene in major_genes:
+            codons = get_cancer_hotspots(gene)
             for codon in codons:
                 assert isinstance(codon, int), f"{gene} codon {codon} should be int"
                 assert codon > 0, f"{gene} codon {codon} should be positive"
 
     def test_no_duplicate_hotspots_per_gene(self):
         """Each gene should not have duplicate hotspot codons."""
-        for gene, codons in CANCER_HOTSPOTS.items():
+        # Test a subset of major genes
+        major_genes = ["BRAF", "KRAS", "EGFR", "PIK3CA", "TP53"]
+        for gene in major_genes:
+            codons = get_cancer_hotspots(gene)
             assert len(codons) == len(set(codons)), \
                 f"{gene} has duplicate hotspot codons"

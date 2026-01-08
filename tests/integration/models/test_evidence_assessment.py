@@ -15,7 +15,7 @@ from pathlib import Path
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.insight_builder.gap_detector import detect_evidence_gaps
-from oncomind.models.evidence.evidence_gaps import (
+from oncomind.models.extracted.evidence_gaps import (
     GapCategory,
     GapSeverity,
     EvidenceGaps,
@@ -249,8 +249,8 @@ class TestHotspotGapIntegration:
                 if gaps is None:
                     gaps = result.evidence.compute_evidence_gaps()
 
-                # Should have "known cancer hotspot" in well_characterized
-                assert "known cancer hotspot" in gaps.well_characterized, \
+                # Should have "Known Cancer Hotspot" in well_characterized (title case)
+                assert "Known Cancer Hotspot" in gaps.well_characterized, \
                     f"{gene} {variant} should be recognized as hotspot"
 
     @pytest.mark.integration

@@ -33,8 +33,8 @@ Our differentiator is **evidence gap detection** — explicitly identifying what
 - LLM-powered hypothesis generation with evidence basis tags
 - Cited sources for all claims (enforced in prompts)
 
-### Therapeutic Evidence Model
-- `TherapeuticEvidence` model with:
+### Therapeutic Data Model
+- `TherapeuticData` model with:
   - All evidence levels (FDA → preclinical → computational)
   - Response type (sensitivity/resistance)
   - Mechanism of action
@@ -127,6 +127,22 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 
 **Research value:** "Cells with this mutation show IC50 = 12nM for trametinib vs 890nM in wild-type (GDSC2, n=23 lines)."
 
+### DGIdb Integration
+**Goal:** Replace manual drug-target mappings with comprehensive drug-gene interaction data
+
+**The problem:** The manual `BIOMARKER_SELECTION_DRUGS` mapping in `constants.py` is incomplete and requires manual curation. We need to distinguish between:
+- Drugs that directly target a gene (e.g., osimertinib targets EGFR)
+- Drugs where a gene mutation is a patient selection biomarker but not the drug target (e.g., datopotamab deruxtecan targets TROP2, but is indicated for EGFR-mutant NSCLC patients)
+
+**Implementation:**
+- Integrate DGIdb (Drug-Gene Interaction Database) API
+- ~40k drug-gene interactions with mechanism annotations
+- Cache results per gene (interactions don't change frequently)
+- Use interaction_types to classify: inhibitor, agonist, antibody, etc.
+- API: https://dgidb.org/api
+
+**Research value:** Automatic, comprehensive drug-target annotation without manual curation. Better distinction between direct targets and biomarker associations.
+
 ### Enhanced Conflict Detection
 **Goal:** Explicitly surface disagreements between sources
 
@@ -137,6 +153,69 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 - Add `conflicts` field to Evidence model
 
 **Research value:** "⚠️ Conflict: CGI reports sensitivity to drug X, but 2 recent papers (PMID: 123, 456) report acquired resistance via Y mechanism."
+
+### LLM Therapeutic Contextualization
+**Goal:** Explain *why* certain drugs are being studied — connect variant biology to therapeutic rationale
+
+**Current state:** We already send gene role (oncogene/TSG) and pathway to the LLM. The Cross-Source Drug Analysis identifies drug corroboration across sources.
+
+**Enhancement — Mechanistic Rationale (without hallucinating):**
+```
+"AKT1 is an oncogene in the PI3K/AKT pathway. E17K is a known activating
+mutation, making direct AKT inhibition a logical therapeutic strategy."
+```
+
+**Prompt instruction:**
+```
+"Explain why the identified drugs are relevant to this variant based on the
+gene role and pathway information provided. Do not invent mechanisms — only
+use what's stated in GENE ROLE and PATHWAY sections."
+```
+
+**Implementation consideration:** We currently tell the LLM not to describe mechanisms ("NEVER describe HOW a variant works mechanistically"). Need to relax this slightly to allow pathway-level context while still prohibiting invented molecular details.
+
+**Research value:** Researchers understand not just *what* drugs are relevant, but *why* — enabling better experimental design and hypothesis refinement.
+
+### Cross-Source Conflict Detection (Pre-computed)
+**Goal:** Flag when evidence sources disagree on the same drug, with structured explanations
+
+**Types of conflicts to detect:**
+1. **Same drug, opposite association** — CGI says Responsive, CIViC says Resistant
+2. **Same drug class, mixed signals** — One AKT inhibitor works, another doesn't
+3. **Different evidence levels disagree** — FDA approved but literature shows resistance emerging
+
+**Implementation — Pre-compute conflicts before LLM:**
+Detect conflicts in code and pass a structured `conflicts` section to the LLM prompt:
+```
+CONFLICTS DETECTED:
+- Imatinib: CGI says Responsive (gene-level), CGI also says Resistant (D816V-specific)
+- Vemurafenib: FDA approved (Melanoma), Literature reports resistance in CRC context
+```
+
+**Prompt instruction:**
+```
+"Review the evidence for contradictions. Distinguish between:
+- Expected biology (e.g., resistance mutation to one drug, sensitivity to next-gen drug)
+- True conflicts (same drug, same context, opposite outcomes)
+Flag true conflicts explicitly."
+```
+
+**Output enhancement:** Add `conflicts_identified` field to JSON output:
+```json
+{
+  "conflicts_identified": [
+    {
+      "drug": "Imatinib",
+      "conflict_type": "same_drug_opposite_signal",
+      "sources": ["CGI (Responsive)", "CGI (Resistant)"],
+      "likely_explanation": "D816V-specific resistance vs gene-level sensitivity",
+      "clinical_implication": "Variant-level testing critical for imatinib decisions"
+    }
+  ]
+}
+```
+
+**Research value:** Surfaces contradictions that researchers would otherwise miss by manually reviewing multiple databases. Enables smarter trial design and biomarker selection.
 
 ### Hypothesis Quality Scoring
 **Goal:** Rank generated hypotheses by testability
@@ -455,6 +534,9 @@ Public API/downloads.
 ---
 
 ## Technical Debt & Infrastructure
+
+### Code Quality
+- [ ] **Tumor type matching consistency**: Check if `_tumor_type_matches` should be used everywhere for tumor matching, e.g. in `evidence.py:524` (clinical trial cancer specificity matching). The curated lists in `gene_context.py` are already normalized so simple substring matching is appropriate there, but external data sources (ClinicalTrials.gov, CIViC, CGI) use varied terminology that may benefit from alias resolution.
 
 ### Performance Optimization
 - Pre-compute cBioPortal prevalence for common genes (cache layer)

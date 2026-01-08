@@ -1,4 +1,4 @@
-"""Evidence data from MyVariant.info API.
+"""Parsed response from MyVariant.info API.
 
 This is a simple data class that holds the parsed response from
 the MyVariant.info API. It's used internally by MyVariantClient
@@ -14,8 +14,8 @@ from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 
 
-class MyVariantEvidence(BaseModel):
-    """Parsed evidence from MyVariant.info API response.
+class MyVariantData(BaseModel):
+    """Parsed data from MyVariant.info API.
 
     This is a simple data container for the MyVariant API response.
     Used by EvidenceAggregator to extract evidence for the Insight model.

@@ -11,7 +11,7 @@ Tests the tumor type filtering and matching functionality:
 import pytest
 
 from oncomind.insight_builder import Conductor, ConductorConfig
-from oncomind.models.evidence.evidence_gaps import GapCategory
+from oncomind.models.extracted.evidence_gaps import GapCategory
 
 
 # =============================================================================

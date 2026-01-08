@@ -3,10 +3,10 @@
 import pytest
 from pydantic import ValidationError
 
-from oncomind.models.llm_insight import LLMInsight
-from oncomind.models import TherapeuticEvidence, RecommendedTherapy
+from oncomind.llm.llm_insight import LLMInsight
+from oncomind.models.extracted.therapeutic_data import TherapeuticData
 from oncomind.models.evidence import CIViCEvidence, CIViCAssertionEvidence, VICCEvidence
-from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
+from oncomind.models.evidence.myvariant_data import MyVariantData
 from oncomind.models.variant import VariantInput
 
 
@@ -193,12 +193,12 @@ class TestCIViCAssertionEvidence:
         assert resist.is_resistance is True
 
 
-class TestMyVariantEvidence:
-    """Tests for MyVariantEvidence model."""
+class TestMyVariantData:
+    """Tests for MyVariantData model."""
 
     def test_myvariant_evidence_has_evidence(self):
         """Test has_evidence method."""
-        evidence = MyVariantEvidence(
+        evidence = MyVariantData(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -210,7 +210,7 @@ class TestMyVariantEvidence:
 
     def test_myvariant_evidence_with_identifiers(self):
         """Test creating evidence with database identifiers."""
-        evidence = MyVariantEvidence(
+        evidence = MyVariantData(
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
@@ -245,7 +245,7 @@ class TestLLMInsight:
 
     def test_insight_with_therapies(self):
         """Test creating an insight with recommended therapies."""
-        therapy = RecommendedTherapy(
+        therapy = TherapeuticData(
             drug_name="Vemurafenib",
             evidence_level="FDA-approved",
             approval_status="Approved",

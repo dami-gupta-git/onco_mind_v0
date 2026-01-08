@@ -27,7 +27,7 @@ from oncomind.models.myvariant import MyVariantHit, MyVariantResponse
 
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
-from oncomind.models.evidence.myvariant_evidence import MyVariantEvidence
+from oncomind.models.evidence.myvariant_data import MyVariantData
 from oncomind.config.debug import get_logger
 
 logger = get_logger(__name__)
@@ -295,7 +295,7 @@ class MyVariantClient:
 
     def _extract_from_hit(
         self, hit: MyVariantHit, gene: str, variant: str
-    ) -> MyVariantEvidence:
+    ) -> MyVariantData:
         """Extract Evidence fields from a parsed MyVariantHit using Pydantic models.
 
         This method uses Pydantic's automatic parsing instead of manual nested
@@ -488,7 +488,7 @@ class MyVariantClient:
             else:
                 cosmic_evidence = self._parse_cosmic_evidence(cosmic_data.model_dump())
 
-        return MyVariantEvidence(
+        return MyVariantData(
             variant_id=hit.id,
             gene=gene,
             variant=variant,
@@ -655,7 +655,7 @@ class MyVariantClient:
         except Exception:
             return None
 
-    async def fetch_evidence(self, gene: str, variant: str) -> MyVariantEvidence:
+    async def fetch_evidence(self, gene: str, variant: str) -> MyVariantData:
         """Fetch evidence for a variant from multiple sources.
 
         Args:
@@ -770,7 +770,7 @@ class MyVariantClient:
 
                 # Return evidence with fallback data (ClinVar and VEP predictions)
                 # CIViC evidence should be fetched separately via CIViCClient
-                return MyVariantEvidence(
+                return MyVariantData(
                     variant_id=f"{gene}:{variant}",
                     gene=gene,
                     variant=variant,
