@@ -459,7 +459,7 @@ $ mind KRAS G14D --tumor NSCLC
 ## Code References
 
 - **Gap detector**: [gap_detector.py](../src/oncomind/insight_builder/gap_detector.py)
-- **EvidenceGaps model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py)
-- **CharacterizedAspect model**: [evidence_gaps.py](../src/oncomind/models/evidence/evidence_gaps.py) — `CharacterizedAspect` class
+- **EvidenceGaps model**: [evidence_gaps.py](../src/oncomind/models/extracted/evidence_gaps.py)
+- **CharacterizedAspect model**: [evidence_gaps.py](../src/oncomind/models/extracted/evidence_gaps.py) — `CharacterizedAspect` class
 - **Hotspot detection**: [gene_context.py](../src/oncomind/models/gene_context.py) — `is_hotspot_variant()`, `is_hotspot_adjacent()`
 - **LLM integration**: [prompts.py](../src/oncomind/llm/prompts.py) — gaps and hypotheses in LLM context

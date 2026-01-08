@@ -1,28 +1,28 @@
-"""Therapeutic evidence model for research context.
+"""Therapeutic data model for research context.
 
-Expands on RecommendedTherapy to include preclinical data, mechanisms,
-and research-relevant context beyond FDA approval status.
+Extracted from evidence items to provide a unified view of drug response data
+across FDA, CIViC, CGI, VICC, and preclinical sources.
 """
 
 from pydantic import BaseModel, Field
 
 
-class TherapeuticEvidence(BaseModel):
-    """Evidence for therapeutic relevance at any evidence level.
+class TherapeuticData(BaseModel):
+    """Unified therapeutic data extracted from multiple evidence sources.
 
-    This model merges RecommendedTherapy fields with additional research context.
+    This model merges drug response information from:
+    - FDA approvals
+    - CIViC assertions/evidence
+    - CGI biomarkers
+    - VICC MetaKB
+    - DepMap/preclinical data
 
-    Original RecommendedTherapy fields (preserved):
-    - drug_name
-    - evidence_level
-    - approval_status
-    - clinical_context
-
-    New research fields:
-    - response_type, mechanism, source, etc.
+    Fields:
+    - drug_name, evidence_level, approval_status, clinical_context (core)
+    - response_type, mechanism, source, etc. (research context)
     """
 
-    # === Original RecommendedTherapy fields (PRESERVED) ===
+    # === Core fields ===
     drug_name: str = Field(..., description="Name of the therapeutic agent")
     evidence_level: str | None = Field(
         None,
@@ -37,7 +37,7 @@ class TherapeuticEvidence(BaseModel):
         description="Clinical context (e.g., first-line, second-line, resistance setting, maintenance)"
     )
 
-    # === New research-focused fields ===
+    # === Research-focused fields ===
 
     # Response type
     response_type: str | None = Field(
@@ -189,7 +189,3 @@ class TherapeuticEvidence(BaseModel):
             parts.append(f"- {self.mechanism}")
 
         return " ".join(parts)
-
-
-# Backwards compatibility alias
-RecommendedTherapy = TherapeuticEvidence

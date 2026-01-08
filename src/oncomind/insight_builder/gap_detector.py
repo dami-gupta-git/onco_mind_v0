@@ -4,7 +4,7 @@ Analyzes what's missing from the evidence to guide research priorities.
 """
 
 from dataclasses import dataclass, field
-from oncomind.models.evidence.evidence_gaps import (
+from oncomind.models.extracted.evidence_gaps import (
     EvidenceGaps, EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
 )
 from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch
@@ -427,7 +427,7 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
             if level in match_counts:
                 match_counts[level] += 1
 
-            # Count tumor match using cancer_specificity from TherapeuticEvidence
+            # Count tumor match using cancer_specificity from TherapeuticData
             if tumor_type:
                 cancer_spec = therapy.cancer_specificity
                 if cancer_spec == "cancer_specific":

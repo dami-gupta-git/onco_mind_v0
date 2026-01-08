@@ -280,7 +280,7 @@ def insight(
                     gap_lines.append(f"   • {aspect}")
 
             # Evidence gaps by severity
-            from oncomind.models.evidence.evidence_gaps import GapSeverity
+            from oncomind.models.extracted.evidence_gaps import GapSeverity
             critical_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.CRITICAL)
             high_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.HIGH)
             significant_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.SIGNIFICANT)

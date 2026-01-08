@@ -173,14 +173,25 @@ def tumor_types_match(
     # Check via TUMOR_TYPE_MAPPINGS
     for abbrev, aliases in TUMOR_TYPE_MAPPINGS.items():
         # Check if queried tumor matches this mapping category
+        # Use min_substring_length to avoid false positives like "ma" matching "melanoma"
         query_matches = (
             query_lower == abbrev or
-            any(query_lower in alias or alias in query_lower for alias in aliases)
+            any(
+                (query_lower in alias and len(query_lower) >= min_substring_length) or
+                (alias in query_lower and len(alias) >= min_substring_length) or
+                query_lower == alias
+                for alias in aliases
+            )
         )
         # Check if source disease matches this mapping category
         source_matches = (
             source_lower == abbrev or
-            any(source_lower in alias or alias in source_lower for alias in aliases)
+            any(
+                (source_lower in alias and len(source_lower) >= min_substring_length) or
+                (alias in source_lower and len(alias) >= min_substring_length) or
+                source_lower == alias
+                for alias in aliases
+            )
         )
         # If both match the same category, they're related
         if query_matches and source_matches:

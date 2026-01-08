@@ -73,11 +73,13 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  │  - Result (top-level output)                                │  │
 │  │    ├── evidence: Evidence (structured data)                 │  │
 │  │    │   ├── identifiers: VariantIdentifiers                  │  │
-│  │    │   ├── kb: KnowledgebaseEvidence                        │  │
 │  │    │   ├── functional: FunctionalScores                     │  │
-│  │    │   ├── clinical: ClinicalContext                        │  │
-│  │    │   └── literature: LiteratureEvidence                   │  │
-│  │    └── llm: LLMInsight | None  ← Optional LLM narrative     │  │
+│  │    │   ├── context: VariantContext                          │  │
+│  │    │   ├── fda_approvals, civic_*, vicc_*, cgi_*            │  │
+│  │    │   ├── cbioportal_evidence, depmap_evidence             │  │
+│  │    │   └── evidence_gaps: EvidenceGaps                      │  │
+│  │    ├── llm: LLMInsight | None  ← Optional LLM narrative     │  │
+│  │    └── cross_source_analysis: dict | None  ← Drug synthesis │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
 ```
@@ -96,25 +98,42 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 All code paths return a single `Result` object that contains:
 - `evidence`: Structured data from databases (always populated)
 - `llm`: Optional LLM-generated narrative (when LLM mode is enabled)
+- `cross_source_analysis`: Optional cross-source drug synthesis (when LLM mode is enabled)
 
 ```python
-# The Result model wraps Evidence and optional LLMInsight
+# The Result model wraps Evidence, optional LLMInsight, and cross-source analysis
 class Result(BaseModel):
-    evidence: Evidence                 # Structured data (always present)
-    llm: LLMInsight | None             # LLM narrative (when enabled)
+    evidence: Evidence                      # Structured data (always present)
+    llm: LLMInsight | None                  # LLM narrative (when enabled)
+    cross_source_analysis: dict | None      # Cross-source drug synthesis (when LLM enabled)
 
     # Property shortcuts for convenience:
     @property
     def identifiers(self) -> VariantIdentifiers:
         return self.evidence.identifiers
-    # ... similar for kb, functional, clinical, literature
+    # ... similar for functional, context
 
 class Evidence(BaseModel):
-    identifiers: VariantIdentifiers    # Gene, variant, IDs
-    kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
-    functional: FunctionalScores       # AlphaMissense, CADD, etc.
-    clinical: ClinicalContext          # FDA, trials, gene role
-    literature: LiteratureEvidence     # PubMed, extracted knowledge
+    identifiers: VariantIdentifiers         # Gene, variant, IDs
+    functional: FunctionalScores            # AlphaMissense, CADD, etc.
+    context: VariantContext                 # tumor_type, gene_role, pathway
+
+    # Evidence lists (flattened, one per source)
+    fda_approvals: list[FDAApproval]
+    civic_assertions: list[CIViCAssertionEvidence]
+    civic_evidence: list[CIViCEvidence]
+    vicc_evidence: list[VICCEvidence]
+    cgi_biomarkers: list[CGIBiomarkerEvidence]
+    clinical_trials: list[ClinicalTrialEvidence]
+    pubmed_articles: list[PubMedEvidence]
+
+    # Rich context sources
+    cbioportal_evidence: CBioPortalEvidence | None
+    depmap_evidence: DepMapEvidence | None
+    literature_knowledge: LiteratureKnowledge | None
+
+    # Computed analysis
+    evidence_gaps: EvidenceGaps | None
 ```
 
 ### 3. LLM as Optional Enhancement
@@ -127,18 +146,26 @@ config = ConductorConfig(enable_llm=False)
 async with Conductor(config) as conductor:
     result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 print(result.llm)  # None
+print(result.cross_source_analysis)  # None
 
-# LLM mode: + literature search + research narrative (~25s)
+# LLM mode: + literature search + research narrative + cross-source analysis (~20s)
 config = ConductorConfig(enable_llm=True)
 async with Conductor(config) as conductor:
     result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
 print(result.llm.llm_summary)  # LLM narrative with gaps and hypotheses
+print(result.cross_source_analysis)  # Cross-source drug corroboration/conflicts
 ```
+
+**Note:** When LLM mode is enabled, two LLM calls run **in parallel** using `asyncio.gather()`:
+1. **Research Synthesis** → `LLMInsight` with narrative, gaps, hypotheses
+2. **Cross-Source Drug Analysis** → `dict` with corroboration, conflicts, emerging targets
+
+This parallel execution reduces total latency compared to sequential calls.
 
 **CLI equivalent:**
 ```bash
 mind insight BRAF V600E -t Melanoma           # Annotation mode (default)
-mind insight BRAF V600E -t Melanoma --llm     # LLM mode
+mind insight BRAF V600E -t Melanoma --llm     # LLM mode (parallel synthesis + drug analysis)
 ```
 
 ### 4. Async-First Design
@@ -837,3 +864,195 @@ pytest tests/integration/ -v -m integration
 - New evidence types: Add to models/evidence/
 - New normalizers: Add patterns to input_parser.py
 - New LLM tasks: Add methods to llm/service.py
+
+---
+
+## Therapeutic Data Model
+
+**Purpose:** Unified model for therapeutic evidence at all evidence levels (FDA → preclinical).
+
+### TherapeuticData Fields
+
+```python
+class TherapeuticData(BaseModel):
+    # Core fields (from legacy RecommendedTherapy)
+    drug_name: str
+    evidence_level: str | None   # "FDA-approved" | "Phase 3" | "Phase 2" | "Preclinical" | etc.
+    approval_status: str | None  # "Approved in indication" | "Investigational" | etc.
+    clinical_context: str | None # "first-line", "resistance setting", etc.
+
+    # Research-focused fields
+    response_type: str | None    # "Sensitivity" | "Resistance" | "Mixed"
+    mechanism: str | None        # "Constitutive kinase activation"
+    tumor_types_tested: list[str]
+    cell_lines_tested: list[str]
+    ic50_nm: float | None
+    response_rate_pct: float | None
+
+    # Source attribution
+    source: str | None           # "CIViC" | "CGI" | "VICC" | "FDA" | "DepMap"
+    source_url: str | None
+    pmids: list[str]
+    confidence: str              # "high" | "moderate" | "low"
+
+    # Match specificity
+    locus_match: str | None      # "variant" | "codon" | "gene"
+```
+
+### Evidence Tier Ranking
+
+```python
+def get_evidence_tier(self) -> int:
+    """
+    1: FDA-approved
+    2: Phase 3
+    3: Phase 2
+    4: Phase 1 / Case reports
+    5: Preclinical
+    6: In vitro / Computational
+    7: Unknown
+    """
+```
+
+### Getting Therapeutic Data
+
+```python
+# From Evidence model:
+result.evidence.get_therapeutic_evidence(
+    include_preclinical=True,  # Include DepMap/CGI preclinical
+    max_results=20
+) -> list[TherapeuticData]
+
+# Grouped by level:
+result.evidence.get_therapeutic_evidence_by_level() -> {
+    "fda_approved": [...],
+    "clinical": [...],
+    "preclinical": [...]
+}
+
+# Filtered by response:
+result.evidence.get_resistance_evidence() -> list[TherapeuticData]
+result.evidence.get_sensitivity_evidence() -> list[TherapeuticData]
+```
+
+### Source Priority
+
+When building therapeutic evidence, sources are processed in order:
+
+1. **FDA approvals** (Tier 1) - `source="FDA"`
+2. **CIViC assertions** (Tier 1-2) - `source="CIViC"`
+3. **CGI FDA-approved biomarkers** (Tier 1) - `source="CGI"`
+4. **VICC evidence** (Tier 1-3) - `source="VICC ({original_source})"`
+5. **CGI preclinical biomarkers** (Tier 5) - `source="CGI (preclinical)"`
+
+Duplicates are removed by drug name (case-insensitive).
+
+---
+
+## Literature Knowledge Model
+
+**Purpose:** Structured knowledge extracted from literature via LLM.
+
+### LiteratureKnowledge Fields
+
+```python
+class LiteratureKnowledge(BaseModel):
+    mutation_type: str           # "primary" | "secondary" | "both" | "unknown"
+    is_prognostic_only: bool     # True if variant only prognostic, not predictive
+
+    resistant_to: list[LitDrugResistance]
+    sensitive_to: list[LitDrugSensitivity]
+
+    clinical_significance: str
+    evidence_level: str          # "FDA-approved" | "Phase 3" | ... | "None"
+    references: list[str]        # PMIDs
+    key_findings: list[str]
+    confidence: float            # 0-1
+```
+
+### Predictive vs Prognostic Distinction
+
+```python
+class LitDrugResistance(BaseModel):
+    drug: str
+    evidence: str                # "in vitro" | "preclinical" | "clinical" | "FDA-labeled"
+    mechanism: str | None
+    is_predictive: bool          # True = affects drug selection, False = just prognostic
+
+# Usage:
+literature_knowledge.get_resistance_drugs(predictive_only=True)
+literature_knowledge.is_resistance_marker(predictive_only=True)
+```
+
+---
+
+## Evidence Flow Summary
+
+```
+User Query (gene, variant, tumor_type)
+           │
+           ├──► MyVariant.info ──► ClinVar, COSMIC, gnomAD, CADD, AlphaMissense
+           │         │
+           │         └──► VEP (fallback) ──► Functional predictions
+           │
+           ├──► CIViC GraphQL ──► AMP/ASCO/CAP assertions
+           │
+           ├──► VICC MetaKB ──► Harmonized evidence from OncoKB, CIViC, CGI, JAX
+           │
+           ├──► CGI Biomarkers ──► FDA/NCCN approval status
+           │
+           ├──► FDA OpenFDA ──► Drug approval indications
+           │
+           ├──► ClinicalTrials.gov ──► Active clinical trials
+           │
+           ├──► Semantic Scholar ──► Literature with citations, TLDR
+           │
+           ├──► PubMed ──► Research articles
+           │
+           ├──► OncoTree ──► Standardized tumor type
+           │
+           ├──► cBioPortal ──► Prevalence, co-mutations, biological context
+           │
+           ├──► DepMap ──► Gene essentiality, drug sensitivity, cell line models
+           │
+           └──► Cancer Hotspots (local TSV) ──► Recurrent mutation site data
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │           Evidence Model                  │
+           │  ├── identifiers, functional, context     │
+           │  ├── clinical evidence lists              │
+           │  ├── cbioportal_evidence, depmap_evidence │
+           │  ├── hotspots_evidence                    │
+           │  └── literature_knowledge                 │
+           └───────────────────────────────────────────┘
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │         Gap Detection                     │
+           │  detect_evidence_gaps(evidence) →         │
+           │  EvidenceGaps with research_priority      │
+           └───────────────────────────────────────────┘
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │      LLM Layer (optional, parallel)       │
+           │                                           │
+           │  ┌─────────────────┐ ┌─────────────────┐  │
+           │  │ Research        │ │ Cross-Source    │  │
+           │  │ Synthesis       │ │ Drug Analysis   │  │
+           │  │ → LLMInsight    │ │ → drug summary  │  │
+           │  └─────────────────┘ └─────────────────┘  │
+           │         │                   │             │
+           │         └───────┬───────────┘             │
+           │                 │ asyncio.gather()        │
+           └─────────────────┼─────────────────────────┘
+                             │
+                             ▼
+           ┌───────────────────────────────────────────┐
+           │              Result                       │
+           │  evidence: Evidence                       │
+           │  llm: LLMInsight | None                   │
+           │  cross_source_analysis: dict | None       │
+           └───────────────────────────────────────────┘
+```

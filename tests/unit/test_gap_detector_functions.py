@@ -27,8 +27,8 @@ from oncomind.insight_builder.gap_detector import (
     _check_tumor_specific_evidence,
     _compute_overall_quality,
 )
-from oncomind.models.evidence.evidence_gaps import GapCategory, GapSeverity, EvidenceGap
-from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge, LitDrugResistance
+from oncomind.models.extracted.evidence_gaps import GapCategory, GapSeverity, EvidenceGap
+from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge, LitDrugResistance
 
 
 # =============================================================================

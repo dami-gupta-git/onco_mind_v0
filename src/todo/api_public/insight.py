@@ -380,7 +380,7 @@ async def _apply_llm_enhancement(
         Tuple of (updated Evidence, LLMInsight or None)
     """
     from oncomind.llm.service import LLMService
-    from oncomind.models.llm_insight import LLMInsight
+    from oncomind.llm.llm_insight import LLMInsight
 
     llm_service = LLMService(
         model=config.llm_model,
@@ -439,7 +439,7 @@ async def _apply_llm_enhancement(
 
                 # Skip if extraction failed
                 if knowledge_data is not None:
-                    from oncomind.models.evidence.literature_knowledge import (
+                    from oncomind.models.extracted.literature_knowledge import (
                         LiteratureKnowledge, LitDrugResistance, LitDrugSensitivity
                     )
 

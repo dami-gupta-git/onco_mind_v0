@@ -326,7 +326,7 @@ if result.llm:
     result.llm.rationale                # Research implications and reasoning
 
     # Therapeutic evidence
-    result.llm.therapeutic_evidence     # list[TherapeuticEvidence]
+    result.llm.therapeutic_evidence     # list[TherapeuticData]
     result.llm.recommended_therapies    # Alias for therapeutic_evidence
     result.llm.clinical_trials_available # True if trials exist
 

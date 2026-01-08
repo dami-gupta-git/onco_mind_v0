@@ -25,14 +25,14 @@ from oncomind.models.evidence.evidence import (
     FunctionalScores,
     VariantContext,
 )
-from oncomind.models.evidence.evidence_gaps import (
+from oncomind.models.extracted.evidence_gaps import (
     EvidenceGap,
     EvidenceGaps,
     GapCategory,
     GapSeverity,
 )
 from oncomind.models.evidence.fda import FDAApproval
-from oncomind.models.evidence.literature_knowledge import LiteratureKnowledge
+from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
 from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch, SourceMatch

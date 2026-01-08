@@ -1199,9 +1199,17 @@ def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool,
     if codon in hotspots:
         return False, None
 
-    # Check proximity to each hotspot
+    # Find the NEAREST hotspot within the window
+    nearest_hotspot = None
+    nearest_distance = window + 1  # Start with distance greater than window
+
     for hotspot in hotspots:
-        if abs(codon - hotspot) <= window:
-            return True, hotspot
+        distance = abs(codon - hotspot)
+        if distance <= window and distance < nearest_distance:
+            nearest_distance = distance
+            nearest_hotspot = hotspot
+
+    if nearest_hotspot is not None:
+        return True, nearest_hotspot
 
     return False, None
