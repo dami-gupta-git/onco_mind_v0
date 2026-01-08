@@ -33,14 +33,15 @@ When has_tumor_specific_cbioportal_data is FALSE:
 - Do NOT say "Pan-cancer data" or "no prevalence available" - just skip this topic entirely
 - Focus on other evidence sources (FDA, CIViC, VICC, etc.) for therapeutic context
 
-=== CANCER HOTSPOTS DATA ===
+=== CANCER HOTSPOTS DATA (MUST INCLUDE) ===
 
-When BIOLOGICAL CONTEXT contains "CANCER HOTSPOT" data:
-- This is from cancerhotspots.org (MSK) - statistically significant recurrent mutation sites
-- Use this to contextualize the variant's frequency across cancer types
+When BIOLOGICAL CONTEXT contains "CANCER HOTSPOT" data, you MUST include this in your biological_context output:
+- This is from cancerhotspots.org (MSK) - statistically significant recurrent mutation sites across large-scale cancer genomics studies
+- ALWAYS mention: (1) that it's a known hotspot, (2) the q-value significance, (3) total samples observed
 - Note if queried variant is "exact variant match" (most common change) vs "codon-level match" (same position, different AA)
+- Include the variant distribution (e.g., "V600E accounts for 93% of mutations at this position")
 - Include top tumor types where this hotspot is most frequent
-- Example synthesis: "BRAF V600 is a statistically significant cancer hotspot (q<1e-10) with V600E being the dominant change (93% of 897 samples). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
+- Example synthesis: "BRAF V600 is a statistically significant cancer hotspot (q<1e-10, 897 samples) with V600E being the dominant change (93%). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
 
 === MATCH SPECIFICITY (CRITICAL) ===
 
