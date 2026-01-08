@@ -7,6 +7,7 @@ import re
 import os
 from backend import get_variant_insight, batch_get_variant_insights
 from pdb_images import get_pdb_image_url, get_pdb_page_url
+from oncomind.api.fda_drugs import get_best_fda_url, get_cached_fda_label
 from oncomind.config.constants import (
     LLM_DEFAULT_TEMPERATURE,
     UI_MAX_CIVIC_EVIDENCE_ROWS,
@@ -68,26 +69,204 @@ st.markdown("""
     }
     /* Scrollable table container for evidence tables */
     .scrollable-table {
+        display: block;
         max-height: 400px;
         overflow-y: auto;
+        overflow-x: hidden;
         border: 1px solid #e0e0e0;
         border-radius: 4px;
         padding: 0.5rem;
-        margin-bottom: 1rem;
+        margin-bottom: 0.25rem;
     }
     .scrollable-table table {
         font-size: 0.85rem !important;
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
     }
     .scrollable-table th, .scrollable-table td {
         padding: 6px 10px !important;
+        border-bottom: 1px solid #e0e0e0;
+        text-align: left;
+        vertical-align: top;
+    }
+    .scrollable-table th {
+        background-color: #f5f5f5;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .scrollable-table a {
+        color: #1a73e8;
+        text-decoration: none;
+    }
+    .scrollable-table a:hover {
+        text-decoration: underline;
+    }
+    /* Column widths */
+    .scrollable-table .col-source { width: 100px; }
+    .scrollable-table .col-locus { width: 80px; }
+    .scrollable-table .col-tumor { width: 70px; }
+    .scrollable-table .col-drugs { width: 180px; }
+    .scrollable-table .col-response { width: 90px; }
+    .scrollable-table .col-status { width: 150px; }
+    .scrollable-table .col-indication { width: 250px; }
+    .scrollable-table .col-links { width: 80px; }
+    /* Truncated text cells */
+    .scrollable-table .truncated {
+        max-width: 250px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: help;
+        position: relative;
+    }
+    /* CSS tooltip on hover */
+    .scrollable-table .truncated:hover::after {
+        content: attr(data-full);
+        position: absolute;
+        left: 0;
+        top: 100%;
+        background: #333;
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        white-space: normal;
+        max-width: 400px;
+        width: max-content;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        line-height: 1.4;
+    }
+    /* Expandable cells - show full content on click */
+    .scrollable-table td.expandable {
+        cursor: pointer;
+    }
+    .scrollable-table td.expandable.expanded {
+        white-space: normal;
+        word-wrap: break-word;
+        background-color: #fffde7;
+        max-width: none;
+        overflow: visible;
+    }
+    .scrollable-table td.expandable.expanded::after {
+        display: none;
+    }
+    /* Tighter section dividers for evidence groupings */
+    .evidence-section-divider {
+        margin: 0.5rem 0 !important;
+        border: none;
+        border-top: 1px solid #e0e0e0;
     }
 </style>
 """, unsafe_allow_html=True)
 
 def scrollable_table(markdown_content: str) -> None:
-    """Render a markdown table inside a scrollable container."""
+    """Render a markdown table inside a scrollable container.
+
+    Converts markdown table to HTML for proper rendering with CSS styles.
+    Long cells are truncated with ellipsis and show full content on hover (title)
+    or click (expands the cell).
+    """
+    import html as html_module
+
+    # Parse markdown table to HTML
+    lines = [line.strip() for line in markdown_content.strip().split('\n') if line.strip()]
+    if len(lines) < 2:
+        st.markdown(markdown_content)
+        return
+
+    # Parse header
+    header_cells = [cell.strip() for cell in lines[0].split('|') if cell.strip()]
+
+    # Map header names to CSS classes for column widths
+    col_class_map = {
+        'source': 'col-source',
+        'id': 'col-source',
+        'locus': 'col-locus',
+        'tumor': 'col-tumor',
+        'drugs': 'col-drugs',
+        'drug': 'col-drugs',
+        'response': 'col-response',
+        'association': 'col-response',
+        'significance': 'col-response',
+        'regulatory status': 'col-status',
+        'status': 'col-status',
+        'indication': 'col-indication',
+        'links': 'col-links',
+    }
+
+    # Skip separator line (line with dashes)
+    data_lines = [l for l in lines[2:] if l and not all(c in '|-: ' for c in l)]
+
+    # Build HTML table
+    html_parts = ['<table>']
+
+    # Header row with column classes
+    html_parts.append('<thead><tr>')
+    header_classes = []
+    for cell in header_cells:
+        col_class = col_class_map.get(cell.lower(), '')
+        header_classes.append(col_class)
+        class_attr = f' class="{col_class}"' if col_class else ''
+        html_parts.append(f'<th{class_attr}>{cell}</th>')
+    html_parts.append('</tr></thead>')
+
+    # Body rows
+    html_parts.append('<tbody>')
+    for line in data_lines:
+        cells = [cell.strip() for cell in line.split('|') if cell.strip() or cell == '']
+        # Filter out empty strings from split but keep actual empty cells
+        cells = [c for i, c in enumerate(line.split('|')) if i > 0 and i < len(line.split('|')) - 1]
+        cells = [c.strip() for c in cells]
+
+        html_parts.append('<tr>')
+        for idx, cell in enumerate(cells):
+            # Convert markdown links to HTML links
+            cell_html = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" target="_blank">\1</a>', cell)
+
+            # Get column class
+            col_class = header_classes[idx] if idx < len(header_classes) else ''
+
+            # For long text, truncate with ellipsis and add tooltip
+            # Strip HTML tags to get plain text length
+            plain_text = re.sub(r'<[^>]+>', '', cell_html)
+            is_long = len(plain_text) > 35
+
+            if is_long:
+                # Escape for data attribute (replace quotes and special chars)
+                escaped_full = html_module.escape(plain_text).replace('"', '&quot;')
+                # Build class list
+                classes = ['truncated', 'expandable']
+                if col_class:
+                    classes.append(col_class)
+                class_str = ' '.join(classes)
+                html_parts.append(f'<td class="{class_str}" data-full="{escaped_full}">{cell_html}</td>')
+            else:
+                class_attr = f'class="{col_class}"' if col_class else ''
+                class_str = f' {class_attr}' if class_attr else ''
+                html_parts.append(f'<td{class_str}>{cell_html}</td>')
+        html_parts.append('</tr>')
+    html_parts.append('</tbody>')
+    html_parts.append('</table>')
+
+    html_table = '\n'.join(html_parts)
+
+    # JavaScript for click-to-expand
+    js_script = """
+    <script>
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('expandable')) {
+            e.target.classList.toggle('expanded');
+        }
+    });
+    </script>
+    """
+
     st.markdown(
-        f'<div class="scrollable-table">\n\n{markdown_content}\n\n</div>',
+        f'<div class="scrollable-table">{html_table}</div>{js_script}',
         unsafe_allow_html=True
     )
 
@@ -425,23 +604,115 @@ with tab1:
 </div>""", unsafe_allow_html=True)
 
                         with table_col:
+                            st.caption("Curated clinical evidence from CIViC (Clinical Interpretation of Variants in Cancer)")
                             # Build match summary for CIViC
-                            with st.expander("📖 Evidence Level Guide", expanded=False):
+                            with st.expander("📖 CIViC Evidence Level Guide", expanded=False):
                                 st.markdown("""
-    **AMP/ASCO/CAP Tiers:**
-    - **Tier I**: Variants with strong clinical significance (FDA-approved or guideline-recommended)
-    - **Tier II**: Variants with potential clinical significance (clinical trials, case studies)
-    - **Tier III**: Variants of unknown clinical significance
-    - **Tier IV**: Benign or likely benign variants
+**CIViC Evidence Levels:**
+- **Level A (FDA/Guideline)**: FDA-approved therapy or included in professional guidelines
+- **Level B (Clinical)**: Well-powered clinical studies with expert consensus
+- **Level C (Case Study)**: Case studies, small series, or early-phase trials
+- **Level D (Preclinical)**: Preclinical data or inferential evidence
+- **Level E (Inferential)**: Indirect evidence from related variants/pathways
 
-    **Evidence Levels (A-D):**
-    - **A**: FDA-approved therapy or included in professional guidelines
-    - **B**: Well-powered studies with consensus
-    - **C**: Case studies or small studies
-    - **D**: Preclinical or inferential evidence
+**AMP/ASCO/CAP Tiers:**
+- **Tier I**: Strong clinical significance (FDA-approved or guideline-recommended)
+- **Tier II**: Potential clinical significance (clinical trials, case studies)
+- **Tier III**: Unknown clinical significance
+- **Tier IV**: Benign or likely benign variants
+""")
+                            # Group evidence by level FIRST so we can render Level A before Assertions
+                            level_groups = {
+                                "A": [],  # FDA/Guideline
+                                "B": [],  # Clinical
+                                "C": [],  # Case Study
+                                "D": [],  # Preclinical
+                                "E": [],  # Inferential
+                            }
+                            if civic_evidence:
+                                for e in civic_evidence:
+                                    level = e.get('evidence_level', '')
+                                    if level in level_groups:
+                                        level_groups[level].append(e)
+                                    else:
+                                        level_groups.setdefault('other', []).append(e)
 
-    """)
+                            # Helper to render a CIViC evidence table
+                            def render_civic_table(evidence_items: list, show_fda_cols: bool = False):
+                                if show_fda_cols:
+                                    # Level A FDA table: ID, Locus Match, Tumor Match, Drugs, Significance, Regulatory Status, Indication, Links
+                                    rows = ["| ID | Locus | Tumor | Drugs | Significance | Regulatory Status | Indication | Links |",
+                                            "|----|-------|-------|-------|--------------|-------------------|------------|-------|"]
+                                else:
+                                    rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Disease | Type |",
+                                            "|----|-------------|-------------|-------|--------------|---------|------|"]
+                                for e in evidence_items[:UI_MAX_CIVIC_EVIDENCE_ROWS]:
+                                    drugs_list = e.get('drugs', [])
+                                    drugs_str = ", ".join(drugs_list) or "N/A"
+                                    drugs_str = drugs_str[:25] if len(drugs_str) > 25 else drugs_str
+                                    eid = e.get('eid') or ''
+                                    url = e.get('civic_url', '')
+                                    id_link = f"[{eid}]({url})" if url else eid
+                                    disease = (e.get('disease', '') or '')[:20]
+                                    sig = e.get('clinical_significance', 'Unknown')
+                                    # Match level indicator
+                                    match = e.get('locus_match', '')
+                                    match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
+                                    # Tumor match indicator
+                                    tumor_match = e.get('tumor_match')
+                                    tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
+
+                                    if show_fda_cols:
+                                        # Get FDA label info for first drug
+                                        first_drug = drugs_list[0] if drugs_list else None
+                                        fda_info = get_cached_fda_label(first_drug) if first_drug else None
+
+                                        # Regulatory Status
+                                        if fda_info and fda_info.approval_date:
+                                            reg_status = f"FDA-approved ({fda_info.approval_date})"
+                                        else:
+                                            reg_status = "FDA-approved"
+
+                                        # Indication
+                                        if fda_info and fda_info.biomarker_text_exact:
+                                            indication = fda_info.biomarker_text_exact[:60]
+                                            if len(fda_info.biomarker_text_exact) > 60:
+                                                indication += "..."
+                                        else:
+                                            indication = disease or "-"
+
+                                        # Links: FDA + PubMed
+                                        links = []
+                                        if fda_info and fda_info.drugs_at_fda_url:
+                                            links.append(f"[FDA]({fda_info.drugs_at_fda_url})")
+                                        elif first_drug:
+                                            fda_url = get_best_fda_url(first_drug)
+                                            if fda_url:
+                                                links.append(f"[FDA]({fda_url})")
+                                        if fda_info and fda_info.pubmed_url:
+                                            links.append(f"[PubMed]({fda_info.pubmed_url})")
+                                        links_str = " · ".join(links) if links else "-"
+
+                                        rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {reg_status} | {indication} | {links_str} |")
+                                    else:
+                                        etype = e.get('evidence_type', '')
+                                        rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {disease} | {etype} |")
+                                scrollable_table("\n".join(rows))
+
+                            # Track sections rendered for dividers
+                            sections_rendered = 0
+
+                            # 1. Render Level A FIRST (highest clinical significance)
+                            if level_groups["A"]:
+                                st.markdown(f"**✅ Level A - FDA/Guideline ({len(level_groups['A'])})**")
+                                st.caption("FDA-approved therapy with regulatory details from OpenFDA")
+                                render_civic_table(level_groups["A"], show_fda_cols=True)
+                                sections_rendered += 1
+
+                            # 2. Render Curated Assertions second
                             if civic_assertions:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
                                 st.markdown("**Curated Assertions:**")
                                 rows = ["| ID | Locus Match | Tumor Match | Therapies | Significance | Disease | AMP Level |",
                                         "|-----|-------------|-------------|-----------|--------------|---------|-----------|"]
@@ -461,32 +732,39 @@ with tab1:
                                     tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
                                     rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {therapies_str} | {sig} | {disease} | {amp} |")
                                 scrollable_table("\n".join(rows))
+                                sections_rendered += 1
 
-                            if civic_evidence:
-                                if civic_assertions:
-                                    st.markdown("---")
-                                st.markdown(f"**Evidence Items ({len(civic_evidence)}):**")
-                                # Use markdown table so IDs are clickable
-                                rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Disease | Level | Type |",
-                                        "|----|-------------|-------------|-------|--------------|---------|-------|------|"]
-                                for e in civic_evidence[:UI_MAX_CIVIC_EVIDENCE_ROWS]:
-                                    drugs_str = ", ".join(e.get('drugs', [])) or "N/A"
-                                    drugs_str = drugs_str[:25] if len(drugs_str) > 25 else drugs_str
-                                    eid = e.get('eid') or ''
-                                    url = e.get('civic_url', '')
-                                    id_link = f"[{eid}]({url})" if url else eid
-                                    disease = (e.get('disease', '') or '')[:20]
-                                    sig = e.get('clinical_significance', 'Unknown')
-                                    level = e.get('evidence_level', '')
-                                    etype = e.get('evidence_type', '')
-                                    # Match level indicator
-                                    match = e.get('locus_match', '')
-                                    match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
-                                    # Tumor match indicator
-                                    tumor_match = e.get('tumor_match')
-                                    tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
-                                    rows.append(f"| {id_link} | {match_display} | {tumor_match_cell} | {drugs_str} | {sig} | {disease} | {level} | {etype} |")
-                                scrollable_table("\n".join(rows))
+                            # 3. Render remaining evidence levels (B, C, D, E)
+                            if level_groups["B"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**🔬 Level B - Clinical ({len(level_groups['B'])})**")
+                                st.caption("Well-powered clinical studies with expert consensus")
+                                render_civic_table(level_groups["B"])
+                                sections_rendered += 1
+
+                            if level_groups["C"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**📋 Level C - Case Study ({len(level_groups['C'])})**")
+                                st.caption("Case studies, small series, or early-phase trials")
+                                render_civic_table(level_groups["C"])
+                                sections_rendered += 1
+
+                            if level_groups["D"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**🧪 Level D - Preclinical ({len(level_groups['D'])})**")
+                                st.caption("Preclinical data or inferential evidence")
+                                render_civic_table(level_groups["D"])
+                                sections_rendered += 1
+
+                            if level_groups["E"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**💭 Level E - Inferential ({len(level_groups['E'])})**")
+                                st.caption("Indirect evidence from related variants/pathways")
+                                render_civic_table(level_groups["E"])
                     tab_idx += 1
 
                 # VICC tab
@@ -508,39 +786,152 @@ with tab1:
 </div>""", unsafe_allow_html=True)
 
                         with table_col:
+                            st.caption("Aggregated evidence from VICC MetaKB (CIViC, OncoKB, MOAlmanac, etc.)")
                             if tumor_display:
                                 st.caption(f"Filtered to **{tumor_display}**")
-                            with st.expander("📖 Evidence Level Guide", expanded=False):
+                            with st.expander("📖 VICC Evidence Level Guide", expanded=False):
                                 st.markdown("""
-    **Evidence Levels:**
-    - **1/A**: FDA-approved or standard of care
-    - **2/B**: Clinical trial evidence or expert consensus
-    - **3/C**: Case reports or limited evidence
-    - **4/D**: Preclinical or computational evidence
-    - **R1/R2**: Resistance evidence (strong/emerging)
-    """)
-                            # Use markdown table for clickable source links
-                            rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease | Level |",
-                                    "|--------|-------------|-------------|-------|----------|---------|-------|"]
+**VICC Evidence Levels (harmonized across sources):**
+- **1/A (FDA/Guideline)**: FDA-approved or standard of care therapy
+- **2/B (Clinical)**: Clinical trial evidence or expert consensus
+- **3/C (Case Study)**: Case reports or limited clinical evidence
+- **4/D (Preclinical)**: Preclinical or computational evidence
+- **R1/R2 (Resistance)**: Resistance evidence (strong/emerging)
+""")
+
+                            # Group VICC evidence by level
+                            # VICC levels can be: 1, 2, 3, 4, A, B, C, D, R1, R2, etc.
+                            level_groups = {
+                                "fda": [],      # 1, A, amp_1, tier_1
+                                "clinical": [], # 2, B, amp_2, tier_2
+                                "case": [],     # 3, C
+                                "preclin": [],  # 4, D
+                                "resist": [],   # R1, R2
+                                "other": [],
+                            }
+
                             for v in vicc:
-                                source = (v.get('source') or 'vicc').upper()
-                                pub_url = v.get('publication_url')
-                                # Handle publication_url being a list or string
-                                if isinstance(pub_url, list) and pub_url:
-                                    pub_url = pub_url[0]
-                                source_link = f"[{source}]({pub_url})" if pub_url else source
-                                locus_match = v.get('locus_match', '')
-                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "")
-                                # Tumor match indicator
-                                tumor_match = v.get('tumor_match')
-                                tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
-                                drugs = ", ".join(v.get('drugs', [])) or "N/A"
-                                drugs = drugs[:30] if len(drugs) > 30 else drugs
-                                response = v.get('response_type', 'Unknown')
-                                disease = (v.get('disease', '') or '')[:25]
-                                level = v.get('evidence_level', '')
-                                rows.append(f"| {source_link} | {match_display} | {tumor_match_cell} | {drugs} | {response} | {disease} | {level} |")
-                            scrollable_table("\n".join(rows))
+                                level = str(v.get('evidence_level', '')).upper()
+                                if level in ['1', 'A', 'AMP_1', 'TIER_1', 'TIER I', 'TIER_I']:
+                                    level_groups["fda"].append(v)
+                                elif level in ['2', 'B', 'AMP_2', 'TIER_2', 'TIER II', 'TIER_II']:
+                                    level_groups["clinical"].append(v)
+                                elif level in ['3', 'C', 'AMP_3', 'TIER_3', 'TIER III', 'TIER_III']:
+                                    level_groups["case"].append(v)
+                                elif level in ['4', 'D', 'AMP_4', 'TIER_4', 'TIER IV', 'TIER_IV']:
+                                    level_groups["preclin"].append(v)
+                                elif level.startswith('R'):
+                                    level_groups["resist"].append(v)
+                                else:
+                                    level_groups["other"].append(v)
+
+                            # Helper to render a VICC table
+                            def render_vicc_table(evidence_items: list, show_fda_cols: bool = False):
+                                if show_fda_cols:
+                                    # FDA level table: Source, Locus, Tumor, Drugs, Response, Regulatory Status, Indication, Links
+                                    rows = ["| Source | Locus | Tumor | Drugs | Response | Regulatory Status | Indication | Links |",
+                                            "|--------|-------|-------|-------|----------|-------------------|------------|-------|"]
+                                else:
+                                    rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease |",
+                                            "|--------|-------------|-------------|-------|----------|---------|"]
+                                for v in evidence_items:
+                                    source = (v.get('source') or 'vicc').upper()
+                                    pub_url = v.get('publication_url')
+                                    if isinstance(pub_url, list) and pub_url:
+                                        pub_url = pub_url[0]
+                                    source_link = f"[{source}]({pub_url})" if pub_url else source
+                                    locus_match = v.get('locus_match', '')
+                                    match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "")
+                                    tumor_match = v.get('tumor_match')
+                                    tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
+                                    drugs_list = v.get('drugs', [])
+                                    drugs = ", ".join(drugs_list) or "N/A"
+                                    drugs = drugs[:30] if len(drugs) > 30 else drugs
+                                    response = v.get('response_type', 'Unknown')
+                                    disease = (v.get('disease', '') or '')[:25]
+
+                                    if show_fda_cols:
+                                        # Get FDA label info for first drug
+                                        first_drug = drugs_list[0] if drugs_list else None
+                                        fda_info = get_cached_fda_label(first_drug) if first_drug else None
+
+                                        # Regulatory Status
+                                        if fda_info and fda_info.approval_date:
+                                            reg_status = f"FDA-approved ({fda_info.approval_date})"
+                                        else:
+                                            reg_status = "FDA-approved"
+
+                                        # Indication
+                                        if fda_info and fda_info.biomarker_text_exact:
+                                            indication = fda_info.biomarker_text_exact[:60]
+                                            if len(fda_info.biomarker_text_exact) > 60:
+                                                indication += "..."
+                                        else:
+                                            indication = disease or "-"
+
+                                        # Links: FDA + PubMed
+                                        links = []
+                                        if fda_info and fda_info.drugs_at_fda_url:
+                                            links.append(f"[FDA]({fda_info.drugs_at_fda_url})")
+                                        elif first_drug:
+                                            fda_url = get_best_fda_url(first_drug)
+                                            if fda_url:
+                                                links.append(f"[FDA]({fda_url})")
+                                        if fda_info and fda_info.pubmed_url:
+                                            links.append(f"[PubMed]({fda_info.pubmed_url})")
+                                        links_str = " · ".join(links) if links else "-"
+
+                                        rows.append(f"| {source_link} | {match_display} | {tumor_match_cell} | {drugs} | {response} | {reg_status} | {indication} | {links_str} |")
+                                    else:
+                                        rows.append(f"| {source_link} | {match_display} | {tumor_match_cell} | {drugs} | {response} | {disease} |")
+                                scrollable_table("\n".join(rows))
+
+                            # Render each level group as a separate section
+                            sections_rendered = 0
+
+                            if level_groups["fda"]:
+                                st.markdown(f"**✅ Level 1/A - FDA/Guideline ({len(level_groups['fda'])})**")
+                                st.caption("FDA-approved therapy with regulatory details from OpenFDA")
+                                render_vicc_table(level_groups["fda"], show_fda_cols=True)
+                                sections_rendered += 1
+
+                            if level_groups["clinical"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**🔬 Level 2/B - Clinical ({len(level_groups['clinical'])})**")
+                                st.caption("Clinical trial evidence or expert consensus")
+                                render_vicc_table(level_groups["clinical"])
+                                sections_rendered += 1
+
+                            if level_groups["case"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**📋 Level 3/C - Case Study ({len(level_groups['case'])})**")
+                                st.caption("Case reports or limited clinical evidence")
+                                render_vicc_table(level_groups["case"])
+                                sections_rendered += 1
+
+                            if level_groups["preclin"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**🧪 Level 4/D - Preclinical ({len(level_groups['preclin'])})**")
+                                st.caption("Preclinical or computational evidence")
+                                render_vicc_table(level_groups["preclin"])
+                                sections_rendered += 1
+
+                            if level_groups["resist"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**🔴 Resistance Evidence ({len(level_groups['resist'])})**")
+                                st.caption("Drug resistance associations (R1=strong, R2=emerging)")
+                                render_vicc_table(level_groups["resist"])
+                                sections_rendered += 1
+
+                            if level_groups["other"]:
+                                if sections_rendered > 0:
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown(f"**Other ({len(level_groups['other'])})**")
+                                render_vicc_table(level_groups["other"])
                     tab_idx += 1
 
                 # CGI tab - shows ALL CGI data organized by evidence level
@@ -555,9 +946,13 @@ with tab1:
 🎯 Variant (exact locus match)<br/>
 📍 Codon (other variants in this codon)<br/>
 🧬 Gene (other variants in this gene)<br/><br/>
+<b>Specificity:</b><br/>
+🎯 Variant (e.g., V600E)<br/>
+🧬 Gene (any mutation)<br/>
+🔬 Phenotype (MSI-H, HRD)<br/><br/>
 <b>Association:</b><br/>
-:green[Responsive] - drug works<br/>
-:red[Resistant] - drug doesn't work
+<span style="color: #28a745">Responsive</span> - drug works<br/>
+<span style="color: #dc3545">Resistant</span> - drug doesn't work
 </div>""", unsafe_allow_html=True)
 
                         with table_col:
@@ -571,8 +966,13 @@ with tab1:
                                 return 1
 
                             # Helper to render a CGI table
-                            def render_cgi_table(biomarkers: list, show_level: bool = False):
-                                if show_level:
+                            def render_cgi_table(biomarkers: list, show_level: bool = False, show_fda_cols: bool = False):
+                                # Build header based on options
+                                if show_fda_cols:
+                                    # FDA-approved table: Drug, Locus, Tumor, Association, Specificity, Regulatory Status, Indication, Links
+                                    rows = ["| Drug | Locus | Tumor | Association | Specificity | Regulatory Status | Indication | Links |",
+                                            "|------|-------|-------|-------------|-------------|-------------------|------------|-------|"]
+                                elif show_level:
                                     rows = ["| Drug | Locus Match | Association | Tumor Type | Level |",
                                             "|------|-------------|-------------|------------|-------|"]
                                 else:
@@ -586,16 +986,73 @@ with tab1:
                                     # Locus match
                                     match = b.get('locus_match', '')
                                     locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
-                                    # Association with color
+                                    # Tumor match
+                                    tumor_match = b.get('cancer_type_match')
+                                    tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
+                                    # Association with color (using HTML spans for HTML table rendering)
                                     assoc_raw = b.get('association', 'Unknown')
                                     if 'respons' in assoc_raw.lower() or 'sensitiv' in assoc_raw.lower():
-                                        association = f":green[{assoc_raw}]"
+                                        association = f'<span style="color: #28a745">{assoc_raw}</span>'
                                     elif 'resist' in assoc_raw.lower():
-                                        association = f":red[{assoc_raw}]"
+                                        association = f'<span style="color: #dc3545">{assoc_raw}</span>'
                                     else:
                                         association = assoc_raw
                                     tumor = (b.get('tumor_type', '') or '')[:25]
-                                    if show_level:
+
+                                    if show_fda_cols:
+                                        # Get FDA label info from cache
+                                        fda_info = get_cached_fda_label(drug) if drug else None
+
+                                        # Regulatory Status: "FDA-approved (date)"
+                                        if fda_info and fda_info.approval_date:
+                                            reg_status = f"FDA-approved ({fda_info.approval_date})"
+                                        else:
+                                            reg_status = "FDA-approved"
+
+                                        # Indication: full indications_and_usage from FDA label
+                                        if fda_info and fda_info.indications_and_usage:
+                                            indication = fda_info.indications_and_usage
+                                        elif fda_info and fda_info.biomarker_text_exact:
+                                            # Fallback to biomarker-specific extract
+                                            indication = fda_info.biomarker_text_exact
+                                        else:
+                                            indication = tumor or "-"
+
+                                        # Links: FDA + PubMed
+                                        links = []
+                                        if fda_info and fda_info.drugs_at_fda_url:
+                                            links.append(f"[FDA]({fda_info.drugs_at_fda_url})")
+                                        else:
+                                            fda_url = get_best_fda_url(drug) if drug else None
+                                            if fda_url:
+                                                links.append(f"[FDA]({fda_url})")
+                                        if fda_info and fda_info.pubmed_url:
+                                            links.append(f"[PubMed]({fda_info.pubmed_url})")
+                                        links_str = " · ".join(links) if links else "-"
+
+                                        # Biomarker Specificity: gene vs variant vs phenotype level
+                                        specificity = "-"
+                                        if fda_info and fda_info.biomarker_specificity:
+                                            spec = fda_info.biomarker_specificity
+                                            if spec == 'variant':
+                                                # Show specific variants if available
+                                                variants = fda_info.specific_variants
+                                                if variants:
+                                                    specificity = f"🎯 {', '.join(variants[:2])}"
+                                                else:
+                                                    specificity = "🎯 Variant"
+                                            elif spec == 'gene':
+                                                specificity = "🧬 Gene"
+                                            elif spec == 'phenotype':
+                                                # Show phenotype markers
+                                                variants = fda_info.specific_variants
+                                                if variants:
+                                                    specificity = f"🔬 {', '.join(variants[:2])}"
+                                                else:
+                                                    specificity = "🔬 Phenotype"
+
+                                        rows.append(f"| {drug_link} | {locus_display} | {tumor_match_cell} | {association} | {specificity} | {reg_status} | {indication} | {links_str} |")
+                                    elif show_level:
                                         level = b.get('evidence_level', '')
                                         rows.append(f"| {drug_link} | {locus_display} | {association} | {tumor} | {level} |")
                                     else:
@@ -605,21 +1062,24 @@ with tab1:
                             # 1. FDA-Approved (from cgi_biomarkers which only contains fda_approved=True)
                             if cgi_biomarkers:
                                 cgi_fda_sorted = sorted(cgi_biomarkers, key=assoc_sort_key)
-                                st.markdown("**✅ FDA-Approved:**")
-                                render_cgi_table(cgi_fda_sorted, show_level=False)
+                                st.markdown("**✅ FDA Approved (CGI)**")
+                                st.caption("FDA-approved biomarker-drug associations with regulatory details from OpenFDA")
+                                render_cgi_table(cgi_fda_sorted, show_level=False, show_fda_cols=True)
 
                             # 2. Early Phase (clinical trials, late trials, case reports)
                             if early_phase:
                                 if cgi_biomarkers:
-                                    st.markdown("---")
-                                st.markdown("**🔬 Clinical Trials / Case Reports:**")
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown("**🔬 Clinical Evidence (CGI)**")
+                                st.caption("Late trials, early trials, case reports")
                                 render_cgi_table(early_phase, show_level=True)
 
                             # 3. Preclinical (cell line, pre-clinical)
                             if preclinical:
                                 if cgi_biomarkers or early_phase:
-                                    st.markdown("---")
-                                st.markdown("**🧪 Preclinical:**")
+                                    st.markdown('<hr class="evidence-section-divider">', unsafe_allow_html=True)
+                                st.markdown("**🧪 Preclinical (CGI)**")
+                                st.caption("Cell line and preclinical studies")
                                 render_cgi_table(preclinical, show_level=True)
                     tab_idx += 1
 

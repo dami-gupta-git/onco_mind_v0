@@ -293,6 +293,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "tumor_type": b.tumor_type,
                 "evidence_level": b.evidence_level,
                 "fda_approved": b.fda_approved,
+                "fda_url": b.fda_url,
                 # Match specificity tracking
                 "locus_match": b.locus_match,
                 "matched_alteration": b.matched_alteration,

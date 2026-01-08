@@ -127,6 +127,42 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 
 **Research value:** "Cells with this mutation show IC50 = 12nM for trametinib vs 890nM in wild-type (GDSC2, n=23 lines)."
 
+### Robust FDA Drug Fetching Algorithm
+**Goal:** Reliable, comprehensive FDA approval and label data fetching
+
+**Current problems:**
+- OpenFDA API is rate-limited and sometimes returns incomplete data
+- Drug name normalization is fragile (brand vs generic, spelling variants)
+- Curated `ONCOLOGY_DRUG_MAPPINGS` requires manual maintenance
+- Biomarker specificity extraction (variant vs gene vs phenotype level) has edge cases
+- FDA label cache can become stale
+
+**Implementation:**
+1. **Multi-source drug resolution:**
+   - OpenFDA (primary)
+   - DailyMed API (backup for label text)
+   - RxNorm for drug name normalization
+   - ChEMBL for drug-target mappings
+
+2. **Improved drug name matching:**
+   - Fuzzy matching for spelling variants
+   - Brand ↔ generic name bidirectional lookup
+   - Handle combination drugs (e.g., "dabrafenib + trametinib")
+   - Normalize suffixes (-ib, -mab, -nib patterns)
+
+3. **Better biomarker specificity extraction:**
+   - Handle negation ("not approved for", "excluding patients with")
+   - Parse companion diagnostic requirements
+   - Extract line-of-therapy constraints
+   - Detect tumor-agnostic vs tumor-specific approvals
+
+4. **Cache management:**
+   - Nightly refresh job for all oncology drugs
+   - Version tracking for FDA label updates
+   - Delta detection for new approvals
+
+**Research value:** Reliable FDA data is foundation for all regulatory evidence. False negatives (missing approvals) and false positives (wrong specificity) directly impact clinical utility.
+
 ### DGIdb Integration
 **Goal:** Replace manual drug-target mappings with comprehensive drug-gene interaction data
 
