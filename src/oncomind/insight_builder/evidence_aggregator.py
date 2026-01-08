@@ -40,6 +40,7 @@ from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
+from oncomind.api.fda_drugs import ensure_fda_labels_cached
 
 from oncomind.models.evidence import (
     Evidence,
@@ -341,6 +342,54 @@ class EvidenceAggregator:
             if not b.fda_approved and b.evidence_level not in ("Pre-clinical", "Cell line", None)
         ]
         return fda_approved, preclinical, early_phase
+
+    async def _ensure_fda_labels_for_evidence(
+        self,
+        evidence: Evidence,
+    ) -> None:
+        """Pre-populate FDA label cache for drugs in FDA-approved evidence.
+
+        Collects unique drug names from CGI (FDA-approved), CIViC Level A,
+        and VICC Level 1/A evidence, then fetches any missing FDA labels.
+        This ensures the cache is populated BEFORE UI rendering.
+
+        Args:
+            evidence: The assembled Evidence object
+        """
+        drugs: set[str] = set()
+
+        # Collect drugs from CGI FDA-approved biomarkers
+        for b in evidence.cgi_biomarkers or []:
+            if b.drug:
+                drugs.add(b.drug)
+
+        # Collect drugs from CIViC Level A assertions
+        for a in evidence.civic_assertions or []:
+            if a.amp_level == "Tier I - Level A" and a.therapies:
+                for therapy in a.therapies:
+                    drugs.add(therapy)
+
+        # Collect drugs from CIViC evidence items with Level A
+        for e in evidence.civic_evidence or []:
+            if e.evidence_level == "A" and e.drugs:
+                for drug in e.drugs:
+                    drugs.add(drug)
+
+        # Collect drugs from VICC Level 1/A evidence
+        for v in evidence.vicc_evidence or []:
+            if v.evidence_level in ("1", "A", "1A") and v.drugs:
+                for drug in v.drugs:
+                    drugs.add(drug)
+
+        if not drugs:
+            return
+
+        # Fetch any missing FDA labels (async)
+        try:
+            await ensure_fda_labels_cached(list(drugs), save=True)
+            logger.debug(f"Ensured FDA labels cached for {len(drugs)} drugs")
+        except Exception as e:
+            logger.warning(f"Failed to fetch FDA labels: {e}")
 
     def _convert_cgi_to_fda_approvals(
         self, cgi_biomarkers: list[CGIBiomarkerEvidence]
@@ -669,9 +718,15 @@ class EvidenceAggregator:
         results = await self._fetch_all_sources(gene, normalized_variant, resolved_tumor, tracker)
 
         # Process results
-        return self._assemble_evidence(
+        evidence = self._assemble_evidence(
             results, variant, normalized_variant, tumor, resolved_tumor, tracker
         )
+
+        # Pre-populate FDA label cache for all drugs in FDA-approved evidence
+        # This ensures labels are cached BEFORE UI rendering (not during)
+        await self._ensure_fda_labels_for_evidence(evidence)
+
+        return evidence
 
     async def _fetch_all_sources(
         self,

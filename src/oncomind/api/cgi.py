@@ -50,6 +50,8 @@ class CGIBiomarker:
         source: str,
         tumor_type: str,
         tumor_type_full: str,
+        comments: str | None = None,
+        drug_full_name: str | None = None,
     ):
         self.gene = gene
         self.alteration = alteration
@@ -60,6 +62,8 @@ class CGIBiomarker:
         self.source = source
         self.tumor_type = tumor_type
         self.tumor_type_full = tumor_type_full
+        self.comments = comments  # FDA label text or description
+        self.drug_full_name = drug_full_name  # Drug name with mechanism (e.g., "Tazemetostat (EZH2 inhibitor)")
 
     def is_fda_approved(self) -> bool:
         """Check if this biomarker represents FDA-approved therapy."""
@@ -67,6 +71,25 @@ class CGIBiomarker:
             "FDA" in self.evidence_level.upper()
             or self.evidence_level.upper() in ["NCCN GUIDELINES", "NCCN/CGC GUIDELINES"]
         )
+
+    def get_fda_url(self) -> str | None:
+        """Extract FDA URL from source field if present.
+
+        Source field format: "FDA:https://www.fda.gov/...;PMID:12345"
+        """
+        if not self.source:
+            return None
+        # Source can contain multiple references separated by semicolons
+        # Look for FDA URL pattern
+        for part in self.source.split(";"):
+            part = part.strip()
+            if part.startswith("FDA:"):
+                url = part[4:]  # Remove "FDA:" prefix
+                if url.startswith("http"):
+                    return url
+            elif "fda.gov" in part.lower() and part.startswith("http"):
+                return part
+        return None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -81,6 +104,9 @@ class CGIBiomarker:
             "tumor_type": self.tumor_type,
             "tumor_type_full": self.tumor_type_full,
             "fda_approved": self.is_fda_approved(),
+            "fda_url": self.get_fda_url(),
+            "comments": self.comments,
+            "drug_full_name": self.drug_full_name,
         }
 
 
@@ -362,6 +388,10 @@ class CGIClient:
                     continue
 
             # Create biomarker object
+            # Get comments (FDA label text) and drug_full_name if available
+            comments = row.get("Comments", "")
+            drug_full_name = row.get("Drug full name", "")
+
             matches.append(
                 CGIBiomarker(
                     gene=row.get("Gene", ""),
@@ -373,6 +403,8 @@ class CGIClient:
                     source=row.get("Source", ""),
                     tumor_type=row.get("Primary Tumor type", ""),
                     tumor_type_full=row.get("Primary Tumor type full name", ""),
+                    comments=comments if comments else None,
+                    drug_full_name=drug_full_name if drug_full_name else None,
                 )
             )
 
@@ -457,6 +489,7 @@ class CGIClient:
                 source=biomarker.source,
                 tumor_type=biomarker.tumor_type,
                 fda_approved=biomarker.is_fda_approved(),
+                fda_url=biomarker.get_fda_url(),
                 matched_alteration=biomarker.alteration,
                 locus_variant_match=locus_variant_match,
                 cancer_type_match=cancer_type_match,

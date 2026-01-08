@@ -15,6 +15,10 @@ class CGIBiomarkerEvidence(EvidenceItemBase):
     source: str | None = None
     tumor_type: str | None = None
     fda_approved: bool = False
+    fda_url: str | None = Field(
+        default=None,
+        description="URL to FDA approval announcement if available"
+    )
     # Additional match tracking fields (not in base class)
     matched_alteration: str | None = Field(
         default=None,

@@ -49,6 +49,11 @@ from oncomind.models.extracted.therapeutic_data import TherapeuticData
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 from oncomind.config.constants import is_biomarker_selection_drug, is_acquired_resistance_mutation
 
+# Import FDALabelInfo with TYPE_CHECKING to avoid circular import
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from oncomind.api.fda_drugs import FDALabelInfo
+
 
 class VariantIdentifiers(BaseModel):
     """Core variant identifiers and normalized notation."""
