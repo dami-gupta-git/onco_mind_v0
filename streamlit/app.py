@@ -108,7 +108,7 @@ EXAMPLE_VARIANTS = {
     "-- Select an example --": ("", "", ""),
     "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
-    "EGFR K601E - Brain (near-hotspot)": ("EGFR", "K601E", "Brain"),
+    "BRAF K601E - Brain (near-hotspot)": ("BRAF", "K601E", "Brain"),
     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
