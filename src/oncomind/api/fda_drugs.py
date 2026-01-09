@@ -36,6 +36,12 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "capivasertib",
         "approval_date": "2023-11-16",
     },
+    "azd5363": {  # Development code for capivasertib
+        "appl_no": "218197",
+        "brand": "Truqap",
+        "generic": "capivasertib",
+        "approval_date": "2023-11-16",
+    },
 
     # BRAF inhibitors
     "vemurafenib": {
@@ -162,6 +168,12 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "osimertinib",
         "approval_date": "2015-11-13",
     },
+    "azd9291": {  # Development code for osimertinib
+        "appl_no": "208065",
+        "brand": "Tagrisso",
+        "generic": "osimertinib",
+        "approval_date": "2015-11-13",
+    },
 
     # ALK inhibitors
     "crizotinib": {
@@ -238,6 +250,18 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "sotorasib",
         "approval_date": "2021-05-28",
     },
+    "amg 510": {  # Development code for sotorasib
+        "appl_no": "214665",
+        "brand": "Lumakras",
+        "generic": "sotorasib",
+        "approval_date": "2021-05-28",
+    },
+    "amg510": {  # Development code for sotorasib (no space)
+        "appl_no": "214665",
+        "brand": "Lumakras",
+        "generic": "sotorasib",
+        "approval_date": "2021-05-28",
+    },
     "adagrasib": {
         "appl_no": "216340",
         "brand": "Krazati",
@@ -245,6 +269,12 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "approval_date": "2022-12-12",
     },
     "krazati": {
+        "appl_no": "216340",
+        "brand": "Krazati",
+        "generic": "adagrasib",
+        "approval_date": "2022-12-12",
+    },
+    "mrtx849": {  # Development code for adagrasib
         "appl_no": "216340",
         "brand": "Krazati",
         "generic": "adagrasib",
@@ -1273,8 +1303,10 @@ import json
 from pathlib import Path
 from datetime import datetime
 
+from oncomind.config.constants import FDA_LABELS_FILE
+
 # Default cache location
-FDA_LABEL_CACHE_PATH = Path.home() / ".cache" / "oncomind" / "fda_labels.json"
+FDA_LABEL_CACHE_PATH = FDA_LABELS_FILE
 
 
 class FDALabelCache:

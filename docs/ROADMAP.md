@@ -134,6 +134,7 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 - OpenFDA API is rate-limited and sometimes returns incomplete data
 - Drug name normalization is fragile (brand vs generic, spelling variants)
 - Curated `ONCOLOGY_DRUG_MAPPINGS` requires manual maintenance
+- **Development codes not mapped:** CIViC/CGI use development codes (AZD5363, AMG 510, MRTX849) but OpenFDA indexes by INN (capivasertib, sotorasib, adagrasib)
 - Biomarker specificity extraction (variant vs gene vs phenotype level) has edge cases
 - FDA label cache can become stale
 
@@ -149,6 +150,7 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
    - Brand ↔ generic name bidirectional lookup
    - Handle combination drugs (e.g., "dabrafenib + trametinib")
    - Normalize suffixes (-ib, -mab, -nib patterns)
+   - **Development code → INN mapping** via ChEMBL/PubChem synonyms (AZD5363 → capivasertib)
 
 3. **Better biomarker specificity extraction:**
    - Handle negation ("not approved for", "excluding patients with")
