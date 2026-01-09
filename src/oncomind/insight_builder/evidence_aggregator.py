@@ -41,6 +41,7 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRate
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 from oncomind.api.fda_drugs import ensure_fda_labels_cached
+from oncomind.api.fda_label_service import get_fda_labels_for_drugs, collect_all_drugs, FDALabelData
 
 from oncomind.models.evidence import (
     Evidence,
@@ -54,6 +55,10 @@ from oncomind.models.evidence import (
     CIViCEvidence,
     ClinicalTrialEvidence,
     FDAApproval,
+    FDALabelEvidence,
+    ClinicalStudyEvidence,
+    MechanismEvidence,
+    AdverseReactionsEvidence,
     HotspotsEvidence,
     PubMedEvidence,
     VICCEvidence,
@@ -346,50 +351,142 @@ class EvidenceAggregator:
     async def _ensure_fda_labels_for_evidence(
         self,
         evidence: Evidence,
-    ) -> None:
+    ) -> list[FDALabelData]:
         """Pre-populate FDA label cache for drugs in FDA-approved evidence.
 
-        Collects unique drug names from CGI (FDA-approved), CIViC Level A,
-        and VICC Level 1/A evidence, then fetches any missing FDA labels.
-        This ensures the cache is populated BEFORE UI rendering.
+        Uses the FDA label service to:
+        1. Collect drugs from CGI, CIViC, VICC, and FDA oncology biomarkers
+        2. Look up in fda_labels.json cache
+        3. Fetch missing drugs from OpenFDA and update cache
 
         Args:
             evidence: The assembled Evidence object
+
+        Returns:
+            List of FDALabelData for all found drugs
         """
-        drugs: set[str] = set()
+        gene = evidence.identifiers.gene
 
-        # Collect drugs from CGI FDA-approved biomarkers
+        # Only collect FDA-APPROVED drugs for FDA label lookup
+        # We don't want to attempt lookups for experimental drugs (MK-2206, AZD5363, etc.)
+        # as they don't have FDA labels and just create noise in the logs
+        cgi_drugs: list[str] = []
+        civic_drugs: list[str] = []
+        vicc_drugs: list[str] = []
+
+        # Only collect drugs from CGI biomarkers that are FDA-approved
         for b in evidence.cgi_biomarkers or []:
-            if b.drug:
-                drugs.add(b.drug)
+            if b.drug and b.fda_approved:
+                cgi_drugs.append(b.drug)
 
-        # Collect drugs from CIViC Level A assertions
+        # From CIViC, only collect drugs with FDA approval level (Level A)
         for a in evidence.civic_assertions or []:
-            if a.amp_level == "Tier I - Level A" and a.therapies:
+            if a.therapies and a.amp_level == "Tier I - Level A":
                 for therapy in a.therapies:
-                    drugs.add(therapy)
+                    civic_drugs.append(therapy)
 
-        # Collect drugs from CIViC evidence items with Level A
-        for e in evidence.civic_evidence or []:
-            if e.evidence_level == "A" and e.drugs:
-                for drug in e.drugs:
-                    drugs.add(drug)
-
-        # Collect drugs from VICC Level 1/A evidence
+        # From VICC, only collect Level 1 FDA-approved evidence
         for v in evidence.vicc_evidence or []:
-            if v.evidence_level in ("1", "A", "1A") and v.drugs:
+            if v.drugs and v.evidence_level in ("Level 1", "Level A"):
                 for drug in v.drugs:
-                    drugs.add(drug)
+                    vicc_drugs.append(drug)
 
-        if not drugs:
-            return
+        # Use the FDA label service to collect all drugs and look up labels
+        # This also adds drugs from fda_oncology_biomarkers.xlsx for the gene
+        all_drugs = collect_all_drugs(
+            gene=gene,
+            cgi_drugs=cgi_drugs,
+            civic_drugs=civic_drugs,
+            vicc_drugs=vicc_drugs,
+        )
 
-        # Fetch any missing FDA labels (async)
+        if not all_drugs:
+            logger.debug(f"No drugs found for gene {gene}")
+            return []
+
+        # Get FDA labels - this looks up in fda_labels.json cache first,
+        # then fetches from OpenFDA for missing drugs and updates cache
         try:
-            await ensure_fda_labels_cached(list(drugs), save=True)
-            logger.debug(f"Ensured FDA labels cached for {len(drugs)} drugs")
+            labels = get_fda_labels_for_drugs(all_drugs, gene, fetch_missing=True)
+            logger.debug(f"Got FDA labels for {len(labels)} drugs (gene: {gene})")
+            return labels
         except Exception as e:
-            logger.warning(f"Failed to fetch FDA labels: {e}")
+            logger.warning(f"Failed to get FDA labels: {e}")
+            return []
+
+    def _convert_fda_labels_to_evidence(
+        self, fda_labels: list[FDALabelData]
+    ) -> list[FDALabelEvidence]:
+        """Convert FDALabelData objects to FDALabelEvidence for the Evidence model.
+
+        Transforms the raw label data from the FDA label service into pydantic
+        models that can be serialized and displayed in the FDA tab.
+        """
+        result = []
+        for label in fda_labels:
+            # Convert clinical studies data
+            clinical_studies = None
+            if label.clinical_studies:
+                cs = label.clinical_studies
+                clinical_studies = ClinicalStudyEvidence(
+                    trial_name=cs.trial_name,
+                    nct_id=cs.nct_id,
+                    patients_n=cs.patients_n,
+                    pfs_months_treatment=cs.pfs_months_treatment,
+                    pfs_months_control=cs.pfs_months_control,
+                    hazard_ratio=cs.hazard_ratio,
+                    hazard_ratio_ci=cs.hazard_ratio_ci,
+                    orr_treatment=cs.orr_treatment,
+                    orr_control=cs.orr_control,
+                    biomarker_breakdown=cs.biomarker_breakdown,
+                )
+
+            # Convert mechanism of action data
+            mechanism = None
+            if label.mechanism_of_action:
+                moa = label.mechanism_of_action
+                mechanism = MechanismEvidence(
+                    targets=moa.targets or [],
+                    mechanism=moa.mechanism,
+                    preclinical=moa.preclinical,
+                )
+
+            # Convert adverse reactions data
+            adverse = None
+            if label.adverse_reactions:
+                ar = label.adverse_reactions
+                adverse = AdverseReactionsEvidence(
+                    common_toxicities=ar.common_toxicities or [],
+                    serious_rate=ar.serious_rate,
+                    discontinuation_rate=ar.discontinuation_rate,
+                )
+
+            # Get last label update info
+            last_update = None
+            update_reason = None
+            if label.recent_major_changes:
+                last_update = label.recent_major_changes.last_label_update
+                update_reason = label.recent_major_changes.update_reason
+
+            result.append(FDALabelEvidence(
+                drug=label.drug,
+                gene=label.gene,
+                brand_name=label.brand_name,
+                generic_name=label.generic_name,
+                manufacturer=label.manufacturer,
+                indications_and_usage=label.indications_and_usage,
+                initial_approval_date=label.initial_approval_date,
+                clinical_studies=clinical_studies,
+                mechanism_of_action=mechanism,
+                adverse_reactions=adverse,
+                last_label_update=last_update,
+                update_reason=update_reason,
+                clinical_studies_text=label.clinical_studies_text,
+                mechanism_of_action_text=label.mechanism_of_action_text,
+                adverse_reactions_text=label.adverse_reactions_text,
+            ))
+
+        return result
 
     def _convert_cgi_to_fda_approvals(
         self, cgi_biomarkers: list[CGIBiomarkerEvidence]
@@ -724,7 +821,9 @@ class EvidenceAggregator:
 
         # Pre-populate FDA label cache for all drugs in FDA-approved evidence
         # This ensures labels are cached BEFORE UI rendering (not during)
-        await self._ensure_fda_labels_for_evidence(evidence)
+        # Also converts to FDALabelEvidence and stores in evidence.fda_labels
+        fda_label_data = await self._ensure_fda_labels_for_evidence(evidence)
+        evidence.fda_labels = self._convert_fda_labels_to_evidence(fda_label_data)
 
         return evidence
 

@@ -31,7 +31,13 @@ from oncomind.models.extracted.evidence_gaps import (
     GapCategory,
     GapSeverity,
 )
-from oncomind.models.evidence.fda import FDAApproval
+from oncomind.models.evidence.fda import (
+    FDAApproval,
+    FDALabelEvidence,
+    ClinicalStudyEvidence,
+    MechanismEvidence,
+    AdverseReactionsEvidence,
+)
 from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -71,6 +77,10 @@ __all__ = [
     "DrugSensitivity",
     "CellLineModel",
     "FDAApproval",
+    "FDALabelEvidence",
+    "ClinicalStudyEvidence",
+    "MechanismEvidence",
+    "AdverseReactionsEvidence",
     "HotspotsEvidence",
     "HotspotEntry",
     "HotspotVariant",

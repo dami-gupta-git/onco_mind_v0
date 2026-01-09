@@ -500,6 +500,7 @@ with tab1:
             depmap = result.get('depmap_evidence')
             hotspots = result.get('hotspots_evidence')
             therapies = result.get('recommended_therapies', [])
+            fda_labels = result.get('fda_labels', [])
 
             # Build tab names
             tab_names = []
@@ -521,6 +522,9 @@ with tab1:
             all_cgi_count = len(cgi_biomarkers) + len(preclinical) + len(early_phase)
             if all_cgi_count > 0:
                 tab_names.append(f"CGI ({all_cgi_count})")
+            # FDA tab - shows FDA label data (clinical studies, mechanism, toxicity)
+            if fda_labels:
+                tab_names.append(f"💊 FDA ({len(fda_labels)})")
             if clinvar_entries or clinvar_sig:
                 tab_names.append("ClinVar")
             if cosmic_id:
@@ -726,8 +730,8 @@ with tab1:
                             # 1. Render Level A FIRST (highest clinical significance)
                             if level_groups["A"]:
                                 st.markdown(f"**✅ Level A - FDA/Guideline ({len(level_groups['A'])})**")
-                                st.caption("FDA-approved therapy with regulatory details from OpenFDA (label text may be outdated)")
-                                render_civic_table(level_groups["A"], show_fda_cols=True)
+                                st.caption("FDA-approved therapies - see FDA tab for label details")
+                                render_civic_table(level_groups["A"], show_fda_cols=False)
                                 sections_rendered += 1
 
                             # 2. Render Curated Assertions second
@@ -913,8 +917,8 @@ with tab1:
 
                             if level_groups["fda"]:
                                 st.markdown(f"**✅ Level 1/A - FDA/Guideline ({len(level_groups['fda'])})**")
-                                st.caption("FDA-approved therapy with regulatory details from OpenFDA (label text may be outdated)")
-                                render_vicc_table(level_groups["fda"], show_fda_cols=True)
+                                st.caption("FDA-approved therapies - see FDA tab for label details")
+                                render_vicc_table(level_groups["fda"], show_fda_cols=False)
                                 sections_rendered += 1
 
                             if level_groups["clinical"]:
@@ -1086,8 +1090,8 @@ with tab1:
                             if cgi_biomarkers:
                                 cgi_fda_sorted = sorted(cgi_biomarkers, key=assoc_sort_key)
                                 st.markdown("**✅ FDA Approved (CGI)**")
-                                st.caption("FDA-approved biomarker-drug associations with regulatory details from OpenFDA (label text may be outdated)")
-                                render_cgi_table(cgi_fda_sorted, show_level=False, show_fda_cols=True)
+                                st.caption("FDA-approved biomarker-drug associations - see FDA tab for label details")
+                                render_cgi_table(cgi_fda_sorted, show_level=False, show_fda_cols=False)
 
                             # 2. Early Phase (clinical trials, late trials, case reports)
                             if early_phase:
@@ -1104,6 +1108,72 @@ with tab1:
                                 st.markdown("**🧪 Preclinical (CGI)**")
                                 st.caption("Cell line and preclinical studies")
                                 render_cgi_table(preclinical, show_level=True)
+                    tab_idx += 1
+
+                # FDA Labels tab - shows detailed drug label information
+                if fda_labels:
+                    with tabs[tab_idx]:
+                        st.caption("FDA drug label data from OpenFDA • Click row to expand")
+
+                        for label in fda_labels:
+                            drug_name = label.get('drug', 'Unknown')
+                            brand = label.get('brand_name', '')
+
+                            # Clinical studies data
+                            cs = label.get('clinical_studies') or {}
+                            nct_id = cs.get('nct_id', '')
+                            trial_name = cs.get('trial_name') or '-'
+                            hr = cs.get('hazard_ratio')
+                            hr_ci = cs.get('hazard_ratio_ci')
+
+                            # Format trial with link
+                            if nct_id:
+                                nct_link = f"[{nct_id}](https://clinicaltrials.gov/study/{nct_id})"
+                            else:
+                                nct_link = "-"
+
+                            # Format HR with 95% CI
+                            if hr:
+                                hr_str = f"{hr:.2f}"
+                                if hr_ci:
+                                    hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
+                            else:
+                                hr_str = "-"
+
+                            # Mechanism targets
+                            moa = label.get('mechanism_of_action') or {}
+                            targets = moa.get('targets', [])
+                            targets_str = ", ".join(targets) if targets else "-"
+
+                            # Indications
+                            indications = label.get('indications_and_usage', '') or '-'
+
+                            # Initial approval date (from effective_time)
+                            approval_date = label.get('initial_approval_date') or '-'
+
+                            # Build expander header with key info
+                            drug_display = f"{drug_name} ({brand})" if brand else drug_name
+                            # Use trial name if available, otherwise fall back to NCT ID
+                            trial_display = trial_name if trial_name != '-' else (nct_id or '-')
+                            header = f"**{drug_display}** | Trial: {trial_display} | HR: {hr_str}"
+
+                            with st.expander(header):
+                                # Summary row
+                                cols = st.columns([1, 1, 1, 1])
+                                with cols[0]:
+                                    st.markdown(f"**Targets:** {targets_str}")
+                                with cols[1]:
+                                    st.markdown(f"**NCT:** {nct_link}")
+                                with cols[2]:
+                                    st.markdown(f"**HR (95% CI):** {hr_str}")
+                                with cols[3]:
+                                    st.markdown(f"**Approval:** {approval_date}")
+
+                                # Full indications
+                                st.markdown("---")
+                                st.markdown("**Indications & Usage:**")
+                                st.markdown(indications)
+
                     tab_idx += 1
 
                 # ClinVar tab

@@ -37,7 +37,7 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
-from oncomind.models.evidence.fda import FDAApproval
+from oncomind.models.evidence.fda import FDAApproval, FDALabelEvidence
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -191,6 +191,10 @@ class Evidence(BaseModel):
 
     # FDA
     fda_approvals: list[FDAApproval] = Field(default_factory=list, description="FDA drug approvals")
+    fda_labels: list[FDALabelEvidence] = Field(
+        default_factory=list,
+        description="FDA drug labels with clinical study data, mechanism, adverse reactions"
+    )
 
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
