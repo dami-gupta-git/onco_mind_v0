@@ -1,8 +1,63 @@
 import re
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from oncomind.models.evidence.base import EvidenceItemBase
+
+
+class ClinicalStudyEvidence(BaseModel):
+    """Structured clinical study data from FDA label."""
+    trial_name: str | None = None
+    nct_id: str | None = None
+    patients_n: int | None = None
+    pfs_months_treatment: float | None = None
+    pfs_months_control: float | None = None
+    hazard_ratio: float | None = None
+    hazard_ratio_ci: tuple[float, float] | None = None
+    orr_treatment: float | None = None
+    orr_control: float | None = None
+    biomarker_breakdown: dict[str, float] | None = None
+
+
+class MechanismEvidence(BaseModel):
+    """Mechanism of action data from FDA label."""
+    targets: list[str] = Field(default_factory=list)
+    mechanism: str | None = None
+    preclinical: str | None = None
+
+
+class AdverseReactionsEvidence(BaseModel):
+    """Adverse reactions data from FDA label."""
+    common_toxicities: list[tuple[str, float]] = Field(default_factory=list)
+    serious_rate: float | None = None
+    discontinuation_rate: float | None = None
+
+
+class FDALabelEvidence(EvidenceItemBase):
+    """Complete FDA drug label data for display in FDA tab.
+
+    This contains the structured data extracted from OpenFDA drug labels,
+    including clinical trial results, mechanism of action, and adverse reactions.
+    """
+    drug: str
+    gene: str
+    brand_name: str | None = None
+    generic_name: str | None = None
+    manufacturer: str | None = None
+    indications_and_usage: str | None = None
+    initial_approval_date: str | None = None
+
+    # Structured data
+    clinical_studies: ClinicalStudyEvidence | None = None
+    mechanism_of_action: MechanismEvidence | None = None
+    adverse_reactions: AdverseReactionsEvidence | None = None
+    last_label_update: str | None = None
+    update_reason: str | None = None
+
+    # Raw text for advanced use
+    clinical_studies_text: str | None = None
+    mechanism_of_action_text: str | None = None
+    adverse_reactions_text: str | None = None
 
 
 class FDAApproval(EvidenceItemBase):

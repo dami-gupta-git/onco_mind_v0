@@ -249,6 +249,45 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for a in evidence.fda_approvals
         ],
+        "fda_labels": [
+            {
+                "drug": l.drug,
+                "gene": l.gene,
+                "brand_name": l.brand_name,
+                "generic_name": l.generic_name,
+                "manufacturer": l.manufacturer,
+                "indications_and_usage": l.indications_and_usage,
+                "clinical_studies": {
+                    "trial_name": l.clinical_studies.trial_name,
+                    "nct_id": l.clinical_studies.nct_id,
+                    "patients_n": l.clinical_studies.patients_n,
+                    "pfs_months_treatment": l.clinical_studies.pfs_months_treatment,
+                    "pfs_months_control": l.clinical_studies.pfs_months_control,
+                    "hazard_ratio": l.clinical_studies.hazard_ratio,
+                    "hazard_ratio_ci": l.clinical_studies.hazard_ratio_ci,
+                    "orr_treatment": l.clinical_studies.orr_treatment,
+                    "orr_control": l.clinical_studies.orr_control,
+                    "biomarker_breakdown": l.clinical_studies.biomarker_breakdown,
+                } if l.clinical_studies else None,
+                "mechanism_of_action": {
+                    "targets": l.mechanism_of_action.targets,
+                    "mechanism": l.mechanism_of_action.mechanism,
+                    "preclinical": l.mechanism_of_action.preclinical,
+                } if l.mechanism_of_action else None,
+                "adverse_reactions": {
+                    "common_toxicities": l.adverse_reactions.common_toxicities,
+                    "serious_rate": l.adverse_reactions.serious_rate,
+                    "discontinuation_rate": l.adverse_reactions.discontinuation_rate,
+                } if l.adverse_reactions else None,
+                "initial_approval_date": l.initial_approval_date,
+                "last_label_update": l.last_label_update,
+                "update_reason": l.update_reason,
+                "clinical_studies_text": l.clinical_studies_text,
+                "mechanism_of_action_text": l.mechanism_of_action_text,
+                "adverse_reactions_text": l.adverse_reactions_text,
+            }
+            for l in evidence.fda_labels
+        ],
         "civic_assertions": [
             {
                 "id": a.assertion_id,
