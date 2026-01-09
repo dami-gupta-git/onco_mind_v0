@@ -489,35 +489,41 @@ class EvidenceAggregator:
 
         return result
 
-    def _convert_cgi_to_fda_approvals(
-        self, cgi_biomarkers: list[CGIBiomarkerEvidence]
+    def _convert_fda_labels_to_approvals(
+        self, fda_labels: list[FDALabelData]
     ) -> list[FDAApproval]:
-        """Convert CGI FDA-approved biomarkers to FDAApproval objects.
+        """Convert FDA label data to FDAApproval objects for LLM consumption.
 
-        CGI provides structured variant-level FDA approval data which is more
-        reliable than parsing free-text FDA labels. This method converts CGI
-        entries with fda_approved=True into FDAApproval objects for unified
-        handling in gap detection and reporting.
+        FDA labels from OpenFDA provide authoritative approval information
+        including drug name, brand name, indication text, and approval date.
 
-        When conflicting entries exist (same drug with different associations),
-        both are kept to show the full picture. For example, KIT D816V has:
-        - Exon range (788-828) → Imatinib Responsive (general exon approval)
-        - D816. → Imatinib Resistant (specific resistance mutation)
-        Both should be shown so users can see the conflicting evidence.
+        Note: FDA labels do not contain sensitivity/resistance associations.
+        Those signals come from CGI/CIViC/VICC therapeutic evidence separately.
 
         Args:
-            cgi_biomarkers: List of CGI biomarkers (already filtered to fda_approved=True)
+            fda_labels: List of FDALabelData from OpenFDA
 
         Returns:
-            List of FDAApproval objects derived from CGI data
+            List of FDAApproval objects for LLM prompt
         """
         fda_approvals = []
-        for cgi in cgi_biomarkers:
+        for label in fda_labels:
             try:
-                fda_approval = cgi.to_fda_approval()
+                fda_approval = FDAApproval(
+                    drug_name=label.drug,
+                    brand_name=label.brand_name,
+                    generic_name=label.generic_name,
+                    indication=label.indications_and_usage,
+                    approval_date=label.initial_approval_date,
+                    gene=label.gene,
+                    variant_in_indications=False,
+                    variant_in_clinical_studies=False,
+                    # No association (sens/res) - that comes from CGI/CIViC/VICC
+                    association=None,
+                )
                 fda_approvals.append(fda_approval)
             except Exception as e:
-                logger.warning(f"Failed to convert CGI biomarker to FDA approval: {e}")
+                logger.warning(f"Failed to convert FDA label to FDA approval: {e}")
         return fda_approvals
 
     def _process_cbioportal_result(
@@ -826,6 +832,11 @@ class EvidenceAggregator:
         fda_label_data = await self._ensure_fda_labels_for_evidence(evidence)
         evidence.fda_labels = self._convert_fda_labels_to_evidence(fda_label_data)
 
+        # Convert FDA labels to FDAApproval objects for LLM consumption
+        # This is the authoritative source of FDA approval data (from OpenFDA)
+        fda_approvals = self._convert_fda_labels_to_approvals(fda_label_data)
+        evidence.fda_approvals = fda_approvals
+
         return evidence
 
     async def _fetch_all_sources(
@@ -988,23 +999,10 @@ class EvidenceAggregator:
 
         if not_actionable:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
-            fda_approvals: list[FDAApproval] = []
-        else:
-            # Convert CGI FDA-approved biomarkers to FDAApproval objects
-            # CGI provides structured variant-level FDA data which is more reliable
-            # than parsing free-text FDA labels
-            cgi_fda_approvals = self._convert_cgi_to_fda_approvals(cgi_biomarkers)
 
-            # Use only CGI-derived approvals (FDA Label API disabled - see comment above)
-            # To re-enable FDA Label API, uncomment fda_approvals_raw and use:
-            # combined_fda_approvals = cgi_fda_approvals + fda_approvals_raw
-            combined_fda_approvals = cgi_fda_approvals
-
-            # Enrich FDA approvals with cancer_type_match based on tumor type
-            fda_approvals = self._enrich_fda_with_tumor_match(combined_fda_approvals, tumor)
-
-            # Sort by association: Responsive/Sensitive first, Resistant last
-            fda_approvals = self._sort_fda_by_association(fda_approvals)
+        # FDA approvals will be populated from FDA labels in build_evidence()
+        # after _ensure_fda_labels_for_evidence() is called
+        fda_approvals: list[FDAApproval] = []
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)

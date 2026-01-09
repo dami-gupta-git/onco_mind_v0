@@ -685,8 +685,9 @@ class Evidence(BaseModel):
 
                 cancer_specificity = self._get_fda_cancer_specificity(approval)
 
-                # Determine response_type from CGI association (the source of truth for FDA approvals)
-                # CGI provides explicit Responsive/Resistant associations from FDA guidelines
+                # FDA labels from OpenFDA don't contain sensitivity/resistance info
+                # That signal comes from CGI/CIViC/VICC therapeutic evidence separately
+                # The association field may be None for FDA label-derived approvals
                 response_type = None
                 if approval.association:
                     assoc_upper = approval.association.upper()
