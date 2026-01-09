@@ -292,7 +292,8 @@ EXAMPLE_VARIANTS = {
     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
-    "KRAS G12D - Pancreatic": ("KRAS", "G12D", "Pancreatic Adenocarcinoma"),
+    "KRAS G12D - NSCLC": ("KRAS", "G12D", "NSCLC"),
+    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
     "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
     "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
@@ -1140,58 +1141,79 @@ with tab1:
                     with tabs[tab_idx]:
                         st.caption("FDA drug label data from OpenFDA • Click to expand")
 
+                        # Use columns: drugs on left, legend on right
+                        fda_col, legend_col = st.columns([4, 1])
+
+                        # Render legend
+                        legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 10px;'>
+<b>Locus Match:</b><br/>
+🎯 Variant (exact match)<br/>
+📌 Codon (same position)<br/>
+🧬 Gene (any alteration)
+</div>""", unsafe_allow_html=True)
+
                         # Scrollable container for FDA labels
-                        fda_container = st.container(height=400)
-                        with fda_container:
-                            for label in fda_labels:
-                                drug_name = label.get('drug', 'Unknown')
-                                brand = label.get('brand_name', '')
+                        with fda_col:
+                            fda_container = st.container(height=400)
+                            with fda_container:
+                                for label in fda_labels:
+                                    drug_name = label.get('drug', 'Unknown')
+                                    brand = label.get('brand_name', '')
 
-                                # Clinical studies data
-                                cs = label.get('clinical_studies') or {}
-                                nct_id = cs.get('nct_id', '')
-                                hr = cs.get('hazard_ratio')
-                                hr_ci = cs.get('hazard_ratio_ci')
+                                    # Clinical studies data
+                                    cs = label.get('clinical_studies') or {}
+                                    nct_id = cs.get('nct_id', '')
+                                    hr = cs.get('hazard_ratio')
+                                    hr_ci = cs.get('hazard_ratio_ci')
 
-                                # Format HR with 95% CI
-                                if hr:
-                                    hr_str = f"{hr:.2f}"
-                                    if hr_ci:
-                                        hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
-                                else:
-                                    hr_str = None
+                                    # Format HR with 95% CI
+                                    if hr:
+                                        hr_str = f"{hr:.2f}"
+                                        if hr_ci:
+                                            hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
+                                    else:
+                                        hr_str = None
 
-                                # Mechanism targets
-                                moa = label.get('mechanism_of_action') or {}
-                                targets = moa.get('targets', [])
+                                    # Mechanism targets
+                                    moa = label.get('mechanism_of_action') or {}
+                                    targets = moa.get('targets', [])
 
-                                # Initial approval date
-                                approval_date = label.get('initial_approval_date')
+                                    # Initial approval date
+                                    approval_date = label.get('initial_approval_date')
 
-                                # Build expander header
-                                drug_display = f"**{drug_name}** ({brand})" if brand else f"**{drug_name}**"
-                                header_parts = [drug_display]
-                                if targets:
-                                    header_parts.append(f"Targets: {', '.join(targets)}")
-                                if nct_id:
-                                    header_parts.append(f"NCT: {nct_id}")
-                                if hr_str:
-                                    header_parts.append(f"HR: {hr_str}")
-                                if approval_date:
-                                    header_parts.append(f"Approved: {approval_date}")
-                                header = " | ".join(header_parts)
+                                    # Locus match from biomarker specificity
+                                    locus_match = label.get('locus_match', 'gene')
+                                    if locus_match == 'variant':
+                                        locus_icon = "🎯"
+                                    elif locus_match == 'codon':
+                                        locus_icon = "📌"
+                                    else:
+                                        locus_icon = "🧬"
 
-                                search_term = brand if brand else drug_name
-                                fda_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&varq={search_term}"
+                                    # Build expander header
+                                    drug_display = f"{locus_icon} **{drug_name}** ({brand})" if brand else f"{locus_icon} **{drug_name}**"
+                                    header_parts = [drug_display]
+                                    if targets:
+                                        header_parts.append(f"Targets: {', '.join(targets)}")
+                                    if nct_id:
+                                        header_parts.append(f"NCT: {nct_id}")
+                                    if hr_str:
+                                        header_parts.append(f"HR: {hr_str}")
+                                    if approval_date:
+                                        header_parts.append(f"Approved: {approval_date}")
+                                    header = " | ".join(header_parts)
 
-                                with st.expander(header):
-                                    approved_indications = label.get('approved_indications', [])
-                                    indications = label.get('indications_and_usage', '') or '-'
+                                    search_term = brand if brand else drug_name
+                                    fda_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&varq={search_term}"
 
-                                    st.markdown(f"[View FDA Label]({fda_url})")
-                                    if approved_indications:
-                                        st.markdown(f"**Approved for:** {', '.join(approved_indications)}")
-                                    st.markdown(f"**Indications & Usage:** {indications}")
+                                    with st.expander(header):
+                                        approved_indications = label.get('approved_indications', [])
+                                        indications = label.get('indications_and_usage', '') or '-'
+
+                                        st.markdown(f"[View FDA Label]({fda_url})")
+                                        if approved_indications:
+                                            st.markdown(f"**Approved for:** {', '.join(approved_indications)}")
+                                        st.markdown(f"**Indications & Usage:** {indications}")
 
                     tab_idx += 1
 

@@ -28,6 +28,7 @@ PROCESSING_DATA_DIR = _PROJECT_ROOT / "data" / "processing"
 # Individual data files
 CGI_BIOMARKERS_FILE = CGI_DATA_DIR / "cgi_biomarkers.tsv"
 FDA_LABELS_FILE = PROCESSING_DATA_DIR / "labels" / "fda_labels.json"
+DRUG_NAMES_CACHE_FILE = PROCESSING_DATA_DIR / "drug_names.json"
 
 # =============================================================================
 # GENE ALIASES

@@ -2,9 +2,8 @@
 
 Verifies that all fields (especially initial_approval_date) are correctly
 passed through the entire data pipeline:
-1. OpenFDA API fetch -> FDALabelData
-2. FDALabelData -> FDALabelEvidence (in evidence_aggregator)
-3. FDALabelEvidence -> backend serialization (for Streamlit UI)
+1. OpenFDA API fetch -> FDALabelEvidence (directly)
+2. FDALabelEvidence -> backend serialization (for Streamlit UI)
 
 Run with: pytest tests/integration/api/test_fda_label_data_flow.py -v
 """
@@ -15,7 +14,6 @@ from unittest.mock import patch, MagicMock
 from oncomind.api.fda_label_service import (
     fetch_drug_label_from_openfda,
     get_fda_labels_for_drugs,
-    FDALabelData,
 )
 from oncomind.models.evidence.fda import FDALabelEvidence, ClinicalStudyEvidence
 
@@ -34,29 +32,6 @@ class TestFDALabelDataFlow:
         # Format should be YYYY-MM-DD
         assert len(result["initial_approval_date"]) == 10, "Date should be in YYYY-MM-DD format"
         assert result["initial_approval_date"][4] == "-", "Date should have dash at position 4"
-
-    def test_fda_label_data_has_initial_approval_date(self):
-        """Verify FDALabelData dataclass has initial_approval_date field."""
-        data = FDALabelData(
-            drug="test_drug",
-            gene="TEST",
-            initial_approval_date="2023-11-14",
-        )
-
-        assert data.initial_approval_date == "2023-11-14"
-
-    def test_fda_label_data_to_dict_includes_initial_approval_date(self):
-        """Verify FDALabelData.to_dict() includes initial_approval_date."""
-        data = FDALabelData(
-            drug="test_drug",
-            gene="TEST",
-            initial_approval_date="2023-11-14",
-        )
-
-        result = data.to_dict()
-
-        assert "initial_approval_date" in result
-        assert result["initial_approval_date"] == "2023-11-14"
 
     def test_fda_label_evidence_has_initial_approval_date(self):
         """Verify FDALabelEvidence model has initial_approval_date field."""
@@ -119,23 +94,11 @@ class TestFDALabelDataFlow:
         assert serialized["clinical_studies"]["trial_name"] == "CAPItello-291"
 
 
-class TestFDALabelDataFieldParity:
-    """Ensure FDALabelData and FDALabelEvidence have matching fields."""
+class TestFDALabelEvidenceFields:
+    """Ensure FDALabelEvidence has all required fields."""
 
-    def test_both_models_have_initial_approval_date(self):
-        """Both FDALabelData and FDALabelEvidence must have initial_approval_date."""
-        # FDALabelData (dataclass in fda_label_service.py)
-        fda_data = FDALabelData(drug="test", gene="TEST")
-        assert hasattr(fda_data, "initial_approval_date"), \
-            "FDALabelData must have initial_approval_date field"
-
-        # FDALabelEvidence (Pydantic model in models/evidence/fda.py)
-        fda_evidence = FDALabelEvidence(drug="test", gene="TEST")
-        assert hasattr(fda_evidence, "initial_approval_date"), \
-            "FDALabelEvidence must have initial_approval_date field"
-
-    def test_required_fields_present_in_both(self):
-        """Verify key fields exist in both models."""
+    def test_required_fields_present(self):
+        """Verify key fields exist in FDALabelEvidence."""
         required_fields = [
             "drug",
             "gene",
@@ -148,94 +111,141 @@ class TestFDALabelDataFieldParity:
             "clinical_studies",
             "mechanism_of_action",
             "adverse_reactions",
+            "locus_variant_match",
         ]
 
-        fda_data = FDALabelData(drug="test", gene="TEST")
         fda_evidence = FDALabelEvidence(drug="test", gene="TEST")
 
         for field in required_fields:
-            assert hasattr(fda_data, field), \
-                f"FDALabelData missing field: {field}"
             assert hasattr(fda_evidence, field), \
                 f"FDALabelEvidence missing field: {field}"
 
 
-class TestEvidenceAggregatorConversion:
-    """Test the conversion from FDALabelData to FDALabelEvidence."""
+class TestLocusVariantMatchPopulation:
+    """Test populate_locus_variant_match for computing locus_variant_match."""
 
-    def test_conversion_preserves_initial_approval_date(self):
-        """Verify evidence_aggregator passes initial_approval_date."""
-        from oncomind.insight_builder.evidence_aggregator import EvidenceAggregator
-        from oncomind.api.fda_label_service import (
-            FDALabelData,
-            ClinicalStudyData,
-            MechanismOfActionData,
+    def test_populate_locus_variant_match_exact(self):
+        """Test locus_variant_match for exact variant match."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+
+        # Sotorasib is approved for KRAS G12C
+        evidence = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="Treatment of KRAS G12C-mutated NSCLC",
         )
 
-        # Create FDALabelData with initial_approval_date
-        label_data = FDALabelData(
+        # Populate with exact matching variant
+        populate_locus_variant_match([evidence], query_variant="G12C")
+
+        # Should match at variant level (exact match)
+        assert evidence.locus_variant_match is not None
+        assert evidence.locus_variant_match.level == "variant"
+        assert evidence.locus_variant_match.scope == "specific"
+
+    def test_populate_locus_variant_match_codon_level(self):
+        """Test locus_variant_match when query variant is at same codon but different AA."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+
+        # Sotorasib is approved for KRAS G12C
+        evidence = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="Treatment of KRAS G12C-mutated NSCLC",
+        )
+
+        # Query with G12D (same codon, different variant)
+        populate_locus_variant_match([evidence], query_variant="G12D")
+
+        # Should match at codon level (not variant level)
+        assert evidence.locus_variant_match is not None
+        assert evidence.locus_variant_match.level == "codon"
+        assert evidence.locus_variant_match.scope == "specific"
+
+    def test_populate_locus_variant_match_gene_level(self):
+        """Test locus_variant_match for gene-level approvals."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+
+        # Capivasertib is approved for AKT1 alterations (gene-level)
+        evidence = FDALabelEvidence(
             drug="capivasertib",
             gene="AKT1",
-            brand_name="TRUQAP",
-            initial_approval_date="2023-11-14",
-            clinical_studies=ClinicalStudyData(
-                trial_name="CAPItello-291",
-                nct_id="NCT04305496",
-            ),
-            mechanism_of_action=MechanismOfActionData(
-                targets=["AKT1", "AKT2", "AKT3"],
-            ),
+            indications_and_usage="Treatment of AKT1 alteration-positive breast cancer",
         )
 
-        # Create aggregator and convert
-        aggregator = EvidenceAggregator.__new__(EvidenceAggregator)
-        aggregator.tumor_type = "Breast Cancer"
+        # Query with E17K
+        populate_locus_variant_match([evidence], query_variant="E17K")
 
-        # Call the conversion method
-        result = aggregator._convert_fda_labels_to_evidence([label_data])
+        # Should match at gene level
+        assert evidence.locus_variant_match is not None
+        assert evidence.locus_variant_match.level == "gene"
+        assert evidence.locus_variant_match.scope == "specific"
 
-        assert len(result) == 1
-        evidence = result[0]
+    def test_populate_locus_variant_match_no_query_variant(self):
+        """Test locus_variant_match when no query variant is provided."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
 
-        # Verify initial_approval_date was passed through
-        assert evidence.initial_approval_date == "2023-11-14", \
-            "initial_approval_date must be passed from FDALabelData to FDALabelEvidence"
-        assert evidence.drug == "capivasertib"
-        assert evidence.brand_name == "TRUQAP"
-        assert evidence.clinical_studies is not None
-        assert evidence.clinical_studies.trial_name == "CAPItello-291"
-
-    def test_conversion_preserves_approved_indications(self):
-        """Verify evidence_aggregator passes approved_indications."""
-        from oncomind.insight_builder.evidence_aggregator import EvidenceAggregator
-        from oncomind.api.fda_label_service import (
-            FDALabelData,
-            MechanismOfActionData,
-        )
-
-        # Create FDALabelData with approved_indications
-        label_data = FDALabelData(
+        # Gene-level approval
+        evidence = FDALabelEvidence(
             drug="capivasertib",
             gene="AKT1",
-            brand_name="TRUQAP",
-            initial_approval_date="2023-11-14",
-            approved_indications=["Breast Cancer", "HR+ Breast Cancer"],
-            mechanism_of_action=MechanismOfActionData(
-                targets=["AKT1", "AKT2", "AKT3"],
-            ),
+            indications_and_usage="Treatment of AKT1 alteration-positive breast cancer",
         )
 
-        # Create aggregator and convert
-        aggregator = EvidenceAggregator.__new__(EvidenceAggregator)
-        aggregator.tumor_type = "Breast Cancer"
+        # No query variant
+        populate_locus_variant_match([evidence], query_variant=None)
 
-        # Call the conversion method
-        result = aggregator._convert_fda_labels_to_evidence([label_data])
+        # Should have gene-level match with unspecified scope
+        assert evidence.locus_variant_match is not None
+        assert evidence.locus_variant_match.level == "gene"
+        assert evidence.locus_variant_match.scope == "unspecified"
 
-        assert len(result) == 1
-        evidence = result[0]
+    def test_populate_locus_variant_match_no_match(self):
+        """Test locus_variant_match when query doesn't match the approval."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
 
-        # Verify approved_indications was passed through
-        assert evidence.approved_indications == ["Breast Cancer", "HR+ Breast Cancer"], \
-            "approved_indications must be passed from FDALabelData to FDALabelEvidence"
-        assert isinstance(evidence.approved_indications, list)
+        # KRAS G12C approval
+        evidence = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="Treatment of KRAS G12C-mutated NSCLC",
+        )
+
+        # Query with completely different variant (different codon)
+        populate_locus_variant_match([evidence], query_variant="Q61H")
+
+        # No match - Q61H is not covered by G12C approval
+        assert evidence.locus_variant_match is None
+
+
+class TestGetFDALabelsForDrugsReturnsEvidence:
+    """Test that get_fda_labels_for_drugs returns FDALabelEvidence directly."""
+
+    @patch('oncomind.api.fda_label_service.load_fda_labels_json')
+    def test_returns_fda_label_evidence(self, mock_load):
+        """Verify get_fda_labels_for_drugs returns FDALabelEvidence objects."""
+        # Mock the cache to return data
+        mock_load.return_value = {
+            "sotorasib": {
+                "brand_name": ["LUMAKRAS"],
+                "generic_name": ["sotorasib"],
+                "manufacturer_name": ["Amgen Inc."],
+                "indications_and_usage": ["Treatment of KRAS G12C-mutated NSCLC"],
+                "initial_approval_date": "2021-05-28",
+                "clinical_studies": {
+                    "trial_name": "CodeBreaK 100",
+                    "nct_id": "NCT03600883",
+                },
+            }
+        }
+
+        results = get_fda_labels_for_drugs({"sotorasib"}, gene="KRAS", fetch_missing=False)
+
+        assert len(results) == 1
+        assert isinstance(results[0], FDALabelEvidence)
+        assert results[0].drug == "sotorasib"
+        assert results[0].gene == "KRAS"
+        assert results[0].brand_name == "LUMAKRAS"
+        assert results[0].initial_approval_date == "2021-05-28"
+        assert results[0].clinical_studies is not None
+        assert results[0].clinical_studies.trial_name == "CodeBreaK 100"

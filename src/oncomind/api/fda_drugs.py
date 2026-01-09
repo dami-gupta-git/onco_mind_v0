@@ -1125,7 +1125,7 @@ class OpenFDAClient:
             )
 
             # Extract biomarker specificity (gene vs variant vs phenotype level)
-            self._extract_biomarker_specificity(result.indications_and_usage, result)
+            self._apply_biomarker_specificity(result.indications_and_usage, result)
 
         # Extract NCT IDs from clinical studies section
         clinical_studies = data.get("clinical_studies", [])
@@ -1175,24 +1175,20 @@ class OpenFDAClient:
 
         return unique
 
-    def _extract_biomarker_specificity(self, text: str, result: FDALabelInfo) -> None:
-        """Extract biomarker specificity from indication text.
+    def _apply_biomarker_specificity(self, text: str, result: FDALabelInfo) -> None:
+        """Apply biomarker specificity parsing to FDALabelInfo result.
 
-        Determines if the FDA approval is for:
-        - 'variant': specific variant (e.g., BRAF V600E, KRAS G12C)
-        - 'gene': any mutation in a gene (e.g., BRCA-mutated, EGFR-mutated)
-        - 'phenotype': a phenotype (e.g., MSI-H, dMMR, HRD, TMB-H)
-
-        Also extracts specific variants and target genes mentioned.
+        Uses the consolidated parse_biomarker_specificity function and maps
+        the result to FDALabelInfo fields.
         """
         if not text:
             return
 
-        text_upper = text.upper()
-        genes_found = set()
-        variants_found = set()
+        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity
 
-        # Known oncology genes
+        text_upper = text.upper()
+
+        # Known oncology genes - scan text for all mentioned genes
         oncology_genes = [
             'EGFR', 'BRAF', 'KRAS', 'NRAS', 'HER2', 'ERBB2', 'ALK', 'ROS1', 'RET',
             'MET', 'NTRK', 'NTRK1', 'NTRK2', 'NTRK3', 'BRCA1', 'BRCA2', 'BRCA',
@@ -1202,79 +1198,49 @@ class OpenFDAClient:
             'MSH2', 'MLH1', 'MSH6', 'PMS2', 'POLE', 'POLD1'
         ]
 
-        # Find genes mentioned - use word boundaries to avoid false positives
-        # e.g., "MET" shouldn't match "metastatic", "ATM" shouldn't match "treatment"
+        # Find all genes mentioned in text
+        genes_found = set()
         for gene in oncology_genes:
-            # Use word boundary regex to ensure we match the gene as a complete word
             gene_pattern = rf'\b{gene}\b'
             if re.search(gene_pattern, text_upper):
                 genes_found.add(gene)
 
-        # Check for phenotype-based approvals first (these are gene-agnostic)
-        phenotype_patterns = [
-            (r'MSI-H|MICROSATELLITE INSTABILITY[- ]HIGH', 'MSI-H'),
-            (r'DMMR|MISMATCH REPAIR DEFICIEN', 'dMMR'),
-            (r'HRD|HOMOLOGOUS RECOMBINATION DEFICIEN', 'HRD'),
-            (r'TMB-H|TUMOR MUTATIONAL BURDEN[- ]HIGH', 'TMB-H'),
-        ]
+        # Try phenotype parsing first (no gene required)
+        spec = parse_biomarker_specificity(text, gene=None)
+        if spec and spec["level"] == "phenotype":
+            result.biomarker_specificity = "phenotype"
+            result.specific_variants = spec.get("phenotypes", [])
+            result.target_genes = list(genes_found)
+            return
 
-        for pattern, phenotype in phenotype_patterns:
-            if re.search(pattern, text_upper):
-                result.biomarker_specificity = 'phenotype'
-                if phenotype not in result.specific_variants:
-                    result.specific_variants.append(phenotype)
+        # Try each gene found to get variant-level specificity
+        for gene in genes_found:
+            spec = parse_biomarker_specificity(text, gene=gene)
+            if spec:
+                if spec["level"] == "variant":
+                    result.biomarker_specificity = "variant"
+                    result.specific_variants = [spec["specified_variant"]]
+                    result.target_genes = spec.get("target_genes", [gene])
+                    return
+                elif spec["level"] in ("codon", "exon"):
+                    # Treat codon/exon as variant-level for this model
+                    result.biomarker_specificity = "variant"
+                    if spec["level"] == "codon":
+                        result.specific_variants = [spec["codon"]]
+                    else:
+                        result.specific_variants = [f"exon {spec['exon']}"]
+                    result.target_genes = spec.get("target_genes", [gene])
+                    return
+                elif spec["level"] == "gene":
+                    result.biomarker_specificity = "gene"
+                    result.target_genes = spec.get("target_genes", [gene])
+                    # Don't return - continue looking for more specific matches
+                    continue
 
-        # Check for specific variants (e.g., V600E, G12C, L858R, exon 19 deletion)
-        # Pattern: GENE followed by variant notation
-        variant_patterns = [
-            # Standard missense: V600E, G12C, L858R, etc.
-            r'([A-Z][0-9]+[A-Z])',
-            # Exon patterns: exon 19 deletion, exon 20 insertion
-            r'(EXON\s*\d+\s*(?:DELETION|DEL|INSERTION|INS))',
-            # Specific well-known variants
-            r'(T790M|C797S|S768I|G719[A-Z])',
-        ]
+        # If we found any genes but no specific match, mark as gene-level
+        if genes_found and not result.biomarker_specificity:
+            result.biomarker_specificity = "gene"
 
-        for pattern in variant_patterns:
-            matches = re.findall(pattern, text_upper)
-            for match in matches:
-                # Clean up the match
-                variant = match.strip()
-                # Filter out common false positives (non-variant patterns)
-                if variant and len(variant) >= 4 and variant not in ['NSCLC', 'BRAF1', 'KRAS1']:
-                    variants_found.add(variant)
-
-        # Check for gene-level approvals (any mutation in gene)
-        gene_level_patterns = [
-            r'(\w+)[- ]MUTATED',
-            r'(\w+)[- ]MUTANT',
-            r'(\w+)\s+MUTATION[S]?\b(?!\s+[A-Z]\d+)',  # BRCA mutation but not BRCA mutation V600E
-            r'(\w+)[- ]POSITIVE',
-            r'(\w+)\s+ALTERATION[S]?',
-            r'(\w+)\s+REARRANGEMENT[S]?',
-            r'(\w+)\s+FUSION[S]?',
-        ]
-
-        gene_level_genes = set()
-        for pattern in gene_level_patterns:
-            matches = re.findall(pattern, text_upper)
-            for match in matches:
-                if match in [g.upper() for g in oncology_genes]:
-                    gene_level_genes.add(match)
-
-        # Determine specificity
-        if result.biomarker_specificity == 'phenotype':
-            # Already set above
-            pass
-        elif variants_found:
-            # Has specific variants - variant level approval
-            result.biomarker_specificity = 'variant'
-            result.specific_variants = list(variants_found)
-        elif gene_level_genes:
-            # Gene-level approval (any mutation)
-            result.biomarker_specificity = 'gene'
-
-        # Set target genes
         result.target_genes = list(genes_found)
 
 

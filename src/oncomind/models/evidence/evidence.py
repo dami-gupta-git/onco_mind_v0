@@ -195,7 +195,6 @@ class Evidence(BaseModel):
         default_factory=list,
         description="FDA drug labels with clinical study data, mechanism, adverse reactions"
     )
-
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
         default_factory=list, description="CIViC curated assertions"

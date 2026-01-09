@@ -33,6 +33,16 @@ from oncomind.config.constants import (
     PROCESSING_DATA_DIR,
     FDA_LABELS_FILE,
     CGI_BIOMARKERS_FILE,
+    DRUG_NAMES_CACHE_FILE,
+)
+
+from oncomind.models.evidence.fda import (
+    FDALabelEvidence,
+    ClinicalStudyEvidence,
+    MechanismEvidence,
+    AdverseReactionsEvidence,
+    CombinationPartner,
+    extract_combination_partners,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +52,171 @@ FDA_ONCOLOGY_BIOMARKERS_FILE = PROCESSING_DATA_DIR / "fda_oncology_biomarkers.xl
 
 # OpenFDA API
 OPENFDA_BASE = "https://api.fda.gov/drug/label.json"
+
+
+def fetch_latest_labels(drug_name: str) -> list[dict[str, Any]]:
+    """Fetch the latest FDA labels from OpenFDA for a drug.
+
+    A drug may have multiple FDA labels (different set_ids), each with
+    multiple versions. This returns one label per unique set_id, each
+    at its latest (highest) version.
+
+    Args:
+        drug_name: Drug name to search for
+
+    Returns:
+        List of processed label data dicts (one per unique set_id).
+        Empty list if no labels found.
+    """
+    # Group results by set_id, keeping track of latest version for each
+    # Key: set_id, Value: (version_num, raw_result)
+    latest_by_set_id: dict[str, tuple[int, dict[str, Any]]] = {}
+
+    for field in ["openfda.brand_name", "openfda.generic_name"]:
+        params = {
+            "search": f'{field}:"{drug_name}"',
+            "limit": 10,
+        }
+        try:
+            resp = requests.get(OPENFDA_BASE, params=params, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                for result in data.get("results", []):
+                    set_id = result.get("set_id")
+                    version = result.get("version")
+                    if set_id and version:
+                        try:
+                            version_num = int(version)
+                            # Check if this set_id is new or has a higher version
+                            if set_id not in latest_by_set_id or version_num > latest_by_set_id[set_id][0]:
+                                latest_by_set_id[set_id] = (version_num, result)
+                        except ValueError:
+                            continue
+        except requests.RequestException as e:
+            logger.debug(f"Error fetching label for {drug_name}: {e}")
+            continue
+
+    if not latest_by_set_id:
+        return []
+
+    # Process each latest result
+    return [_process_raw_label(result, drug_name) for _, result in latest_by_set_id.values()]
+
+
+# In-memory cache for drug names (loaded from disk on first access)
+_drug_names_cache: dict[str, dict[str, str | None]] | None = None
+
+
+def _load_drug_names_cache() -> dict[str, dict[str, str | None]]:
+    """Load drug names cache from disk.
+
+    Returns:
+        Dict mapping drug name (lowercase) to {generic, brand} dict
+    """
+    global _drug_names_cache
+
+    if _drug_names_cache is not None:
+        return _drug_names_cache
+
+    if DRUG_NAMES_CACHE_FILE.exists():
+        try:
+            with open(DRUG_NAMES_CACHE_FILE, "r") as f:
+                data = json.load(f)
+            _drug_names_cache = data.get("drugs", {})
+            logger.debug(f"Loaded {len(_drug_names_cache)} drugs from cache")
+        except Exception as e:
+            logger.warning(f"Error loading drug names cache: {e}")
+            _drug_names_cache = {}
+    else:
+        _drug_names_cache = {}
+
+    return _drug_names_cache
+
+
+def _save_drug_names_cache() -> None:
+    """Save drug names cache to disk."""
+    global _drug_names_cache
+
+    if _drug_names_cache is None:
+        return
+
+    from datetime import datetime
+
+    DRUG_NAMES_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    data = {
+        "last_updated": datetime.now().isoformat(),
+        "drugs": _drug_names_cache,
+    }
+
+    with open(DRUG_NAMES_CACHE_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+    logger.debug(f"Saved {len(_drug_names_cache)} drugs to cache")
+
+
+def _add_to_drug_names_cache(drug_name: str, info: dict[str, str | None]) -> None:
+    """Add a drug to the cache and save.
+
+    Args:
+        drug_name: Drug name (will be lowercased for lookup key)
+        info: Dict with 'generic' and 'brand' keys
+    """
+    cache = _load_drug_names_cache()
+
+    # Add by input name
+    cache[drug_name.lower()] = info
+
+    # Also add by generic and brand names for reverse lookups
+    if info.get("generic"):
+        cache[info["generic"].lower()] = info
+    if info.get("brand"):
+        cache[info["brand"].lower()] = info
+
+    _save_drug_names_cache()
+
+
+def get_drug_info(drug_name: str) -> dict[str, str | None] | None:
+    """Look up brand/generic name for a drug.
+
+    Checks local cache first, then queries OpenFDA API.
+    Results are cached to avoid repeated API calls.
+
+    Args:
+        drug_name: Drug name to look up (generic or brand)
+
+    Returns:
+        Dict with 'generic' and 'brand' keys, or None if not found
+    """
+    # Check cache first
+    cache = _load_drug_names_cache()
+    cached = cache.get(drug_name.lower())
+    if cached:
+        logger.debug(f"Cache hit for drug: {drug_name}")
+        return cached
+
+    # Query OpenFDA API
+    search = f'openfda.generic_name:"{drug_name}" OR openfda.brand_name:"{drug_name}"'
+    params = {"search": search, "limit": 1}
+
+    try:
+        resp = requests.get(OPENFDA_BASE, params=params, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("results"):
+                openfda = data["results"][0].get("openfda", {})
+                info = {
+                    "generic": openfda.get("generic_name", [None])[0],
+                    "brand": openfda.get("brand_name", [None])[0],
+                }
+                # Cache the result
+                _add_to_drug_names_cache(drug_name, info)
+                logger.debug(f"Fetched and cached drug info: {drug_name} -> {info}")
+                return info
+    except requests.RequestException as e:
+        logger.debug(f"Error fetching drug info for {drug_name}: {e}")
+
+    return None
 
 
 # =============================================================================
@@ -86,76 +261,7 @@ class RecentMajorChangesData:
     update_reason: str | None = None
 
 
-@dataclass
-class FDALabelData:
-    """FDA label data for a drug-gene pair."""
-    drug: str
-    gene: str
-    brand_name: str | None = None
-    generic_name: str | None = None
-    manufacturer: str | None = None
-    indications_and_usage: str | None = None
-    initial_approval_date: str | None = None
-    approved_indications: list[str] = field(default_factory=list)  # List of approved diseases/conditions
-
-    # Additional structured data
-    clinical_studies: ClinicalStudyData | None = None
-    mechanism_of_action: MechanismOfActionData | None = None
-    adverse_reactions: AdverseReactionsData | None = None
-    recent_major_changes: RecentMajorChangesData | None = None
-
-    # Raw text fields (for full access)
-    clinical_studies_text: str | None = None
-    mechanism_of_action_text: str | None = None
-    adverse_reactions_text: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        result = {
-            "drug": self.drug,
-            "gene": self.gene,
-            "brand_name": self.brand_name,
-            "generic_name": self.generic_name,
-            "manufacturer": self.manufacturer,
-            "indications_and_usage": self.indications_and_usage,
-            "initial_approval_date": self.initial_approval_date,
-            "approved_indications": self.approved_indications,
-        }
-
-        if self.clinical_studies:
-            result["clinical_studies"] = {
-                "trial_name": self.clinical_studies.trial_name,
-                "nct_id": self.clinical_studies.nct_id,
-                "patients_n": self.clinical_studies.patients_n,
-                "pfs_months_treatment": self.clinical_studies.pfs_months_treatment,
-                "pfs_months_control": self.clinical_studies.pfs_months_control,
-                "hazard_ratio": self.clinical_studies.hazard_ratio,
-                "hazard_ratio_ci": self.clinical_studies.hazard_ratio_ci,
-                "orr_treatment": self.clinical_studies.orr_treatment,
-                "orr_control": self.clinical_studies.orr_control,
-                "biomarker_breakdown": self.clinical_studies.biomarker_breakdown,
-            }
-
-        if self.mechanism_of_action:
-            result["mechanism_of_action"] = {
-                "targets": self.mechanism_of_action.targets,
-                "mechanism": self.mechanism_of_action.mechanism,
-                "preclinical": self.mechanism_of_action.preclinical,
-            }
-
-        if self.adverse_reactions:
-            result["adverse_reactions"] = {
-                "common_toxicities": self.adverse_reactions.common_toxicities,
-                "serious_rate": self.adverse_reactions.serious_rate,
-                "discontinuation_rate": self.adverse_reactions.discontinuation_rate,
-            }
-
-        if self.recent_major_changes:
-            result["recent_major_changes"] = {
-                "last_label_update": self.recent_major_changes.last_label_update,
-                "update_reason": self.recent_major_changes.update_reason,
-            }
-
-        return result
+# FDALabelData removed - use FDALabelEvidence from models/evidence/fda.py directly
 
 
 # =============================================================================
@@ -274,26 +380,38 @@ def load_fda_labels_json() -> dict[str, Any]:
 # Lookup Functions
 # =============================================================================
 
-def lookup_drug_in_json(drug: str, labels: dict[str, Any]) -> dict[str, Any] | None:
-    """Look up a drug in the fda_labels.json cache.
+def lookup_by_set_id_version(set_id: str, version: str, labels: dict[str, Any]) -> dict[str, Any] | None:
+    """Look up a drug in the cache by set_id and version.
 
     Args:
-        drug: Drug name
+        set_id: FDA label set_id (UUID)
+        version: FDA label version
         labels: Dictionary from fda_labels.json
 
     Returns:
         Label data dict if found, None otherwise
     """
-    # Try exact match first
-    if drug in labels:
-        return labels[drug]
+    cache_key = f"{set_id}_{version}"
+    return labels.get(cache_key)
 
-    # Try case-insensitive match
+
+def lookup_by_drug_name(drug: str, labels: dict[str, Any]) -> dict[str, Any] | None:
+    """Look up a drug in the cache by drug name (for cache-only mode).
+
+    Searches all cache entries for matching drug_name field.
+
+    Args:
+        drug: Drug name to search for
+        labels: Dictionary from fda_labels.json
+
+    Returns:
+        Label data dict if found, None otherwise
+    """
     drug_lower = drug.lower().strip()
-    for key, value in labels.items():
-        if key.lower().strip() == drug_lower:
-            return value
-
+    for entry in labels.values():
+        entry_drug_name = entry.get("drug_name", "").lower().strip()
+        if entry_drug_name == drug_lower:
+            return entry
     return None
 
 
@@ -432,7 +550,8 @@ def parse_clinical_studies(text: str) -> ClinicalStudyData | None:
 
     # Return None if we didn't find any meaningful data
     if (data.nct_id or data.trial_name or data.pfs_months_treatment or
-            data.hazard_ratio or data.orr_treatment):
+            data.hazard_ratio or data.orr_treatment or data.patients_n or
+            data.biomarker_breakdown):
         return data
     return None
 
@@ -597,7 +716,9 @@ def parse_recent_major_changes(text: str) -> RecentMajorChangesData | None:
             data.update_reason = reason
             break
 
-    if data.last_label_update or data.update_reason:
+    # Only return data if we found a date - that's the meaningful indicator
+    # update_reason alone (without date) is just raw text, not structured data
+    if data.last_label_update:
         return data
     return None
 
@@ -744,141 +865,154 @@ def _fetch_initial_approval_date(drug_name: str, brand_names: list[str] | None =
     return None
 
 
-def fetch_drug_label_from_openfda(drug_name: str) -> dict[str, Any] | None:
-    """Fetch FDA label for a drug from OpenFDA API.
+def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]:
+    """Process raw OpenFDA label result into structured label data.
 
     Args:
-        drug_name: Drug name to search for
+        result: Raw result dict from OpenFDA API
+        drug_name: Drug name (for fetching approval date)
 
     Returns:
-        Label data dict with all extracted fields, None if not found
+        Processed label data dict with all extracted fields
     """
-    # Try brand name first, then generic name
-    for field in ["openfda.brand_name", "openfda.generic_name"]:
-        params = {
-            "search": f'{field}:"{drug_name}"',
-            "limit": 1
+    # Extract indications_and_usage as a string
+    indications = result.get("indications_and_usage", [])
+    indications_str = _join_list_to_text(indications)
+
+    # Extract brand/generic names
+    openfda = result.get("openfda", {})
+    brand_names = openfda.get("brand_name", [])
+    generic_names = openfda.get("generic_name", [])
+    manufacturer_names = openfda.get("manufacturer_name", [])
+
+    # Get initial approval date from drugsfda endpoint
+    initial_approval_date = _fetch_initial_approval_date(drug_name, brand_names)
+
+    # Extract effective_time (label revision date) - format is YYYYMMDD
+    effective_time_raw = result.get("effective_time")
+    effective_time = None
+    if effective_time_raw and len(effective_time_raw) == 8:
+        effective_time = f"{effective_time_raw[:4]}-{effective_time_raw[4:6]}-{effective_time_raw[6:8]}"
+
+    # Extract set_id and version for cache key
+    set_id = result.get("set_id")
+    version = result.get("version")
+
+    # Extract additional sections as text
+    clinical_studies_text = _join_list_to_text(result.get("clinical_studies", []))
+    mechanism_of_action_text = _join_list_to_text(result.get("mechanism_of_action", []))
+    adverse_reactions_text = _join_list_to_text(result.get("adverse_reactions", []))
+    recent_major_changes_text = _join_list_to_text(result.get("recent_major_changes", []))
+
+    # Parse structured data from text
+    clinical_studies_parsed = parse_clinical_studies(clinical_studies_text)
+    mechanism_parsed = parse_mechanism_of_action(mechanism_of_action_text)
+    adverse_parsed = parse_adverse_reactions(adverse_reactions_text)
+    recent_changes_parsed = parse_recent_major_changes(recent_major_changes_text)
+
+    # Build result dict
+    label_data: dict[str, Any] = {
+        "indications_and_usage": indications,
+        "indications_and_usage_text": indications_str,
+        "brand_name": brand_names,
+        "generic_name": generic_names,
+        "manufacturer_name": manufacturer_names,
+        "initial_approval_date": initial_approval_date,
+        "effective_time": effective_time,
+        "set_id": set_id,
+        "version": version,
+        "clinical_studies_text": clinical_studies_text,
+        "mechanism_of_action_text": mechanism_of_action_text,
+        "adverse_reactions_text": adverse_reactions_text,
+        "recent_major_changes_text": recent_major_changes_text,
+    }
+
+    # Add parsed structured data if available
+    if clinical_studies_parsed:
+        label_data["clinical_studies"] = {
+            "trial_name": clinical_studies_parsed.trial_name,
+            "nct_id": clinical_studies_parsed.nct_id,
+            "patients_n": clinical_studies_parsed.patients_n,
+            "pfs_months_treatment": clinical_studies_parsed.pfs_months_treatment,
+            "pfs_months_control": clinical_studies_parsed.pfs_months_control,
+            "hazard_ratio": clinical_studies_parsed.hazard_ratio,
+            "hazard_ratio_ci": clinical_studies_parsed.hazard_ratio_ci,
+            "orr_treatment": clinical_studies_parsed.orr_treatment,
+            "orr_control": clinical_studies_parsed.orr_control,
+            "biomarker_breakdown": clinical_studies_parsed.biomarker_breakdown,
         }
-        try:
-            resp = requests.get(OPENFDA_BASE, params=params, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("results"):
-                    result = data["results"][0]
 
-                    # Extract indications_and_usage as a string
-                    indications = result.get("indications_and_usage", [])
-                    indications_str = _join_list_to_text(indications)
+    if mechanism_parsed:
+        label_data["mechanism_of_action"] = {
+            "targets": mechanism_parsed.targets,
+            "mechanism": mechanism_parsed.mechanism,
+            "preclinical": mechanism_parsed.preclinical,
+        }
 
-                    # Extract brand/generic names
-                    openfda = result.get("openfda", {})
-                    brand_names = openfda.get("brand_name", [])
-                    generic_names = openfda.get("generic_name", [])
-                    manufacturer_names = openfda.get("manufacturer_name", [])
+    if adverse_parsed:
+        label_data["adverse_reactions"] = {
+            "common_toxicities": adverse_parsed.common_toxicities,
+            "serious_rate": adverse_parsed.serious_rate,
+            "discontinuation_rate": adverse_parsed.discontinuation_rate,
+        }
 
-                    # Get initial approval date from drugsfda endpoint
-                    # The label endpoint's effective_time is the last label update, not initial approval
-                    initial_approval_date = _fetch_initial_approval_date(drug_name, brand_names)
+    if recent_changes_parsed:
+        label_data["recent_major_changes"] = {
+            "last_label_update": recent_changes_parsed.last_label_update,
+            "update_reason": recent_changes_parsed.update_reason,
+        }
 
-                    # Extract additional sections as text
-                    clinical_studies = result.get("clinical_studies", [])
-                    clinical_studies_text = _join_list_to_text(clinical_studies)
-
-                    mechanism_of_action = result.get("mechanism_of_action", [])
-                    mechanism_of_action_text = _join_list_to_text(mechanism_of_action)
-
-                    adverse_reactions = result.get("adverse_reactions", [])
-                    adverse_reactions_text = _join_list_to_text(adverse_reactions)
-
-                    recent_major_changes = result.get("recent_major_changes", [])
-                    recent_major_changes_text = _join_list_to_text(recent_major_changes)
-
-                    # Parse structured data from text
-                    clinical_studies_parsed = parse_clinical_studies(clinical_studies_text)
-                    mechanism_parsed = parse_mechanism_of_action(mechanism_of_action_text)
-                    adverse_parsed = parse_adverse_reactions(adverse_reactions_text)
-                    recent_changes_parsed = parse_recent_major_changes(recent_major_changes_text)
-
-                    # Build result dict
-                    label_data = {
-                        # Basic fields
-                        "indications_and_usage": indications,  # Keep as list for JSON
-                        "indications_and_usage_text": indications_str,  # String for CSV
-                        "brand_name": brand_names,
-                        "generic_name": generic_names,
-                        "manufacturer_name": manufacturer_names,
-                        "initial_approval_date": initial_approval_date,
-
-                        # Raw text fields
-                        "clinical_studies_text": clinical_studies_text,
-                        "mechanism_of_action_text": mechanism_of_action_text,
-                        "adverse_reactions_text": adverse_reactions_text,
-                        "recent_major_changes_text": recent_major_changes_text,
-                    }
-
-                    # Add parsed structured data if available
-                    if clinical_studies_parsed:
-                        label_data["clinical_studies"] = {
-                            "trial_name": clinical_studies_parsed.trial_name,
-                            "nct_id": clinical_studies_parsed.nct_id,
-                            "patients_n": clinical_studies_parsed.patients_n,
-                            "pfs_months_treatment": clinical_studies_parsed.pfs_months_treatment,
-                            "pfs_months_control": clinical_studies_parsed.pfs_months_control,
-                            "hazard_ratio": clinical_studies_parsed.hazard_ratio,
-                            "hazard_ratio_ci": clinical_studies_parsed.hazard_ratio_ci,
-                            "orr_treatment": clinical_studies_parsed.orr_treatment,
-                            "orr_control": clinical_studies_parsed.orr_control,
-                            "biomarker_breakdown": clinical_studies_parsed.biomarker_breakdown,
-                        }
-
-                    if mechanism_parsed:
-                        label_data["mechanism_of_action"] = {
-                            "targets": mechanism_parsed.targets,
-                            "mechanism": mechanism_parsed.mechanism,
-                            "preclinical": mechanism_parsed.preclinical,
-                        }
-
-                    if adverse_parsed:
-                        label_data["adverse_reactions"] = {
-                            "common_toxicities": adverse_parsed.common_toxicities,
-                            "serious_rate": adverse_parsed.serious_rate,
-                            "discontinuation_rate": adverse_parsed.discontinuation_rate,
-                        }
-
-                    if recent_changes_parsed:
-                        label_data["recent_major_changes"] = {
-                            "last_label_update": recent_changes_parsed.last_label_update,
-                            "update_reason": recent_changes_parsed.update_reason,
-                        }
-
-                    return label_data
-
-            elif resp.status_code == 404:
-                continue  # Try next field
+    # Extract combination partners from indication text
+    partner_names = extract_combination_partners(indications_str)
+    if partner_names:
+        combination_partners = []
+        for partner_name in partner_names:
+            partner_info = get_drug_info(partner_name)
+            if partner_info:
+                combination_partners.append({
+                    "generic_name": partner_info.get("generic"),
+                    "brand_name": partner_info.get("brand"),
+                })
             else:
-                logger.warning(f"HTTP {resp.status_code} for {drug_name} ({field})")
+                combination_partners.append({
+                    "generic_name": partner_name,
+                    "brand_name": None,
+                })
+        label_data["combination_partners"] = combination_partners
 
-        except requests.RequestException as e:
-            logger.error(f"Request failed for {drug_name}: {e}")
-
-    return None
+    return label_data
 
 
 # =============================================================================
 # Cache Update Functions
 # =============================================================================
 
-def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[str]) -> None:
+def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[str]) -> bool:
     """Update fda_labels.json with a new drug entry.
 
     Maintains the file structure: {"last_updated": "...", "drugs": {...}}
+
+    Uses composite key format: "set_id_version" (e.g., "d698c106-2322-401e-b738-cbd83c843ecf_8")
+    where set_id is the FDA label's unique identifier and version is the label version.
+    This allows tracking multiple versions of the same label and different labels
+    for different approvals.
 
     Args:
         drug: Drug name
         label_data: Label data from OpenFDA
         genes: List of genes associated with this drug
+
+    Returns:
+        True if the entry was saved, False if set_id or version was missing
     """
     from datetime import datetime
+
+    # Require set_id and version for cache key - do not fall back to drug name
+    set_id = label_data.get("set_id")
+    version = label_data.get("version")
+    if not set_id or not version:
+        logger.warning(f"Cannot cache {drug}: missing set_id or version")
+        return False
 
     # Load existing file to get full structure
     if FDA_LABELS_FILE.exists():
@@ -888,15 +1022,17 @@ def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[st
     else:
         full_data = {}
         drugs = {}
-
-    # Format entry to match existing structure
     entry = {
+        "drug_name": drug,  # Store original drug name in the entry
         "genes": genes,
         "indications_and_usage": label_data.get("indications_and_usage", []),
         "brand_name": label_data.get("brand_name", []),
         "generic_name": label_data.get("generic_name", []),
         "manufacturer_name": label_data.get("manufacturer_name", []),
         "initial_approval_date": label_data.get("initial_approval_date"),
+        "effective_time": label_data.get("effective_time"),  # Label revision date
+        "set_id": set_id,
+        "version": version,
     }
 
     # Add extended fields if available
@@ -920,7 +1056,12 @@ def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[st
     if label_data.get("recent_major_changes"):
         entry["recent_major_changes"] = label_data["recent_major_changes"]
 
-    drugs[drug] = entry
+    if label_data.get("combination_partners"):
+        entry["combination_partners"] = label_data["combination_partners"]
+
+    # Create composite key: set_id_version (e.g., "d698c106-2322-401e-b738-cbd83c843ecf_8")
+    cache_key = f"{set_id}_{version}"
+    drugs[cache_key] = entry
 
     # Rebuild full structure with updated drugs
     full_data["last_updated"] = datetime.now().isoformat()
@@ -931,22 +1072,156 @@ def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[st
     with open(FDA_LABELS_FILE, "w") as f:
         json.dump(full_data, f, indent=2)
 
-    logger.info(f"Updated fda_labels.json with {drug}")
+    logger.info(f"Updated fda_labels.json with {cache_key}")
+    return True
 
 
 # =============================================================================
 # Main Service Functions
 # =============================================================================
 
+def _create_fda_label_evidence(
+    drug: str,
+    gene: str,
+    label_data: dict[str, Any],
+) -> FDALabelEvidence:
+    """Create FDALabelEvidence from label data dict.
+
+    Helper function that converts raw label data to FDALabelEvidence model.
+
+    Args:
+        drug: Drug name
+        gene: Gene symbol
+        label_data: Label data dict from cache or OpenFDA
+
+    Returns:
+        FDALabelEvidence instance
+    """
+    # Extract basic fields
+    brand_name = label_data.get("brand_name", [])
+    if isinstance(brand_name, list):
+        brand_name = brand_name[0] if brand_name else None
+
+    generic_name = label_data.get("generic_name", [])
+    if isinstance(generic_name, list):
+        generic_name = generic_name[0] if generic_name else None
+
+    manufacturer = label_data.get("manufacturer_name", [])
+    if isinstance(manufacturer, list):
+        manufacturer = manufacturer[0] if manufacturer else None
+
+    indications = label_data.get("indications_and_usage_text", "")
+    if not indications:
+        indications_list = label_data.get("indications_and_usage", [])
+        if isinstance(indications_list, list):
+            indications = " ".join(indications_list)
+
+    # Build structured data from parsed fields using Pydantic models
+    clinical_studies_evidence = None
+    if label_data.get("clinical_studies"):
+        cs = label_data["clinical_studies"]
+        clinical_studies_evidence = ClinicalStudyEvidence(
+            trial_name=cs.get("trial_name"),
+            nct_id=cs.get("nct_id"),
+            patients_n=cs.get("patients_n"),
+            pfs_months_treatment=cs.get("pfs_months_treatment"),
+            pfs_months_control=cs.get("pfs_months_control"),
+            hazard_ratio=cs.get("hazard_ratio"),
+            hazard_ratio_ci=tuple(cs["hazard_ratio_ci"]) if cs.get("hazard_ratio_ci") else None,
+            orr_treatment=cs.get("orr_treatment"),
+            orr_control=cs.get("orr_control"),
+            biomarker_breakdown=cs.get("biomarker_breakdown"),
+        )
+
+    mechanism_evidence = None
+    if label_data.get("mechanism_of_action"):
+        moa = label_data["mechanism_of_action"]
+        mechanism_evidence = MechanismEvidence(
+            targets=moa.get("targets", []),
+            mechanism=moa.get("mechanism"),
+            preclinical=moa.get("preclinical"),
+        )
+
+    adverse_evidence = None
+    if label_data.get("adverse_reactions"):
+        ar = label_data["adverse_reactions"]
+        adverse_evidence = AdverseReactionsEvidence(
+            common_toxicities=[tuple(t) for t in ar.get("common_toxicities", [])],
+            serious_rate=ar.get("serious_rate"),
+            discontinuation_rate=ar.get("discontinuation_rate"),
+        )
+
+    # Extract last_label_update from recent_major_changes
+    last_label_update = None
+    update_reason = None
+    if label_data.get("recent_major_changes"):
+        rmc = label_data["recent_major_changes"]
+        last_label_update = rmc.get("last_label_update")
+        update_reason = rmc.get("update_reason")
+
+    # Extract approved indications from the full indication text
+    approved_indications = extract_approved_indications(indications or "")
+
+    # Extract combination partner drugs from cache
+    combination_partners: list[CombinationPartner] = []
+    partner_display_names: list[str] = []
+
+    for cp in label_data.get("combination_partners", []):
+        combination_partners.append(CombinationPartner(
+            generic_name=cp.get("generic_name"),
+            brand_name=cp.get("brand_name"),
+        ))
+        display_name = cp.get("brand_name") or cp.get("generic_name") or ""
+        if display_name:
+            partner_display_names.append(display_name)
+
+    # Build therapy name with partner(s)
+    if partner_display_names:
+        therapy_name = f"{drug} + {' + '.join(partner_display_names)}"
+        logger.debug(f"Combination therapy: {therapy_name}")
+    else:
+        therapy_name = drug
+
+    # Create FDALabelEvidence directly (locus_variant_match will be None initially)
+    x= FDALabelEvidence(
+        drug=therapy_name,  # e.g., "capivasertib + FASLODEX"
+        gene=gene,
+        brand_name=brand_name,
+        generic_name=generic_name,
+        manufacturer=manufacturer,
+        indications_and_usage=indications,
+        initial_approval_date=label_data.get("initial_approval_date"),
+        effective_time=label_data.get("effective_time"),
+        set_id=label_data.get("set_id"),
+        version=str(label_data.get("version")) if label_data.get("version") else None,
+        approved_indications=approved_indications,
+        combination_partners=combination_partners,
+        clinical_studies=clinical_studies_evidence,
+        mechanism_of_action=mechanism_evidence,
+        adverse_reactions=adverse_evidence,
+        last_label_update=last_label_update,
+        update_reason=update_reason,
+        clinical_studies_text=label_data.get("clinical_studies_text"),
+        mechanism_of_action_text=label_data.get("mechanism_of_action_text"),
+        adverse_reactions_text=label_data.get("adverse_reactions_text"),
+    )
+    return x
+
+
 def get_fda_labels_for_drugs(
     drugs: set[str],
     gene: str,
     fetch_missing: bool = True,
-) -> list[FDALabelData]:
+) -> list[FDALabelEvidence]:
     """Get FDA label data for a set of drugs.
 
-    Checks fda_labels.json cache first, then fetches from OpenFDA API
-    for missing drugs. Saves fetched data back to cache.
+    When fetch_missing=True:
+    1. Call fetch_label_version(drug) to get set_id and version from OpenFDA
+    2. Look up cache by set_id_version key
+    3. If found in cache, use it; if not, fetch full label
+
+    When fetch_missing=False (cache-only mode):
+    1. Look up cache by drug_name field (no API calls)
 
     Args:
         drugs: Set of drug names to look up
@@ -954,121 +1229,53 @@ def get_fda_labels_for_drugs(
         fetch_missing: Whether to fetch from OpenFDA (if False, only uses cache)
 
     Returns:
-        List of FDALabelData for found drugs
+        List of FDALabelEvidence for found drugs (without locus_variant_match populated)
     """
-    results: list[FDALabelData] = []
+    results: list[FDALabelEvidence] = []
 
     # Load cache
     labels_cache = load_fda_labels_json()
 
     for drug in drugs:
-        # Check cache first
-        cached = lookup_drug_in_json(drug, labels_cache)
+        if fetch_missing:
+            # Online mode: fetch latest labels (one per set_id)
+            labels_data = fetch_latest_labels(drug)
 
-        if cached and cached.get("clinical_studies"):
-            # Cache hit with structured data
-            logger.debug(f"Cache hit for {drug}")
-            label_data = cached
-        elif fetch_missing:
-            # Cache miss or missing structured data - fetch from OpenFDA
-            logger.debug(f"Fetching {drug} from OpenFDA...")
-            label_data = fetch_drug_label_from_openfda(drug)
-
-            if label_data is None:
-                logger.debug(f"No FDA label found for {drug} (may be experimental)")
+            if not labels_data:
+                logger.debug(f"No FDA labels found for {drug}")
                 continue
 
-            # Save to cache
-            update_fda_labels_json(drug, label_data, [gene])
+            for label_data in labels_data:
+                set_id = label_data.get("set_id")
+                version = label_data.get("version")
+                if not set_id or not version:
+                    logger.warning(f"FDA label for {drug} missing set_id or version, skipping")
+                    continue
+
+                # Check if already in cache
+                cached_entry = lookup_by_set_id_version(set_id, version, labels_cache)
+                if cached_entry:
+                    logger.debug(f"Cache hit for {drug} (set_id={set_id}, version={version})")
+                    label_evidence = _create_fda_label_evidence(drug, gene, cached_entry)
+                else:
+                    # Cache miss - save to cache
+                    logger.debug(f"Cache miss for {drug}, saving to cache...")
+                    update_fda_labels_json(drug, label_data, [gene])
+                    label_evidence = _create_fda_label_evidence(drug, gene, label_data)
+
+                results.append(label_evidence)
 
             # Rate limiting between API calls
             time.sleep(0.2)
         else:
-            # No cache and not fetching
-            continue
-
-        # Create result
-        brand_name = label_data.get("brand_name", [])
-        if isinstance(brand_name, list):
-            brand_name = brand_name[0] if brand_name else None
-
-        generic_name = label_data.get("generic_name", [])
-        if isinstance(generic_name, list):
-            generic_name = generic_name[0] if generic_name else None
-
-        manufacturer = label_data.get("manufacturer_name", [])
-        if isinstance(manufacturer, list):
-            manufacturer = manufacturer[0] if manufacturer else None
-
-        indications = label_data.get("indications_and_usage_text", "")
-        if not indications:
-            indications_list = label_data.get("indications_and_usage", [])
-            if isinstance(indications_list, list):
-                indications = " ".join(indications_list)
-
-        # Build structured data from parsed fields
-        clinical_studies_data = None
-        if label_data.get("clinical_studies"):
-            cs = label_data["clinical_studies"]
-            clinical_studies_data = ClinicalStudyData(
-                trial_name=cs.get("trial_name"),
-                nct_id=cs.get("nct_id"),
-                patients_n=cs.get("patients_n"),
-                pfs_months_treatment=cs.get("pfs_months_treatment"),
-                pfs_months_control=cs.get("pfs_months_control"),
-                hazard_ratio=cs.get("hazard_ratio"),
-                hazard_ratio_ci=tuple(cs["hazard_ratio_ci"]) if cs.get("hazard_ratio_ci") else None,
-                orr_treatment=cs.get("orr_treatment"),
-                orr_control=cs.get("orr_control"),
-                biomarker_breakdown=cs.get("biomarker_breakdown"),
-            )
-
-        mechanism_data = None
-        if label_data.get("mechanism_of_action"):
-            moa = label_data["mechanism_of_action"]
-            mechanism_data = MechanismOfActionData(
-                targets=moa.get("targets", []),
-                mechanism=moa.get("mechanism"),
-                preclinical=moa.get("preclinical"),
-            )
-
-        adverse_data = None
-        if label_data.get("adverse_reactions"):
-            ar = label_data["adverse_reactions"]
-            adverse_data = AdverseReactionsData(
-                common_toxicities=[tuple(t) for t in ar.get("common_toxicities", [])],
-                serious_rate=ar.get("serious_rate"),
-                discontinuation_rate=ar.get("discontinuation_rate"),
-            )
-
-        recent_changes_data = None
-        if label_data.get("recent_major_changes"):
-            rmc = label_data["recent_major_changes"]
-            recent_changes_data = RecentMajorChangesData(
-                last_label_update=rmc.get("last_label_update"),
-                update_reason=rmc.get("update_reason"),
-            )
-
-        # Extract approved indications from the full indication text
-        approved_indications = extract_approved_indications(indications or "")
-
-        results.append(FDALabelData(
-            drug=drug,
-            gene=gene,
-            brand_name=brand_name,
-            generic_name=generic_name,
-            manufacturer=manufacturer,
-            indications_and_usage=indications,
-            initial_approval_date=label_data.get("initial_approval_date"),
-            approved_indications=approved_indications,
-            clinical_studies=clinical_studies_data,
-            mechanism_of_action=mechanism_data,
-            adverse_reactions=adverse_data,
-            recent_major_changes=recent_changes_data,
-            clinical_studies_text=label_data.get("clinical_studies_text"),
-            mechanism_of_action_text=label_data.get("mechanism_of_action_text"),
-            adverse_reactions_text=label_data.get("adverse_reactions_text"),
-        ))
+            # Cache-only mode: search by drug_name field (no API calls)
+            cached_entry = lookup_by_drug_name(drug, labels_cache)
+            if cached_entry:
+                logger.debug(f"Cache hit for {drug}")
+                label_evidence = _create_fda_label_evidence(drug, gene, cached_entry)
+                results.append(label_evidence)
+            else:
+                logger.debug(f"Cache miss for {drug} (cache-only mode)")
 
     return results
 
@@ -1079,7 +1286,7 @@ async def get_fda_labels_for_gene(
     civic_drugs: list[str] | None = None,
     vicc_drugs: list[str] | None = None,
     fetch_missing: bool = True,
-) -> list[FDALabelData]:
+) -> list[FDALabelEvidence]:
     """Get FDA label data for all drugs associated with a gene.
 
     Collects drug names from CGI, CIViC, VICC, and FDA oncology biomarkers,
@@ -1093,7 +1300,7 @@ async def get_fda_labels_for_gene(
         fetch_missing: Whether to fetch missing drugs from OpenFDA
 
     Returns:
-        List of FDALabelData for all found drugs
+        List of FDALabelEvidence for all found drugs
     """
     # Collect all drugs from all sources
     all_drugs = collect_all_drugs(
@@ -1118,7 +1325,7 @@ def get_fda_labels_for_gene_sync(
     civic_drugs: list[str] | None = None,
     vicc_drugs: list[str] | None = None,
     fetch_missing: bool = True,
-) -> list[FDALabelData]:
+) -> list[FDALabelEvidence]:
     """Synchronous version of get_fda_labels_for_gene."""
     import asyncio
     return asyncio.run(get_fda_labels_for_gene(

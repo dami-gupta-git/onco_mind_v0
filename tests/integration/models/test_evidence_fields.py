@@ -165,10 +165,7 @@ class TestFDAApprovalNewFields:
             generic_name="vemurafenib",
             indication="Treatment of BRAF V600E-mutant melanoma",
             approval_date="2011-08-17",
-            marketing_status="Prescription",
             gene="BRAF",
-            variant_in_indications=True,
-            variant_in_clinical_studies=True,
             companion_diagnostic="cobas 4800 BRAF V600 Mutation Test",
             black_box_warning="New primary cutaneous malignancies can occur",
             dosing_for_variant="960 mg orally twice daily",
@@ -386,8 +383,57 @@ class TestBackendEvidenceStructure:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
+    async def test_backend_kras_g12c_has_fda_approvals(self):
+        """BRAF V600E should have FDA approvals with all expected fields."""
+        result = await get_variant_insight(
+            gene="KRAS",
+            variant="G12C",
+            tumor_type="NSCLC",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        fda_approvals = result.get("fda_approvals", [])
+        assert fda_approvals
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_kras_g12d(self):
+        """BRAF V600E should have FDA approvals with all expected fields."""
+        result = await get_variant_insight(
+            gene="KRAS",
+            variant="G12D",
+            tumor_type="Colorectal",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        fda_approvals = result.get("fda_approvals", [])
+        assert fda_approvals
+
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_backend_akt1_e17k(self):
+        """BRAF V600E should have FDA approvals with all expected fields."""
+        result = await get_variant_insight(
+            gene="AKT1",
+            variant="E17K",
+            tumor_type="Breast Cancer",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        fda_approvals = result.get("fda_approvals", [])
+        assert len(fda_approvals) == 1
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_backend_braf_v600e_has_fda_approvals(self):
-        """BRAF V600E should have FDA approvals."""
+        """BRAF V600E should have FDA approvals with all expected fields."""
         result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
@@ -400,6 +446,28 @@ class TestBackendEvidenceStructure:
 
         # BRAF V600E has multiple FDA-approved drugs
         assert len(fda_approvals) >= 1, "BRAF V600E should have at least 1 FDA approval"
+
+        # Verify all expected fields are present in each FDA approval
+        # Note: backend.py manually constructs this dict, so it's a subset of FDAApproval fields
+        expected_fields = [
+            "drug_name",
+            "brand_name",
+            "generic_name",
+            "indication",
+            "approval_date",
+            "companion_diagnostic",
+            "black_box_warning",
+            "dosing_for_variant",
+            "locus_match",
+        ]
+
+        for approval in fda_approvals:
+            for field in expected_fields:
+                assert field in approval, f"Missing field '{field}' in FDA approval: {approval.get('drug_name')}"
+
+            # locus_match should be one of: variant, codon, gene
+            locus = approval.get("locus_match")
+            assert locus in ("variant", "codon", "gene"), f"Invalid locus_match: {locus}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
