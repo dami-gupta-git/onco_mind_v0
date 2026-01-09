@@ -1,5 +1,15 @@
 from oncomind.config.constants import BROAD_VARIANTS
-from oncomind.models.evidence.base import EvidenceItemBase, EvidenceLevel, VariantGeneLevel, Scope, Origin, CancerSpecificity, is_ambiguous_variant
+from oncomind.models.evidence.base import (
+    EvidenceItemBase,
+    EvidenceLevel,
+    VariantGeneLevel,
+    Scope,
+    Origin,
+    CancerSpecificity,
+    is_ambiguous_variant,
+    extract_variant_codon,
+    extract_variant_position,
+)
 from oncomind.models.evidence.cbioportal import CBioPortalEvidence, CoMutationEntry
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
@@ -37,6 +47,7 @@ from oncomind.models.evidence.fda import (
     ClinicalStudyEvidence,
     MechanismEvidence,
     AdverseReactionsEvidence,
+    CombinationPartner,
 )
 from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
@@ -52,6 +63,10 @@ __all__ = [
     "Origin",
     "CancerSpecificity",
     "BROAD_VARIANTS",
+    # Utility functions
+    "is_ambiguous_variant",
+    "extract_variant_codon",
+    "extract_variant_position",
     # Core model
     "Evidence",
     # Core components
@@ -81,6 +96,7 @@ __all__ = [
     "ClinicalStudyEvidence",
     "MechanismEvidence",
     "AdverseReactionsEvidence",
+    "CombinationPartner",
     "HotspotsEvidence",
     "HotspotEntry",
     "HotspotVariant",

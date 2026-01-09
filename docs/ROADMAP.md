@@ -137,6 +137,7 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 - **Development codes not mapped:** CIViC/CGI use development codes (AZD5363, AMG 510, MRTX849) but OpenFDA indexes by INN (capivasertib, sotorasib, adagrasib)
 - Biomarker specificity extraction (variant vs gene vs phenotype level) has edge cases
 - FDA label cache can become stale
+- **Combination therapy not handled:** FDA approvals for combination regimens (e.g., Adagrasib + cetuximab for KRAS G12C CRC) are not parsed or displayed as combinations. Each drug appears separately without indicating the approved combination context.
 
 **Implementation:**
 1. **Multi-source drug resolution:**
@@ -151,6 +152,7 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
    - Handle combination drugs (e.g., "dabrafenib + trametinib")
    - Normalize suffixes (-ib, -mab, -nib patterns)
    - **Development code → INN mapping** via ChEMBL/PubChem synonyms (AZD5363 → capivasertib)
+   - **Combination therapy parsing:** Parse indication text for "in combination with" patterns and display as unified regimen (e.g., "Adagrasib + Cetuximab" instead of separate entries)
 
 3. **Better biomarker specificity extraction:**
    - Handle negation ("not approved for", "excluding patients with")

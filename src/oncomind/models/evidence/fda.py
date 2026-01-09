@@ -5,6 +5,54 @@ from pydantic import BaseModel, Field
 from oncomind.models.evidence.base import EvidenceItemBase
 
 
+def extract_combination_partners(indication_text: str | None) -> list[str]:
+    """Extract combination therapy partner drugs from indication text.
+
+    Parses FDA indication text to identify if a drug is approved
+    in combination with other drugs. Returns all unique partners found.
+
+    Args:
+        indication_text: The indications_and_usage text from FDA label
+
+    Returns:
+        List of combination partner drug names (empty if monotherapy)
+
+    Examples:
+        >>> extract_combination_partners("in combination with panitumumab for mCRC")
+        ['panitumumab']
+        >>> extract_combination_partners("in combination with fulvestrant")
+        ['fulvestrant']
+        >>> extract_combination_partners("as a single agent for NSCLC")
+        []
+    """
+    if not indication_text:
+        return []
+
+    patterns = [
+        r"in combination with\s+([^,\.]+)",
+        r"combined with\s+([^,\.]+)",
+        r"coadministered with\s+([^,\.]+)",
+        r"plus\s+([^,\.]+?)(?:\s+(?:for|in|after|is|are|,|\.))",
+    ]
+
+    partners = []
+    seen = set()
+
+    for pattern in patterns:
+        for match in re.finditer(pattern, indication_text, re.IGNORECASE):
+            partner = match.group(1).strip()
+            # Clean up common trailing words/phrases
+            partner = re.sub(r'\s+(?:for|in|after|is|are|to|the|treatment|of)\b.*$', '', partner, flags=re.IGNORECASE)
+            # Remove any parenthetical content at the end
+            partner = re.sub(r'\s*\([^)]*\)\s*$', '', partner)
+            partner = partner.strip()
+            if partner and partner.lower() not in seen:
+                seen.add(partner.lower())
+                partners.append(partner)
+
+    return partners
+
+
 class ClinicalStudyEvidence(BaseModel):
     """Structured clinical study data from FDA label."""
     trial_name: str | None = None
@@ -33,6 +81,12 @@ class AdverseReactionsEvidence(BaseModel):
     discontinuation_rate: float | None = None
 
 
+class CombinationPartner(BaseModel):
+    """Partner drug in a combination therapy."""
+    generic_name: str | None = None
+    brand_name: str | None = None
+
+
 class FDALabelEvidence(EvidenceItemBase):
     """Complete FDA drug label data for display in FDA tab.
 
@@ -41,12 +95,18 @@ class FDALabelEvidence(EvidenceItemBase):
     """
     drug: str
     gene: str
+    set_id: str | None = None  # FDA label unique identifier (UUID)
+    version: str | None = None  # FDA label version number
     brand_name: str | None = None
     generic_name: str | None = None
     manufacturer: str | None = None
     indications_and_usage: str | None = None
     initial_approval_date: str | None = None
+    effective_time: str | None = None  # Label revision date (YYYY-MM-DD)
     approved_indications: list[str] = Field(default_factory=list)  # List of approved diseases
+
+    # Combination therapy partners (if any)
+    combination_partners: list[CombinationPartner] = Field(default_factory=list)
 
     # Structured data
     clinical_studies: ClinicalStudyEvidence | None = None
@@ -60,16 +120,39 @@ class FDALabelEvidence(EvidenceItemBase):
     mechanism_of_action_text: str | None = None
     adverse_reactions_text: str | None = None
 
+    def to_approval(self) -> "FDAApproval":
+        """Convert this label to an FDAApproval for LLM consumption.
+
+        Returns a simplified FDAApproval object suitable for LLM prompts,
+        preserving the locus_variant_match from this label.
+        """
+        return FDAApproval(
+            drug_name=self.drug,
+            brand_name=self.brand_name,
+            generic_name=self.generic_name,
+            indication=self.indications_and_usage,
+            approval_date=self.initial_approval_date,
+            gene=self.gene,
+            locus_variant_match=self.locus_variant_match,
+            cancer_type_match=self.cancer_type_match,
+        )
+
 
 class FDAApproval(EvidenceItemBase):
-    """FDA drug approval information."""
+    """FDA drug approval information.
+
+    Inherits from EvidenceItemBase which provides:
+    - locus_variant_match: EvidenceLevel tracking variant/gene level match
+    - cancer_type_match: EvidenceLevel tracking cancer specificity
+    - locus_match: Computed field returning 'variant', 'codon', or 'gene'
+    - tumor_match: Computed field returning True/False/None for cancer match
+    """
 
     drug_name: str | None = None
     brand_name: str | None = None
     generic_name: str | None = None
     indication: str | None = None
     approval_date: str | None = None
-    marketing_status: str | None = None
     gene: str | None = None
     variant_in_indications: bool = False
     variant_in_clinical_studies: bool = False
@@ -77,7 +160,9 @@ class FDAApproval(EvidenceItemBase):
     companion_diagnostic: str | None = None
     black_box_warning: str | None = None
     dosing_for_variant: str | None = None
-    # Drug response association from CGI (Responsive, Resistant, etc.)
+    # Drug response association (Responsive, Resistant, etc.)
+    # Note: FDA labels from OpenFDA don't contain this - it comes from CGI/CIViC
+    # This field is None for FDA label-derived approvals
     association: str | None = None
 
     def extract_approved_variant(self) -> str | None:

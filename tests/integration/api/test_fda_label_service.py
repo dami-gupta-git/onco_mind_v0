@@ -17,8 +17,9 @@ from oncomind.api.fda_label_service import (
     collect_all_drugs,
     get_drugs_from_fda_biomarkers,
     get_fda_labels_for_drugs,
-    FDALabelData,
+    fetch_latest_labels,
 )
+from oncomind.models.evidence.fda import FDALabelEvidence
 
 
 class TestFDALabelServiceDrugCollection:
@@ -82,10 +83,10 @@ class TestFDALabelServiceIntegration:
         for label in labels:
             print(f"  - {label.drug}: {label.brand_name or 'no brand'}")
 
-        # Should return FDALabelData objects
+        # Should return FDALabelEvidence objects
         assert isinstance(labels, list)
         for label in labels:
-            assert isinstance(label, FDALabelData)
+            assert isinstance(label, FDALabelEvidence)
 
     @pytest.mark.skip(reason="Enable to test OpenFDA fetching - may be slow")
     def test_get_fda_labels_with_fetch(self):
@@ -111,7 +112,7 @@ class TestFDALabelServiceAKT1E17KBreastCancer:
         """Test the full FDA label service flow for AKT1 E17K in Breast Cancer.
 
         This simulates what happens when the evidence_aggregator processes
-        AKT1 E17K in Breast Cancer and calls _ensure_fda_labels_for_evidence.
+        AKT1 E17K in Breast Cancer and calls _get_fda_label_data.
         """
         # Simulate drugs that would be collected from CGI/CIViC/VICC for AKT1 E17K
         # These are actual drugs associated with AKT1 E17K in breast cancer
@@ -150,7 +151,7 @@ class TestFDALabelServiceAKT1E17KBreastCancer:
 
         # If we have cached labels, verify they have expected fields
         for label in labels:
-            assert isinstance(label, FDALabelData)
+            assert isinstance(label, FDALabelEvidence)
             assert label.drug is not None
             assert label.gene is not None
 
@@ -233,3 +234,53 @@ class TestFDALabelServiceEdgeCases:
 
         # Should still return drugs from fda_oncology_biomarkers.xlsx if it has BRAF
         assert isinstance(all_drugs, set)
+
+
+class TestFetchLatestLabels:
+    """Tests for fetch_latest_labels function."""
+
+    def test_fetch_latest_labels_capivasertib(self):
+        """Test fetching latest labels for capivasertib (TRUQAP)."""
+        labels = fetch_latest_labels("capivasertib")
+
+        assert len(labels) > 0, "Should return at least one label for capivasertib"
+        for label_data in labels:
+            assert label_data.get("set_id") is not None, "Should have set_id"
+            assert label_data.get("version") is not None, "Should have version"
+            assert "-" in label_data["set_id"], "set_id should be a UUID format"
+
+        print(f"\nCapivasertib labels ({len(labels)} found):")
+        for label_data in labels:
+            print(f"  set_id: {label_data.get('set_id')}, version: {label_data.get('version')}")
+
+    def test_fetch_latest_labels_osimertinib(self):
+        """Test fetching latest labels for osimertinib (TAGRISSO)."""
+        labels = fetch_latest_labels("osimertinib")
+
+        assert len(labels) > 0, "Should return at least one label for osimertinib"
+        for label_data in labels:
+            assert label_data.get("set_id") is not None, "Should have set_id"
+            assert label_data.get("version") is not None, "Should have version"
+
+        print(f"\nOsimertinib labels ({len(labels)} found):")
+        for label_data in labels:
+            print(f"  set_id: {label_data.get('set_id')}, version: {label_data.get('version')}")
+
+    def test_fetch_latest_labels_unknown_drug(self):
+        """Test fetching labels for unknown drug returns empty list."""
+        labels = fetch_latest_labels("FAKE_DRUG_XYZ123")
+
+        assert labels == [], "Should return empty list for unknown drug"
+
+    def test_fetch_latest_labels_by_brand_name(self):
+        """Test fetching by brand name (TRUQAP)."""
+        labels = fetch_latest_labels("TRUQAP")
+
+        assert len(labels) > 0, "Should return at least one label for brand name TRUQAP"
+        for label_data in labels:
+            assert label_data.get("set_id") is not None, "Should have set_id"
+            assert label_data.get("version") is not None, "Should have version"
+
+        print(f"\nTRUQAP labels ({len(labels)} found):")
+        for label_data in labels:
+            print(f"  set_id: {label_data.get('set_id')}, version: {label_data.get('version')}")

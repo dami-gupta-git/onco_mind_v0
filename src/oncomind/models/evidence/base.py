@@ -13,6 +13,9 @@ LocusMatch = Literal["variant", "codon", "gene"]
 # Regex pattern to extract position from variant notation (e.g., V600E -> 600, L858R -> 858)
 _VARIANT_POSITION_PATTERN = re.compile(r'[A-Z](\d+)')
 
+# Regex pattern to extract codon (ref AA + position) from variant notation (e.g., V600E -> V600)
+_VARIANT_CODON_PATTERN = re.compile(r'[A-Z]\d+')
+
 
 def determine_locus_match(
     source_variant: str | None,
@@ -82,6 +85,28 @@ def extract_variant_position(variant: str | None) -> str | None:
     clean = variant.replace("p.", "").replace("P.", "").upper().strip()
     match = _VARIANT_POSITION_PATTERN.search(clean)
     return match.group(1) if match else None
+
+
+def extract_variant_codon(variant: str | None) -> str | None:
+    """Extract the codon (ref AA + position) from a variant notation.
+
+    The codon is the reference amino acid plus the position number,
+    without the alternate amino acid. This is useful for comparing
+    variants at the same position (e.g., V600E and V600K both have
+    codon "V600").
+
+    Args:
+        variant: Variant notation (e.g., "V600E", "G12C", "p.L858R")
+
+    Returns:
+        Codon string (e.g., "V600", "G12", "L858") or None if not found
+    """
+    if not variant:
+        return None
+
+    clean = variant.replace("p.", "").replace("P.", "").upper().strip()
+    match = _VARIANT_CODON_PATTERN.search(clean)
+    return match.group() if match else None
 
 
 # Type aliases for the allowed values

@@ -280,12 +280,19 @@ def _build_response(result) -> Dict[str, Any]:
                     "discontinuation_rate": l.adverse_reactions.discontinuation_rate,
                 } if l.adverse_reactions else None,
                 "initial_approval_date": l.initial_approval_date,
+                "effective_time": l.effective_time,
                 "approved_indications": l.approved_indications or [],
+                "combination_partners": [
+                    {"generic_name": p.generic_name, "brand_name": p.brand_name}
+                    for p in l.combination_partners
+                ],
                 "last_label_update": l.last_label_update,
                 "update_reason": l.update_reason,
                 "clinical_studies_text": l.clinical_studies_text,
                 "mechanism_of_action_text": l.mechanism_of_action_text,
                 "adverse_reactions_text": l.adverse_reactions_text,
+                # Match specificity tracking
+                "locus_match": l.locus_match,
             }
             for l in evidence.fda_labels
         ],

@@ -41,7 +41,7 @@ from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRate
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
 from oncomind.api.fda_drugs import ensure_fda_labels_cached
-from oncomind.api.fda_label_service import get_fda_labels_for_drugs, collect_all_drugs, FDALabelData
+from oncomind.api.fda_label_service import collect_all_drugs
 
 from oncomind.models.evidence import (
     Evidence,
@@ -65,6 +65,14 @@ from oncomind.models.evidence import (
 )
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
+
+from oncomind.insight_builder.fda_processor import (
+    convert_fda_labels_to_approvals,
+    enrich_fda_with_tumor_match,
+    sort_fda_by_association,
+    populate_locus_variant_match,
+)
+from oncomind.api.fda_label_service import get_fda_labels_for_drugs
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -348,22 +356,20 @@ class EvidenceAggregator:
         ]
         return fda_approved, preclinical, early_phase
 
-    async def _ensure_fda_labels_for_evidence(
+    def _collect_fda_approved_drugs(
         self,
         evidence: Evidence,
-    ) -> list[FDALabelData]:
-        """Pre-populate FDA label cache for drugs in FDA-approved evidence.
+    ) -> set[str]:
+        """Collect FDA-approved drug names from evidence.
 
-        Uses the FDA label service to:
-        1. Collect drugs from CGI, CIViC, VICC, and FDA oncology biomarkers
-        2. Look up in fda_labels.json cache
-        3. Fetch missing drugs from OpenFDA and update cache
+        Collects drug names from CGI, CIViC, VICC, and FDA oncology biomarkers.
+        Only includes drugs that have FDA approval status.
 
         Args:
             evidence: The assembled Evidence object
 
         Returns:
-            List of FDALabelData for all found drugs
+            Set of drug names to look up FDA labels for
         """
         gene = evidence.identifiers.gene
 
@@ -391,7 +397,7 @@ class EvidenceAggregator:
                 for drug in v.drugs:
                     vicc_drugs.append(drug)
 
-        # Use the FDA label service to collect all drugs and look up labels
+        # Use the FDA label service to collect all drugs
         # This also adds drugs from fda_oncology_biomarkers.xlsx for the gene
         all_drugs = collect_all_drugs(
             gene=gene,
@@ -402,129 +408,8 @@ class EvidenceAggregator:
 
         if not all_drugs:
             logger.debug(f"No drugs found for gene {gene}")
-            return []
 
-        # Get FDA labels - this looks up in fda_labels.json cache first,
-        # then fetches from OpenFDA for missing drugs and updates cache
-        try:
-            labels = get_fda_labels_for_drugs(all_drugs, gene, fetch_missing=True)
-            logger.debug(f"Got FDA labels for {len(labels)} drugs (gene: {gene})")
-            return labels
-        except Exception as e:
-            logger.warning(f"Failed to get FDA labels: {e}")
-            return []
-
-    def _convert_fda_labels_to_evidence(
-        self, fda_labels: list[FDALabelData]
-    ) -> list[FDALabelEvidence]:
-        """Convert FDALabelData objects to FDALabelEvidence for the Evidence model.
-
-        Transforms the raw label data from the FDA label service into pydantic
-        models that can be serialized and displayed in the FDA tab.
-        """
-        result = []
-        for label in fda_labels:
-            # Convert clinical studies data
-            clinical_studies = None
-            if label.clinical_studies:
-                cs = label.clinical_studies
-                clinical_studies = ClinicalStudyEvidence(
-                    trial_name=cs.trial_name,
-                    nct_id=cs.nct_id,
-                    patients_n=cs.patients_n,
-                    pfs_months_treatment=cs.pfs_months_treatment,
-                    pfs_months_control=cs.pfs_months_control,
-                    hazard_ratio=cs.hazard_ratio,
-                    hazard_ratio_ci=cs.hazard_ratio_ci,
-                    orr_treatment=cs.orr_treatment,
-                    orr_control=cs.orr_control,
-                    biomarker_breakdown=cs.biomarker_breakdown,
-                )
-
-            # Convert mechanism of action data
-            mechanism = None
-            if label.mechanism_of_action:
-                moa = label.mechanism_of_action
-                mechanism = MechanismEvidence(
-                    targets=moa.targets or [],
-                    mechanism=moa.mechanism,
-                    preclinical=moa.preclinical,
-                )
-
-            # Convert adverse reactions data
-            adverse = None
-            if label.adverse_reactions:
-                ar = label.adverse_reactions
-                adverse = AdverseReactionsEvidence(
-                    common_toxicities=ar.common_toxicities or [],
-                    serious_rate=ar.serious_rate,
-                    discontinuation_rate=ar.discontinuation_rate,
-                )
-
-            # Get last label update info
-            last_update = None
-            update_reason = None
-            if label.recent_major_changes:
-                last_update = label.recent_major_changes.last_label_update
-                update_reason = label.recent_major_changes.update_reason
-
-            result.append(FDALabelEvidence(
-                drug=label.drug,
-                gene=label.gene,
-                brand_name=label.brand_name,
-                generic_name=label.generic_name,
-                manufacturer=label.manufacturer,
-                indications_and_usage=label.indications_and_usage,
-                initial_approval_date=label.initial_approval_date,
-                approved_indications=label.approved_indications or [],
-                clinical_studies=clinical_studies,
-                mechanism_of_action=mechanism,
-                adverse_reactions=adverse,
-                last_label_update=last_update,
-                update_reason=update_reason,
-                clinical_studies_text=label.clinical_studies_text,
-                mechanism_of_action_text=label.mechanism_of_action_text,
-                adverse_reactions_text=label.adverse_reactions_text,
-            ))
-
-        return result
-
-    def _convert_fda_labels_to_approvals(
-        self, fda_labels: list[FDALabelData]
-    ) -> list[FDAApproval]:
-        """Convert FDA label data to FDAApproval objects for LLM consumption.
-
-        FDA labels from OpenFDA provide authoritative approval information
-        including drug name, brand name, indication text, and approval date.
-
-        Note: FDA labels do not contain sensitivity/resistance associations.
-        Those signals come from CGI/CIViC/VICC therapeutic evidence separately.
-
-        Args:
-            fda_labels: List of FDALabelData from OpenFDA
-
-        Returns:
-            List of FDAApproval objects for LLM prompt
-        """
-        fda_approvals = []
-        for label in fda_labels:
-            try:
-                fda_approval = FDAApproval(
-                    drug_name=label.drug,
-                    brand_name=label.brand_name,
-                    generic_name=label.generic_name,
-                    indication=label.indications_and_usage,
-                    approval_date=label.initial_approval_date,
-                    gene=label.gene,
-                    variant_in_indications=False,
-                    variant_in_clinical_studies=False,
-                    # No association (sens/res) - that comes from CGI/CIViC/VICC
-                    association=None,
-                )
-                fda_approvals.append(fda_approval)
-            except Exception as e:
-                logger.warning(f"Failed to convert FDA label to FDA approval: {e}")
-        return fda_approvals
+        return all_drugs
 
     def _process_cbioportal_result(
         self, result: Any, tracker: FetchResults
@@ -704,86 +589,6 @@ class EvidenceAggregator:
 
         return gene_role, gene_class, pathway
 
-    def _enrich_fda_with_tumor_match(
-        self,
-        approvals: list[FDAApproval],
-        tumor_type: str | None,
-    ) -> list[FDAApproval]:
-        """Enrich FDA approvals with cancer_type_match based on tumor type.
-
-        Uses parse_indication_for_tumor() to determine if the approval
-        matches the queried tumor type, then sets cancer_type_match
-        for consistency with ClinicalTrialEvidence.
-
-        Args:
-            approvals: List of FDAApproval objects
-            tumor_type: The queried tumor type (may be None)
-
-        Returns:
-            Same list with cancer_type_match populated
-        """
-        if not tumor_type:
-            # No tumor type to match against - leave cancer_type_match as None
-            return approvals
-
-        for approval in approvals:
-            # Use existing parse_indication_for_tumor method
-            parsed = approval.parse_indication_for_tumor(tumor_type)
-            tumor_match = parsed.get('tumor_match', False)
-
-            # Check for pan-cancer / tumor-agnostic approvals (MSI-H, NTRK, etc.)
-            # Uses centralized is_pan_cancer_term() which handles substring matching
-            is_pan_cancer = is_pan_cancer_term(approval.indication)
-
-            if tumor_match:
-                if is_pan_cancer:
-                    level = "pan_cancer"
-                else:
-                    level = "cancer_specific"
-            else:
-                # Not a match - extract what cancer it IS for
-                extracted_cancer = approval.extract_indication_cancer_type()
-                level = extracted_cancer if extracted_cancer else "pan_cancer"
-
-            approval.cancer_type_match = EvidenceLevel(
-                level=level,
-                scope="specific" if tumor_match else "unspecified",
-                origin="kb",
-            )
-
-        return approvals
-
-    def _sort_fda_by_association(
-        self,
-        approvals: list[FDAApproval],
-    ) -> list[FDAApproval]:
-        """Sort FDA approvals by association: Responsive/Sensitive first, Resistant last.
-
-        Sort order:
-        1. Responsive/Sensitivity (drug works for this variant)
-        2. None/Unknown (from FDA labels without CGI association data)
-        3. Resistant (drug does NOT work for this variant)
-
-        This ensures that when displaying FDA approvals, the drugs most likely
-        to be effective appear first, with resistance mutations clearly shown last.
-
-        Args:
-            approvals: List of FDAApproval objects
-
-        Returns:
-            Sorted list with Responsive first, Resistant last
-        """
-        def sort_key(approval: FDAApproval) -> int:
-            assoc = (approval.association or "").lower()
-            if assoc in ("responsive", "sensitivity", "sensitive"):
-                return 0  # Best - drug works
-            elif assoc in ("resistant", "resistance"):
-                return 2  # Worst - drug doesn't work
-            else:
-                return 1  # Unknown - from FDA labels
-
-        return sorted(approvals, key=sort_key)
-
     # -------------------------------------------------------------------------
     # Main Build Method
     # -------------------------------------------------------------------------
@@ -826,16 +631,23 @@ class EvidenceAggregator:
             results, variant, normalized_variant, tumor, resolved_tumor, tracker
         )
 
-        # Pre-populate FDA label cache for all drugs in FDA-approved evidence
-        # This ensures labels are cached BEFORE UI rendering (not during)
-        # Also converts to FDALabelEvidence and stores in evidence.fda_labels
-        fda_label_data = await self._ensure_fda_labels_for_evidence(evidence)
-        evidence.fda_labels = self._convert_fda_labels_to_evidence(fda_label_data)
+        # Collect FDA-approved drug names from evidence
+        # Then build therapies (which internally fetches labels and converts them)
+        all_drugs = self._collect_fda_approved_drugs(evidence)
+
+        # Fetch FDA labels for drugs and populate locus_variant_match
+        evidence.fda_labels = get_fda_labels_for_drugs(
+            drugs=all_drugs,
+            gene=gene,
+            fetch_missing=True,
+        )
+        populate_locus_variant_match(evidence.fda_labels, query_variant=normalized_variant)
 
         # Convert FDA labels to FDAApproval objects for LLM consumption
-        # This is the authoritative source of FDA approval data (from OpenFDA)
-        fda_approvals = self._convert_fda_labels_to_approvals(fda_label_data)
-        evidence.fda_approvals = fda_approvals
+        # Uses already-processed FDALabelEvidence which has locus_variant_match computed
+        evidence.fda_approvals = convert_fda_labels_to_approvals(
+            evidence.fda_labels
+        )
 
         return evidence
 
@@ -1001,7 +813,7 @@ class EvidenceAggregator:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
 
         # FDA approvals will be populated from FDA labels in build_evidence()
-        # after _ensure_fda_labels_for_evidence() is called
+        # after get_fda_labels_for_drugs() is called
         fda_approvals: list[FDAApproval] = []
 
         # Get gene context
