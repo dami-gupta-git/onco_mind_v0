@@ -22,6 +22,7 @@ from typing import Any
 
 import httpx
 
+from oncomind.config.constants import CGI_DATA_DIR, CGI_BIOMARKERS_FILE
 from oncomind.models.evidence.base import (
     is_pan_cancer_term,
     tumor_types_match,
@@ -117,12 +118,12 @@ class CGIClient:
     FDA approval status, complementing the FDA label API which uses
     generic text descriptions.
 
-    Data is downloaded once and cached locally.
+    Data is downloaded once and cached locally in data/cgi/.
     """
 
     BIOMARKERS_URL = "https://www.cancergenomeinterpreter.org/data/biomarkers/cgi_biomarkers_latest.tsv"
-    CACHE_DIR = Path.home() / ".cache" / "oncomind"
-    CACHE_FILE = CACHE_DIR / "cgi_biomarkers.tsv"
+    CACHE_DIR = CGI_DATA_DIR
+    CACHE_FILE = CGI_BIOMARKERS_FILE
     CACHE_MAX_AGE = timedelta(days=7)  # Re-download after 7 days
 
     def __init__(self, timeout: float = 30.0):

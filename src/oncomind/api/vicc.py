@@ -175,12 +175,15 @@ class VICCClient:
                 return 17
         return None
 
-    def _build_query(self, gene: str, variant: str | None = None) -> str:
+    def _build_query(
+        self, gene: str, variant: str | None = None, tumor_type: str | None = None
+    ) -> str:
         """Build a Lucene query string for the VICC API.
 
         Args:
             gene: Gene symbol (e.g., "BRAF")
             variant: Optional variant notation (e.g., "V600E")
+            tumor_type: Optional tumor type (e.g., "breast cancer")
 
         Returns:
             Lucene query string
@@ -193,19 +196,33 @@ class VICCClient:
             clean_variant = variant.replace("p.", "").upper()
             query_parts.append(clean_variant)
 
+        if tumor_type:
+            # Normalize tumor type for query
+            # Use quotes for multi-word tumor types to ensure phrase matching
+            tumor_normalized = tumor_type.strip().lower()
+            # VICC uses disease field - add tumor type as quoted phrase
+            query_parts.append(f'"{tumor_normalized}"')
+
         return " AND ".join(query_parts)
 
-    def _build_exon_query(self, gene: str, exon: int) -> str:
+    def _build_exon_query(
+        self, gene: str, exon: int, tumor_type: str | None = None
+    ) -> str:
         """Build a Lucene query for exon-level search.
 
         Args:
             gene: Gene symbol (e.g., "KIT")
             exon: Exon number (e.g., 11)
+            tumor_type: Optional tumor type (e.g., "GIST")
 
         Returns:
             Lucene query string for exon-level search
         """
-        return f'{gene.upper()} AND "exon {exon}"'
+        query = f'{gene.upper()} AND "exon {exon}"'
+        if tumor_type:
+            tumor_normalized = tumor_type.strip().lower()
+            query += f' AND "{tumor_normalized}"'
+        return query
 
     def _determine_locus_match(
         self,
@@ -403,8 +420,8 @@ class VICCClient:
         Returns:
             List of VICCAssociation objects
         """
-        # Build primary query with exact variant
-        query = self._build_query(gene, variant)
+        # Build primary query with exact variant and tumor type
+        query = self._build_query(gene, variant, tumor_type)
         associations = await self._fetch_with_query(query, variant, tumor_type, max_results)
 
         # For KIT variants, also try exon-level search if we didn't find much
@@ -413,7 +430,7 @@ class VICCClient:
         if gene.upper() == "KIT" and variant and len(associations) < 5:
             exon = self._get_kit_exon(variant)
             if exon:
-                exon_query = self._build_exon_query(gene, exon)
+                exon_query = self._build_exon_query(gene, exon, tumor_type)
                 exon_associations = await self._fetch_with_query(
                     exon_query, variant, tumor_type, max_results
                 )

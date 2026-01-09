@@ -110,49 +110,45 @@ st.markdown("""
     .scrollable-table .col-tumor { width: 70px; }
     .scrollable-table .col-drugs { width: 180px; }
     .scrollable-table .col-response { width: 90px; }
+    .scrollable-table .col-specificity { width: 100px; }
     .scrollable-table .col-status { width: 150px; }
     .scrollable-table .col-indication { width: 250px; }
     .scrollable-table .col-links { width: 80px; }
-    /* Truncated text cells */
-    .scrollable-table .truncated {
-        max-width: 250px;
+    /* Truncated text cells - inner div handles the truncation */
+    .scrollable-table td.truncated {
+        cursor: pointer;
+        padding: 0 !important;
+    }
+    .scrollable-table td.truncated .cell-content {
+        max-width: 200px;
+        width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        cursor: help;
-        position: relative;
+        direction: ltr !important;
+        text-align: left !important;
+        unicode-bidi: isolate;
+        display: block;
+        padding: 6px 10px;
+        /* Force text to start from left edge */
+        text-indent: 0;
+        margin-left: 0;
+        padding-left: 10px;
     }
-    /* CSS tooltip on hover */
-    .scrollable-table .truncated:hover::after {
-        content: attr(data-full);
-        position: absolute;
-        left: 0;
-        top: 100%;
-        background: #333;
-        color: #fff;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        white-space: normal;
-        max-width: 400px;
-        width: max-content;
-        z-index: 1000;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        line-height: 1.4;
-    }
-    /* Expandable cells - show full content on click */
-    .scrollable-table td.expandable {
-        cursor: pointer;
-    }
-    .scrollable-table td.expandable.expanded {
-        white-space: normal;
+    /* Click to expand - toggle class via inline onclick */
+    .scrollable-table td.expanded .cell-content {
+        white-space: normal !important;
         word-wrap: break-word;
-        background-color: #fffde7;
-        max-width: none;
-        overflow: visible;
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
-    .scrollable-table td.expandable.expanded::after {
-        display: none;
+    .scrollable-table td.expanded {
+        background-color: #fffde7 !important;
+    }
+    /* Visual hint that cell is clickable */
+    .scrollable-table td.truncated:hover {
+        background-color: #f0f7ff;
     }
     /* Tighter section dividers for evidence groupings */
     .evidence-section-divider {
@@ -186,12 +182,16 @@ def scrollable_table(markdown_content: str) -> None:
         'source': 'col-source',
         'id': 'col-source',
         'locus': 'col-locus',
+        'locus match': 'col-locus',
         'tumor': 'col-tumor',
+        'tumor match': 'col-tumor',
         'drugs': 'col-drugs',
         'drug': 'col-drugs',
         'response': 'col-response',
         'association': 'col-response',
         'significance': 'col-response',
+        'specificity': 'col-specificity',
+        'drug specificity': 'col-specificity',
         'regulatory status': 'col-status',
         'status': 'col-status',
         'indication': 'col-indication',
@@ -211,7 +211,15 @@ def scrollable_table(markdown_content: str) -> None:
         col_class = col_class_map.get(cell.lower(), '')
         header_classes.append(col_class)
         class_attr = f' class="{col_class}"' if col_class else ''
-        html_parts.append(f'<th{class_attr}>{cell}</th>')
+        # Use line breaks for two-word headers to save space
+        display_cell = cell
+        if cell.lower() == 'locus match':
+            display_cell = 'Locus<br>Match'
+        elif cell.lower() == 'tumor match':
+            display_cell = 'Tumor<br>Match'
+        elif cell.lower() == 'drug specificity':
+            display_cell = 'Drug<br>Specificity'
+        html_parts.append(f'<th{class_attr}>{display_cell}</th>')
     html_parts.append('</tr></thead>')
 
     # Body rows
@@ -236,14 +244,18 @@ def scrollable_table(markdown_content: str) -> None:
             is_long = len(plain_text) > 35
 
             if is_long:
-                # Escape for data attribute (replace quotes and special chars)
+                # Escape for title attribute (replace quotes and special chars)
                 escaped_full = html_module.escape(plain_text).replace('"', '&quot;')
                 # Build class list
-                classes = ['truncated', 'expandable']
+                classes = ['truncated']
                 if col_class:
                     classes.append(col_class)
                 class_str = ' '.join(classes)
-                html_parts.append(f'<td class="{class_str}" data-full="{escaped_full}">{cell_html}</td>')
+                # Use title for hover tooltip (works in Streamlit iframe)
+                # Use inline onclick for click-to-expand (works without external JS)
+                # Wrap content in div for proper truncation
+                onclick = "this.classList.toggle('expanded')"
+                html_parts.append(f'<td class="{class_str}" title="{escaped_full}" onclick="{onclick}"><div class="cell-content">{cell_html}</div></td>')
             else:
                 class_attr = f'class="{col_class}"' if col_class else ''
                 class_str = f' {class_attr}' if class_attr else ''
@@ -254,19 +266,8 @@ def scrollable_table(markdown_content: str) -> None:
 
     html_table = '\n'.join(html_parts)
 
-    # JavaScript for click-to-expand
-    js_script = """
-    <script>
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('expandable')) {
-            e.target.classList.toggle('expanded');
-        }
-    });
-    </script>
-    """
-
     st.markdown(
-        f'<div class="scrollable-table">{html_table}</div>{js_script}',
+        f'<div class="scrollable-table">{html_table}</div>',
         unsafe_allow_html=True
     )
 
@@ -641,8 +642,9 @@ with tab1:
                             def render_civic_table(evidence_items: list, show_fda_cols: bool = False):
                                 if show_fda_cols:
                                     # Level A FDA table: ID, Locus Match, Tumor Match, Drugs, Significance, Regulatory Status, Indication, Links
-                                    rows = ["| ID | Locus | Tumor | Drugs | Significance | Regulatory Status | Indication | Links |",
-                                            "|----|-------|-------|-------|--------------|-------------------|------------|-------|"]
+                                    # Note: Drug Specificity removed - OpenFDA returns outdated label text
+                                    rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Regulatory Status | Indication | Links |",
+                                            "|----|-------------|-------------|-------|--------------|-------------------|------------|-------|"]
                                 else:
                                     rows = ["| ID | Locus Match | Tumor Match | Drugs | Significance | Disease | Type |",
                                             "|----|-------------|-------------|-------|--------------|---------|------|"]
@@ -673,13 +675,32 @@ with tab1:
                                         else:
                                             reg_status = "FDA-approved"
 
-                                        # Indication
-                                        if fda_info and fda_info.biomarker_text_exact:
-                                            indication = fda_info.biomarker_text_exact[:60]
-                                            if len(fda_info.biomarker_text_exact) > 60:
-                                                indication += "..."
+                                        # Indication - use full indications_and_usage
+                                        if fda_info and fda_info.indications_and_usage:
+                                            indication = fda_info.indications_and_usage
+                                        elif fda_info and fda_info.biomarker_text_exact:
+                                            indication = fda_info.biomarker_text_exact
                                         else:
                                             indication = disease or "-"
+
+                                        # Biomarker Specificity: gene vs variant vs phenotype level
+                                        specificity = "-"
+                                        if fda_info and fda_info.biomarker_specificity:
+                                            spec = fda_info.biomarker_specificity
+                                            if spec == 'variant':
+                                                variants = fda_info.specific_variants
+                                                if variants:
+                                                    specificity = f"🎯 {', '.join(variants[:2])}"
+                                                else:
+                                                    specificity = "🎯 Variant"
+                                            elif spec == 'gene':
+                                                specificity = "🧬 Gene"
+                                            elif spec == 'phenotype':
+                                                variants = fda_info.specific_variants
+                                                if variants:
+                                                    specificity = f"🔬 {', '.join(variants[:2])}"
+                                                else:
+                                                    specificity = "🔬 Phenotype"
 
                                         # Links: FDA + PubMed
                                         links = []
@@ -705,7 +726,7 @@ with tab1:
                             # 1. Render Level A FIRST (highest clinical significance)
                             if level_groups["A"]:
                                 st.markdown(f"**✅ Level A - FDA/Guideline ({len(level_groups['A'])})**")
-                                st.caption("FDA-approved therapy with regulatory details from OpenFDA")
+                                st.caption("FDA-approved therapy with regulatory details from OpenFDA (label text may be outdated)")
                                 render_civic_table(level_groups["A"], show_fda_cols=True)
                                 sections_rendered += 1
 
@@ -828,9 +849,9 @@ with tab1:
                             # Helper to render a VICC table
                             def render_vicc_table(evidence_items: list, show_fda_cols: bool = False):
                                 if show_fda_cols:
-                                    # FDA level table: Source, Locus, Tumor, Drugs, Response, Regulatory Status, Indication, Links
-                                    rows = ["| Source | Locus | Tumor | Drugs | Response | Regulatory Status | Indication | Links |",
-                                            "|--------|-------|-------|-------|----------|-------------------|------------|-------|"]
+                                    # FDA level table: Source, Locus Match, Tumor Match, Drugs, Response, Regulatory Status, Indication, Links
+                                    rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Regulatory Status | Indication | Links |",
+                                            "|--------|-------------|-------------|-------|----------|-------------------|------------|-------|"]
                                 else:
                                     rows = ["| Source | Locus Match | Tumor Match | Drugs | Response | Disease |",
                                             "|--------|-------------|-------------|-------|----------|---------|"]
@@ -861,10 +882,11 @@ with tab1:
                                         else:
                                             reg_status = "FDA-approved"
 
-                                        # Indication
-                                        if fda_info and fda_info.biomarker_text_exact:
-                                            indication = fda_info.biomarker_text_exact[:60]
-                                            if len(fda_info.biomarker_text_exact) > 60:
+                                        # Indication - use full indications_and_usage, not biomarker_text_exact
+                                        # biomarker_text_exact is a substring that often starts mid-sentence
+                                        if fda_info and fda_info.indications_and_usage:
+                                            indication = fda_info.indications_and_usage[:60]
+                                            if len(fda_info.indications_and_usage) > 60:
                                                 indication += "..."
                                         else:
                                             indication = disease or "-"
@@ -891,7 +913,7 @@ with tab1:
 
                             if level_groups["fda"]:
                                 st.markdown(f"**✅ Level 1/A - FDA/Guideline ({len(level_groups['fda'])})**")
-                                st.caption("FDA-approved therapy with regulatory details from OpenFDA")
+                                st.caption("FDA-approved therapy with regulatory details from OpenFDA (label text may be outdated)")
                                 render_vicc_table(level_groups["fda"], show_fda_cols=True)
                                 sections_rendered += 1
 
@@ -969,9 +991,10 @@ with tab1:
                             def render_cgi_table(biomarkers: list, show_level: bool = False, show_fda_cols: bool = False):
                                 # Build header based on options
                                 if show_fda_cols:
-                                    # FDA-approved table: Drug, Locus, Tumor, Association, Specificity, Regulatory Status, Indication, Links
-                                    rows = ["| Drug | Locus | Tumor | Association | Specificity | Regulatory Status | Indication | Links |",
-                                            "|------|-------|-------|-------------|-------------|-------------------|------------|-------|"]
+                                    # FDA-approved table: Drug, Locus Match, Tumor Match, Association, Regulatory Status, Indication, Links
+                                    # Note: Drug Specificity removed - OpenFDA returns outdated label text
+                                    rows = ["| Drug | Locus Match | Tumor Match | Association | Regulatory Status | Indication | Links |",
+                                            "|------|-------------|-------------|-------------|-------------------|------------|-------|"]
                                 elif show_level:
                                     rows = ["| Drug | Locus Match | Association | Tumor Type | Level |",
                                             "|------|-------------|-------------|------------|-------|"]
@@ -1051,7 +1074,7 @@ with tab1:
                                                 else:
                                                     specificity = "🔬 Phenotype"
 
-                                        rows.append(f"| {drug_link} | {locus_display} | {tumor_match_cell} | {association} | {specificity} | {reg_status} | {indication} | {links_str} |")
+                                        rows.append(f"| {drug_link} | {locus_display} | {tumor_match_cell} | {association} | {reg_status} | {indication} | {links_str} |")
                                     elif show_level:
                                         level = b.get('evidence_level', '')
                                         rows.append(f"| {drug_link} | {locus_display} | {association} | {tumor} | {level} |")
@@ -1063,7 +1086,7 @@ with tab1:
                             if cgi_biomarkers:
                                 cgi_fda_sorted = sorted(cgi_biomarkers, key=assoc_sort_key)
                                 st.markdown("**✅ FDA Approved (CGI)**")
-                                st.caption("FDA-approved biomarker-drug associations with regulatory details from OpenFDA")
+                                st.caption("FDA-approved biomarker-drug associations with regulatory details from OpenFDA (label text may be outdated)")
                                 render_cgi_table(cgi_fda_sorted, show_level=False, show_fda_cols=True)
 
                             # 2. Early Phase (clinical trials, late trials, case reports)

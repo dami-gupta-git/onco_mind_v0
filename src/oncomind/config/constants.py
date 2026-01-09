@@ -9,6 +9,26 @@ This module consolidates all hardcoded mappings used across the codebase:
 Centralizing these makes maintenance easier and ensures consistency.
 """
 
+from pathlib import Path
+
+# =============================================================================
+# DATA PATHS
+# =============================================================================
+# Centralized paths for prefetched/cached data files.
+# Each data source has its own subdirectory under data/.
+
+# Project root (onco_mind_v0/)
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+# Data directories - each source has its own subdirectory
+CGI_DATA_DIR = _PROJECT_ROOT / "data" / "cgi"
+FDA_DATA_DIR = _PROJECT_ROOT / "data" / "fda"
+PROCESSING_DATA_DIR = _PROJECT_ROOT / "data" / "processing"
+
+# Individual data files
+CGI_BIOMARKERS_FILE = CGI_DATA_DIR / "cgi_biomarkers.tsv"
+FDA_LABELS_FILE = PROCESSING_DATA_DIR / "labels" / "fda_labels.json"
+
 # =============================================================================
 # GENE ALIASES
 # =============================================================================

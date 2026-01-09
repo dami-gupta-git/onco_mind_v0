@@ -228,6 +228,31 @@ class TestVICCClient:
         assert "V600E" in query
         assert "p." not in query
 
+    def test_build_query_with_tumor_type(self):
+        """Test building query with tumor type included."""
+        client = VICCClient()
+        query = client._build_query("AKT1", "E17K", "breast cancer")
+        assert "AKT1" in query
+        assert "E17K" in query
+        assert '"breast cancer"' in query
+        assert "AND" in query
+
+    def test_build_query_tumor_type_only(self):
+        """Test building query with gene and tumor type (no variant)."""
+        client = VICCClient()
+        query = client._build_query("BRAF", tumor_type="melanoma")
+        assert "BRAF" in query
+        assert '"melanoma"' in query
+        assert "AND" in query
+
+    def test_build_exon_query_with_tumor_type(self):
+        """Test building exon query with tumor type."""
+        client = VICCClient()
+        query = client._build_exon_query("KIT", 11, "gist")
+        assert "KIT" in query
+        assert '"exon 11"' in query
+        assert '"gist"' in query
+
     @pytest.mark.asyncio
     async def test_fetch_associations_mocked(self):
         """Test fetching associations with mocked response."""
