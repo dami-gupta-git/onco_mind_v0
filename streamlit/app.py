@@ -109,7 +109,7 @@ st.markdown("""
     .scrollable-table .col-locus { width: 80px; }
     .scrollable-table .col-tumor { width: 70px; }
     .scrollable-table .col-drugs { width: 180px; }
-    .scrollable-table .col-response { width: 90px; }
+    .scrollable-table .col-response { width: 110px; }
     .scrollable-table .col-specificity { width: 100px; }
     .scrollable-table .col-status { width: 150px; }
     .scrollable-table .col-indication { width: 250px; }
@@ -660,7 +660,16 @@ with tab1:
                                     url = e.get('civic_url', '')
                                     id_link = f"[{eid}]({url})" if url else eid
                                     disease = (e.get('disease', '') or '')[:20]
-                                    sig = e.get('clinical_significance', 'Unknown')
+                                    sig_raw = e.get('clinical_significance', 'Unknown') or 'Unknown'
+                                    # Abbreviate long significance values
+                                    sig_map = {
+                                        'SENSITIVITY/RESPONSE': 'Sensitive',
+                                        'SENSITIVITYRESPONSE': 'Sensitive',
+                                        'RESISTANCE': 'Resistant',
+                                        'REDUCED SENSITIVITY': 'Reduced',
+                                        'ADVERSE RESPONSE': 'Adverse',
+                                    }
+                                    sig = sig_map.get(sig_raw.upper(), sig_raw.title())
                                     # Match level indicator
                                     match = e.get('locus_match', '')
                                     match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")
@@ -747,7 +756,16 @@ with tab1:
                                     url = a.get('civic_url', '')
                                     id_link = f"[{aid}]({url})" if url else aid
                                     disease = (a.get('disease', '') or '')[:35]
-                                    sig = a.get('significance', 'Unknown')
+                                    sig_raw = a.get('significance', 'Unknown') or 'Unknown'
+                                    # Abbreviate long significance values
+                                    sig_map = {
+                                        'SENSITIVITY/RESPONSE': 'Sensitive',
+                                        'SENSITIVITYRESPONSE': 'Sensitive',
+                                        'RESISTANCE': 'Resistant',
+                                        'REDUCED SENSITIVITY': 'Reduced',
+                                        'ADVERSE RESPONSE': 'Adverse',
+                                    }
+                                    sig = sig_map.get(sig_raw.upper(), sig_raw.title())
                                     amp = a.get('amp_level', '')
                                     # Match level indicator with label
                                     match = a.get('locus_match', '')
@@ -1007,9 +1025,16 @@ with tab1:
                                             "|------|-------------|-------------|------------|"]
                                 for b in biomarkers:
                                     drug = b.get('drug', 'Unknown')
-                                    gene_val = b.get('gene', gene_display)
-                                    cgi_url = f"https://www.cancergenomeinterpreter.org/biomarkers?gene={gene_val}"
-                                    drug_link = f"[{drug}]({cgi_url})"
+                                    # Link to DailyMed for specific drug names, skip link for drug classes
+                                    # Drug classes are things like "allosteric AKT inhibitor" which won't have FDA labels
+                                    drug_words = drug.lower().split()
+                                    is_drug_class = any(w in drug_words for w in ['inhibitor', 'inhibitors', 'agonist', 'antagonist', 'blocker'])
+                                    if is_drug_class:
+                                        drug_link = drug  # Plain text for drug classes
+                                    else:
+                                        # Link to DailyMed search for specific drugs
+                                        dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={drug}"
+                                        drug_link = f"[{drug}]({dailymed_url})"
                                     # Locus match
                                     match = b.get('locus_match', '')
                                     locus_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "-")
@@ -1113,66 +1138,60 @@ with tab1:
                 # FDA Labels tab - shows detailed drug label information
                 if fda_labels:
                     with tabs[tab_idx]:
-                        st.caption("FDA drug label data from OpenFDA • Click row to expand")
+                        st.caption("FDA drug label data from OpenFDA • Click to expand")
 
-                        for label in fda_labels:
-                            drug_name = label.get('drug', 'Unknown')
-                            brand = label.get('brand_name', '')
+                        # Scrollable container for FDA labels
+                        fda_container = st.container(height=400)
+                        with fda_container:
+                            for label in fda_labels:
+                                drug_name = label.get('drug', 'Unknown')
+                                brand = label.get('brand_name', '')
 
-                            # Clinical studies data
-                            cs = label.get('clinical_studies') or {}
-                            nct_id = cs.get('nct_id', '')
-                            trial_name = cs.get('trial_name') or '-'
-                            hr = cs.get('hazard_ratio')
-                            hr_ci = cs.get('hazard_ratio_ci')
+                                # Clinical studies data
+                                cs = label.get('clinical_studies') or {}
+                                nct_id = cs.get('nct_id', '')
+                                hr = cs.get('hazard_ratio')
+                                hr_ci = cs.get('hazard_ratio_ci')
 
-                            # Format trial with link
-                            if nct_id:
-                                nct_link = f"[{nct_id}](https://clinicaltrials.gov/study/{nct_id})"
-                            else:
-                                nct_link = "-"
+                                # Format HR with 95% CI
+                                if hr:
+                                    hr_str = f"{hr:.2f}"
+                                    if hr_ci:
+                                        hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
+                                else:
+                                    hr_str = None
 
-                            # Format HR with 95% CI
-                            if hr:
-                                hr_str = f"{hr:.2f}"
-                                if hr_ci:
-                                    hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
-                            else:
-                                hr_str = "-"
+                                # Mechanism targets
+                                moa = label.get('mechanism_of_action') or {}
+                                targets = moa.get('targets', [])
 
-                            # Mechanism targets
-                            moa = label.get('mechanism_of_action') or {}
-                            targets = moa.get('targets', [])
-                            targets_str = ", ".join(targets) if targets else "-"
+                                # Initial approval date
+                                approval_date = label.get('initial_approval_date')
 
-                            # Indications
-                            indications = label.get('indications_and_usage', '') or '-'
+                                # Build expander header
+                                drug_display = f"**{drug_name}** ({brand})" if brand else f"**{drug_name}**"
+                                header_parts = [drug_display]
+                                if targets:
+                                    header_parts.append(f"Targets: {', '.join(targets)}")
+                                if nct_id:
+                                    header_parts.append(f"NCT: {nct_id}")
+                                if hr_str:
+                                    header_parts.append(f"HR: {hr_str}")
+                                if approval_date:
+                                    header_parts.append(f"Approved: {approval_date}")
+                                header = " | ".join(header_parts)
 
-                            # Initial approval date (from effective_time)
-                            approval_date = label.get('initial_approval_date') or '-'
+                                search_term = brand if brand else drug_name
+                                fda_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&varq={search_term}"
 
-                            # Build expander header with key info
-                            drug_display = f"{drug_name} ({brand})" if brand else drug_name
-                            # Use trial name if available, otherwise fall back to NCT ID
-                            trial_display = trial_name if trial_name != '-' else (nct_id or '-')
-                            header = f"**{drug_display}** | Trial: {trial_display} | HR: {hr_str}"
+                                with st.expander(header):
+                                    approved_indications = label.get('approved_indications', [])
+                                    indications = label.get('indications_and_usage', '') or '-'
 
-                            with st.expander(header):
-                                # Summary row
-                                cols = st.columns([1, 1, 1, 1])
-                                with cols[0]:
-                                    st.markdown(f"**Targets:** {targets_str}")
-                                with cols[1]:
-                                    st.markdown(f"**NCT:** {nct_link}")
-                                with cols[2]:
-                                    st.markdown(f"**HR (95% CI):** {hr_str}")
-                                with cols[3]:
-                                    st.markdown(f"**Approval:** {approval_date}")
-
-                                # Full indications
-                                st.markdown("---")
-                                st.markdown("**Indications & Usage:**")
-                                st.markdown(indications)
+                                    st.markdown(f"[View FDA Label]({fda_url})")
+                                    if approved_indications:
+                                        st.markdown(f"**Approved for:** {', '.join(approved_indications)}")
+                                    st.markdown(f"**Indications & Usage:** {indications}")
 
                     tab_idx += 1
 

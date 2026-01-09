@@ -280,6 +280,7 @@ def _build_response(result) -> Dict[str, Any]:
                     "discontinuation_rate": l.adverse_reactions.discontinuation_rate,
                 } if l.adverse_reactions else None,
                 "initial_approval_date": l.initial_approval_date,
+                "approved_indications": l.approved_indications or [],
                 "last_label_update": l.last_label_update,
                 "update_reason": l.update_reason,
                 "clinical_studies_text": l.clinical_studies_text,
