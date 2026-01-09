@@ -41,7 +41,6 @@ from oncomind.models.evidence.fda import (
     ClinicalStudyEvidence,
     MechanismEvidence,
     AdverseReactionsEvidence,
-    CombinationPartner,
     extract_combination_partners,
 )
 
@@ -962,24 +961,6 @@ def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]
             "update_reason": recent_changes_parsed.update_reason,
         }
 
-    # Extract combination partners from indication text
-    partner_names = extract_combination_partners(indications_str)
-    if partner_names:
-        combination_partners = []
-        for partner_name in partner_names:
-            partner_info = get_drug_info(partner_name)
-            if partner_info:
-                combination_partners.append({
-                    "generic_name": partner_info.get("generic"),
-                    "brand_name": partner_info.get("brand"),
-                })
-            else:
-                combination_partners.append({
-                    "generic_name": partner_name,
-                    "brand_name": None,
-                })
-        label_data["combination_partners"] = combination_partners
-
     return label_data
 
 
@@ -1055,9 +1036,6 @@ def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[st
         entry["recent_major_changes_text"] = label_data["recent_major_changes_text"]
     if label_data.get("recent_major_changes"):
         entry["recent_major_changes"] = label_data["recent_major_changes"]
-
-    if label_data.get("combination_partners"):
-        entry["combination_partners"] = label_data["combination_partners"]
 
     # Create composite key: set_id_version (e.g., "d698c106-2322-401e-b738-cbd83c843ecf_8")
     cache_key = f"{set_id}_{version}"
@@ -1162,22 +1140,11 @@ def _create_fda_label_evidence(
     # Extract approved indications from the full indication text
     approved_indications = extract_approved_indications(indications or "")
 
-    # Extract combination partner drugs from cache
-    combination_partners: list[CombinationPartner] = []
-    partner_display_names: list[str] = []
-
-    for cp in label_data.get("combination_partners", []):
-        combination_partners.append(CombinationPartner(
-            generic_name=cp.get("generic_name"),
-            brand_name=cp.get("brand_name"),
-        ))
-        display_name = cp.get("brand_name") or cp.get("generic_name") or ""
-        if display_name:
-            partner_display_names.append(display_name)
-
-    # Build therapy name with partner(s)
-    if partner_display_names:
-        therapy_name = f"{drug} + {' + '.join(partner_display_names)}"
+    # Build therapy name with combination partners (if any)
+    # Extract partner names from indication text directly
+    partner_names = extract_combination_partners(indications or "")
+    if partner_names:
+        therapy_name = f"{drug} + {' + '.join(partner_names)}"
         logger.debug(f"Combination therapy: {therapy_name}")
     else:
         therapy_name = drug
@@ -1195,7 +1162,6 @@ def _create_fda_label_evidence(
         set_id=label_data.get("set_id"),
         version=str(label_data.get("version")) if label_data.get("version") else None,
         approved_indications=approved_indications,
-        combination_partners=combination_partners,
         clinical_studies=clinical_studies_evidence,
         mechanism_of_action=mechanism_evidence,
         adverse_reactions=adverse_evidence,

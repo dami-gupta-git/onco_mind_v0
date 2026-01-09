@@ -6,51 +6,49 @@ from oncomind.models.evidence.base import EvidenceItemBase
 
 
 def extract_combination_partners(indication_text: str | None) -> list[str]:
-    """Extract combination therapy partner drugs from indication text.
-
-    Parses FDA indication text to identify if a drug is approved
-    in combination with other drugs. Returns all unique partners found.
-
-    Args:
-        indication_text: The indications_and_usage text from FDA label
-
-    Returns:
-        List of combination partner drug names (empty if monotherapy)
-
-    Examples:
-        >>> extract_combination_partners("in combination with panitumumab for mCRC")
-        ['panitumumab']
-        >>> extract_combination_partners("in combination with fulvestrant")
-        ['fulvestrant']
-        >>> extract_combination_partners("as a single agent for NSCLC")
-        []
-    """
+    """Extract combination drug partners from indication text."""
     if not indication_text:
         return []
 
     patterns = [
-        r"in combination with\s+([^,\.]+)",
-        r"combined with\s+([^,\.]+)",
-        r"coadministered with\s+([^,\.]+)",
-        r"plus\s+([^,\.]+?)(?:\s+(?:for|in|after|is|are|,|\.))",
+        r"in combination with\s+([^,\.]+?)(?:\s+for|\s+in|\.|,|$)",
+        r"combined with\s+([^,\.]+?)(?:\s+for|\s+in|\.|,|$)",
+        r"coadministered with\s+([^,\.]+?)(?:\s+for|\s+in|\.|,|$)",
     ]
 
     partners = []
-    seen = set()
-
     for pattern in patterns:
-        for match in re.finditer(pattern, indication_text, re.IGNORECASE):
-            partner = match.group(1).strip()
-            # Clean up common trailing words/phrases
-            partner = re.sub(r'\s+(?:for|in|after|is|are|to|the|treatment|of)\b.*$', '', partner, flags=re.IGNORECASE)
-            # Remove any parenthetical content at the end
-            partner = re.sub(r'\s*\([^)]*\)\s*$', '', partner)
-            partner = partner.strip()
-            if partner and partner.lower() not in seen:
-                seen.add(partner.lower())
-                partners.append(partner)
+        matches = re.findall(pattern, indication_text, re.IGNORECASE)
+        partners.extend([m.strip() for m in matches])
 
-    return partners
+    # Handle "X and Y" in partner string
+    expanded = []
+    for p in partners:
+        if " and " in p.lower():
+            expanded.extend([x.strip() for x in re.split(r"\s+and\s+", p, flags=re.IGNORECASE)])
+        else:
+            expanded.append(p)
+
+    # Deduplicate while preserving order (FDA text often repeats indications)
+    seen = set()
+    unique = []
+    for p in expanded:
+        p_lower = p.lower()
+        if p_lower not in seen:
+            seen.add(p_lower)
+            unique.append(p)
+
+    return unique
+
+
+class BiomarkerMatch(BaseModel):
+    """Result of matching a patient's biomarker against FDA indication.
+
+    Populated by match_fda_approval() from fda_processor.py.
+    """
+    matched: bool = False  # Whether the variant is covered by FDA approval
+    match_level: str | None = None  # "variant", "codon", "gene", "contraindicated", or None
+    combination_partners: list[str] = Field(default_factory=list)  # Partner drugs from indication
 
 
 class ClinicalStudyEvidence(BaseModel):
@@ -81,12 +79,6 @@ class AdverseReactionsEvidence(BaseModel):
     discontinuation_rate: float | None = None
 
 
-class CombinationPartner(BaseModel):
-    """Partner drug in a combination therapy."""
-    generic_name: str | None = None
-    brand_name: str | None = None
-
-
 class FDALabelEvidence(EvidenceItemBase):
     """Complete FDA drug label data for display in FDA tab.
 
@@ -105,9 +97,6 @@ class FDALabelEvidence(EvidenceItemBase):
     effective_time: str | None = None  # Label revision date (YYYY-MM-DD)
     approved_indications: list[str] = Field(default_factory=list)  # List of approved diseases
 
-    # Combination therapy partners (if any)
-    combination_partners: list[CombinationPartner] = Field(default_factory=list)
-
     # Structured data
     clinical_studies: ClinicalStudyEvidence | None = None
     mechanism_of_action: MechanismEvidence | None = None
@@ -119,6 +108,9 @@ class FDALabelEvidence(EvidenceItemBase):
     clinical_studies_text: str | None = None
     mechanism_of_action_text: str | None = None
     adverse_reactions_text: str | None = None
+
+    # Match result from match_fda_approval - populated when matching patient variant
+    biomarker_match: BiomarkerMatch | None = None
 
     def to_approval(self) -> "FDAApproval":
         """Convert this label to an FDAApproval for LLM consumption.

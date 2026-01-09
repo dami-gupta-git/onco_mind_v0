@@ -11,7 +11,6 @@ from oncomind.models.evidence.fda import (
     AdverseReactionsEvidence,
     FDALabelEvidence,
     FDAApproval,
-    CombinationPartner,
     extract_combination_partners,
 )
 
@@ -534,38 +533,6 @@ class TestFDAApprovalExtractIndicationCancerType:
         assert cancer_type is None
 
 
-class TestCombinationPartner:
-    """Tests for CombinationPartner model."""
-
-    def test_default_values(self):
-        """All fields should default to None."""
-        partner = CombinationPartner()
-
-        assert partner.generic_name is None
-        assert partner.brand_name is None
-
-    def test_set_values(self):
-        """Should correctly store all values."""
-        partner = CombinationPartner(
-            generic_name="fulvestrant",
-            brand_name="FASLODEX",
-        )
-
-        assert partner.generic_name == "fulvestrant"
-        assert partner.brand_name == "FASLODEX"
-
-    def test_model_dump(self):
-        """Test serialization with model_dump."""
-        partner = CombinationPartner(
-            generic_name="pemetrexed",
-            brand_name="ALIMTA",
-        )
-        dumped = partner.model_dump()
-
-        assert dumped["generic_name"] == "pemetrexed"
-        assert dumped["brand_name"] == "ALIMTA"
-
-
 class TestExtractCombinationPartners:
     """Tests for extract_combination_partners function."""
 
@@ -617,15 +584,15 @@ class TestExtractCombinationPartners:
         assert partners[0] == "carboplatin"
 
     def test_multiple_partners_and_pattern(self):
-        """Should extract partners joined with 'and'."""
+        """Should extract partners joined with 'and' as separate entries."""
         partners = extract_combination_partners(
             "in combination with paclitaxel and carboplatin for NSCLC"
         )
 
-        # Returns as single string since 'and' is within the same capture group
-        assert len(partners) == 1
-        assert "paclitaxel" in partners[0]
-        assert "carboplatin" in partners[0]
+        # "paclitaxel and carboplatin" is split into two separate partners
+        assert len(partners) == 2
+        assert "paclitaxel" in partners
+        assert "carboplatin" in partners
 
     def test_cleans_trailing_for_phrase(self):
         """Should clean 'for' and following text."""
@@ -646,84 +613,3 @@ class TestExtractCombinationPartners:
 
         assert len(partners) == 1
         assert partners[0].lower() == "fulvestrant"
-
-
-class TestFDALabelEvidenceCombinationPartners:
-    """Tests for FDALabelEvidence.combination_partners field."""
-
-    def test_default_empty_list(self):
-        """combination_partners should default to empty list."""
-        label = FDALabelEvidence(drug="test", gene="BRAF")
-
-        assert label.combination_partners == []
-
-    def test_with_single_partner(self):
-        """Should store single combination partner."""
-        partner = CombinationPartner(
-            generic_name="fulvestrant",
-            brand_name="FASLODEX",
-        )
-        label = FDALabelEvidence(
-            drug="capivasertib + FASLODEX",
-            gene="AKT1",
-            combination_partners=[partner],
-        )
-
-        assert len(label.combination_partners) == 1
-        assert label.combination_partners[0].generic_name == "fulvestrant"
-        assert label.combination_partners[0].brand_name == "FASLODEX"
-
-    def test_with_multiple_partners(self):
-        """Should store multiple combination partners."""
-        partner1 = CombinationPartner(
-            generic_name="paclitaxel",
-            brand_name="TAXOL",
-        )
-        partner2 = CombinationPartner(
-            generic_name="carboplatin",
-            brand_name="PARAPLATIN",
-        )
-        label = FDALabelEvidence(
-            drug="pembrolizumab + TAXOL + PARAPLATIN",
-            gene="PD-L1",
-            combination_partners=[partner1, partner2],
-        )
-
-        assert len(label.combination_partners) == 2
-        assert label.combination_partners[0].generic_name == "paclitaxel"
-        assert label.combination_partners[0].brand_name == "TAXOL"
-        assert label.combination_partners[1].generic_name == "carboplatin"
-        assert label.combination_partners[1].brand_name == "PARAPLATIN"
-
-    def test_model_dump_with_partners(self):
-        """Test serialization of combination_partners."""
-        partner = CombinationPartner(
-            generic_name="fulvestrant",
-            brand_name="FASLODEX",
-        )
-        label = FDALabelEvidence(
-            drug="capivasertib + FASLODEX",
-            gene="AKT1",
-            combination_partners=[partner],
-        )
-        dumped = label.model_dump()
-
-        assert "combination_partners" in dumped
-        assert len(dumped["combination_partners"]) == 1
-        assert dumped["combination_partners"][0]["generic_name"] == "fulvestrant"
-        assert dumped["combination_partners"][0]["brand_name"] == "FASLODEX"
-
-    def test_partner_with_only_generic_name(self):
-        """Partner can have only generic name (brand lookup failed)."""
-        partner = CombinationPartner(
-            generic_name="some-experimental-drug",
-            brand_name=None,
-        )
-        label = FDALabelEvidence(
-            drug="test + some-experimental-drug",
-            gene="TEST",
-            combination_partners=[partner],
-        )
-
-        assert label.combination_partners[0].generic_name == "some-experimental-drug"
-        assert label.combination_partners[0].brand_name is None

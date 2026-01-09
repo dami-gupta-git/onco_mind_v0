@@ -110,7 +110,7 @@ def extract_variant_codon(variant: str | None) -> str | None:
 
 
 # Type aliases for the allowed values
-VariantGeneLevel = Literal["variant", "gene"]
+VariantGeneLevel = Literal["variant", "codon", "gene", "contraindicated"]
 Scope = Literal["specific", "unspecified", "ambiguous"]
 
 
