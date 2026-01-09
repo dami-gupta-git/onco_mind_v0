@@ -144,6 +144,7 @@ class TestFDALabelDataFieldParity:
             "manufacturer",
             "indications_and_usage",
             "initial_approval_date",
+            "approved_indications",
             "clinical_studies",
             "mechanism_of_action",
             "adverse_reactions",
@@ -203,3 +204,38 @@ class TestEvidenceAggregatorConversion:
         assert evidence.brand_name == "TRUQAP"
         assert evidence.clinical_studies is not None
         assert evidence.clinical_studies.trial_name == "CAPItello-291"
+
+    def test_conversion_preserves_approved_indications(self):
+        """Verify evidence_aggregator passes approved_indications."""
+        from oncomind.insight_builder.evidence_aggregator import EvidenceAggregator
+        from oncomind.api.fda_label_service import (
+            FDALabelData,
+            MechanismOfActionData,
+        )
+
+        # Create FDALabelData with approved_indications
+        label_data = FDALabelData(
+            drug="capivasertib",
+            gene="AKT1",
+            brand_name="TRUQAP",
+            initial_approval_date="2023-11-14",
+            approved_indications=["Breast Cancer", "HR+ Breast Cancer"],
+            mechanism_of_action=MechanismOfActionData(
+                targets=["AKT1", "AKT2", "AKT3"],
+            ),
+        )
+
+        # Create aggregator and convert
+        aggregator = EvidenceAggregator.__new__(EvidenceAggregator)
+        aggregator.tumor_type = "Breast Cancer"
+
+        # Call the conversion method
+        result = aggregator._convert_fda_labels_to_evidence([label_data])
+
+        assert len(result) == 1
+        evidence = result[0]
+
+        # Verify approved_indications was passed through
+        assert evidence.approved_indications == ["Breast Cancer", "HR+ Breast Cancer"], \
+            "approved_indications must be passed from FDALabelData to FDALabelEvidence"
+        assert isinstance(evidence.approved_indications, list)

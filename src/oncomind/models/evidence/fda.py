@@ -46,6 +46,7 @@ class FDALabelEvidence(EvidenceItemBase):
     manufacturer: str | None = None
     indications_and_usage: str | None = None
     initial_approval_date: str | None = None
+    approved_indications: list[str] = Field(default_factory=list)  # List of approved diseases
 
     # Structured data
     clinical_studies: ClinicalStudyEvidence | None = None

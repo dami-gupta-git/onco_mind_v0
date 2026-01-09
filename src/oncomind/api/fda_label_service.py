@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import requests
 
 from oncomind.config.constants import (
@@ -95,6 +96,7 @@ class FDALabelData:
     manufacturer: str | None = None
     indications_and_usage: str | None = None
     initial_approval_date: str | None = None
+    approved_indications: list[str] = field(default_factory=list)  # List of approved diseases/conditions
 
     # Additional structured data
     clinical_studies: ClinicalStudyData | None = None
@@ -116,6 +118,7 @@ class FDALabelData:
             "manufacturer": self.manufacturer,
             "indications_and_usage": self.indications_and_usage,
             "initial_approval_date": self.initial_approval_date,
+            "approved_indications": self.approved_indications,
         }
 
         if self.clinical_studies:
@@ -612,6 +615,86 @@ def _join_list_to_text(value: list | str | None) -> str:
     return str(value)
 
 
+def extract_approved_indications(indications_text: str) -> list[str]:
+    """Extract list of approved diseases/conditions from FDA indication text.
+
+    Parses the indications_and_usage text to find all approved cancer types
+    and other diseases the drug is approved for.
+
+    Args:
+        indications_text: Raw indications and usage text from FDA label
+
+    Returns:
+        List of disease/condition names (e.g., ["breast cancer", "GIST", "RCC"])
+    """
+    if not indications_text:
+        return []
+
+    text_lower = indications_text.lower()
+    found = []
+
+    # Cancer types and other conditions to look for
+    # Order matters - more specific patterns first
+    indication_patterns = [
+        # Specific cancer types
+        (r"gastrointestinal stromal tumor", "GIST"),
+        (r"\bgist\b", "GIST"),
+        (r"renal cell carcinoma", "Renal Cell Carcinoma"),
+        (r"\brcc\b", "Renal Cell Carcinoma"),
+        (r"non-small cell lung cancer", "NSCLC"),
+        (r"\bnsclc\b", "NSCLC"),
+        (r"small cell lung cancer", "Small Cell Lung Cancer"),
+        (r"breast cancer", "Breast Cancer"),
+        (r"colorectal cancer", "Colorectal Cancer"),
+        (r"colon cancer", "Colorectal Cancer"),
+        (r"pancreatic neuroendocrine tumor", "Pancreatic NET"),
+        (r"\bpnet\b", "Pancreatic NET"),
+        (r"pancreatic cancer", "Pancreatic Cancer"),
+        (r"hepatocellular carcinoma", "Hepatocellular Carcinoma"),
+        (r"thyroid cancer", "Thyroid Cancer"),
+        (r"anaplastic thyroid", "Anaplastic Thyroid Cancer"),
+        (r"\bmelanoma\b", "Melanoma"),
+        (r"ovarian cancer", "Ovarian Cancer"),
+        (r"prostate cancer", "Prostate Cancer"),
+        (r"bladder cancer", "Bladder Cancer"),
+        (r"urothelial carcinoma", "Urothelial Carcinoma"),
+        (r"cholangiocarcinoma", "Cholangiocarcinoma"),
+        (r"bile duct cancer", "Cholangiocarcinoma"),
+        (r"gastric cancer", "Gastric Cancer"),
+        (r"esophageal cancer", "Esophageal Cancer"),
+        (r"head and neck", "Head and Neck Cancer"),
+        (r"acute myeloid leukemia", "AML"),
+        (r"\baml\b", "AML"),
+        (r"chronic myeloid leukemia", "CML"),
+        (r"\bcml\b", "CML"),
+        (r"multiple myeloma", "Multiple Myeloma"),
+        (r"\blymphoma\b", "Lymphoma"),
+        (r"myelofibrosis", "Myelofibrosis"),
+        (r"polycythemia vera", "Polycythemia Vera"),
+        (r"systemic mastocytosis", "Systemic Mastocytosis"),
+        (r"endometrial cancer", "Endometrial Cancer"),
+        (r"cervical cancer", "Cervical Cancer"),
+        (r"glioblastoma", "Glioblastoma"),
+        # Pan-cancer/biomarker-driven
+        (r"msi-h", "MSI-H Tumors"),
+        (r"microsatellite instability-high", "MSI-H Tumors"),
+        (r"dmmr", "dMMR Tumors"),
+        (r"mismatch repair deficient", "dMMR Tumors"),
+        (r"ntrk.+fusion", "NTRK Fusion+ Tumors"),
+        (r"tumor.agnostic", "Tumor-Agnostic"),
+        (r"solid tumor", "Solid Tumors"),
+    ]
+
+    seen = set()
+    for pattern, display_name in indication_patterns:
+        if re.search(pattern, text_lower):
+            if display_name not in seen:
+                found.append(display_name)
+                seen.add(display_name)
+
+    return found
+
+
 def _fetch_initial_approval_date(drug_name: str, brand_names: list[str] | None = None) -> str | None:
     """Fetch initial FDA approval date from drugsfda endpoint.
 
@@ -966,6 +1049,9 @@ def get_fda_labels_for_drugs(
                 update_reason=rmc.get("update_reason"),
             )
 
+        # Extract approved indications from the full indication text
+        approved_indications = extract_approved_indications(indications or "")
+
         results.append(FDALabelData(
             drug=drug,
             gene=gene,
@@ -974,6 +1060,7 @@ def get_fda_labels_for_drugs(
             manufacturer=manufacturer,
             indications_and_usage=indications,
             initial_approval_date=label_data.get("initial_approval_date"),
+            approved_indications=approved_indications,
             clinical_studies=clinical_studies_data,
             mechanism_of_action=mechanism_data,
             adverse_reactions=adverse_data,

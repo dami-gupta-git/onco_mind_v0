@@ -476,6 +476,7 @@ class EvidenceAggregator:
                 manufacturer=label.manufacturer,
                 indications_and_usage=label.indications_and_usage,
                 initial_approval_date=label.initial_approval_date,
+                approved_indications=label.approved_indications or [],
                 clinical_studies=clinical_studies,
                 mechanism_of_action=mechanism,
                 adverse_reactions=adverse,
