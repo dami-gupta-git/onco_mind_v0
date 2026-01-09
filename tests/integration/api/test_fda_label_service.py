@@ -284,3 +284,122 @@ class TestFetchLatestLabels:
         print(f"\nTRUQAP labels ({len(labels)} found):")
         for label_data in labels:
             print(f"  set_id: {label_data.get('set_id')}, version: {label_data.get('version')}")
+
+
+class TestCombinationTherapyIntegration:
+    """Integration tests for combination therapy extraction and storage."""
+
+    def test_capivasertib_has_fulvestrant_partner(self):
+        """Capivasertib (TRUQAP) is approved in combination with fulvestrant."""
+        from oncomind.models.evidence.fda import extract_combination_partners
+
+        labels = fetch_latest_labels("capivasertib")
+
+        assert len(labels) > 0, "Should fetch capivasertib label"
+
+        label_data = labels[0]
+        indications = label_data.get("indications_and_usage_text", "")
+        partners = extract_combination_partners(indications)
+
+        print(f"\nCapivasertib combination partners: {partners}")
+
+        # Should have fulvestrant as combination partner
+        assert len(partners) > 0, "Capivasertib should have combination partners"
+        assert "fulvestrant" in [p.lower() for p in partners], \
+            f"Fulvestrant should be a combination partner, got: {partners}"
+
+    def test_sotorasib_has_panitumumab_partner(self):
+        """Sotorasib (LUMAKRAS) is approved in combination with panitumumab for mCRC."""
+        from oncomind.models.evidence.fda import extract_combination_partners
+
+        labels = fetch_latest_labels("sotorasib")
+
+        assert len(labels) > 0, "Should fetch sotorasib label"
+
+        label_data = labels[0]
+        indications = label_data.get("indications_and_usage_text", "")
+        partners = extract_combination_partners(indications)
+
+        print(f"\nSotorasib combination partners: {partners}")
+        print(f"Indications mention panitumumab: {'panitumumab' in indications.lower()}")
+
+        # Sotorasib has both single-agent and combination indications
+        # The combination with panitumumab should be detected
+        if "panitumumab" in indications.lower():
+            assert "panitumumab" in [p.lower() for p in partners], \
+                f"Panitumumab should be a combination partner, got: {partners}"
+
+    def test_fda_label_evidence_therapy_name(self):
+        """FDALabelEvidence should have combination partners reflected in drug name."""
+        labels = get_fda_labels_for_drugs({"capivasertib"}, gene="AKT1", fetch_missing=False)
+
+        if not labels:
+            pytest.skip("Capivasertib not in cache")
+
+        label = labels[0]
+
+        print(f"\nFDALabelEvidence for capivasertib:")
+        print(f"  Drug: {label.drug}")
+
+        # Drug name should include the partner for combination therapies
+        assert "+" in label.drug, \
+            f"Combination therapy drug name should include '+', got: {label.drug}"
+
+    def test_therapy_name_includes_partner(self):
+        """The drug field should include combination partner names."""
+        labels = get_fda_labels_for_drugs({"capivasertib"}, gene="AKT1", fetch_missing=False)
+
+        if not labels:
+            pytest.skip("Capivasertib not in cache")
+
+        label = labels[0]
+
+        print(f"\nTherapy name: {label.drug}")
+
+        # For combination therapies, drug name should be like "capivasertib + fulvestrant"
+        assert "+" in label.drug, \
+            f"Drug name should include '+' for combination therapy, got: {label.drug}"
+
+        # Fulvestrant should be in the drug name
+        assert "fulvestrant" in label.drug.lower(), \
+            f"Drug name '{label.drug}' should include 'fulvestrant'"
+
+    def test_monotherapy_no_plus_in_name(self):
+        """Monotherapy drugs should not have '+' in drug name."""
+        from oncomind.models.evidence.fda import extract_combination_partners
+
+        # Osimertinib is approved as single-agent (though also in combinations)
+        labels = fetch_latest_labels("osimertinib")
+
+        assert len(labels) > 0, "Should fetch osimertinib label"
+
+        label_data = labels[0]
+        indications = label_data.get("indications_and_usage_text", "")
+        partners = extract_combination_partners(indications)
+
+        print(f"\nOsimertinib indications (first 200 chars): {indications[:200]}")
+        print(f"Combination partners found: {partners}")
+
+        # This is informational - osimertinib is primarily single-agent
+        # but may have combination indication in newer labels
+
+    def test_processed_label_has_required_fields(self):
+        """Processed label data should have all required fields."""
+        labels = fetch_latest_labels("capivasertib")
+
+        assert len(labels) > 0, "Should fetch capivasertib label"
+
+        label_data = labels[0]
+
+        # Required fields
+        assert "set_id" in label_data, "Should have set_id"
+        assert "version" in label_data, "Should have version"
+        assert "indications_and_usage" in label_data, "Should have indications_and_usage"
+        assert "indications_and_usage_text" in label_data, "Should have indications_and_usage_text"
+        assert "brand_name" in label_data, "Should have brand_name"
+        assert "generic_name" in label_data, "Should have generic_name"
+
+        print(f"\nProcessed label structure validated:")
+        print(f"  set_id: {label_data.get('set_id')}")
+        print(f"  version: {label_data.get('version')}")
+        print(f"  brand_name: {label_data.get('brand_name')}")

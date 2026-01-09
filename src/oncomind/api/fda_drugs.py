@@ -1222,6 +1222,11 @@ class OpenFDAClient:
                     result.specific_variants = [spec["specified_variant"]]
                     result.target_genes = spec.get("target_genes", [gene])
                     return
+                elif spec["level"] == "variant_list":
+                    result.biomarker_specificity = "variant"
+                    result.specific_variants = spec.get("specified_variants", [])
+                    result.target_genes = spec.get("target_genes", [gene])
+                    return
                 elif spec["level"] in ("codon", "exon"):
                     # Treat codon/exon as variant-level for this model
                     result.biomarker_specificity = "variant"
@@ -1236,6 +1241,11 @@ class OpenFDAClient:
                     result.target_genes = spec.get("target_genes", [gene])
                     # Don't return - continue looking for more specific matches
                     continue
+                elif spec["level"] in ("contraindication", "wild_type_required"):
+                    # These indicate drug is NOT for mutated gene
+                    result.biomarker_specificity = spec["level"]
+                    result.target_genes = spec.get("target_genes", [gene])
+                    return
 
         # If we found any genes but no specific match, mark as gene-level
         if genes_found and not result.biomarker_specificity:

@@ -1146,9 +1146,13 @@ with tab1:
 
                         # Render legend
                         legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 10px;'>
-<b>Locus Match:</b><br/>
-🎯 Variant (exact match)<br/>
-📌 Codon (same position)<br/>
+<b>FDA Therapy Match:</b><br/>
+🟢 Matched<br/>
+🔴 Not Matched<br/>
+<br/>
+<b>Match Level:</b><br/>
+🎯 Variant (exact)<br/>
+◐ Codon (same position)<br/>
 🧬 Gene (any alteration)
 </div>""", unsafe_allow_html=True)
 
@@ -1181,17 +1185,17 @@ with tab1:
                                     # Initial approval date
                                     approval_date = label.get('initial_approval_date')
 
-                                    # Locus match from biomarker specificity
-                                    locus_match = label.get('locus_match', 'gene')
-                                    if locus_match == 'variant':
-                                        locus_icon = "🎯"
-                                    elif locus_match == 'codon':
-                                        locus_icon = "📌"
-                                    else:
-                                        locus_icon = "🧬"
+                                    # Biomarker match icons:
+                                    # - 🟢/⚪ for whether variant is covered
+                                    # - 🎯/◐/🧬 for match level (variant/codon/gene)
+                                    biomarker_match = label.get('biomarker_match') or {}
+                                    is_matched = biomarker_match.get('matched', False)
+                                    match_icon = "🟢" if is_matched else "🔴"
+                                    match_level = biomarker_match.get('match_level')
+                                    level_icon = {"variant": "🎯", "codon": "◐", "gene": "🧬"}.get(match_level, "")
 
-                                    # Build expander header
-                                    drug_display = f"{locus_icon} **{drug_name}** ({brand})" if brand else f"{locus_icon} **{drug_name}**"
+                                    # Build expander header with icons at the beginning
+                                    drug_display = f"{match_icon} {level_icon} **{drug_name}** ({brand})" if brand else f"{match_icon} {level_icon} **{drug_name}**"
                                     header_parts = [drug_display]
                                     if targets:
                                         header_parts.append(f"Targets: {', '.join(targets)}")

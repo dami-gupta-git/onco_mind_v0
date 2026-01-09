@@ -282,10 +282,6 @@ def _build_response(result) -> Dict[str, Any]:
                 "initial_approval_date": l.initial_approval_date,
                 "effective_time": l.effective_time,
                 "approved_indications": l.approved_indications or [],
-                "combination_partners": [
-                    {"generic_name": p.generic_name, "brand_name": p.brand_name}
-                    for p in l.combination_partners
-                ],
                 "last_label_update": l.last_label_update,
                 "update_reason": l.update_reason,
                 "clinical_studies_text": l.clinical_studies_text,
@@ -293,6 +289,11 @@ def _build_response(result) -> Dict[str, Any]:
                 "adverse_reactions_text": l.adverse_reactions_text,
                 # Match specificity tracking
                 "locus_match": l.locus_match,
+                "biomarker_match": {
+                    "matched": l.biomarker_match.matched,
+                    "match_level": l.biomarker_match.match_level,
+                    "combination_partners": l.biomarker_match.combination_partners,
+                } if l.biomarker_match else None,
             }
             for l in evidence.fda_labels
         ],
