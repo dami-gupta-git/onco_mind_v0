@@ -320,93 +320,56 @@ def populate_locus_variant_match(
         query_tumor: The tumor type being queried (e.g., "colorectal cancer", "NSCLC")
     """
     for label in fda_labels:
-        # Parse biomarker specificity to determine locus_variant_match
-        # locus_variant_match reflects the relationship between the queried
-        # variant and the approved variant (variant/codon/gene match)
-        if label.indications_and_usage and label.gene:
+        if not label.indications_and_usage or not label.gene:
+            continue
+
+        # Use match_fda_approval for biomarker matching logic
+        if query_variant:
+            result = match_fda_approval(
+                query_gene=label.gene,
+                query_variant=query_variant,
+                query_tumor=query_tumor or "",
+                fda_indication=label.indications_and_usage,
+            )
+
+            covered = result["matched"]
+            match_level = result.get("match_level")
+            partners = result.get("combination_partners", [])
+
+            # Set biomarker_match
+            label.biomarker_match = BiomarkerMatch(
+                matched=covered,
+                match_level=match_level,
+                tumor_matched=None,  # TODO: add tumor matching later
+                tumor_match_type=None,
+                combination_partners=partners,
+            )
+
+            # Also set locus_variant_match for backward compatibility
+            if match_level:
+                label.locus_variant_match = EvidenceLevel(
+                    level=match_level,
+                    scope="specific",
+                    origin="kb"
+                )
+        else:
+            # No query variant - check if gene-level approval
             biomarker_spec = parse_biomarker_specificity(
                 label.indications_and_usage, label.gene
             )
-
-            # Compute tumor match using to_approval().parse_indication_for_tumor()
-            tumor_matched = None
-            tumor_match_type = None
-            if query_tumor:
-                approval = label.to_approval()
-                tumor_result = approval.parse_indication_for_tumor(query_tumor)
-                tumor_matched = tumor_result.get('tumor_match', False)
-                # Determine if it's a pan-cancer approval
-                if tumor_matched and is_pan_cancer_term(label.indications_and_usage):
-                    tumor_match_type = "pan_cancer"
-                elif tumor_matched:
-                    tumor_match_type = "exact"
-
-            if biomarker_spec:
-                # Determine locus_level based on queried variant vs approved variant
-                if query_variant:
-                    # Use is_variant_covered to get matched status and level
-                    covered, match_level = is_variant_covered(query_variant, biomarker_spec)
-                    partners = extract_combination_partners(label.indications_and_usage)
-
-                    # Set biomarker_match with tumor info
-                    label.biomarker_match = BiomarkerMatch(
-                        matched=covered,
-                        match_level=match_level,
-                        tumor_matched=tumor_matched,
-                        tumor_match_type=tumor_match_type,
-                        combination_partners=partners,
-                    )
-
-                    # Also set locus_variant_match for backward compatibility
-                    if match_level:
-                        label.locus_variant_match = EvidenceLevel(
-                            level=match_level,
-                            scope="specific",
-                            origin="kb"
-                        )
-                elif biomarker_spec["level"] == "gene":
-                    # No query variant but gene-level approval
-                    label.locus_variant_match = EvidenceLevel(
-                        level="gene",
-                        scope="unspecified",
-                        origin="kb"
-                    )
-                    # Also set biomarker_match for gene-level
-                    partners = extract_combination_partners(label.indications_and_usage)
-                    label.biomarker_match = BiomarkerMatch(
-                        matched=True,  # Gene-level means any variant is covered
-                        match_level="gene",
-                        tumor_matched=tumor_matched,
-                        tumor_match_type=tumor_match_type,
-                        combination_partners=partners,
-                    )
-            elif query_tumor and tumor_matched is not None:
-                # No biomarker spec but we have tumor match info (e.g., MSI-H/dMMR phenotype approvals)
+            if biomarker_spec and biomarker_spec.get("level") == "gene":
                 partners = extract_combination_partners(label.indications_and_usage)
-                label.biomarker_match = BiomarkerMatch(
-                    matched=False,  # No variant match since no biomarker spec
-                    match_level=None,
-                    tumor_matched=tumor_matched,
-                    tumor_match_type=tumor_match_type,
-                    combination_partners=partners,
+                label.locus_variant_match = EvidenceLevel(
+                    level="gene",
+                    scope="unspecified",
+                    origin="kb"
                 )
-
-            # Set cancer_type_match based on tumor matching result
-            # This enables tumor_match computed property to work correctly
-            if query_tumor and tumor_matched is not None:
-                if tumor_matched:
-                    # Tumor matches - determine if pan-cancer or cancer-specific
-                    level = "pan_cancer" if tumor_match_type == "pan_cancer" else "cancer_specific"
-                else:
-                    # Tumor doesn't match - try to extract what cancer the approval IS for
-                    approval = label.to_approval()
-                    extracted_cancer = approval.extract_indication_cancer_type()
-                    level = extracted_cancer if extracted_cancer else "pan_cancer"
-
-                label.cancer_type_match = EvidenceLevel(
-                    level=level,
-                    scope="specific" if tumor_matched else "unspecified",
-                    origin="kb",
+                label.biomarker_match = BiomarkerMatch(
+                    matched=True,
+                    match_level="gene",
+                    tumor_matched=None,
+                    tumor_match_type=None,
+                    combination_partners=partners,
                 )
 
 

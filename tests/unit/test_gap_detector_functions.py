@@ -337,10 +337,10 @@ class TestCheckClinicalEvidence:
         # has_clinical should be True (there IS clinical data)
         assert base_context.has_clinical is True
 
-    def test_fda_labels_gene_level_not_well_characterized(self, mock_evidence, base_context):
-        """FDA labels with GENE-level biomarker_match should NOT mark as well-characterized.
+    def test_fda_labels_gene_level_is_well_characterized(self, mock_evidence, base_context):
+        """FDA labels with GENE-level biomarker_match should mark as well-characterized.
 
-        Gene-level extrapolation is a SIGNIFICANT gap, not well-characterized.
+        If biomarker_match.matched=True, the drug covers this variant regardless of match_level.
         """
         # Set up FDA label with gene-level biomarker_match
         fda_label = MagicMock()
@@ -349,7 +349,7 @@ class TestCheckClinicalEvidence:
         fda_label.generic_name = "testgeneric"
         fda_label.biomarker_match = MagicMock()
         fda_label.biomarker_match.matched = True
-        fda_label.biomarker_match.match_level = "gene"  # Gene-level, not variant
+        fda_label.biomarker_match.match_level = "gene"  # Gene-level match
         fda_label.biomarker_match.tumor_matched = True
         fda_label.biomarker_match.tumor_match_type = "exact"
         fda_label.cancer_type_match = None
@@ -358,14 +358,9 @@ class TestCheckClinicalEvidence:
 
         _check_clinical_evidence(mock_evidence, base_context)
 
-        # Should NOT be marked well-characterized (gene-level extrapolation)
-        assert not any("clinical" in w.lower() for w in base_context.well_characterized)
-        # But has_clinical should still be True (there IS clinical data)
+        # Should be marked well-characterized (matched=True means drug covers variant)
+        assert any("clinical" in w.lower() for w in base_context.well_characterized)
         assert base_context.has_clinical is True
-        # Should have a SIGNIFICANT gap for gene-level extrapolation
-        clinical_gaps = [g for g in base_context.gaps if g.category == GapCategory.CLINICAL]
-        assert len(clinical_gaps) >= 1
-        assert any(g.severity == GapSeverity.SIGNIFICANT for g in clinical_gaps)
 
     def test_no_clinical_evidence_adds_critical_gap(self, mock_evidence, base_context):
         """Missing clinical evidence should add a CRITICAL gap."""

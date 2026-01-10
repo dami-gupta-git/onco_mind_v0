@@ -303,10 +303,9 @@ class TestIsVariantCovered:
         assert covered is False
         assert level is None
 
-    def test_real_scenario_akt1_e17k_gene_level(self):
-        """Test AKT1 E17K with gene-level approval (Capivasertib)."""
-        # Capivasertib is approved for AKT1 alterations (gene-level)
-        specificity = {"level": "gene"}
+    def test_real_scenario_akt1_e17k_match(self):
+        text = "metastatic breast cancer with one or more PIK3CA/AKT1/PTEN -alteration as detected by an FDA-approved test following"
+        specificity = parse_biomarker_specificity(text, "AKT1")
 
         covered, level = is_variant_covered("E17K", specificity)
         assert covered is True
