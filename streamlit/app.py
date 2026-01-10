@@ -1321,18 +1321,9 @@ with tab1:
                             rows = ["| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |",
                                     "|-------------|-------------|--------|-------|--------|-------|"]
                             for t in trials:
-                                matched_biomarker = t.get('matched_biomarker', '')
-                                match_scope = t.get('match_scope')
-
-                                # Build display string with icons
-                                if match_scope == 'ambiguous':
-                                    match_display = f"📌 {matched_biomarker}" if matched_biomarker else "📌 Broad"
-                                elif match_scope == 'specific':
-                                    match_display = f"🎯 {matched_biomarker}" if matched_biomarker else "🎯 Variant"
-                                elif t.get('variant_specific', False):
-                                    match_display = f"🎯 {matched_biomarker}" if matched_biomarker else "🎯 Variant"
-                                else:
-                                    match_display = f"🧬 {matched_biomarker}" if matched_biomarker else "🧬 Gene"
+                                locus_match = t.get('locus_match', '')
+                                # Use consistent format with other tabs: icon + level name only
+                                match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "🧬 Gene")
 
                                 # Tumor match display
                                 tumor_match = t.get('tumor_match')

@@ -380,6 +380,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "matched_biomarker": t.matched_biomarker,
                 "match_scope": t.match_scope,
                 "tumor_match": t.tumor_match,
+                "locus_match": t.locus_match,
             }
             for t in evidence.clinical_trials
         ],
