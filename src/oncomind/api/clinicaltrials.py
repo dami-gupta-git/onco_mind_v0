@@ -438,6 +438,11 @@ class ClinicalTrialsClient:
         # Build query
         query = self._build_search_query(gene, variant, tumor_type)
 
+        # Filter to last 10 years
+        from datetime import datetime
+        current_year = datetime.now().year
+        min_year = current_year - 10
+
         # Build parameters - request only needed fields to reduce payload
         params: dict[str, Any] = {
             'query.term': query,
@@ -445,6 +450,7 @@ class ClinicalTrialsClient:
             'countTotal': 'true',
             'format': 'json',
             'fields': '|'.join(self.FIELDS),  # Only fetch fields we need
+            'filter.advanced': f'AREA[StartDate]RANGE[01/01/{min_year}, MAX]',  # Started in last 10 years
         }
 
         # Add condition filter if tumor type specified
@@ -504,6 +510,11 @@ class ClinicalTrialsClient:
         Returns:
             List of ClinicalTrial objects
         """
+        # Filter to last 10 years
+        from datetime import datetime
+        current_year = datetime.now().year
+        min_year = current_year - 10
+
         # Build parameters - search by condition only
         params: dict[str, Any] = {
             'query.cond': tumor_type,
@@ -511,6 +522,7 @@ class ClinicalTrialsClient:
             'countTotal': 'true',
             'format': 'json',
             'fields': '|'.join(self.FIELDS),
+            'filter.advanced': f'AREA[StartDate]RANGE[01/01/{min_year}, MAX]',  # Started in last 10 years
         }
 
         # Filter by status

@@ -401,12 +401,20 @@ class PubMedClient:
         """
         client = self._get_client()
 
+        # Filter to last 10 years
+        from datetime import datetime
+        current_year = datetime.now().year
+        min_year = current_year - 10
+
         params: dict[str, Any] = {
             'db': 'pubmed',
             'term': query,
             'retmax': max_results,
             'retmode': 'json',
             'sort': 'relevance',
+            'mindate': str(min_year),
+            'maxdate': str(current_year),
+            'datetype': 'pdat',  # Publication date
         }
 
         if self.api_key:

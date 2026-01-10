@@ -929,7 +929,7 @@ MAX_VICC_RESULTS = 500
 # VICC aggregates from: CIViC, CGI, JAX-CKB, OncoKB, PMKB, MolecularMatch
 VICC_DUPLICATE_SOURCES: set[str] = {"civic", "cgi"}
 MAX_CIVIC_ASSERTIONS = 500
-MAX_CLINICAL_TRIALS = 500
+MAX_CLINICAL_TRIALS = 30
 MAX_LITERATURE_RESULTS = 30
 
 # =============================================================================
