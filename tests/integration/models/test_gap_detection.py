@@ -199,7 +199,13 @@ class TestGapDetectionIntegration:
 
     @pytest.mark.asyncio
     async def test_braf_v600e_comprehensive_evidence(self):
-        """BRAF V600E in Melanoma should have comprehensive evidence."""
+        """BRAF V600E in Melanoma should have comprehensive evidence.
+
+        This variant is FDA-approved with multiple drugs and well-studied.
+        FDA vs VICC resistance reports are NOT flagged as conflicts because
+        VICC resistance typically represents acquired resistance (expected
+        clinical behavior) rather than intrinsic resistance.
+        """
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
@@ -208,7 +214,7 @@ class TestGapDetectionIntegration:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # BRAF V600E is well-studied
+        # BRAF V600E is well-studied - should be comprehensive or moderate
         assert gaps.overall_evidence_quality in ("comprehensive", "moderate")
         # Check case-insensitively
         well_char_lower = [w.lower() for w in gaps.well_characterized]

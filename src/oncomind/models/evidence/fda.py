@@ -21,18 +21,52 @@ def extract_combination_partners(indication_text: str | None) -> list[str]:
         matches = re.findall(pattern, indication_text, re.IGNORECASE)
         partners.extend([m.strip() for m in matches])
 
-    # Handle "X and Y" in partner string
+    # Handle "X and Y" or "X or Y" in partner string
     expanded = []
     for p in partners:
-        if " and " in p.lower():
-            expanded.extend([x.strip() for x in re.split(r"\s+and\s+", p, flags=re.IGNORECASE)])
-        else:
-            expanded.append(p)
+        parts = re.split(r"\s+(?:and|or|\+|with)\s+", p, flags=re.IGNORECASE)
+        expanded.extend([x.strip() for x in parts])
 
-    # Deduplicate while preserving order (FDA text often repeats indications)
+    # Clean up artifacts
+    cleaned = []
+    for p in expanded:
+        # Remove leading "either", "without", "or without"
+        p = re.sub(r"^(either|without|or without)\s+", "", p, flags=re.IGNORECASE)
+        # Remove trailing "or without X"
+        p = re.sub(r"\s+(or without|without).*$", "", p, flags=re.IGNORECASE)
+        p = p.strip()
+        if p:
+            cleaned.append(p)
+
+    # Filter to only drug-like names
+    drug_suffixes = (
+        'mab', 'nib', 'lib', 'tib', 'tin', 'zumab', 'ximab', 'mumab',
+        'platin', 'taxel', 'mustine', 'rubicin', 'mycin', 'tinib',
+        'ciclib', 'lisib', 'rafenib', 'metinib', 'sertib', 'parin',
+        'mide', 'uracil', 'citabine', 'trexed', 'fosfamide', 'imod',
+        'olimus', 'fulvestrant', 'pemetrexed', 'asertib',
+    )
+
+    filtered = []
+    for p in cleaned:
+        p_lower = p.lower()
+        # Skip generic terms
+        skip_terms = (
+            'chemotherapy', 'radiotherapy', 'radiation', 'therapy',
+            'platinum-based', 'platinum', 'chemoradiotherapy',
+            'neoadjuvant treatment', 'fluoropyrimidine-based',
+            'platinum-containing', 'single agent',
+        )
+        if any(term in p_lower for term in skip_terms):
+            continue
+        # Check suffix
+        if any(p_lower.endswith(suffix) for suffix in drug_suffixes):
+            filtered.append(p)
+
+    # Deduplicate while preserving order
     seen = set()
     unique = []
-    for p in expanded:
+    for p in filtered:
         p_lower = p.lower()
         if p_lower not in seen:
             seen.add(p_lower)
@@ -118,10 +152,24 @@ class FDALabelEvidence(EvidenceItemBase):
         """Convert this label to an FDAApproval for LLM consumption.
 
         Returns a simplified FDAApproval object suitable for LLM prompts,
-        preserving the locus_variant_match from this label.
+        preserving the locus_variant_match and biomarker_match from this label.
         """
+        # Extract flattened biomarker_match fields
+        biomarker_matched = False
+        biomarker_match_level = None
+        biomarker_tumor_matched = None
+        biomarker_tumor_match_type = None
+        combination_partners: list[str] = []
+
+        if self.biomarker_match:
+            biomarker_matched = self.biomarker_match.matched
+            biomarker_match_level = self.biomarker_match.match_level
+            biomarker_tumor_matched = self.biomarker_match.tumor_matched
+            biomarker_tumor_match_type = self.biomarker_match.tumor_match_type
+            combination_partners = self.biomarker_match.combination_partners
+
         return FDAApproval(
-            drug_name=self.drug,
+            drug_name=self.drug,  # Already has combination name (e.g., "capivasertib + fulvestrant")
             brand_name=self.brand_name,
             generic_name=self.generic_name,
             indication=self.indications_and_usage,
@@ -129,6 +177,12 @@ class FDALabelEvidence(EvidenceItemBase):
             gene=self.gene,
             locus_variant_match=self.locus_variant_match,
             cancer_type_match=self.cancer_type_match,
+            # Flattened biomarker match fields
+            biomarker_matched=biomarker_matched,
+            biomarker_match_level=biomarker_match_level,
+            biomarker_tumor_matched=biomarker_tumor_matched,
+            biomarker_tumor_match_type=biomarker_tumor_match_type,
+            combination_partners=combination_partners,
         )
 
 
@@ -158,6 +212,13 @@ class FDAApproval(EvidenceItemBase):
     # Note: FDA labels from OpenFDA don't contain this - it comes from CGI/CIViC
     # This field is None for FDA label-derived approvals
     association: str | None = None
+
+    # Flattened BiomarkerMatch fields - populated from FDALabelEvidence.biomarker_match
+    biomarker_matched: bool = False  # Whether the queried variant is covered by this approval
+    biomarker_match_level: str | None = None  # "variant", "codon", "gene", or None
+    biomarker_tumor_matched: bool | None = None  # Whether tumor type matches FDA indication
+    biomarker_tumor_match_type: str | None = None  # "exact", "pan_cancer", or None
+    combination_partners: list[str] = Field(default_factory=list)  # Partner drugs from indication
 
     def extract_approved_variant(self) -> str | None:
         """Extract the specific variant(s) the drug is approved for from indication text.
