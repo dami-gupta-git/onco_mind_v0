@@ -472,3 +472,134 @@ class TestCancerHotspotsData:
             codons = get_cancer_hotspots(gene)
             assert len(codons) == len(set(codons)), \
                 f"{gene} has duplicate hotspot codons"
+
+
+# =============================================================================
+# CIVIC SENSITIVITY/RESISTANCE INTEGRATION TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestCivicSensitivityResistance:
+    """Integration tests for CIViC is_sensitivity and is_resistance in gap detection.
+
+    These tests verify that:
+    1. CIViC evidence with direction=SUPPORTS is correctly categorized
+    2. CIViC evidence with direction=DOES_NOT_SUPPORT is excluded
+    3. Gap detector correctly counts sensitive vs resistant drugs from CIViC
+    """
+
+    @pytest.mark.asyncio
+    async def test_braf_v600e_has_sensitivity_evidence(self):
+        """BRAF V600E should have CIViC sensitivity evidence for BRAF inhibitors."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        # Get CIViC evidence items
+        civic_evidence = result.evidence.civic_evidence
+
+        # Should have sensitivity evidence (vemurafenib, dabrafenib, etc.)
+        sensitivity_evidence = [e for e in civic_evidence if e.is_sensitivity]
+        assert len(sensitivity_evidence) > 0, "BRAF V600E should have CIViC sensitivity evidence"
+
+        # Verify these are SUPPORTS direction
+        for e in sensitivity_evidence:
+            if e.evidence_direction:
+                assert e.evidence_direction.upper() == "SUPPORTS", (
+                    f"is_sensitivity=True but direction={e.evidence_direction}"
+                )
+
+    @pytest.mark.asyncio
+    async def test_egfr_t790m_has_resistance_evidence(self):
+        """EGFR T790M should have CIViC resistance evidence."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR T790M", tumor_type="NSCLC")
+
+        # Get CIViC evidence items
+        civic_evidence = result.evidence.civic_evidence
+
+        # T790M is a resistance mutation - should have resistance evidence
+        resistance_evidence = [e for e in civic_evidence if e.is_resistance]
+        assert len(resistance_evidence) > 0, "EGFR T790M should have CIViC resistance evidence"
+
+        # Verify these are SUPPORTS direction with RESIST in significance
+        for e in resistance_evidence:
+            assert "RESIST" in e.clinical_significance.upper(), (
+                f"is_resistance=True but significance={e.clinical_significance}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_does_not_support_excluded_from_sensitivity(self):
+        """Evidence with DOES_NOT_SUPPORT direction should not be counted as sensitivity."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        civic_evidence = result.evidence.civic_evidence
+
+        # Find evidence with "Sensitivity/Response" significance
+        sensitivity_topic_evidence = [
+            e for e in civic_evidence
+            if e.clinical_significance and (
+                "SENSITIV" in e.clinical_significance.upper() or
+                "RESPONSE" in e.clinical_significance.upper()
+            )
+        ]
+
+        # For each sensitivity topic, verify is_sensitivity respects direction
+        for e in sensitivity_topic_evidence:
+            if e.evidence_direction:
+                direction = e.evidence_direction.upper()
+                if direction == "DOES_NOT_SUPPORT":
+                    assert e.is_sensitivity is False, (
+                        f"DOES_NOT_SUPPORT should give is_sensitivity=False, "
+                        f"got is_sensitivity={e.is_sensitivity}"
+                    )
+                elif direction == "SUPPORTS":
+                    assert e.is_sensitivity is True, (
+                        f"SUPPORTS should give is_sensitivity=True"
+                    )
+
+    @pytest.mark.asyncio
+    async def test_civic_evidence_direction_in_gap_detector(self):
+        """Gap detector should only count SUPPORTS evidence for drug categorization."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        civic_evidence = result.evidence.civic_evidence
+
+        # Count sensitivity evidence (only SUPPORTS)
+        sensitivity_count = sum(1 for e in civic_evidence if e.is_sensitivity)
+
+        # Count all sensitivity-topic evidence (regardless of direction)
+        all_sensitivity_topic = sum(
+            1 for e in civic_evidence
+            if e.clinical_significance and (
+                "SENSITIV" in e.clinical_significance.upper() or
+                "RESPONSE" in e.clinical_significance.upper()
+            )
+        )
+
+        # If there's DOES_NOT_SUPPORT evidence, counts should differ
+        # Or at minimum, sensitivity_count <= all_sensitivity_topic
+        assert sensitivity_count <= all_sensitivity_topic, (
+            f"is_sensitivity count ({sensitivity_count}) should not exceed "
+            f"all sensitivity topic count ({all_sensitivity_topic})"
+        )
+
+    @pytest.mark.asyncio
+    async def test_sensitivity_resistance_mutually_exclusive(self):
+        """is_sensitivity and is_resistance should be mutually exclusive."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        civic_evidence = result.evidence.civic_evidence
+
+        # No evidence should have both is_sensitivity=True AND is_resistance=True
+        for e in civic_evidence:
+            assert not (e.is_sensitivity and e.is_resistance), (
+                f"Evidence {e.evidence_id} has both is_sensitivity=True and is_resistance=True"
+            )

@@ -1023,3 +1023,239 @@ class TestPubMedEvidenceFields:
         assert "Chapman PB et al." in citation
         assert "(2012)" in citation
         assert "PMID: 22735384" in citation
+
+
+class TestEvidenceCivicEvidenceField:
+    """Tests for Evidence.civic_evidence field (list of CIViCEvidence items).
+
+    These tests validate that CIViC evidence items fetched from the GraphQL API
+    are correctly populated in the Evidence model, including computed properties
+    like is_sensitivity and is_resistance.
+    """
+
+    def test_is_sensitivity_supports_direction(self):
+        """is_sensitivity should be True when significance is sensitivity and direction is SUPPORTS."""
+        evidence = CIViCEvidence(
+            evidence_id=1,
+            clinical_significance="Sensitivity/Response",
+            evidence_direction="SUPPORTS",
+        )
+        assert evidence.is_sensitivity is True
+
+    def test_is_sensitivity_does_not_support_direction(self):
+        """is_sensitivity should be False when direction is DOES_NOT_SUPPORT."""
+        evidence = CIViCEvidence(
+            evidence_id=2,
+            clinical_significance="Sensitivity/Response",
+            evidence_direction="DOES_NOT_SUPPORT",
+        )
+        assert evidence.is_sensitivity is False
+
+    def test_is_sensitivity_no_direction(self):
+        """is_sensitivity should default to True when direction is None (backward compat)."""
+        evidence = CIViCEvidence(
+            evidence_id=3,
+            clinical_significance="Sensitivity/Response",
+            evidence_direction=None,
+        )
+        assert evidence.is_sensitivity is True
+
+    def test_is_sensitivity_no_significance(self):
+        """is_sensitivity should be False when clinical_significance is None."""
+        evidence = CIViCEvidence(
+            evidence_id=4,
+            clinical_significance=None,
+            evidence_direction="SUPPORTS",
+        )
+        assert evidence.is_sensitivity is False
+
+    def test_is_sensitivity_non_sensitivity_significance(self):
+        """is_sensitivity should be False for non-sensitivity significance values."""
+        evidence = CIViCEvidence(
+            evidence_id=5,
+            clinical_significance="Resistance",
+            evidence_direction="SUPPORTS",
+        )
+        assert evidence.is_sensitivity is False
+
+    def test_is_resistance_supports_direction(self):
+        """is_resistance should be True when significance is resistance and direction is SUPPORTS."""
+        evidence = CIViCEvidence(
+            evidence_id=6,
+            clinical_significance="Resistance",
+            evidence_direction="SUPPORTS",
+        )
+        assert evidence.is_resistance is True
+
+    def test_is_resistance_does_not_support_direction(self):
+        """is_resistance should be False when direction is DOES_NOT_SUPPORT."""
+        evidence = CIViCEvidence(
+            evidence_id=7,
+            clinical_significance="Resistance",
+            evidence_direction="DOES_NOT_SUPPORT",
+        )
+        assert evidence.is_resistance is False
+
+    def test_is_resistance_no_direction(self):
+        """is_resistance should default to True when direction is None (backward compat)."""
+        evidence = CIViCEvidence(
+            evidence_id=8,
+            clinical_significance="Resistance",
+            evidence_direction=None,
+        )
+        assert evidence.is_resistance is True
+
+    def test_is_resistance_reduced_sensitivity(self):
+        """is_resistance should be True for 'Reduced Sensitivity' (contains 'resist' pattern check)."""
+        evidence = CIViCEvidence(
+            evidence_id=9,
+            clinical_significance="Reduced Sensitivity",
+            evidence_direction="SUPPORTS",
+        )
+        # "Reduced Sensitivity" does NOT contain "RESIST", so should be False
+        assert evidence.is_resistance is False
+
+    def test_sensitivity_response_variants(self):
+        """Test various sensitivity/response significance string formats."""
+        test_cases = [
+            ("Sensitivity/Response", "SUPPORTS", True),
+            ("SENSITIVITYRESPONSE", "SUPPORTS", True),
+            ("Sensitivity", "SUPPORTS", True),
+            ("Response", "SUPPORTS", True),
+            ("sensitivity/response", "SUPPORTS", True),  # lowercase
+        ]
+        for sig, direction, expected in test_cases:
+            evidence = CIViCEvidence(
+                clinical_significance=sig,
+                evidence_direction=direction,
+            )
+            assert evidence.is_sensitivity is expected, (
+                f"Expected is_sensitivity={expected} for sig={sig}, direction={direction}"
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_civic_evidence_clinical_significance_populated(self):
+        """CIViC evidence items should have clinical_significance populated."""
+        from oncomind.api.civic import CIViCClient
+
+        async with CIViCClient() as client:
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=10)
+
+        assert len(evidence_list) >= 1, "BRAF V600E should have CIViC evidence items"
+
+        # At least some evidence should have clinical_significance
+        evidence_with_sig = [e for e in evidence_list if e.clinical_significance]
+        assert len(evidence_with_sig) > 0, (
+            "BRAF V600E should have evidence with clinical_significance"
+        )
+
+        for evidence in evidence_with_sig:
+            assert isinstance(evidence.clinical_significance, str)
+            assert len(evidence.clinical_significance) > 0
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_civic_evidence_is_sensitivity_computed(self):
+        """CIViCEvidence.is_sensitivity should be correctly computed from clinical_significance and evidence_direction."""
+        from oncomind.api.civic import CIViCClient
+
+        async with CIViCClient() as client:
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=20)
+
+        assert len(evidence_list) >= 1
+
+        # BRAF V600E should have sensitivity evidence (responds to BRAF inhibitors)
+        sensitivity_evidence = [e for e in evidence_list if e.is_sensitivity]
+        assert len(sensitivity_evidence) > 0, (
+            "BRAF V600E should have is_sensitivity=True evidence"
+        )
+
+        # Verify the computed property logic
+        for evidence in sensitivity_evidence:
+            sig = evidence.clinical_significance
+            assert sig is not None
+            sig_upper = sig.upper()
+            assert "SENSITIV" in sig_upper or "RESPONSE" in sig_upper, (
+                f"is_sensitivity=True but clinical_significance={sig}"
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_civic_evidence_is_resistance_computed(self):
+        """CIViCEvidence.is_resistance should be correctly computed."""
+        from oncomind.api.civic import CIViCClient
+
+        # EGFR T790M is a known resistance mutation
+        async with CIViCClient() as client:
+            evidence_list = await client.fetch_evidence_items("EGFR", "T790M", max_results=20)
+
+        assert len(evidence_list) >= 1, "EGFR T790M should have CIViC evidence"
+
+        # T790M should have resistance evidence
+        resistance_evidence = [e for e in evidence_list if e.is_resistance]
+
+        # Verify computed property for resistance evidence
+        for evidence in resistance_evidence:
+            sig = evidence.clinical_significance
+            assert sig is not None
+            assert "RESIST" in sig.upper(), (
+                f"is_resistance=True but clinical_significance={sig}"
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_civic_evidence_direction_affects_sensitivity(self):
+        """evidence_direction should affect is_sensitivity computation."""
+        from oncomind.api.civic import CIViCClient
+
+        async with CIViCClient() as client:
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=30)
+
+        # Find evidence with both sensitivity significance and direction populated
+        evidence_with_direction = [
+            e for e in evidence_list
+            if e.clinical_significance and e.evidence_direction
+        ]
+
+        for evidence in evidence_with_direction:
+            sig_upper = evidence.clinical_significance.upper()
+            direction_upper = evidence.evidence_direction.upper()
+
+            is_sens_topic = "SENSITIV" in sig_upper or "RESPONSE" in sig_upper
+
+            if is_sens_topic:
+                # If direction is SUPPORTS, is_sensitivity should be True
+                if direction_upper == "SUPPORTS":
+                    assert evidence.is_sensitivity is True, (
+                        f"SUPPORTS + sensitivity topic should give is_sensitivity=True, "
+                        f"got direction={evidence.evidence_direction}, sig={evidence.clinical_significance}"
+                    )
+                # If direction is DOES_NOT_SUPPORT, is_sensitivity should be False
+                elif direction_upper == "DOES_NOT_SUPPORT":
+                    assert evidence.is_sensitivity is False, (
+                        f"DOES_NOT_SUPPORT + sensitivity topic should give is_sensitivity=False"
+                    )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_civic_evidence_serialization_includes_significance(self):
+        """Serialized CIViC evidence should include clinical_significance and computed flags."""
+        from oncomind.api.civic import CIViCClient
+
+        async with CIViCClient() as client:
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=5)
+
+        assert len(evidence_list) >= 1
+
+        for evidence in evidence_list:
+            data = evidence.model_dump()
+
+            # clinical_significance should be in serialized output
+            assert "clinical_significance" in data
+
+            # Computed properties should also be serialized
+            assert "is_sensitivity" in data
+            assert "is_resistance" in data
+            assert isinstance(data["is_sensitivity"], bool)
+            assert isinstance(data["is_resistance"], bool)

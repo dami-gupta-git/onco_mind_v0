@@ -1403,12 +1403,15 @@ class Evidence(BaseModel):
             # For codon/gene level, exclude if drug has variant-level resistance
             return drug_lower not in variant_resistant_drugs
 
-        # FDA approvals - with cancer specificity and locus match
+        # FDA approvals - with cancer specificity and biomarker match level
+        # Use biomarker_match_level (not locus_match) for FDA because it indicates
+        # whether the approval covers the variant (e.g., "AKT1 alteration" covers E17K)
         for approval in self.fda_approvals:
             drug = approval.generic_name or approval.brand_name or approval.drug_name
             if drug:
                 drug_lower = drug.lower()
-                locus = approval.locus_match or "gene"
+                # Use biomarker_match_level for FDA approvals
+                locus = approval.biomarker_match_level or "gene"
                 cancer_spec = self._get_fda_cancer_specificity(approval)
                 if cancer_spec == "cancer_specific" or cancer_spec == "pan_cancer":
                     if drug_lower in fda_matching_drugs:
@@ -1427,43 +1430,65 @@ class Evidence(BaseModel):
         all_fda_drugs = set(fda_matching_drugs.keys()) | set(fda_other_drugs.keys())
 
         # VICC sensitivity evidence - with locus match
+        # Level D = preclinical, Level A/B/C = clinical
+        # Keep combination drugs together (e.g., "capivasertib + fulvestrant")
+        vicc_preclinical_drugs: dict[str, str] = {}
         for vicc in self.vicc_evidence:
             if vicc.is_sensitivity and vicc.drugs:
                 locus = vicc.locus_match or "gene"
-                for drug in vicc.drugs:
-                    drug_lower = drug.lower()
-                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                is_preclinical = vicc.evidence_level and vicc.evidence_level.upper() == "D"
+                # Join multiple drugs as combination therapy
+                drug_name = " + ".join(sorted(vicc.drugs)) if len(vicc.drugs) > 1 else vicc.drugs[0]
+                drug_lower = drug_name.lower()
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                    if is_preclinical:
+                        if drug_lower in vicc_preclinical_drugs:
+                            vicc_preclinical_drugs[drug_lower] = get_best_locus(vicc_preclinical_drugs[drug_lower], locus)
+                        else:
+                            vicc_preclinical_drugs[drug_lower] = locus
+                    else:
                         if drug_lower in clinical_drugs:
                             clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
                         else:
                             clinical_drugs[drug_lower] = locus
 
-        # CIViC sensitivity assertions - with locus match
+        # CIViC sensitivity assertions - with locus match (assertions are curated, treat as clinical)
+        # Keep combination therapies together
         for assertion in self.civic_assertions:
             if assertion.is_sensitivity and assertion.therapies:
                 locus = assertion.locus_match or "gene"
-                for therapy in assertion.therapies:
-                    drug_lower = therapy.lower()
-                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                # Join multiple therapies as combination
+                drug_name = " + ".join(sorted(assertion.therapies)) if len(assertion.therapies) > 1 else assertion.therapies[0]
+                drug_lower = drug_name.lower()
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                    if drug_lower in clinical_drugs:
+                        clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                    else:
+                        clinical_drugs[drug_lower] = locus
+
+        # CIViC sensitivity evidence items - with locus match
+        # Level D/E = preclinical, Level A/B/C = clinical
+        # Keep combination drugs together (e.g., "capivasertib + fulvestrant")
+        civic_preclinical_drugs: dict[str, str] = {}
+        for evidence in self.civic_evidence:
+            if evidence.is_sensitivity and evidence.drugs:
+                locus = evidence.locus_match or "gene"
+                level = (evidence.evidence_level or "").upper()
+                is_preclinical = level in ("D", "E")
+                # Join multiple drugs as combination therapy
+                drug_name = " + ".join(sorted(evidence.drugs)) if len(evidence.drugs) > 1 else evidence.drugs[0]
+                drug_lower = drug_name.lower()
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                    if is_preclinical:
+                        if drug_lower in civic_preclinical_drugs:
+                            civic_preclinical_drugs[drug_lower] = get_best_locus(civic_preclinical_drugs[drug_lower], locus)
+                        else:
+                            civic_preclinical_drugs[drug_lower] = locus
+                    else:
                         if drug_lower in clinical_drugs:
                             clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
                         else:
                             clinical_drugs[drug_lower] = locus
-
-        # CIViC sensitivity evidence items - with locus match
-        for evidence in self.civic_evidence:
-            if evidence.clinical_significance:
-                sig_upper = evidence.clinical_significance.upper()
-                if ("SENS" in sig_upper or "RESPON" in sig_upper) and "RESIST" not in sig_upper:
-                    if evidence.drugs:
-                        locus = evidence.locus_match or "gene"
-                        for drug in evidence.drugs:
-                            drug_lower = drug.lower()
-                            if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
-                                if drug_lower in clinical_drugs:
-                                    clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
-                                else:
-                                    clinical_drugs[drug_lower] = locus
 
         # CGI sensitivity biomarkers (FDA-approved) - with locus match
         for biomarker in self.cgi_biomarkers:
@@ -1528,8 +1553,8 @@ class Evidence(BaseModel):
                 if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
                     depmap_preclinical_drugs[drug_lower] = "gene"  # DepMap is gene-level
 
-        # Combine all preclinical drugs
-        all_preclinical_drugs = {**cgi_preclinical_drugs, **depmap_preclinical_drugs}
+        # Combine all preclinical drugs (VICC level D, CIViC level D/E, CGI preclinical, DepMap)
+        all_preclinical_drugs = {**vicc_preclinical_drugs, **civic_preclinical_drugs, **cgi_preclinical_drugs, **depmap_preclinical_drugs}
 
         # Build synthesized summary with locus match levels
         summaries = []

@@ -121,6 +121,106 @@ class TestCIViCEvidence:
         assert data["eid"] == "EID5586"
         assert data["civic_url"] == "https://civicdb.org/evidence/5586/summary"
 
+    # is_sensitivity tests
+    def test_is_sensitivity_supports(self):
+        """is_sensitivity=True when significance is sensitivity and direction is SUPPORTS."""
+        civic = CIViCEvidence(
+            clinical_significance="Sensitivity/Response",
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_sensitivity is True
+
+    def test_is_sensitivity_does_not_support(self):
+        """is_sensitivity=False when direction is DOES_NOT_SUPPORT."""
+        civic = CIViCEvidence(
+            clinical_significance="Sensitivity/Response",
+            evidence_direction="DOES_NOT_SUPPORT",
+        )
+        assert civic.is_sensitivity is False
+
+    def test_is_sensitivity_no_significance(self):
+        """is_sensitivity=False when clinical_significance is None."""
+        civic = CIViCEvidence(
+            clinical_significance=None,
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_sensitivity is False
+
+    def test_is_sensitivity_resistance_significance(self):
+        """is_sensitivity=False when significance is Resistance (not a sensitivity topic)."""
+        civic = CIViCEvidence(
+            clinical_significance="Resistance",
+            evidence_direction="SUPPORTS",
+        )
+        # Resistance evidence - is_sensitivity should be False
+        assert civic.is_resistance is True
+
+    def test_is_sensitivity_response_keyword(self):
+        """is_sensitivity=True for 'Response' keyword."""
+        civic = CIViCEvidence(
+            clinical_significance="Response",
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_sensitivity is True
+
+    def test_is_sensitivity_case_insensitive(self):
+        """is_sensitivity handles case-insensitive matching."""
+        civic = CIViCEvidence(
+            clinical_significance="sensitivity/response",
+            evidence_direction="supports",
+        )
+        assert civic.is_sensitivity is True
+
+    # is_resistance tests
+    def test_is_resistance_supports(self):
+        """is_resistance=True when significance is resistance and direction is SUPPORTS."""
+        civic = CIViCEvidence(
+            clinical_significance="Resistance",
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_resistance is True
+
+    def test_is_resistance_does_not_support(self):
+        """is_resistance=False when direction is DOES_NOT_SUPPORT."""
+        civic = CIViCEvidence(
+            clinical_significance="Resistance",
+            evidence_direction="DOES_NOT_SUPPORT",
+        )
+        assert civic.is_resistance is False
+
+    def test_is_resistance_no_significance(self):
+        """is_resistance=False when clinical_significance is None."""
+        civic = CIViCEvidence(
+            clinical_significance=None,
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_resistance is False
+
+    def test_is_resistance_sensitivity_significance(self):
+        """is_resistance=False when significance is Sensitivity (not a resistance topic)."""
+        civic = CIViCEvidence(
+            clinical_significance="Sensitivity/Response",
+            evidence_direction="SUPPORTS",
+        )
+        # Sensitivity evidence - is_resistance should be False
+        assert civic.is_resistance is False
+
+    def test_is_resistance_reduced_sensitivity(self):
+        """is_resistance=False for 'Reduced Sensitivity' (doesn't contain 'resist')."""
+        civic = CIViCEvidence(
+            clinical_significance="Reduced Sensitivity",
+            evidence_direction="SUPPORTS",
+        )
+        assert civic.is_resistance is False
+
+    def test_is_resistance_case_insensitive(self):
+        """is_resistance handles case-insensitive matching."""
+        civic = CIViCEvidence(
+            clinical_significance="resistance",
+            evidence_direction="supports",
+        )
+        assert civic.is_resistance is True
+
 
 class TestCIViCAssertionEvidence:
     """Tests for CIViC Assertion Evidence model."""

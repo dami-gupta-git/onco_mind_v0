@@ -397,6 +397,13 @@ class VICCClient:
             if assoc.source and assoc.source.lower() == "molecularmatch":
                 continue
 
+            # Filter out CIViC data from VICC - we get CIViC directly with evidence_direction
+            # VICC doesn't pass through evidence_direction, so CIViC via VICC loses the
+            # SUPPORTS/DOES_NOT_SUPPORT distinction (e.g., MK-2206 shows "Sensitivity"
+            # when paper actually says "did not show sensitivity")
+            if assoc.source and assoc.source.lower() == "civic":
+                continue
+
             if tumor_type and not is_pan_cancer_term(assoc.disease) and not tumor_types_match(assoc.disease, tumor_type):
                 continue
 

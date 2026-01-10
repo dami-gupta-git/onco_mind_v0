@@ -159,6 +159,7 @@ def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
             "pmid": e.pmid,
             "source_url": e.source_url,
             "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
+            "evidence_direction": e.evidence_direction,
             # Match specificity tracking
             "locus_match": e.locus_match,
             "matched_profile": e.matched_profile,
