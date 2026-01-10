@@ -858,13 +858,15 @@ with tab1:
 
                             for v in vicc:
                                 level = str(v.get('evidence_level', '')).upper()
-                                if level in ['1', 'A', 'AMP_1', 'TIER_1', 'TIER I', 'TIER_I']:
+                                # Extract tier from combined formats like "2C", "3A", etc.
+                                tier = level[0] if level and level[0].isdigit() else None
+                                if level in ['1', 'A', 'AMP_1', 'TIER_1', 'TIER I', 'TIER_I'] or tier == '1':
                                     level_groups["fda"].append(v)
-                                elif level in ['2', 'B', 'AMP_2', 'TIER_2', 'TIER II', 'TIER_II']:
+                                elif level in ['2', 'B', 'AMP_2', 'TIER_2', 'TIER II', 'TIER_II'] or tier == '2':
                                     level_groups["clinical"].append(v)
-                                elif level in ['3', 'C', 'AMP_3', 'TIER_3', 'TIER III', 'TIER_III']:
+                                elif level in ['3', 'C', 'AMP_3', 'TIER_3', 'TIER III', 'TIER_III'] or tier == '3':
                                     level_groups["case"].append(v)
-                                elif level in ['4', 'D', 'AMP_4', 'TIER_4', 'TIER IV', 'TIER_IV']:
+                                elif level in ['4', 'D', 'AMP_4', 'TIER_4', 'TIER IV', 'TIER_IV'] or tier == '4':
                                     level_groups["preclin"].append(v)
                                 elif level.startswith('R'):
                                     level_groups["resist"].append(v)
@@ -893,7 +895,20 @@ with tab1:
                                     drugs_list = v.get('drugs', [])
                                     drugs = ", ".join(drugs_list) or "N/A"
                                     drugs = drugs[:30] if len(drugs) > 30 else drugs
+                                    # Handle response_type - some sources (molecularmatch) return AMP level codes
+                                    # like "2C" instead of clinical response types like "Sensitive"
                                     response = v.get('response_type', 'Unknown')
+                                    import re
+                                    if response and re.match(r'^[1234][A-D]?$', response.upper()):
+                                        # This is an AMP tier code, not a response type
+                                        # Try to infer from description or show as unknown
+                                        desc = (v.get('description') or '').lower()
+                                        if 'sensitivity' in desc or 'sensitive' in desc or 'response' in desc:
+                                            response = 'sensitive'
+                                        elif 'resistance' in desc or 'resistant' in desc:
+                                            response = 'resistant'
+                                        else:
+                                            response = '-'
                                     disease = (v.get('disease', '') or '')[:25]
 
                                     if show_fda_cols:

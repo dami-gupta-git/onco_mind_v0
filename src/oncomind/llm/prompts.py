@@ -33,46 +33,45 @@ When has_tumor_specific_cbioportal_data is FALSE:
 - Do NOT say "Pan-cancer data" or "no prevalence available" - just skip this topic entirely
 - Focus on other evidence sources (FDA, CIViC, VICC, etc.) for therapeutic context
 
-=== CANCER HOTSPOTS DATA (MUST INCLUDE) ===
+=== CANCER HOTSPOTS DATA (MUST INCLUDE WITH ATTRIBUTION) ===
 
 When BIOLOGICAL CONTEXT contains "CANCER HOTSPOT" data, you MUST include this in your biological_context output:
-- This is from cancerhotspots.org (MSK) - statistically significant recurrent mutation sites across large-scale cancer genomics studies
+- ALWAYS cite the source: "In the Cancer Hotspots database (cancerhotspots.org), ..."
+- This is statistically significant recurrent mutation sites across large-scale cancer genomics studies
 - ALWAYS mention: (1) that it's a known hotspot, (2) the q-value significance, (3) total samples observed
 - Note if queried variant is "exact variant match" (most common change) vs "codon-level match" (same position, different AA)
 - Include the variant distribution (e.g., "V600E accounts for 93% of mutations at this position")
 - Include top tumor types where this hotspot is most frequent
-- Example synthesis: "BRAF V600 is a statistically significant cancer hotspot (q<1e-10, 897 samples) with V600E being the dominant change (93%). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
+- Example synthesis: "In the Cancer Hotspots database, BRAF V600 is a statistically significant cancer hotspot (q<1e-10) observed in 897 cancer samples, with V600E being the dominant change (93%). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
 
 === MATCH SPECIFICITY (CRITICAL) ===
 
-Always indicate both LOCUS match and TUMOR match level for therapeutic evidence:
+FDA approvals are categorized by whether they COVER the queried variant:
 
-LOCUS MATCH (variant specificity):
-- VARIANT-LEVEL: Evidence directly studied for THIS specific variant
-- CODON-LEVEL: Evidence from OTHER variants at same codon (e.g., Q209P data applied to Q209L)
-- GENE-LEVEL: Evidence from gene-level studies (any mutation in the gene)
+MATCHED APPROVALS (drug covers this variant - present confidently):
+- If FDA approval says "[GENE] alteration/mutation" (e.g., "AKT1 alteration"), it COVERS any variant in that gene
+- If FDA approval says specific variant and patient has that variant, it's a direct match
+- Do NOT hedge or add caveats like "gene-level rather than variant-specific" - the drug IS approved for this variant
+
+UNMATCHED NEAR-MISSES (drug does NOT cover this variant - flag clearly):
+- Listed under "FDA Codon-Level (not for queried variant)" in evidence
+- Example: sotorasib approved for G12C, patient has G12A - drug is NOT approved for this variant
+- State explicitly: "approved for [approved variant], not [queried variant]"
 
 TUMOR MATCH (cancer specificity):
 - CANCER-SPECIFIC: Evidence from the patient's tumor type ({tumor_type})
 - PAN-CANCER: Tumor-agnostic evidence (e.g., MSI-H, Solid Tumor)
 - OTHER CANCER: Evidence from a different specific cancer type
 
-Format therapeutic entries as: "drug (locus-level, approved for VARIANT, tumor-context)"
-IMPORTANT: When evidence says "approved for [VARIANT]", ALWAYS include the variant info.
-NEVER say "approved for any [GENE] mutation" - most targeted therapies are approved for SPECIFIC variants only.
-Examples:
-- "osimertinib (variant-level, approved for T790M, NSCLC)" - best evidence, variant-specific
-- "sotorasib (gene-level, approved for G12C, NSCLC)" - G12C-specific drug used for other KRAS variant
-- "adagrasib (gene-level, approved for G12C, not pancreatic)" - different tumor AND different variant
-- "MEK inhibitors (codon-level from Q209P, melanoma)" - same codon, different AA
-- "gefitinib (codon-level, approved for exon 19 del/L858R, NSCLC)" - approved for specific sensitizing mutations, NOT for T790M or other variants
-- "erlotinib (codon-level, approved for exon 19 del/L858R, NSCLC)" - same as gefitinib, specific variants only
+Format therapeutic entries as: "drug (tumor-context)" for matched approvals.
+For unmatched near-misses: "drug (approved for [variant], not for queried variant)"
 
-CODON-LEVEL EVIDENCE WARNING:
-When evidence comes from OTHER variants at the same codon (e.g., Q209P data applied to Q209L):
-- State explicitly: "Evidence from [other variant] at same codon; [queried variant]-specific data limited"
-- Note that different amino acid substitutions can have distinct signaling and drug-response profiles
-- Flag this as a knowledge gap requiring variant-specific validation
+CODON-LEVEL NEAR-MISS WARNING:
+When "FDA Codon-Level (not for queried variant)" section shows drugs:
+- These drugs are approved for OTHER variants at the same codon position
+- The approval does NOT extend to the queried variant
+- Example: KRAS G12C drugs (sotorasib, adagrasib) do NOT cover G12A, G12D, G12V, etc.
+- Mention these as "drugs exist for related variants but not approved for [queried variant]"
 
 If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type})", report it as approved for that other cancer, NOT {tumor_type}.
 

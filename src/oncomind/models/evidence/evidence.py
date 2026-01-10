@@ -472,14 +472,13 @@ class Evidence(BaseModel):
                         # Map CIViC evidence level (A-E) to standard format
                         evidence_level = self._civic_level_to_evidence_level(civic.evidence_level)
 
-                        # Determine response type from clinical_significance
+                        # Determine response type using computed properties
+                        # (these check both clinical_significance AND evidence_direction)
                         response_type = None
-                        if civic.clinical_significance:
-                            sig_upper = civic.clinical_significance.upper()
-                            if "SENSITIV" in sig_upper or "RESPONSE" in sig_upper:
-                                response_type = "Sensitivity"
-                            elif "RESIST" in sig_upper:
-                                response_type = "Resistance"
+                        if civic.is_sensitivity:
+                            response_type = "Sensitivity"
+                        elif civic.is_resistance:
+                            response_type = "Resistance"
 
                         evidence_list.append(TherapeuticData(
                             drug_name=drug,
@@ -672,15 +671,24 @@ class Evidence(BaseModel):
 
         # From FDA approvals
         for approval in self.fda_approvals:
-            drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
+            # For combinations (contain "+"), use drug_name as key; otherwise use generic/brand
+            is_combination = approval.drug_name and "+" in approval.drug_name
+            if is_combination:
+                drug_key = approval.drug_name.lower()
+            else:
+                drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
             assoc_key = (approval.association or "").lower()
             entry_key = (drug_key, assoc_key)
             if drug_key and entry_key not in seen_entries:
                 seen_entries.add(entry_key)
 
-                drug_name = approval.brand_name or approval.generic_name or approval.drug_name
-                if approval.generic_name and approval.brand_name:
+                # For combinations, use the full combination name
+                if is_combination:
+                    drug_name = approval.drug_name
+                elif approval.generic_name and approval.brand_name:
                     drug_name = f"{approval.generic_name} ({approval.brand_name})"
+                else:
+                    drug_name = approval.brand_name or approval.generic_name or approval.drug_name
 
                 cancer_specificity = self._get_fda_cancer_specificity(approval)
 
@@ -849,12 +857,11 @@ class Evidence(BaseModel):
             # Level A/B = 2, Level C/D/E = 1
             weight = 2 if civic.evidence_level in ("A", "B") else 1
 
-            if civic.clinical_significance:
-                sig_upper = civic.clinical_significance.upper()
-                if "RESIST" in sig_upper:
-                    resistance_score += weight
-                elif "SENSITIV" in sig_upper or "RESPONSE" in sig_upper:
-                    sensitivity_score += weight
+            # Use computed properties that check both clinical_significance AND evidence_direction
+            if civic.is_resistance:
+                resistance_score += weight
+            elif civic.is_sensitivity:
+                sensitivity_score += weight
 
         # Check CGI biomarkers
         for biomarker in self.cgi_biomarkers:
@@ -1591,6 +1598,8 @@ class Evidence(BaseModel):
                 drug = therapy.drug_name
 
                 # Build annotation parts
+                # NOTE: Do NOT include locus_match level for matched drugs - it causes LLM to hedge
+                # If the drug is in fda_from_fda, it's already matched (biomarker_matched=True)
                 parts = []
 
                 # Add response type (Sensitivity/Resistance) - critical for LLM
@@ -1601,12 +1610,6 @@ class Evidence(BaseModel):
                 if therapy.clinical_context:
                     parts.append(therapy.clinical_context)
 
-                # Add match level
-                if therapy.locus_match == "variant":
-                    parts.append("variant-level")
-                elif therapy.locus_match:
-                    parts.append(f"{therapy.locus_match}-level")
-
                 # Add tumor match info
                 if therapy.cancer_specificity == "cancer_specific":
                     parts.append(tumor_type)
@@ -1615,6 +1618,25 @@ class Evidence(BaseModel):
 
                 fda_drugs.append(f"{drug} ({', '.join(parts)})" if parts else drug)
             lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
+
+        # FDA Codon-Level Near-Misses - drugs approved for OTHER variants at same codon
+        # e.g., KRAS G12C drugs (sotorasib, adagrasib) when patient has G12A
+        # These are NOT matched (biomarker_matched=False) but are at codon-level
+        codon_near_misses = []
+        for approval in self.fda_approvals:
+            # Only include if NOT matched but has codon-level match
+            if not approval.biomarker_matched and approval.biomarker_match_level == "codon":
+                # Use drug_name first - it may contain combination name (e.g., "capivasertib + fulvestrant")
+                drug_name = approval.drug_name or approval.generic_name or approval.brand_name
+                if drug_name and not is_biomarker_selection_drug(drug_name, gene):
+                    # Extract what variant it's actually approved for
+                    approved_variant = approval.extract_approved_variant()
+                    if approved_variant:
+                        codon_near_misses.append(f"{drug_name} (approved for {approved_variant})")
+                    else:
+                        codon_near_misses.append(drug_name)
+        if codon_near_misses:
+            lines.append(f"FDA Codon-Level (not for queried variant): {', '.join(codon_near_misses[:4])}")
 
         # CGI Biomarkers - compact (filter out biomarker selection drugs)
         if self.cgi_biomarkers:
@@ -1658,13 +1680,12 @@ class Evidence(BaseModel):
                     if not filtered_drugs:
                         continue
                     drug_str = ", ".join(filtered_drugs[:2])
+                    # Use computed properties that check both clinical_significance AND evidence_direction
                     sig = ""
-                    if e.clinical_significance:
-                        sig_upper = e.clinical_significance.upper()
-                        if "RESIST" in sig_upper:
-                            sig = "res"
-                        elif "SENS" in sig_upper or "RESPON" in sig_upper:
-                            sig = "sens"
+                    if e.is_resistance:
+                        sig = "res"
+                    elif e.is_sensitivity:
+                        sig = "sens"
                     if sig:
                         civic_eid_drugs.append(f"{drug_str} ({sig})")
                     else:
@@ -1711,7 +1732,13 @@ class Evidence(BaseModel):
                         conds += f" (+{len(entry.conditions) - 2} more)"
                     parts.append(f"conditions: {conds}")
                 if parts:
-                    clinvar_summaries.append(" | ".join(parts))
+                    summary_text = " | ".join(parts)
+                    # Add link if variation_id exists
+                    url = entry.get_url()
+                    if url:
+                        clinvar_summaries.append(f"[{summary_text}]({url})")
+                    else:
+                        clinvar_summaries.append(summary_text)
             if clinvar_summaries:
                 lines.append(f"ClinVar ({len(self.clinvar_entries)} entries):")
                 for i, summary in enumerate(clinvar_summaries, 1):

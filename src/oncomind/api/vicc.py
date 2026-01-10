@@ -392,6 +392,11 @@ class VICCClient:
             if assoc is None:
                 continue
 
+            # Filter out MolecularMatch data - it has unreliable response_type values
+            # (returns AMP tier codes like "2C" instead of clinical response types)
+            if assoc.source and assoc.source.lower() == "molecularmatch":
+                continue
+
             if tumor_type and not is_pan_cancer_term(assoc.disease) and not tumor_types_match(assoc.disease, tumor_type):
                 continue
 
