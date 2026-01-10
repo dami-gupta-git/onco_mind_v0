@@ -68,7 +68,6 @@ from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
 
 from oncomind.insight_builder.fda_processor import (
     convert_fda_labels_to_approvals,
-    enrich_fda_with_tumor_match,
     sort_fda_by_association,
     populate_locus_variant_match,
 )
@@ -641,7 +640,11 @@ class EvidenceAggregator:
             gene=gene,
             fetch_missing=True,
         )
-        populate_locus_variant_match(evidence.fda_labels, query_variant=normalized_variant)
+        populate_locus_variant_match(
+            evidence.fda_labels,
+            query_variant=normalized_variant,
+            query_tumor=resolved_tumor,
+        )
 
         # Convert FDA labels to FDAApproval objects for LLM consumption
         # Uses already-processed FDALabelEvidence which has locus_variant_match computed

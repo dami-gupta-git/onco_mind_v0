@@ -59,6 +59,85 @@ class PubMedArticle:
     keywords: list[str]
     url: str
 
+    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+        """Check if article mentions the gene and/or variant with codon-level matching.
+
+        Uses parse_biomarker_specificity() to extract what variant the article describes,
+        then is_variant_covered() to compare against the query. This enables proper
+        codon-level matching (e.g., G12C article matches G12D query at codon level).
+
+        Args:
+            variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
+            gene: Gene symbol (e.g., "NRAS", "BRAF"). If provided, ensures
+                  the variant is mentioned in context of this gene.
+
+        Returns:
+            Tuple of (match_type, matched_biomarker):
+            - ("variant", "KRAS G12C") - exact variant match
+            - ("codon", "KRAS G12") - same codon, different variant
+            - ("ambiguous", "KRAS G12") - gene found and ambiguous variant
+            - ("gene", "KRAS") - only gene found in text
+            - ("none", None) - no match found
+        """
+        from oncomind.config.constants import BROAD_VARIANTS
+        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
+
+        gene_upper = gene.upper() if gene else None
+
+        # Combine title and abstract to search
+        full_text = f"{self.title or ''} {self.abstract or ''}"
+        full_text_upper = full_text.upper()
+
+        gene_found = gene_upper and gene_upper in full_text_upper
+
+        if not gene_found:
+            return ('none', None)
+
+        # Use parse_biomarker_specificity to extract what the article describes
+        biomarker_spec = parse_biomarker_specificity(full_text, gene)
+
+        if biomarker_spec and variant:
+            # Use is_variant_covered for proper codon-level matching
+            covered, match_level = is_variant_covered(variant, biomarker_spec)
+
+            if match_level == "variant":
+                matched_var = biomarker_spec.get("specified_variant")
+                if not matched_var and biomarker_spec.get("specified_variants"):
+                    matched_var = next(
+                        (v for v in biomarker_spec["specified_variants"]
+                         if v.upper() == variant.upper()),
+                        biomarker_spec["specified_variants"][0]
+                    )
+                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                return ('variant', biomarker)
+
+            elif match_level == "codon":
+                codon = biomarker_spec.get("codon")
+                biomarker = f"{gene} {codon}" if codon else gene
+                return ('codon', biomarker)
+
+            elif match_level == "gene":
+                return ('gene', gene)
+
+        # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
+        ambig_variants = [
+            (g, v) for (g, v) in BROAD_VARIANTS
+            if g.upper() in full_text_upper and v.upper() in full_text_upper
+        ]
+        matched_ambig = next(
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
+            None
+        )
+        if matched_ambig:
+            g, v = matched_ambig
+            return ('ambiguous', f"{g} {v}")
+
+        # Gene-level only
+        if gene_found:
+            return ('gene', gene)
+
+        return ('none', None)
+
     def mentions_resistance(self) -> bool:
         """Check if article mentions resistance."""
         text = f"{self.title or ''} {self.abstract or ''}".lower()
@@ -630,11 +709,58 @@ class PubMedClient:
                 merged_articles.append(article)
 
         # Convert to PubMedEvidence, skipping articles with no title
+        from oncomind.models.evidence.base import EvidenceLevel
+
         evidence_list = []
         for article in merged_articles:
             # Skip articles without titles (malformed records)
             if not article.title:
                 continue
+
+            # Determine locus_variant_match using mentions_variant
+            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
+            match_type, matched_biomarker = article.mentions_variant(variant, gene=gene)
+
+            locus_variant_match = None
+            if match_type == "variant":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "codon":
+                locus_variant_match = EvidenceLevel(
+                    level="codon",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "ambiguous":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="ambiguous",
+                    origin="kb",
+                )
+            elif match_type == "gene":
+                locus_variant_match = EvidenceLevel(
+                    level="gene",
+                    scope="unspecified",
+                    origin="kb",
+                )
+            # else: match_type == "none", locus_variant_match stays None
+
+            # Build cancer_type_match based on whether article mentions the queried tumor type
+            # We fetch articles broadly, but track whether each matches the queried tumor
+            cancer_type_match = None
+            if tumor_type:
+                from oncomind.models.evidence.base import tumor_types_match
+                full_text = f"{article.title or ''} {article.abstract or ''}"
+                tumor_matches = tumor_types_match(full_text, tumor_type)
+                cancer_type_match = EvidenceLevel(
+                    level="cancer_specific" if tumor_matches else "pan_cancer",
+                    scope="specific" if tumor_matches else "unspecified",
+                    origin="kb",
+                )
+
             evidence_list.append(PubMedEvidence(
                 pmid=article.pmid,
                 title=article.title,
@@ -646,6 +772,8 @@ class PubMedClient:
                 url=article.url,
                 signal_type=article.get_signal_type(),
                 drugs_mentioned=article.extract_drug_mentions(),
+                locus_variant_match=locus_variant_match,
+                cancer_type_match=cancer_type_match,
             ))
 
         return evidence_list

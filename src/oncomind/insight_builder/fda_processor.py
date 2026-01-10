@@ -300,20 +300,24 @@ def match_fda_approval(
 
 
 def populate_locus_variant_match(
-    fda_labels: list[FDALabelEvidence], query_variant: str | None = None
+    fda_labels: list[FDALabelEvidence],
+    query_variant: str | None = None,
+    query_tumor: str | None = None,
 ) -> None:
-    """Populate locus_variant_match and biomarker_match fields on FDALabelEvidence.
+    """Populate locus_variant_match, cancer_type_match, and biomarker_match on FDALabelEvidence.
 
     Determines the relationship between the queried variant and the approved
-    variant (variant/codon/gene match) and sets both:
-    - locus_variant_match: EvidenceLevel for consistency with other evidence types
-    - biomarker_match: BiomarkerMatch with matched bool and match_level
+    variant (variant/codon/gene match) and sets:
+    - locus_variant_match: EvidenceLevel for variant/codon/gene match level
+    - cancer_type_match: EvidenceLevel for tumor type match (cancer_specific/pan_cancer/other)
+    - biomarker_match: BiomarkerMatch with matched bool, match_level, and tumor_matched
 
     Modifies fda_labels in place.
 
     Args:
         fda_labels: List of FDALabelEvidence to populate
         query_variant: The variant being queried (e.g., "E17K", "G12C")
+        query_tumor: The tumor type being queried (e.g., "colorectal cancer", "NSCLC")
     """
     for label in fda_labels:
         # Parse biomarker specificity to determine locus_variant_match
@@ -323,6 +327,20 @@ def populate_locus_variant_match(
             biomarker_spec = parse_biomarker_specificity(
                 label.indications_and_usage, label.gene
             )
+
+            # Compute tumor match using to_approval().parse_indication_for_tumor()
+            tumor_matched = None
+            tumor_match_type = None
+            if query_tumor:
+                approval = label.to_approval()
+                tumor_result = approval.parse_indication_for_tumor(query_tumor)
+                tumor_matched = tumor_result.get('tumor_match', False)
+                # Determine if it's a pan-cancer approval
+                if tumor_matched and is_pan_cancer_term(label.indications_and_usage):
+                    tumor_match_type = "pan_cancer"
+                elif tumor_matched:
+                    tumor_match_type = "exact"
+
             if biomarker_spec:
                 # Determine locus_level based on queried variant vs approved variant
                 if query_variant:
@@ -330,10 +348,12 @@ def populate_locus_variant_match(
                     covered, match_level = is_variant_covered(query_variant, biomarker_spec)
                     partners = extract_combination_partners(label.indications_and_usage)
 
-                    # Set biomarker_match
+                    # Set biomarker_match with tumor info
                     label.biomarker_match = BiomarkerMatch(
                         matched=covered,
                         match_level=match_level,
+                        tumor_matched=tumor_matched,
+                        tumor_match_type=tumor_match_type,
                         combination_partners=partners,
                     )
 
@@ -356,8 +376,38 @@ def populate_locus_variant_match(
                     label.biomarker_match = BiomarkerMatch(
                         matched=True,  # Gene-level means any variant is covered
                         match_level="gene",
+                        tumor_matched=tumor_matched,
+                        tumor_match_type=tumor_match_type,
                         combination_partners=partners,
                     )
+            elif query_tumor and tumor_matched is not None:
+                # No biomarker spec but we have tumor match info (e.g., MSI-H/dMMR phenotype approvals)
+                partners = extract_combination_partners(label.indications_and_usage)
+                label.biomarker_match = BiomarkerMatch(
+                    matched=False,  # No variant match since no biomarker spec
+                    match_level=None,
+                    tumor_matched=tumor_matched,
+                    tumor_match_type=tumor_match_type,
+                    combination_partners=partners,
+                )
+
+            # Set cancer_type_match based on tumor matching result
+            # This enables tumor_match computed property to work correctly
+            if query_tumor and tumor_matched is not None:
+                if tumor_matched:
+                    # Tumor matches - determine if pan-cancer or cancer-specific
+                    level = "pan_cancer" if tumor_match_type == "pan_cancer" else "cancer_specific"
+                else:
+                    # Tumor doesn't match - try to extract what cancer the approval IS for
+                    approval = label.to_approval()
+                    extracted_cancer = approval.extract_indication_cancer_type()
+                    level = extracted_cancer if extracted_cancer else "pan_cancer"
+
+                label.cancer_type_match = EvidenceLevel(
+                    level=level,
+                    scope="specific" if tumor_matched else "unspecified",
+                    origin="kb",
+                )
 
 
 def convert_fda_labels_to_approvals(
@@ -384,55 +434,6 @@ def convert_fda_labels_to_approvals(
         except Exception as e:
             logger.warning(f"Failed to convert FDA label to FDA approval: {e}")
     return fda_approvals
-
-
-def enrich_fda_with_tumor_match(
-    approvals: list[FDAApproval],
-    tumor_type: str | None,
-) -> list[FDAApproval]:
-    """Enrich FDA approvals with cancer_type_match based on tumor type.
-
-    Uses parse_indication_for_tumor() to determine if the approval
-    matches the queried tumor type, then sets cancer_type_match
-    for consistency with ClinicalTrialEvidence.
-
-    Args:
-        approvals: List of FDAApproval objects
-        tumor_type: The queried tumor type (may be None)
-
-    Returns:
-        Same list with cancer_type_match populated
-    """
-    if not tumor_type:
-        # No tumor type to match against - leave cancer_type_match as None
-        return approvals
-
-    for approval in approvals:
-        # Use existing parse_indication_for_tumor method
-        parsed = approval.parse_indication_for_tumor(tumor_type)
-        tumor_match = parsed.get('tumor_match', False)
-
-        # Check for pan-cancer / tumor-agnostic approvals (MSI-H, NTRK, etc.)
-        # Uses centralized is_pan_cancer_term() which handles substring matching
-        is_pan_cancer = is_pan_cancer_term(approval.indication)
-
-        if tumor_match:
-            if is_pan_cancer:
-                level = "pan_cancer"
-            else:
-                level = "cancer_specific"
-        else:
-            # Not a match - extract what cancer it IS for
-            extracted_cancer = approval.extract_indication_cancer_type()
-            level = extracted_cancer if extracted_cancer else "pan_cancer"
-
-        approval.cancer_type_match = EvidenceLevel(
-            level=level,
-            scope="specific" if tumor_match else "unspecified",
-            origin="kb",
-        )
-
-    return approvals
 
 
 def sort_fda_by_association(approvals: list[FDAApproval]) -> list[FDAApproval]:

@@ -48,6 +48,8 @@ class BiomarkerMatch(BaseModel):
     """
     matched: bool = False  # Whether the variant is covered by FDA approval
     match_level: str | None = None  # "variant", "codon", "gene", "contraindicated", or None
+    tumor_matched: bool | None = None  # Whether the tumor type matches FDA indication
+    tumor_match_type: str | None = None  # "exact", "pan_cancer", or None
     combination_partners: list[str] = Field(default_factory=list)  # Partner drugs from indication
 
 

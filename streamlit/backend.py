@@ -292,6 +292,8 @@ def _build_response(result) -> Dict[str, Any]:
                 "biomarker_match": {
                     "matched": l.biomarker_match.matched,
                     "match_level": l.biomarker_match.match_level,
+                    "tumor_matched": l.biomarker_match.tumor_matched,
+                    "tumor_match_type": l.biomarker_match.tumor_match_type,
                     "combination_partners": l.biomarker_match.combination_partners,
                 } if l.biomarker_match else None,
             }
