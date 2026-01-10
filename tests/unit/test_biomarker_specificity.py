@@ -354,3 +354,133 @@ class TestIsVariantCovered:
         covered, level = is_variant_covered("K601E", specificity)
         assert covered is False
         assert level is None
+
+
+class TestTumorMatching:
+    """Tests for tumor type matching in populate_locus_variant_match."""
+
+    def test_tumor_match_nsclc(self):
+        """Test tumor matching for NSCLC."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="indicated for KRAS G12C-mutated non-small cell lung cancer",
+        )
+
+        populate_locus_variant_match([label], query_variant="G12C", query_tumor="NSCLC")
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True
+        assert label.biomarker_match.match_level == "variant"
+        assert label.biomarker_match.tumor_matched is True
+        assert label.biomarker_match.tumor_match_type == "exact"
+
+    def test_tumor_match_different_cancer(self):
+        """Test tumor mismatch when cancer type differs."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="indicated for KRAS G12C-mutated non-small cell lung cancer",
+        )
+
+        populate_locus_variant_match([label], query_variant="G12C", query_tumor="colorectal cancer")
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True  # Variant matches
+        assert label.biomarker_match.tumor_matched is False  # But tumor doesn't
+
+    def test_tumor_match_no_tumor_provided(self):
+        """Test that tumor_matched is None when no tumor type is provided."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="sotorasib",
+            gene="KRAS",
+            indications_and_usage="indicated for KRAS G12C-mutated non-small cell lung cancer",
+        )
+
+        populate_locus_variant_match([label], query_variant="G12C", query_tumor=None)
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True
+        assert label.biomarker_match.tumor_matched is None
+        assert label.biomarker_match.tumor_match_type is None
+
+    def test_tumor_match_pan_cancer_msi_h(self):
+        """Test pan-cancer MSI-H approval matches any solid tumor."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="pembrolizumab",
+            gene="MSH2",
+            indications_and_usage="[FDA APPROVED FOR MSI-H/dMMR] for MSI-H or dMMR cancer that has progressed",
+        )
+
+        populate_locus_variant_match([label], query_variant="E17K", query_tumor="endometrial cancer")
+
+        assert label.biomarker_match is not None
+        # MSI-H is phenotype-based, not gene-based, so variant match is False
+        assert label.biomarker_match.tumor_matched is True
+        assert label.biomarker_match.tumor_match_type == "pan_cancer"
+
+    def test_tumor_match_breast_cancer(self):
+        """Test tumor matching for breast cancer with AKT1."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="capivasertib",
+            gene="AKT1",
+            indications_and_usage="TRUQAP is indicated for HR-positive, HER2-negative breast cancer with PIK3CA/AKT1/PTEN -alteration",
+        )
+
+        populate_locus_variant_match([label], query_variant="E17K", query_tumor="breast cancer")
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True  # Gene-level approval covers E17K
+        assert label.biomarker_match.match_level == "gene"
+        assert label.biomarker_match.tumor_matched is True
+        assert label.biomarker_match.tumor_match_type == "exact"
+
+    def test_tumor_match_melanoma_braf(self):
+        """Test tumor matching for melanoma with BRAF V600."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="vemurafenib",
+            gene="BRAF",
+            indications_and_usage="ZELBORAF is indicated for unresectable or metastatic melanoma with BRAF V600 mutation",
+        )
+
+        populate_locus_variant_match([label], query_variant="V600E", query_tumor="melanoma")
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True
+        assert label.biomarker_match.match_level == "codon"
+        assert label.biomarker_match.tumor_matched is True
+
+    def test_tumor_match_melanoma_wrong_tumor(self):
+        """Test tumor mismatch when BRAF melanoma drug queried for NSCLC."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+        from oncomind.models.evidence.fda import FDALabelEvidence
+
+        label = FDALabelEvidence(
+            drug="vemurafenib",
+            gene="BRAF",
+            indications_and_usage="ZELBORAF is indicated for unresectable or metastatic melanoma with BRAF V600 mutation",
+        )
+
+        populate_locus_variant_match([label], query_variant="V600E", query_tumor="NSCLC")
+
+        assert label.biomarker_match is not None
+        assert label.biomarker_match.matched is True  # Variant matches at codon level
+        assert label.biomarker_match.tumor_matched is False  # But tumor doesn't match

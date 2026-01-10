@@ -74,7 +74,11 @@ class ClinicalTrial:
         ]
 
     def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
-        """Check if trial mentions the gene and/or variant.
+        """Check if trial mentions the gene and/or variant with codon-level matching.
+
+        Uses parse_biomarker_specificity() to extract what variant the trial describes,
+        then is_variant_covered() to compare against the query. This enables proper
+        codon-level matching (e.g., G12C trial matches G12D query at codon level).
 
         Args:
             variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
@@ -84,49 +88,79 @@ class ClinicalTrial:
 
         Returns:
             Tuple of (match_type, matched_biomarker):
-            - ("specific", "KRAS G12D") - both gene and variant found in text
+            - ("variant", "KRAS G12C") - exact variant match
+            - ("codon", "KRAS G12") - same codon, different variant (e.g., G12C trial, G12D query)
             - ("ambiguous", "KRAS G12") - gene found and ambiguous variant in BROAD_VARIANTS
             - ("gene", "KRAS") - only gene found in text
             - ("none", None) - no match found
         """
         from oncomind.config.constants import BROAD_VARIANTS
+        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
 
         gene_upper = gene.upper() if gene else None
-        variant_upper = variant.upper() if variant else None
 
         # Combine all text to search
-        search_texts = [self.title.upper()]
+        search_texts = [self.title]
         if self.eligibility_criteria:
-            search_texts.append(self.eligibility_criteria.upper())
+            search_texts.append(self.eligibility_criteria)
         if self.brief_summary:
-            search_texts.append(self.brief_summary.upper())
+            search_texts.append(self.brief_summary)
 
         full_text = " ".join(search_texts)
+        full_text_upper = full_text.upper()
 
-        gene_found = gene_upper and gene_upper in full_text
-        variant_found = variant_upper and variant_upper in full_text
+        gene_found = gene_upper and gene_upper in full_text_upper
 
-        # Find ambiguous variants where both gene and variant are in the text
+        if not gene_found:
+            return ('none', None)
+
+        # Use parse_biomarker_specificity to extract what the trial describes
+        biomarker_spec = parse_biomarker_specificity(full_text, gene)
+
+        if biomarker_spec and variant:
+            # Use is_variant_covered for proper codon-level matching
+            covered, match_level = is_variant_covered(variant, biomarker_spec)
+
+            if match_level == "variant":
+                # Extract the matched variant from the spec
+                matched_var = biomarker_spec.get("specified_variant")
+                if not matched_var and biomarker_spec.get("specified_variants"):
+                    # For variant_list, find the matching one
+                    matched_var = next(
+                        (v for v in biomarker_spec["specified_variants"]
+                         if v.upper() == variant.upper()),
+                        biomarker_spec["specified_variants"][0]
+                    )
+                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                return ('variant', biomarker)
+
+            elif match_level == "codon":
+                # Codon-level match (e.g., trial has G12C, query is G12D)
+                codon = biomarker_spec.get("codon")
+                biomarker = f"{gene} {codon}" if codon else gene
+                return ('codon', biomarker)
+
+            elif match_level == "gene":
+                return ('gene', gene)
+
+        # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
         ambig_variants = [
             (g, v) for (g, v) in BROAD_VARIANTS
-            if g.upper() in full_text and v.upper() in full_text
+            if g.upper() in full_text_upper and v.upper() in full_text_upper
         ]
-        # Find the ambiguous variant that matches the queried gene
         matched_ambig = next(
             ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
             None
         )
-
-        if variant_found:
-            biomarker = f"{gene} {variant}" if gene else variant
-            return ('specific', biomarker)
-        elif matched_ambig:
+        if matched_ambig:
             g, v = matched_ambig
             return ('ambiguous', f"{g} {v}")
-        elif gene_found:
+
+        # Gene-level only
+        if gene_found:
             return ('gene', gene)
-        else:
-            return ('none', None)
+
+        return ('none', None)
 
        
 
@@ -541,11 +575,15 @@ class ClinicalTrialsClient:
 
         for trial in trials:
             # mentions_variant returns: (match_type, matched_biomarker)
+            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
             match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
 
             # Determine level and scope based on match type
-            if match_type == "specific":
+            if match_type == "variant":
                 level = "variant"
+                scope = "specific"
+            elif match_type == "codon":
+                level = "codon"
                 scope = "specific"
             elif match_type == "ambiguous":
                 level = "variant"
@@ -565,15 +603,13 @@ class ClinicalTrialsClient:
             )
 
             # Build cancer_type_match based on whether trial targets specific tumor type
-            # Only set if tumor_type was queried; otherwise leave as None (unknown)
+            # We still fetch trials broadly, but track whether each matches the queried tumor
             cancer_type_match = None
             if tumor_type:
-                # Args: source_disease (condition from trial), queried_tumor (user's query)
                 cancer_matches = any(
                     tumor_types_match(condition, tumor_type)
                     for condition in (trial.conditions or [])
                 )
-
                 cancer_type_match = EvidenceLevel(
                     level="cancer_specific" if cancer_matches else "pan_cancer",
                     scope="specific" if cancer_matches else "unspecified",
@@ -633,13 +669,20 @@ class ClinicalTrialsClient:
         for trial in trials:
             # Determine locus_variant_match using mentions_variant
             # mentions_variant returns: (match_type, matched_biomarker)
+            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
             locus_variant_match = None
             matched_biomarker = None
             if gene:
                 match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
-                if match_type == "specific":
+                if match_type == "variant":
                     locus_variant_match = EvidenceLevel(
                         level="variant",
+                        scope="specific",
+                        origin="trial",
+                    )
+                elif match_type == "codon":
+                    locus_variant_match = EvidenceLevel(
+                        level="codon",
                         scope="specific",
                         origin="trial",
                     )

@@ -303,7 +303,7 @@ class TestHotspotGapIntegration:
 # =============================================================================
 
 # Add streamlit directory to path
-streamlit_dir = Path(__file__).parent.parent.parent / "streamlit"
+streamlit_dir = Path(__file__).parent.parent.parent.parent / "streamlit"
 sys.path.insert(0, str(streamlit_dir))
 
 
@@ -411,6 +411,21 @@ class TestStreamlitBackendEvidenceGaps:
 
 class TestEndToEndPipeline:
     """End-to-end tests from API through to UI-ready data."""
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_full_pipeline_akt1(self):
+        """Test full pipeline for well-characterized variant."""
+        from backend import get_variant_insight
+
+        result = await get_variant_insight(
+            gene="AKT1",
+            variant="E17K",
+            tumor_type="Breast Cancer",
+            enable_llm=False,
+            enable_literature=False,
+        )
+        assert result
 
     @pytest.mark.integration
     @pytest.mark.asyncio
