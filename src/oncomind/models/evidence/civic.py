@@ -46,6 +46,55 @@ class CIViCEvidence(EvidenceItemBase):
             return f"https://civicdb.org/evidence/{self.evidence_id}/summary"
         return None
 
+    @computed_field
+    @property
+    def is_sensitivity(self) -> bool:
+        """Check if this evidence SUPPORTS sensitivity/response.
+
+        CIViC has two fields:
+        - clinical_significance: What the evidence is ABOUT (e.g., "Sensitivity/Response")
+        - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance
+
+        True sensitivity requires:
+        - clinical_significance contains "sensitiv" or "response"
+        - AND evidence_direction is "SUPPORTS" (or missing, for backward compatibility)
+        """
+        if not self.clinical_significance:
+            return False
+        sig_upper = self.clinical_significance.upper()
+        is_sens_topic = "SENSITIV" in sig_upper or "RESPONSE" in sig_upper
+        if not is_sens_topic:
+            return False
+        # Check direction - if DOES_NOT_SUPPORT, the study refutes sensitivity
+        if self.evidence_direction:
+            return self.evidence_direction.upper() == "SUPPORTS"
+        # Default to True if direction is missing (backward compatibility)
+        return True
+
+    @computed_field
+    @property
+    def is_resistance(self) -> bool:
+        """Check if this evidence SUPPORTS resistance.
+
+        CIViC has two fields:
+        - clinical_significance: What the evidence is ABOUT (e.g., "Resistance")
+        - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance
+
+        True resistance requires:
+        - clinical_significance contains "resist"
+        - AND evidence_direction is "SUPPORTS" (or missing, for backward compatibility)
+        """
+        if not self.clinical_significance:
+            return False
+        sig_upper = self.clinical_significance.upper()
+        is_resist_topic = "RESIST" in sig_upper
+        if not is_resist_topic:
+            return False
+        # Check direction - if DOES_NOT_SUPPORT, the study refutes resistance
+        if self.evidence_direction:
+            return self.evidence_direction.upper() == "SUPPORTS"
+        # Default to True if direction is missing (backward compatibility)
+        return True
 
 
 

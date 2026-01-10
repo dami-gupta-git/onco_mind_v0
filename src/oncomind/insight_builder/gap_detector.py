@@ -1697,20 +1697,19 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
                     sensitive_variant_level.setdefault(drug_lower, set()).add("CIViC")
 
     # Check CIViC evidence items
+    # Use computed properties that check both clinical_significance AND evidence_direction
     for civic in evidence.civic_evidence:
         if not civic.drugs or len(civic.drugs) > 1:  # Skip combinations
             continue
         drug_lower = civic.drugs[0].lower()
-        if civic.clinical_significance:
-            sig_upper = civic.clinical_significance.upper()
-            if "RESIST" in sig_upper:
-                resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
-                if civic.locus_match == "variant":
-                    resistant_variant_level.setdefault(drug_lower, set()).add("CIViC")
-            elif "SENS" in sig_upper or "RESPON" in sig_upper:
-                sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
-                if civic.locus_match == "variant":
-                    sensitive_variant_level.setdefault(drug_lower, set()).add("CIViC")
+        if civic.is_resistance:
+            resistant_drugs.setdefault(drug_lower, set()).add("CIViC")
+            if civic.locus_match == "variant":
+                resistant_variant_level.setdefault(drug_lower, set()).add("CIViC")
+        elif civic.is_sensitivity:
+            sensitive_drugs.setdefault(drug_lower, set()).add("CIViC")
+            if civic.locus_match == "variant":
+                sensitive_variant_level.setdefault(drug_lower, set()).add("CIViC")
 
     # Find drugs with TRUE CROSS-SOURCE conflicts at VARIANT LEVEL only
     # Gene/codon-level conflicts are not flagged as different variants can behave differently
