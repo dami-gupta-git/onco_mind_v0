@@ -158,10 +158,27 @@ class TestLocusVariantMatchPopulation:
         # Query with G12D (same codon, different variant)
         populate_locus_variant_match([evidence], query_variant="G12D")
 
-        # Should match at codon level (not variant level)
         assert evidence.locus_variant_match is not None
         assert evidence.locus_variant_match.level == "codon"
         assert evidence.locus_variant_match.scope == "specific"
+
+    def test_cap(self):
+        """Test locus_variant_match for gene-level approvals."""
+        from oncomind.insight_builder.fda_processor import populate_locus_variant_match
+
+        # Capivasertib is approved for AKT1 alterations (gene-level)
+        evidence = FDALabelEvidence(
+            drug="capivasertib",
+            gene="AKT1",
+            indications_and_usage="cancer with one or more PIK3CA/AKT1/PTEN -alterations as detected by an FDA",
+        )
+
+        # Query with E17K
+        populate_locus_variant_match([evidence], query_variant="E17K")
+
+        bm = evidence.biomarker_match
+        assert bm.matched
+        assert bm.match_level=='gene'
 
     def test_populate_locus_variant_match_gene_level(self):
         """Test locus_variant_match for gene-level approvals."""

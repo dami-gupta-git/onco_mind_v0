@@ -400,8 +400,8 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
     - tumor_matched: Whether the tumor type matches FDA indication
     - tumor_match_type: "exact", "pan_cancer", or None
 
-    Only variant/codon-level matches are marked as well-characterized.
-    Gene-level matches add a SIGNIFICANT gap (extrapolation).
+    If biomarker_match.matched is True, the drug covers this variant and clinical
+    actionability is well-characterized. The match_level is informational only.
     """
     ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or bool(evidence.fda_labels)
 
@@ -443,11 +443,9 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                         other_cancers.append(cancer)
 
     has_matched_drug = bool(matched_drugs)
-    has_variant_or_codon_level = match_counts["variant"] > 0 or match_counts["codon"] > 0
-    has_only_gene_level = has_matched_drug and not has_variant_or_codon_level
 
-    if has_matched_drug and has_variant_or_codon_level:
-        # Variant or codon-level FDA approval - mark as well-characterized
+    if has_matched_drug:
+        # FDA approval covers this variant - mark as well-characterized
         n_drugs = len(matched_drugs)
         basis = f"{n_drugs} FDA-approved drug{'s' if n_drugs > 1 else ''} for this variant"
 
@@ -470,7 +468,7 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 tumor_parts.append(f"{tumor_match_counts['other']} other")
             tumor_match_str = ", ".join(tumor_parts) if tumor_parts else None
 
-        # Mark as well-characterized - we have variant/codon level evidence
+        # Mark as well-characterized - FDA approval covers this variant
         ctx.add_well_characterized(
             "clinical actionability",
             basis,
@@ -489,17 +487,6 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                 suggested_studies=["Basket trial", "Off-label use case series"],
                 addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
             )
-    elif has_only_gene_level:
-        # Gene-level FDA approval only - NOT well-characterized, add SIGNIFICANT gap
-        # Gene-level extrapolation means the specific variant hasn't been validated
-        ctx.add_gap(
-            category=GapCategory.CLINICAL,
-            severity=GapSeverity.SIGNIFICANT,
-            description=f"FDA-approved drugs exist for {ctx.gene} but only at gene-level (not specifically for {ctx.variant})",
-            suggested_studies=["Variant-specific efficacy analysis", "Case series for this variant"],
-            addressable_with=["ClinicalTrials.gov variant-specific arms", "Real-world evidence databases"]
-        )
-        ctx.add_poorly_characterized("variant-specific clinical approval")
     elif ctx.has_clinical:
         # Has clinical evidence but no FDA-approved drug that matches this variant
         # Check if we have FDA labels but none match (biomarker_match.matched=False)
@@ -1756,8 +1743,8 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
     # VICC resistance reports represent acquired resistance (expected clinical behavior).
     from oncomind.config.constants import is_sensitizing_variant_for_drug
 
-    query_gene = evidence.context.gene if evidence.context else None
-    query_variant = evidence.context.variant if evidence.context else None
+    query_gene = evidence.identifiers.gene if evidence.identifiers else None
+    query_variant = evidence.identifiers.variant if evidence.identifiers else None
 
     for drug in fda_sensitive_variant_level.keys():
         if drug in vicc_resistant_variant_level:

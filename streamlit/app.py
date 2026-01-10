@@ -1145,8 +1145,8 @@ with tab1:
                         # Render legend (consistent with other tabs)
                         legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 10px;'>
 <b>FDA Approval Match:</b><br/>
-✓ Matched<br/>
-✗ Not Matched<br/>
+🟢 Matched<br/>
+🔴 Not Matched<br/>
 <br/>
 <b>Locus Level:</b><br/>
 🎯 Variant (exact)<br/>
@@ -1189,12 +1189,12 @@ with tab1:
                                     approval_date = label.get('initial_approval_date')
 
                                     # Biomarker match icons:
-                                    # - ✓/✗ for whether variant is covered by FDA approval
+                                    # - 🟢/🔴 for whether variant is covered by FDA approval
                                     # - 🎯/◐/🧬 for match level (variant/codon/gene)
                                     # - ✅/🌐/🔸 for tumor match
                                     biomarker_match = label.get('biomarker_match') or {}
                                     is_matched = biomarker_match.get('matched', False)
-                                    match_icon = "✓" if is_matched else "✗"
+                                    match_icon = "🟢" if is_matched else "🔴"
                                     match_level = biomarker_match.get('match_level')
                                     level_icon = {"variant": "🎯", "codon": "◐", "gene": "🧬"}.get(match_level, "")
 
