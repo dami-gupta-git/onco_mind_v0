@@ -411,6 +411,172 @@ def is_acquired_resistance_mutation(gene: str, variant: str) -> bool:
 
 
 # =============================================================================
+# TARGETABLE SENSITIZING VARIANTS
+# =============================================================================
+# Variants where FDA-approved drugs exist and acquired resistance is expected.
+# When VICC reports resistance for these drug+variant pairs, it represents
+# acquired resistance (develops under treatment) NOT intrinsic resistance
+# (drug never works). This distinction is critical for discordant evidence detection.
+#
+# Format: {drug_name_lower: [(gene, variant), ...]}
+# Drug names should be lowercase for case-insensitive matching.
+#
+# Used by: gap_detector._detect_discordant_evidence_internal()
+# to avoid flagging FDA approval + VICC resistance as a conflict.
+
+TARGETABLE_SENSITIZING_VARIANTS: dict[str, list[tuple[str, str]]] = {
+    # BRAF V600 inhibitors - melanoma, NSCLC, CRC
+    "vemurafenib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "zelboraf": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "dabrafenib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "tafinlar": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "encorafenib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "braftovi": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    # MEK inhibitors (used with BRAF inhibitors)
+    "trametinib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "mekinist": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "cobimetinib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "cotellic": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "binimetinib": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    "mektovi": [("BRAF", "V600E"), ("BRAF", "V600K")],
+    # EGFR TKIs - NSCLC
+    "erlotinib": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "tarceva": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "gefitinib": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "iressa": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "afatinib": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "gilotrif": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "osimertinib": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19"), ("EGFR", "T790M")],
+    "tagrisso": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19"), ("EGFR", "T790M")],
+    "dacomitinib": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    "vizimpro": [("EGFR", "L858R"), ("EGFR", "exon 19 deletion"), ("EGFR", "del19")],
+    # EGFR exon 20 insertion inhibitors
+    "amivantamab": [("EGFR", "exon 20 insertion")],
+    "rybrevant": [("EGFR", "exon 20 insertion")],
+    "mobocertinib": [("EGFR", "exon 20 insertion")],
+    "exkivity": [("EGFR", "exon 20 insertion")],
+    # KRAS G12C inhibitors - NSCLC, CRC
+    "sotorasib": [("KRAS", "G12C")],
+    "lumakras": [("KRAS", "G12C")],
+    "adagrasib": [("KRAS", "G12C")],
+    "krazati": [("KRAS", "G12C")],
+    # ALK inhibitors - NSCLC
+    "crizotinib": [("ALK", "fusion"), ("ALK", "rearrangement"), ("ROS1", "fusion")],
+    "xalkori": [("ALK", "fusion"), ("ALK", "rearrangement"), ("ROS1", "fusion")],
+    "ceritinib": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "zykadia": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "alectinib": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "alecensa": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "brigatinib": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "alunbrig": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "lorlatinib": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    "lorbrena": [("ALK", "fusion"), ("ALK", "rearrangement")],
+    # ROS1 inhibitors - NSCLC
+    "entrectinib": [("ROS1", "fusion"), ("NTRK1", "fusion"), ("NTRK2", "fusion"), ("NTRK3", "fusion")],
+    "rozlytrek": [("ROS1", "fusion"), ("NTRK1", "fusion"), ("NTRK2", "fusion"), ("NTRK3", "fusion")],
+    "repotrectinib": [("ROS1", "fusion")],
+    "augtyro": [("ROS1", "fusion")],
+    # RET inhibitors - NSCLC, thyroid
+    "selpercatinib": [("RET", "fusion"), ("RET", "mutation")],
+    "retevmo": [("RET", "fusion"), ("RET", "mutation")],
+    "pralsetinib": [("RET", "fusion"), ("RET", "mutation")],
+    "gavreto": [("RET", "fusion"), ("RET", "mutation")],
+    # MET inhibitors - NSCLC
+    "capmatinib": [("MET", "exon 14 skipping"), ("MET", "amplification")],
+    "tabrecta": [("MET", "exon 14 skipping"), ("MET", "amplification")],
+    "tepotinib": [("MET", "exon 14 skipping")],
+    "tepmetko": [("MET", "exon 14 skipping")],
+    # NTRK inhibitors - tumor agnostic
+    "larotrectinib": [("NTRK1", "fusion"), ("NTRK2", "fusion"), ("NTRK3", "fusion")],
+    "vitrakvi": [("NTRK1", "fusion"), ("NTRK2", "fusion"), ("NTRK3", "fusion")],
+    # HER2 inhibitors - breast, gastric
+    "trastuzumab": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    "herceptin": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    "pertuzumab": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    "perjeta": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    "trastuzumab deruxtecan": [("ERBB2", "amplification"), ("HER2", "amplification"), ("ERBB2", "mutation")],
+    "enhertu": [("ERBB2", "amplification"), ("HER2", "amplification"), ("ERBB2", "mutation")],
+    "neratinib": [("ERBB2", "mutation"), ("HER2", "mutation")],
+    "nerlynx": [("ERBB2", "mutation"), ("HER2", "mutation")],
+    "tucatinib": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    "tukysa": [("ERBB2", "amplification"), ("HER2", "amplification")],
+    # BCR-ABL inhibitors - CML
+    "imatinib": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "gleevec": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "dasatinib": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "sprycel": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "nilotinib": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "tasigna": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "bosutinib": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "bosulif": [("ABL1", "fusion"), ("BCR-ABL1", "fusion")],
+    "ponatinib": [("ABL1", "fusion"), ("BCR-ABL1", "fusion"), ("ABL1", "T315I")],
+    "iclusig": [("ABL1", "fusion"), ("BCR-ABL1", "fusion"), ("ABL1", "T315I")],
+    # KIT/PDGFRA inhibitors - GIST
+    "avapritinib": [("KIT", "D816V"), ("PDGFRA", "D842V")],
+    "ayvakit": [("KIT", "D816V"), ("PDGFRA", "D842V")],
+    "ripretinib": [("KIT", "mutation")],
+    "qinlock": [("KIT", "mutation")],
+    # IDH inhibitors - AML, cholangiocarcinoma
+    "ivosidenib": [("IDH1", "R132H"), ("IDH1", "R132C"), ("IDH1", "R132")],
+    "tibsovo": [("IDH1", "R132H"), ("IDH1", "R132C"), ("IDH1", "R132")],
+    "enasidenib": [("IDH2", "R140Q"), ("IDH2", "R172K"), ("IDH2", "R140"), ("IDH2", "R172")],
+    "idhifa": [("IDH2", "R140Q"), ("IDH2", "R172K"), ("IDH2", "R140"), ("IDH2", "R172")],
+    # FGFR inhibitors - cholangiocarcinoma, bladder
+    "pemigatinib": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "pemazyre": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "infigratinib": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "truseltiq": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "futibatinib": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "lytgobi": [("FGFR2", "fusion"), ("FGFR2", "rearrangement")],
+    "erdafitinib": [("FGFR3", "mutation"), ("FGFR2", "mutation"), ("FGFR3", "fusion")],
+    "balversa": [("FGFR3", "mutation"), ("FGFR2", "mutation"), ("FGFR3", "fusion")],
+    # PIK3CA inhibitors - breast
+    "alpelisib": [("PIK3CA", "H1047R"), ("PIK3CA", "E545K"), ("PIK3CA", "E542K"), ("PIK3CA", "mutation")],
+    "piqray": [("PIK3CA", "H1047R"), ("PIK3CA", "E545K"), ("PIK3CA", "E542K"), ("PIK3CA", "mutation")],
+    # AKT inhibitors - breast
+    "capivasertib": [("AKT1", "E17K"), ("AKT1", "mutation"), ("PTEN", "loss")],
+    "truqap": [("AKT1", "E17K"), ("AKT1", "mutation"), ("PTEN", "loss")],
+}
+
+# Build reverse lookup: {(gene_upper, variant_upper): [drug_names]}
+# For efficient checking if a gene+variant has known sensitizing drugs
+SENSITIZING_VARIANT_TO_DRUGS: dict[tuple[str, str], list[str]] = {}
+for drug, variants in TARGETABLE_SENSITIZING_VARIANTS.items():
+    for gene, variant in variants:
+        key = (gene.upper(), variant.upper())
+        if key not in SENSITIZING_VARIANT_TO_DRUGS:
+            SENSITIZING_VARIANT_TO_DRUGS[key] = []
+        SENSITIZING_VARIANT_TO_DRUGS[key].append(drug)
+
+
+def is_sensitizing_variant_for_drug(gene: str, variant: str, drug: str) -> bool:
+    """Check if a gene+variant is a known sensitizing target for a drug.
+
+    When True, VICC resistance reports for this drug+variant pair represent
+    acquired resistance (expected clinical behavior), not intrinsic resistance.
+
+    Args:
+        gene: Gene symbol (e.g., "BRAF")
+        variant: Variant notation (e.g., "V600E")
+        drug: Drug name (case-insensitive)
+
+    Returns:
+        True if this variant is a known sensitizing target for this drug
+    """
+    drug_lower = drug.lower()
+    if drug_lower not in TARGETABLE_SENSITIZING_VARIANTS:
+        return False
+
+    gene_upper = gene.upper()
+    variant_upper = variant.upper()
+
+    for target_gene, target_variant in TARGETABLE_SENSITIZING_VARIANTS[drug_lower]:
+        if target_gene.upper() == gene_upper and target_variant.upper() == variant_upper:
+            return True
+    return False
+
+
+# =============================================================================
 # CBIOPORTAL STUDY MAPPINGS
 # =============================================================================
 CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {

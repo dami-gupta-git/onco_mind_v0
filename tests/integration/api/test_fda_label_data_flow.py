@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from oncomind.api.fda_label_service import (
-    fetch_drug_label_from_openfda,
+    fetch_latest_labels,
     get_fda_labels_for_drugs,
 )
 from oncomind.models.evidence.fda import FDALabelEvidence, ClinicalStudyEvidence
@@ -22,11 +22,12 @@ class TestFDALabelDataFlow:
     """Test that all fields flow through the entire pipeline."""
 
     def test_fetch_returns_initial_approval_date(self):
-        """Verify fetch_drug_label_from_openfda extracts initial_approval_date."""
+        """Verify fetch_latest_labels extracts initial_approval_date."""
         # This test hits the real API - skip in CI if needed
-        result = fetch_drug_label_from_openfda("capivasertib")
+        results = fetch_latest_labels("capivasertib")
 
-        assert result is not None, "Should return data for capivasertib"
+        assert results is not None and len(results) > 0, "Should return data for capivasertib"
+        result = results[0]  # Take first label
         assert "initial_approval_date" in result, "Should have initial_approval_date key"
         assert result["initial_approval_date"] is not None, "initial_approval_date should not be None"
         # Format should be YYYY-MM-DD

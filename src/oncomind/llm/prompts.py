@@ -76,27 +76,6 @@ When evidence comes from OTHER variants at the same codon (e.g., Q209P data appl
 
 If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type})", report it as approved for that other cancer, NOT {tumor_type}.
 
-=== CROSS-SOURCE SYNTHESIS (CRITICAL) ===
-
-You will receive a CROSS-SOURCE DRUG EVIDENCE SYNTHESIS section that groups evidence by drug across all sources.
-Use this to:
-
-1. **Highlight corroborated findings**: When CGI, CIViC, VICC, and/or Literature all point to the same drug with the same signal, this is HIGH CONFIDENCE. State: "Multiple independent sources (CGI, CIViC, Literature) consistently show [drug] sensitivity, providing strong evidence for therapeutic relevance."
-
-2. **Flag conflicts for investigation**: When sources disagree (e.g., CGI says Responsive but Literature mentions resistance), explain the likely reason:
-   - Different tumor types?
-   - Resistance mutation vs. sensitizing mutation?
-   - Different lines of therapy?
-
-3. **Connect biology to therapy**: Use GENE ROLE and PATHWAY info to explain WHY certain drugs are being studied:
-   - "AKT1 is an oncogene in the PI3K/AKT pathway, making AKT inhibitors a logical therapeutic target"
-   - "BRCA1 loss creates synthetic lethality with PARP inhibition"
-
-4. **Prioritize actionability**: End therapeutic_summary with a clear statement:
-   - What has STRONGEST evidence (FDA-approved, multiple sources agree)
-   - What is PROMISING but needs validation (preclinical, single source)
-   - What GAPS exist (no FDA approval despite preclinical activity)
-
 === CONFLICTING EVIDENCE ===
 
 Distinguish expected biology from true conflicts:

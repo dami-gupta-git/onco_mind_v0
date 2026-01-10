@@ -65,6 +65,7 @@ def mock_evidence():
     evidence.civic_assertions = []
     evidence.civic_evidence = []
     evidence.fda_approvals = []
+    evidence.fda_labels = []  # FDA label evidence (used by _check_clinical_evidence)
     evidence.vicc_evidence = []
     evidence.cgi_biomarkers = []
     evidence.preclinical_biomarkers = []
@@ -302,18 +303,23 @@ class TestCheckGeneMechanism:
 class TestCheckClinicalEvidence:
     """Tests for _check_clinical_evidence function."""
 
-    def test_with_fda_approvals_variant_level(self, mock_evidence, base_context):
-        """FDA approvals at VARIANT level should mark as well-characterized.
+    def test_with_fda_labels_variant_level(self, mock_evidence, base_context):
+        """FDA labels with VARIANT-level biomarker_match should mark as well-characterized.
 
         Only variant-level evidence is marked well-characterized for clinical actionability.
         """
-        # Set up FDA approval with variant-level match
-        therapy = MagicMock()
-        therapy.source = "FDA"
-        therapy.locus_match = "variant"
-        therapy.cancer_specificity = "cancer_specific"
-        mock_evidence.fda_approvals = [MagicMock()]
-        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
+        # Set up FDA label with variant-level biomarker_match
+        fda_label = MagicMock()
+        fda_label.drug = "TestDrug"
+        fda_label.brand_name = "TestBrand"
+        fda_label.generic_name = "testgeneric"
+        fda_label.biomarker_match = MagicMock()
+        fda_label.biomarker_match.matched = True
+        fda_label.biomarker_match.match_level = "variant"
+        fda_label.biomarker_match.tumor_matched = True
+        fda_label.biomarker_match.tumor_match_type = "exact"
+        fda_label.cancer_type_match = None
+        mock_evidence.fda_labels = [fda_label]
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -321,32 +327,33 @@ class TestCheckClinicalEvidence:
         assert any("clinical" in w.lower() for w in base_context.well_characterized)
         assert base_context.has_clinical is True
 
-    def test_with_civic_assertions_variant_level(self, mock_evidence, base_context):
-        """CIViC assertions at VARIANT level should mark as well-characterized."""
-        therapy = MagicMock()
-        therapy.source = "CIViC"
-        therapy.locus_match = "variant"
-        therapy.cancer_specificity = "pan_cancer"
+    def test_with_civic_assertions_sets_has_clinical(self, mock_evidence, base_context):
+        """CIViC assertions should set has_clinical=True."""
         mock_evidence.civic_assertions = [MagicMock(), MagicMock()]
-        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
 
-        assert any("clinical" in w.lower() for w in base_context.well_characterized)
+        # has_clinical should be True (there IS clinical data)
         assert base_context.has_clinical is True
 
-    def test_fda_approvals_gene_level_not_well_characterized(self, mock_evidence, base_context):
-        """FDA approvals at GENE level should NOT mark as well-characterized.
+    def test_fda_labels_gene_level_not_well_characterized(self, mock_evidence, base_context):
+        """FDA labels with GENE-level biomarker_match should NOT mark as well-characterized.
 
         Gene-level extrapolation is a SIGNIFICANT gap, not well-characterized.
         """
-        therapy = MagicMock()
-        therapy.source = "FDA"
-        therapy.locus_match = "gene"  # Gene-level, not variant
-        therapy.cancer_specificity = "cancer_specific"
-        mock_evidence.fda_approvals = [MagicMock()]
-        mock_evidence.get_fda_approved_therapies.return_value = [therapy]
+        # Set up FDA label with gene-level biomarker_match
+        fda_label = MagicMock()
+        fda_label.drug = "TestDrug"
+        fda_label.brand_name = "TestBrand"
+        fda_label.generic_name = "testgeneric"
+        fda_label.biomarker_match = MagicMock()
+        fda_label.biomarker_match.matched = True
+        fda_label.biomarker_match.match_level = "gene"  # Gene-level, not variant
+        fda_label.biomarker_match.tumor_matched = True
+        fda_label.biomarker_match.tumor_match_type = "exact"
+        fda_label.cancer_type_match = None
+        mock_evidence.fda_labels = [fda_label]
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -355,11 +362,15 @@ class TestCheckClinicalEvidence:
         assert not any("clinical" in w.lower() for w in base_context.well_characterized)
         # But has_clinical should still be True (there IS clinical data)
         assert base_context.has_clinical is True
+        # Should have a SIGNIFICANT gap for gene-level extrapolation
+        clinical_gaps = [g for g in base_context.gaps if g.category == GapCategory.CLINICAL]
+        assert len(clinical_gaps) >= 1
+        assert any(g.severity == GapSeverity.SIGNIFICANT for g in clinical_gaps)
 
     def test_no_clinical_evidence_adds_critical_gap(self, mock_evidence, base_context):
         """Missing clinical evidence should add a CRITICAL gap."""
-        # Mock get_fda_approved_therapies to return empty list
-        mock_evidence.get_fda_approved_therapies.return_value = []
+        # fda_labels is already empty from fixture
+        # civic_assertions is already empty from fixture
 
         _check_clinical_evidence(mock_evidence, base_context)
 
