@@ -672,7 +672,13 @@ with tab1:
                                         'REDUCED SENSITIVITY': 'Reduced',
                                         'ADVERSE RESPONSE': 'Adverse',
                                     }
-                                    sig = sig_map.get(sig_raw.upper(), sig_raw.title())
+                                    sig_abbrev = sig_map.get(sig_raw.upper(), sig_raw.title())
+                                    # Add "NOT" prefix if direction is DOES_NOT_SUPPORT (except for N/A)
+                                    direction = e.get('evidence_direction', '') or ''
+                                    if direction.upper() == 'DOES_NOT_SUPPORT' and sig_raw.upper() != 'N/A':
+                                        sig = f"NOT {sig_abbrev}"
+                                    else:
+                                        sig = sig_abbrev
                                     # Match level indicator
                                     match = e.get('locus_match', '')
                                     match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(match, "")

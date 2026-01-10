@@ -49,27 +49,24 @@ class CIViCEvidence(EvidenceItemBase):
     @computed_field
     @property
     def is_sensitivity(self) -> bool:
-        """Check if this evidence SUPPORTS sensitivity/response.
 
-        CIViC has two fields:
-        - clinical_significance: What the evidence is ABOUT (e.g., "Sensitivity/Response")
-        - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance
-
-        True sensitivity requires:
-        - clinical_significance contains "sensitiv" or "response"
-        - AND evidence_direction is "SUPPORTS" (or missing, for backward compatibility)
-        """
+        # Check if this evidence SUPPORTS sensitivity/response.\n"
+        #          CIViC has two fields:\n"
+        #          - clinical_significance: What the evidence is ABOUT (e.g., \"Sensitivity/Response\")\n"
+        #          - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance\n"
         if not self.clinical_significance:
             return False
-        sig_upper = self.clinical_significance.upper()
-        is_sens_topic = "SENSITIV" in sig_upper or "RESPONSE" in sig_upper
-        if not is_sens_topic:
-            return False
-        # Check direction - if DOES_NOT_SUPPORT, the study refutes sensitivity
-        if self.evidence_direction:
-            return self.evidence_direction.upper() == "SUPPORTS"
-        # Default to True if direction is missing (backward compatibility)
-        return True
+        significance = self.clinical_significance.upper()
+        direction = self.evidence_direction.upper()
+
+        if "SENSITIV" in significance or "RESPONSE" in significance:
+            if direction=="SUPPORTS":
+                return True
+            else:
+                return False
+
+
+
 
     @computed_field
     @property
@@ -87,14 +84,14 @@ class CIViCEvidence(EvidenceItemBase):
         if not self.clinical_significance:
             return False
         sig_upper = self.clinical_significance.upper()
+        direction = self.evidence_direction.upper()
+
         is_resist_topic = "RESIST" in sig_upper
-        if not is_resist_topic:
-            return False
-        # Check direction - if DOES_NOT_SUPPORT, the study refutes resistance
-        if self.evidence_direction:
-            return self.evidence_direction.upper() == "SUPPORTS"
-        # Default to True if direction is missing (backward compatibility)
-        return True
+        if is_resist_topic and direction == "SUPPORTS":
+                return True
+
+        return False
+
 
 
 
