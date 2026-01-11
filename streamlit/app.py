@@ -107,7 +107,7 @@ st.markdown("""
     /* Column widths */
     .scrollable-table .col-source { width: 100px; }
     .scrollable-table .col-fda { width: 55px !important; max-width: 55px !important; min-width: 55px !important; text-align: center; }
-    .scrollable-table .col-locus { width: 80px; }
+    .scrollable-table .col-locus { width: 100px; }
     .scrollable-table .col-tumor { width: 70px; }
     .scrollable-table .col-drugs { width: 180px; }
     .scrollable-table .col-response { width: 110px; }

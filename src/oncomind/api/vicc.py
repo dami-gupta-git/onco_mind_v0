@@ -21,7 +21,6 @@ Key Design:
 from typing import Any
 
 import httpx
-
 from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match, determine_locus_match
 
 
@@ -74,6 +73,7 @@ class VICCAssociation:
         if not self.response_type:
             return False
         return "RESIST" in self.response_type.upper()
+
 
     def get_oncokb_level(self) -> str | None:
         """Extract OncoKB-style level if present (1A, 1B, 2A, 2B, 3A, 3B, 4, R1, R2)."""
@@ -229,20 +229,39 @@ class VICCClient:
         assoc_variant: str | None,
         queried_gene: str,
         queried_variant: str | None,
+        description: str | None = None,
     ) -> str:
         """Determine the match specificity level for a VICC association.
 
-        Delegates to the core determine_locus_match() function.
+        First checks the variant field match using determine_locus_match().
+        Then validates by checking if the variant is actually mentioned in the description.
+        If the variant field matches but the description doesn't mention the variant,
+        downgrades to 'gene' level.
 
         Args:
             assoc_variant: The variant from the VICC association (e.g., "V600E")
             queried_gene: The gene being queried (unused, kept for API compatibility)
             queried_variant: The variant being queried (e.g., "V600E")
+            description: The association description text to validate against
 
         Returns:
             Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
         """
-        return determine_locus_match(assoc_variant, queried_variant)
+        # Get initial match from variant field comparison
+        initial_match = determine_locus_match(assoc_variant, queried_variant)
+
+        # If variant-level match, validate that description actually mentions the variant
+        if initial_match == "variant" and queried_variant and description:
+            # Clean variant for search (remove p. prefix)
+            clean_variant = queried_variant.replace("p.", "").replace("P.", "").upper()
+            desc_upper = description.upper()
+
+            # Check if variant is mentioned in description
+            if clean_variant not in desc_upper:
+                # Variant field matches but description doesn't mention it - downgrade to gene
+                return "gene"
+
+        return initial_match
 
     def _parse_association(self, hit: dict[str, Any]) -> VICCAssociation | None:
         """Parse a VICC API hit into an association object.
@@ -524,8 +543,8 @@ class VICCClient:
         evidence_list = []
 
         for assoc in associations:
-            # Determine match specificity
-            locus_match = self._determine_locus_match(assoc.variant, gene, variant)
+            # Determine match specificity - also validates variant is mentioned in description
+            locus_match = self._determine_locus_match(assoc.variant, gene, variant, assoc.description)
             # Build matched profile string
             matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
 

@@ -1,7 +1,7 @@
 """Tumor-specific evidence match aggregation.
 
 Tracks which evidence sources have tumor-specific data and at what match level.
-Used by gap_detector to populate the "Evidence In [Tumor]" well-characterized aspect.
+Used by gap_detector to populate the "Evidence Items For [Tumor]" well-characterized aspect.
 """
 
 from pydantic import BaseModel, Field
