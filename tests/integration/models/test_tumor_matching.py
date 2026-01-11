@@ -319,7 +319,7 @@ class TestTumorSpecificEvidenceIntegration:
 
     @pytest.mark.asyncio
     async def test_egfr_l858r_nsclc_has_tumor_evidence(self):
-        """EGFR L858R in NSCLC should show 'Evidence In NSCLC' as well-characterized."""
+        """EGFR L858R in NSCLC should show 'Evidence Items For NSCLC' as well-characterized."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
@@ -328,13 +328,13 @@ class TestTumorSpecificEvidenceIntegration:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Should have "Evidence In NSCLC" in well_characterized
+        # Should have "Evidence Items For NSCLC" in well_characterized
         evidence_in_tumor = [
             w for w in gaps.well_characterized
-            if "evidence in" in w.lower() and "nsclc" in w.lower()
+            if "evidence items for" in w.lower() and "nsclc" in w.lower()
         ]
         assert len(evidence_in_tumor) > 0, \
-            f"Should have 'Evidence In NSCLC', got: {gaps.well_characterized}"
+            f"Should have 'Evidence Items For NSCLC', got: {gaps.well_characterized}"
 
     @pytest.mark.asyncio
     async def test_tumor_evidence_detailed_has_match_info(self):
@@ -350,7 +350,7 @@ class TestTumorSpecificEvidenceIntegration:
         # Find tumor-specific evidence
         tumor_evidence = [
             item for item in gaps.well_characterized_detailed
-            if "evidence in" in item.aspect.lower()
+            if "evidence items for" in item.aspect.lower()
         ]
 
         if tumor_evidence:
@@ -377,7 +377,7 @@ class TestTumorSpecificEvidenceIntegration:
         # Should have tumor-specific evidence
         tumor_evidence = [
             item for item in gaps.well_characterized_detailed
-            if "evidence in" in item.aspect.lower() and "melanoma" in item.aspect.lower()
+            if "evidence items for" in item.aspect.lower() and "melanoma" in item.aspect.lower()
         ]
         assert len(tumor_evidence) > 0, \
             f"Should have Melanoma-specific evidence, got: {[i.aspect for i in gaps.well_characterized_detailed]}"

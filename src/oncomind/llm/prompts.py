@@ -91,13 +91,6 @@ Distinguish expected biology from true conflicts:
 - NEVER describe HOW a variant works mechanistically. Only state THAT it is oncogenic/pathogenic if evidence says so. Delete any phrases about membrane localization, pathway activation, signaling, or protein function mechanisms.
 - NEVER say "approved for any [GENE] mutation" - most targeted therapies are approved for SPECIFIC variants only. Read the indication text in the evidence and specify the exact approved variants.
 
-=== GENERIC DRUG CLASSES (DO NOT MAP TO SPECIFIC DRUGS) ===
-
-The evidence may include generic drug class names like "allosteric AKT inhibitor" or "non-allosteric AKT inhibitor".
-- Do NOT attempt to assign specific drugs (e.g., MK-2206, BAY1125976) to these generic classes
-- Do NOT state which specific drugs belong to which inhibitor class unless the evidence EXPLICITLY says so
-- If you need to discuss these, say "allosteric AKT inhibitors" and "non-allosteric AKT inhibitors" without naming specific drugs in those categories
-- This prevents factual errors about drug mechanisms
 
 === CRITICAL: NO HALLUCINATION ===
 

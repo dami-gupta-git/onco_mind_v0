@@ -1333,3 +1333,19 @@ LOCUS_MATCH_DESCRIPTIONS: dict[str, str] = {
     "codon": "Evidence for other variants at this codon — extrapolation from similar position",
     "gene": "Evidence for other variants in this gene — may not apply to this variant",
 }
+
+SENSITIVITY_KEYWORDS = [
+    "inhibit",
+    "potent",
+    "antiproliferative",
+    "proapoptotic",
+    "regress",
+    "nanomolar activity",
+    "selective",
+    "selectively",
+    "significant impact",
+    "effic",
+    "sensitiv",
+    "respons"
+]
+

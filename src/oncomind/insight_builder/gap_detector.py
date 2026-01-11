@@ -532,7 +532,7 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
         # Only mark as well-characterized if we have VARIANT-level tumor-matched evidence
         if tumor_match.total_variant_level > 0:
             ctx.add_well_characterized(
-                f"evidence in {ctx.tumor_type}",
+                f"evidence items for {ctx.tumor_type}",
                 tumor_match.sources_str,
                 category=GapCategory.TUMOR_TYPE,
                 matches_on=tumor_match.matches_on_str,
@@ -793,7 +793,14 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
         resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
         counts.add(count_with_levels(civic_resistance, ctx.tumor_type))
 
-    # 4. VICC evidence with resistance response types
+    # 4. CIViC evidence items with is_resistance=True
+    # Uses computed property that checks both clinical_significance AND evidence_direction
+    civic_evidence_resistance = [e for e in evidence.civic_evidence if e.is_resistance]
+    if civic_evidence_resistance:
+        resistance_sources.append(f"{len(civic_evidence_resistance)} CIViC evidence item{'s' if len(civic_evidence_resistance) != 1 else ''}")
+        counts.add(count_with_levels(civic_evidence_resistance, ctx.tumor_type))
+
+    # 5. VICC evidence with resistance response types
     vicc_resistance = [
         v for v in evidence.vicc_evidence
         if v.response_type and ("RESIST" in v.response_type.upper() or "REDUCED SENSITIVITY" in v.response_type.upper())
@@ -802,7 +809,7 @@ def _check_resistance_mechanisms(evidence: "Evidence", ctx: GapDetectionContext)
         resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
         counts.add(count_with_levels(vicc_resistance, ctx.tumor_type))
 
-    # 5. LLM-extracted literature knowledge with resistance signals
+    # 6. LLM-extracted literature knowledge with resistance signals
     # Literature entries don't have tumor type info
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
         drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)

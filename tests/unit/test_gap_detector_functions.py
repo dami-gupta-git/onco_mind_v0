@@ -412,7 +412,7 @@ class TestCheckTumorTypeEvidence:
 
         _check_tumor_type_evidence(mock_evidence, ctx)
 
-        assert any("evidence in" in w.lower() for w in ctx.well_characterized)
+        assert any("evidence items for" in w.lower() for w in ctx.well_characterized)
 
     def test_no_tumor_specific_evidence_cancer_gene_critical(self, mock_evidence):
         """Cancer gene without tumor-specific data should get CRITICAL gap."""
