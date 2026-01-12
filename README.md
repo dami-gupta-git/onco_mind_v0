@@ -36,9 +36,24 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 ## Screenshots
 
 ![Title](./images/title.png)
-![Gap Analysis](./images/gap.png)
-![LLM Synthesis](./images/synthesis.png)
-![LLM Cross Source Drug Analysis](./images/cross_source.png)
+
+### Gap Analysis
+![Gap Analysis](./images/gap_large.png)
+
+<details>
+
+<summary>📸 Click to see more screenshots</summary>
+
+### LLM Research Synthesis
+![LLM Synthesis](./images/synthesis_large.png)
+
+### Cross-Source Drug Analysis
+![LLM Cross Source Drug Analysis 1](./images/cross_source_1.png)
+![LLM Cross Source Drug Analysis 2](./images/cross_source_2.png)
+
+
+</details>
+
 ---
 
 ## What This Demonstrates

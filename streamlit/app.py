@@ -1914,8 +1914,8 @@ with tab1:
         if llm_narrative and not (llm_rationale and llm_rationale.startswith("LLM narrative generation failed:")):
             with st.container(border=True):
                 st.markdown("### 🤖 LLM Research Synthesis")
-                st.markdown("""<div style='font-size: 0.95rem; color: #1976d2; display: grid; grid-template-columns: max-content max-content max-content max-content; gap: 0 24px;'>
-<div><b>Locus Match:</b></div><div> variant-level = evidence match at exact locus</div><div> codon-level = evidence match at other variants in this codon</div><div> gene-level =  evidence match at other variants in this gene</div>
+                st.markdown("""<div style='font-size: 0.95rem; color: #1976d2;'>
+<b>Locus Match:</b> variant-level = evidence match at exact locus &nbsp;·&nbsp; codon-level = evidence match at other variants in this codon &nbsp;·&nbsp; gene-level = evidence match at other variants in this gene
 </div>""", unsafe_allow_html=True)
                 st.markdown("<hr style='margin: 0.5rem 0; border: none; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
 
