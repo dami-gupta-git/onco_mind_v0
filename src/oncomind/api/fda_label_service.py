@@ -30,7 +30,6 @@ import pandas as pd
 import requests
 
 from oncomind.config.constants import (
-    PROCESSING_DATA_DIR,
     FDA_LABELS_FILE,
     CGI_BIOMARKERS_FILE,
     DRUG_NAMES_CACHE_FILE,
@@ -45,9 +44,6 @@ from oncomind.models.evidence.fda import (
 )
 
 logger = logging.getLogger(__name__)
-
-# File paths
-FDA_ONCOLOGY_BIOMARKERS_FILE = PROCESSING_DATA_DIR / "fda_oncology_biomarkers.xlsx"
 
 # OpenFDA API
 OPENFDA_BASE = "https://api.fda.gov/drug/label.json"
@@ -267,57 +263,17 @@ class RecentMajorChangesData:
 # Drug Collection Functions
 # =============================================================================
 
-def get_drugs_from_fda_biomarkers(gene: str) -> set[str]:
-    """Get all drugs associated with a gene from fda_oncology_biomarkers.xlsx."""
-    drugs: set[str] = set()
-
-    if not FDA_ONCOLOGY_BIOMARKERS_FILE.exists():
-        logger.warning(f"FDA biomarkers file not found: {FDA_ONCOLOGY_BIOMARKERS_FILE}")
-        return drugs
-
-    try:
-        df = pd.read_excel(FDA_ONCOLOGY_BIOMARKERS_FILE)
-
-        # Find the gene column (might be "Biomarker†", "Biomarker", or "Gene")
-        gene_col = None
-        for col in ["Biomarker†", "Biomarker", "Gene", "gene", "biomarker"]:
-            if col in df.columns:
-                gene_col = col
-                break
-
-        drug_col = None
-        for col in ["Drug", "drug"]:
-            if col in df.columns:
-                drug_col = col
-                break
-
-        if gene_col is None or drug_col is None:
-            logger.warning(f"Could not find gene/drug columns in {FDA_ONCOLOGY_BIOMARKERS_FILE}")
-            return drugs
-
-        # Filter by gene (case-insensitive partial match)
-        gene_upper = gene.upper()
-        mask = df[gene_col].str.upper().str.contains(gene_upper, na=False)
-        gene_drugs = df.loc[mask, drug_col].dropna().unique()
-
-        for drug in gene_drugs:
-            drugs.add(str(drug).strip())
-
-        logger.debug(f"Found {len(drugs)} drugs for {gene} in FDA biomarkers")
-
-    except Exception as e:
-        logger.error(f"Error reading FDA biomarkers: {e}")
-
-    return drugs
-
-
 def collect_all_drugs(
     gene: str,
     cgi_drugs: list[str] | None = None,
     civic_drugs: list[str] | None = None,
     vicc_drugs: list[str] | None = None,
 ) -> set[str]:
-    """Collect all unique drug names from all sources for a gene.
+    """Collect all unique drug names from curated sources for a gene.
+
+    Note: FDA approvals are now discovered via direct OpenFDA API search
+    (search_fda_by_biomarker) in evidence_aggregator, not from the static
+    fda_oncology_biomarkers.xlsx file.
 
     Args:
         gene: Gene symbol (e.g., "BRAF")
@@ -339,10 +295,6 @@ def collect_all_drugs(
 
     if vicc_drugs:
         all_drugs.update(d.strip() for d in vicc_drugs if d)
-
-    # Add drugs from FDA oncology biomarkers for this gene
-    fda_drugs = get_drugs_from_fda_biomarkers(gene)
-    all_drugs.update(fda_drugs)
 
     logger.info(f"Collected {len(all_drugs)} unique drugs for gene {gene}")
     return all_drugs

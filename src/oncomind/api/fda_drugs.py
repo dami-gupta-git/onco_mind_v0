@@ -1253,6 +1253,153 @@ class OpenFDAClient:
 
         result.target_genes = list(genes_found)
 
+    async def search_by_biomarker(
+        self,
+        gene: str,
+        variant: str | None = None,
+        limit: int = 100,
+    ) -> list[FDALabelInfo]:
+        """Search FDA drug labels by biomarker (gene/variant).
+
+        Searches the indications_and_usage field for drugs that mention
+        the specified gene. This catches FDA approvals that may not be
+        in curated databases yet.
+
+        Args:
+            gene: Gene symbol (e.g., "IDH1", "BRAF", "EGFR")
+            variant: Optional variant (e.g., "R132H", "V600E") to filter results
+            limit: Maximum number of results to return
+
+        Returns:
+            List of FDALabelInfo objects for drugs mentioning the gene
+
+        Example:
+            >>> client = OpenFDAClient()
+            >>> labels = await client.search_by_biomarker("IDH1")
+            >>> for label in labels:
+            ...     print(f"{label.brand_name}: {label.target_genes}")
+        """
+        gene_upper = gene.upper()
+        results: list[FDALabelInfo] = []
+
+        # Search indications_and_usage for the gene
+        # Use exact word boundary matching where possible
+        search_query = f'indications_and_usage:"{gene_upper}"'
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            try:
+                response = await client.get(
+                    self.BASE_URL,
+                    params={"search": search_query, "limit": limit}
+                )
+
+                if response.status_code != 200:
+                    logger.warning(f"OpenFDA biomarker search failed: {response.status_code}")
+                    return results
+
+                data = response.json()
+                api_results = data.get("results", [])
+
+                for label_data in api_results:
+                    # Parse into FDALabelInfo
+                    openfda = label_data.get("openfda", {})
+
+                    brand_name = openfda.get("brand_name", [None])[0] if openfda.get("brand_name") else None
+                    generic_name = openfda.get("generic_name", [None])[0] if openfda.get("generic_name") else None
+                    drug_name = generic_name or brand_name or "Unknown"
+
+                    result = FDALabelInfo(drug_name=drug_name)
+                    result.brand_name = brand_name
+                    result.generic_name = generic_name
+                    result.api_success = True
+
+                    # Parse full label data
+                    self._parse_label_data(label_data, result)
+
+                    # Apply biomarker specificity analysis
+                    if result.indications_and_usage:
+                        self._apply_biomarker_specificity(result.indications_and_usage, result)
+
+                    # Verify the gene is actually in target_genes
+                    # (API search may have false positives)
+                    if gene_upper not in [g.upper() for g in result.target_genes]:
+                        # Check if gene appears in indications text
+                        if result.indications_and_usage:
+                            text_upper = result.indications_and_usage.upper()
+                            if gene_upper not in text_upper:
+                                continue
+                            # Gene is in text but not parsed - add it
+                            result.target_genes.append(gene_upper)
+
+                    # If variant specified, filter by variant match
+                    if variant:
+                        variant_upper = variant.upper()
+                        # Check if variant is in specific_variants or indications text
+                        variant_matched = False
+
+                        if result.specific_variants:
+                            for v in result.specific_variants:
+                                if variant_upper in v.upper():
+                                    variant_matched = True
+                                    break
+
+                        # Also check indications text for variant mention
+                        if not variant_matched and result.indications_and_usage:
+                            if variant_upper in result.indications_and_usage.upper():
+                                variant_matched = True
+
+                        # For gene-level approvals (any mutation), include them
+                        if not variant_matched:
+                            if result.biomarker_specificity == "gene":
+                                # Gene-level approval covers all variants
+                                variant_matched = True
+                            elif "MUTATION" in (result.indications_and_usage or "").upper():
+                                # Generic mutation language
+                                variant_matched = True
+
+                        if not variant_matched:
+                            continue
+
+                    results.append(result)
+
+            except httpx.TimeoutException:
+                logger.warning(f"OpenFDA biomarker search timeout for gene: {gene}")
+            except httpx.HTTPError as e:
+                logger.warning(f"OpenFDA biomarker search HTTP error: {e}")
+            except Exception as e:
+                logger.error(f"OpenFDA biomarker search error: {e}")
+
+        # Deduplicate by generic_name or brand_name
+        seen_drugs: set[str] = set()
+        unique_results: list[FDALabelInfo] = []
+        for result in results:
+            key = (result.generic_name or result.brand_name or result.drug_name).lower()
+            if key not in seen_drugs:
+                seen_drugs.add(key)
+                unique_results.append(result)
+
+        logger.info(f"OpenFDA biomarker search for {gene}: found {len(unique_results)} drugs")
+        return unique_results
+
+
+async def search_fda_by_biomarker(
+    gene: str,
+    variant: str | None = None,
+    limit: int = 100,
+) -> list[FDALabelInfo]:
+    """Convenience function to search FDA labels by biomarker.
+
+    Args:
+        gene: Gene symbol (e.g., "IDH1", "BRAF")
+        variant: Optional variant to filter results
+        limit: Maximum results
+
+    Returns:
+        List of FDALabelInfo for drugs targeting this biomarker
+    """
+    client = get_openfda_client()
+    return await client.search_by_biomarker(gene, variant, limit)
+
 
 # Module-level singleton for OpenFDA client
 _openfda_client: OpenFDAClient | None = None

@@ -165,6 +165,7 @@ class GapDetectionContext:
     # Flags set during detection (used by later checks)
     has_clinical: bool = False
     has_drug_data: bool = False
+    has_fda_approval: bool = False  # True if FDA-approved drug matches this variant
 
     def add_well_characterized(
         self,
@@ -254,9 +255,13 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     _enrich_gaps_with_context(evidence, ctx)
 
     # Compute overall assessments
-    overall_quality = _compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
+    # FDA approvals are weighted higher as they represent gold standard clinical evidence
+    overall_quality = _compute_overall_quality(
+        ctx.gaps, len(ctx.well_characterized), has_fda_approval=ctx.has_fda_approval
+    )
     research_priority = _compute_research_priority(
-        evidence, ctx.gaps, overall_quality, ctx.is_cancer_gene, ctx.has_pathogenic_signal
+        evidence, ctx.gaps, overall_quality, ctx.is_cancer_gene, ctx.has_pathogenic_signal,
+        has_fda_approval=ctx.has_fda_approval
     )
 
     # Sort well_characterized_detailed by category for grouped display
@@ -443,6 +448,9 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
                         other_cancers.append(cancer)
 
     has_matched_drug = bool(matched_drugs)
+
+    # Set context flag for FDA approval (used by quality scoring)
+    ctx.has_fda_approval = has_matched_drug
 
     if has_matched_drug:
         # FDA approval covers this variant - mark as well-characterized
@@ -1872,11 +1880,18 @@ SEVERITY_MULTIPLIERS: dict[GapSeverity, float] = {
 }
 
 
-def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: int) -> str:
+def _compute_overall_quality(
+    gaps: list[EvidenceGap],
+    well_characterized_count: int,
+    has_fda_approval: bool = False
+) -> str:
     """Compute overall evidence quality using net scoring (gaps vs well-characterized).
 
     A variant with many well-characterized aspects and few gaps scores better than
     one with few well-characterized aspects and the same gaps.
+
+    FDA approvals are weighted higher than other evidence sources because they
+    represent the gold standard for clinical actionability (Phase III trial data).
 
     FLOOR RULES (severity-based caps):
     - Any CRITICAL gap → cannot be better than "limited"
@@ -1886,6 +1901,7 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     Args:
         gaps: List of evidence gaps found
         well_characterized_count: Number of well-characterized aspects
+        has_fda_approval: Whether an FDA-approved drug matches this variant
 
     Returns:
         Quality rating: "comprehensive" | "moderate" | "limited" | "minimal"
@@ -1905,6 +1921,11 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     # Give credit for well-characterized aspects (each worth 1.5 points of offset)
     positive_credit = well_characterized_count * 1.5
 
+    # FDA approval bonus: worth 4.0 additional points (equivalent to ~3 well-characterized aspects)
+    # This reflects that FDA approval is the gold standard for clinical actionability
+    if has_fda_approval:
+        positive_credit += 4.0
+
     # Net score: higher gap_score is worse, positive_credit offsets it
     net_score = gap_score - positive_credit
 
@@ -1923,14 +1944,26 @@ def _compute_overall_quality(gaps: list[EvidenceGap], well_characterized_count: 
     quality_order = ["minimal", "limited", "moderate", "comprehensive"]
     base_idx = quality_order.index(base_quality)
 
-    if has_critical:
-        # CRITICAL gaps → cannot be better than "limited" (index 1)
-        max_idx = 1
-    elif has_high or has_significant:
-        # HIGH or SIGNIFICANT gaps → cannot be better than "moderate" (index 2)
-        max_idx = 2
+    # FDA approval relaxes the floor cap: allow "moderate" even with critical gaps
+    # because FDA approval proves clinical utility despite knowledge gaps
+    if has_fda_approval:
+        if has_critical:
+            # With FDA approval, CRITICAL gaps → can still be "moderate" (index 2)
+            max_idx = 2
+        elif has_high or has_significant:
+            # With FDA approval, HIGH/SIGNIFICANT gaps → can be "comprehensive" (index 3)
+            max_idx = 3
+        else:
+            max_idx = 3  # No cap
     else:
-        max_idx = 3  # No cap
+        if has_critical:
+            # CRITICAL gaps → cannot be better than "limited" (index 1)
+            max_idx = 1
+        elif has_high or has_significant:
+            # HIGH or SIGNIFICANT gaps → cannot be better than "moderate" (index 2)
+            max_idx = 2
+        else:
+            max_idx = 3  # No cap
 
     final_idx = min(base_idx, max_idx)
     return quality_order[final_idx]
@@ -1942,8 +1975,13 @@ def _compute_research_priority(
     overall_quality: str,
     is_cancer_gene: bool,
     has_pathogenic_signal: bool,
+    has_fda_approval: bool = False,
 ) -> str:
     """Compute research priority based on gene importance and gap profile.
+
+    FDA-approved variants generally have lower research priority because they're
+    already clinically validated. Research focus should be on resistance mechanisms
+    and tumor-type expansion rather than basic characterization.
 
     Args:
         evidence: The aggregated evidence
@@ -1951,6 +1989,7 @@ def _compute_research_priority(
         overall_quality: The computed overall quality ("comprehensive", "moderate", etc.)
         is_cancer_gene: Whether the gene is a known cancer gene (from ctx.is_cancer_gene)
         has_pathogenic_signal: Whether evidence shows pathogenic signals (from ctx.has_pathogenic_signal)
+        has_fda_approval: Whether an FDA-approved drug matches this variant
 
     Returns: "very_high" | "high" | "medium" | "low"
     """
@@ -1963,6 +2002,25 @@ def _compute_research_priority(
     # Only return low if comprehensive AND no significant/critical/high gaps
     if overall_quality == "comprehensive" and critical_count == 0 and high_count == 0 and significant_count == 0:
         return "low"
+
+    # FDA-approved variants have reduced research priority for basic characterization
+    # (they're already clinically proven), but resistance research remains valuable
+    if has_fda_approval:
+        # Check if gaps are primarily resistance/expansion related (still valuable research)
+        resistance_gaps = sum(1 for g in gaps if g.category in (
+            GapCategory.RESISTANCE, GapCategory.TUMOR_TYPE
+        ))
+        basic_gaps = sum(1 for g in gaps if g.category in (
+            GapCategory.FUNCTIONAL, GapCategory.VALIDATION, GapCategory.PRECLINICAL
+        ))
+
+        # If mostly basic characterization gaps with FDA approval → lower priority
+        if basic_gaps > resistance_gaps:
+            # Cap at "medium" since FDA approval proves clinical utility
+            # Focus should be on resistance/expansion research instead
+            if overall_quality in ("comprehensive", "moderate"):
+                return "low"
+            return "medium"
 
     gene = evidence.identifiers.gene
     variant = evidence.identifiers.variant

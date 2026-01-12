@@ -17,11 +17,106 @@ from oncomind.models.evidence import (
     FDAApproval,
     FDALabelEvidence,
 )
-from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term, extract_variant_codon
+from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term, extract_variant_codon, tumor_types_match
 from oncomind.models.evidence.fda import extract_combination_partners
 from oncomind.config.debug import get_logger
 
 logger = get_logger(__name__)
+
+
+# Common cancer/tumor type patterns in FDA indications
+# These are used to extract the disease context from indication text
+FDA_TUMOR_PATTERNS = [
+    # Specific cancers (order matters - more specific first)
+    (r"acute myeloid leukemia|AML", "AML"),
+    (r"non-?small cell lung cancer|NSCLC", "NSCLC"),
+    (r"small cell lung cancer|SCLC", "SCLC"),
+    (r"lung cancer|lung adenocarcinoma|lung carcinoma", "Lung Cancer"),
+    (r"colorectal cancer|colon cancer|rectal cancer|CRC", "Colorectal Cancer"),
+    (r"breast cancer|breast carcinoma", "Breast Cancer"),
+    (r"melanoma", "Melanoma"),
+    (r"glioma|astrocytoma|oligodendroglioma|glioblastoma|GBM", "Glioma"),
+    (r"cholangiocarcinoma|bile duct cancer", "Cholangiocarcinoma"),
+    (r"thyroid cancer|thyroid carcinoma", "Thyroid Cancer"),
+    (r"prostate cancer|prostate carcinoma", "Prostate Cancer"),
+    (r"ovarian cancer|ovarian carcinoma", "Ovarian Cancer"),
+    (r"pancreatic cancer|pancreatic carcinoma", "Pancreatic Cancer"),
+    (r"gastric cancer|stomach cancer", "Gastric Cancer"),
+    (r"esophageal cancer", "Esophageal Cancer"),
+    (r"bladder cancer|urothelial cancer|urothelial carcinoma", "Bladder Cancer"),
+    (r"renal cell carcinoma|kidney cancer|RCC", "Kidney Cancer"),
+    (r"hepatocellular carcinoma|liver cancer|HCC", "Liver Cancer"),
+    (r"head and neck.*cancer|HNSCC", "Head and Neck Cancer"),
+    (r"cervical cancer", "Cervical Cancer"),
+    (r"endometrial cancer|uterine cancer", "Endometrial Cancer"),
+    (r"gastrointestinal stromal tumor|GIST", "GIST"),
+    (r"chronic myeloid leukemia|CML", "CML"),
+    (r"chronic lymphocytic leukemia|CLL", "CLL"),
+    (r"multiple myeloma", "Multiple Myeloma"),
+    (r"lymphoma", "Lymphoma"),
+    (r"leukemia", "Leukemia"),
+    # Pan-cancer/tumor-agnostic
+    (r"solid tumor", "Solid Tumor"),
+    (r"advanced.*cancer|metastatic.*cancer", "Advanced Cancer"),
+]
+
+
+def extract_tumor_from_indication(indication_text: str) -> list[str]:
+    """Extract tumor/disease types from FDA indication text.
+
+    Args:
+        indication_text: FDA indications and usage text
+
+    Returns:
+        List of normalized tumor types found (e.g., ["AML", "Cholangiocarcinoma"])
+    """
+    if not indication_text:
+        return []
+
+    tumors_found = []
+    text_lower = indication_text.lower()
+
+    for pattern, tumor_name in FDA_TUMOR_PATTERNS:
+        if re.search(pattern, text_lower, re.IGNORECASE):
+            if tumor_name not in tumors_found:
+                tumors_found.append(tumor_name)
+
+    return tumors_found
+
+
+def match_fda_tumor(
+    indication_text: str,
+    query_tumor: str | None,
+) -> tuple[bool, str | None]:
+    """Match query tumor against FDA indication text.
+
+    Args:
+        indication_text: FDA indications and usage text
+        query_tumor: User's tumor type query (e.g., "Glioma", "NSCLC")
+
+    Returns:
+        Tuple of (matched: bool, match_type: str | None)
+        match_type is "cancer_specific" if tumor matches, "pan_cancer" if solid tumor, None if no match
+    """
+    if not query_tumor or not indication_text:
+        return False, None
+
+    # Extract tumors from indication
+    indication_tumors = extract_tumor_from_indication(indication_text)
+
+    if not indication_tumors:
+        return False, None
+
+    # Check for pan-cancer approvals
+    if "Solid Tumor" in indication_tumors or "Advanced Cancer" in indication_tumors:
+        return True, "pan_cancer"
+
+    # Check if query tumor matches any indication tumor
+    for ind_tumor in indication_tumors:
+        if tumor_types_match(ind_tumor, query_tumor):
+            return True, "cancer_specific"
+
+    return False, None
 
 
 def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | None:
@@ -74,10 +169,10 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     if phenotypes_found:
         return {"level": "phenotype", "phenotypes": phenotypes_found}
 
-    # 2. Multi-gene patterns: "PIK3CA/AKT1/PTEN -alteration"
-    # The space before hyphen is common in FDA text: "PIK3CA/AKT1/PTEN -alteration"
+    # 2. Multi-gene patterns: "PIK3CA/AKT1/PTEN-alteration" or "PIK3CA/AKT1/PTEN -alteration"
+    # Handle both with and without space before hyphen
     multi_gene_match = re.search(
-        r'([A-Z0-9]+(?:/[A-Z0-9]+)+)\s+-?\s*(?:ALTER|MUTAT)',
+        r'([A-Z0-9]+(?:/[A-Z0-9]+)+)\s*-?\s*(?:ALTER|MUTAT)',
         text_upper
     )
     if multi_gene_match:
@@ -143,11 +238,13 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
         }
 
     # 9. Gene-level: "AKT1 alteration", "BRCA-mutated", "ALK-positive"
+    # Also handles "(IDH1) or ... (IDH2) mutation" format from FDA labels
     gene_level_patterns = [
         rf"{gene}\s*-?\s*(?:alter|mutat)",
         rf"{gene}[- ]?positive",
         rf"{gene}\s+rearrangement",
         rf"{gene}\s+fusion",
+        rf"\({gene}\).*?mutation",  # "(IDH1) ... mutation" format
     ]
     for pattern in gene_level_patterns:
         if re.search(pattern, text, re.IGNORECASE):
@@ -323,6 +420,11 @@ def populate_locus_variant_match(
         if not label.indications_and_usage or not label.gene:
             continue
 
+        # Check tumor match first (applies to all cases)
+        tumor_matched, tumor_match_type = match_fda_tumor(
+            label.indications_and_usage, query_tumor
+        )
+
         # Use match_fda_approval for biomarker matching logic
         if query_variant:
             result = match_fda_approval(
@@ -332,23 +434,35 @@ def populate_locus_variant_match(
                 fda_indication=label.indications_and_usage,
             )
 
-            covered = result["matched"]
+            biomarker_covered = result["matched"]
             match_level = result.get("match_level")
             partners = result.get("combination_partners", [])
 
+            # Final "matched" requires BOTH biomarker AND tumor match
+            # A drug approved for AML shouldn't match for a Glioma patient
+            fully_matched = biomarker_covered and tumor_matched
+
             # Set biomarker_match
             label.biomarker_match = BiomarkerMatch(
-                matched=covered,
-                match_level=match_level,
-                tumor_matched=None,  # TODO: add tumor matching later
-                tumor_match_type=None,
+                matched=fully_matched,
+                match_level=match_level if fully_matched else None,
+                tumor_matched=tumor_matched,
+                tumor_match_type=tumor_match_type,
                 combination_partners=partners,
             )
 
             # Also set locus_variant_match for backward compatibility
-            if match_level:
+            if match_level and fully_matched:
                 label.locus_variant_match = EvidenceLevel(
                     level=match_level,
+                    scope="specific",
+                    origin="kb"
+                )
+
+            # Set cancer_type_match
+            if tumor_matched:
+                label.cancer_type_match = EvidenceLevel(
+                    level=tumor_match_type or "cancer_specific",
                     scope="specific",
                     origin="kb"
                 )
@@ -359,18 +473,29 @@ def populate_locus_variant_match(
             )
             if biomarker_spec and biomarker_spec.get("level") == "gene":
                 partners = extract_combination_partners(label.indications_and_usage)
+
+                # Gene-level match still requires tumor match
+                fully_matched = tumor_matched
+
                 label.locus_variant_match = EvidenceLevel(
                     level="gene",
                     scope="unspecified",
                     origin="kb"
                 )
                 label.biomarker_match = BiomarkerMatch(
-                    matched=True,
-                    match_level="gene",
-                    tumor_matched=None,
-                    tumor_match_type=None,
+                    matched=fully_matched,
+                    match_level="gene" if fully_matched else None,
+                    tumor_matched=tumor_matched,
+                    tumor_match_type=tumor_match_type,
                     combination_partners=partners,
                 )
+
+                if tumor_matched:
+                    label.cancer_type_match = EvidenceLevel(
+                        level=tumor_match_type or "cancer_specific",
+                        scope="specific",
+                        origin="kb"
+                    )
 
 
 def convert_fda_labels_to_approvals(

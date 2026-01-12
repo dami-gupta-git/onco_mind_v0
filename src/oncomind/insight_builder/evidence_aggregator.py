@@ -40,7 +40,7 @@ from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
-from oncomind.api.fda_drugs import ensure_fda_labels_cached
+from oncomind.api.fda_drugs import ensure_fda_labels_cached, search_fda_by_biomarker, FDALabelInfo
 from oncomind.api.fda_label_service import collect_all_drugs
 
 from oncomind.models.evidence import (
@@ -141,6 +141,8 @@ class FetchResults:
     sources_queried: list[str] = field(default_factory=list)
     sources_with_data: list[str] = field(default_factory=list)
     sources_failed: list[str] = field(default_factory=list)
+    # FDA biomarker search results - stored here to merge with curated drug list
+    fda_biomarker_labels: list = field(default_factory=list)
 
     def handle_result(self, result: Any, source_name: str) -> Any:
         """Handle an API result with error tracking.
@@ -634,6 +636,19 @@ class EvidenceAggregator:
         # Then build therapies (which internally fetches labels and converts them)
         all_drugs = self._collect_fda_approved_drugs(evidence)
 
+        # Add drugs from FDA biomarker search (direct OpenFDA search by gene)
+        # This catches recent FDA approvals not yet in curated databases
+        # Normalize to title case for consistency with existing drug names
+        existing_lower = {d.lower() for d in all_drugs}
+        for fda_label in tracker.fda_biomarker_labels:
+            drug_name = fda_label.generic_name or fda_label.brand_name
+            if drug_name and drug_name.lower() not in existing_lower:
+                # Use title case for consistency
+                normalized_name = drug_name.title()
+                all_drugs.add(normalized_name)
+                existing_lower.add(drug_name.lower())
+                logger.debug(f"Added {normalized_name} from FDA biomarker search")
+
         # Fetch FDA labels for drugs and populate locus_variant_match
         evidence.fda_labels = get_fda_labels_for_drugs(
             drugs=all_drugs,
@@ -734,6 +749,18 @@ class EvidenceAggregator:
                 )
             return None
 
+        async def fetch_fda_biomarker():
+            """Search FDA labels directly by biomarker.
+
+            This catches FDA approvals not in curated databases (CGI, VICC, etc.)
+            by searching OpenFDA for drugs mentioning this gene in indications.
+            """
+            try:
+                return await search_fda_by_biomarker(gene, variant)
+            except Exception as e:
+                logger.warning(f"FDA biomarker search failed for {gene}: {e}")
+                return []
+
         return await asyncio.gather(
             self.myvariant_client.fetch_evidence(gene=gene, variant=variant),
             self.fda_client.fetch_approval_evidence(gene=gene, variant=variant),
@@ -746,6 +773,7 @@ class EvidenceAggregator:
             fetch_cbioportal(),
             fetch_cell_lines(),
             fetch_depmap(),
+            fetch_fda_biomarker(),
             return_exceptions=True,
         )
 
@@ -762,7 +790,7 @@ class EvidenceAggregator:
         (
             myvariant_result, fda_result, cgi_result, vicc_result, civic_assertions_result,
             civic_evidence_result, trials_result, literature_result, cbioportal_result,
-            cell_lines_result, depmap_result,
+            cell_lines_result, depmap_result, fda_biomarker_result,
         ) = results
 
         gene = variant.gene
@@ -780,6 +808,13 @@ class EvidenceAggregator:
         civic_evidence: list[CIViCEvidence] = tracker.handle_result(civic_evidence_result, "CIViC Evidence") or []
         clinical_trials: list[ClinicalTrialEvidence] = tracker.handle_result(trials_result, "ClinicalTrials.gov") or []
         pubmed_articles: list[PubMedEvidence] = tracker.handle_result(literature_result, "Literature") or []
+
+        # FDA biomarker search - drugs found directly from OpenFDA by gene search
+        # Store on tracker so build_evidence can merge with curated drug list
+        fda_biomarker_labels: list[FDALabelInfo] = tracker.handle_result(fda_biomarker_result, "FDA Biomarker") or []
+        tracker.fda_biomarker_labels = fda_biomarker_labels
+        if fda_biomarker_labels:
+            logger.info(f"FDA biomarker search found {len(fda_biomarker_labels)} drugs for {gene}")
 
         # Process CGI biomarkers (split by evidence level)
         cgi_biomarkers, preclinical_biomarkers, early_phase_biomarkers = self._process_cgi_biomarkers(all_cgi)
