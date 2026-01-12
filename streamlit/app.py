@@ -115,6 +115,9 @@ st.markdown("""
     .scrollable-table .col-status { width: 150px; }
     .scrollable-table .col-indication { width: 250px; }
     .scrollable-table .col-links { width: 80px; }
+    .scrollable-table .col-nct { width: 95px; }
+    .scrollable-table .col-phase { width: 60px; }
+    .scrollable-table .col-title { min-width: 300px; }
     /* Truncated text cells - inner div handles the truncation */
     .scrollable-table td.truncated {
         cursor: pointer;
@@ -198,6 +201,9 @@ def scrollable_table(markdown_content: str) -> None:
         'status': 'col-status',
         'indication': 'col-indication',
         'links': 'col-links',
+        'nct id': 'col-nct',
+        'phase': 'col-phase',
+        'title': 'col-title',
     }
 
     # Skip separator line (line with dashes)
@@ -1360,8 +1366,10 @@ with tab1:
                                 nct_link = f"[{nct_id}]({nct_url})" if nct_id and nct_url else nct_id
                                 phase = t.get('phase', 'N/A')
                                 status = t.get('status', '')
-                                title = (t.get('title', '') or '')[:50] + "..."
-                                rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title} |")
+                                title = t.get('title', '') or ''
+                                # Show more of the title (truncation handled by CSS)
+                                title_display = title[:100] + "..." if len(title) > 100 else title
+                                rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title_display} |")
                             scrollable_table("\n".join(rows))
                     tab_idx += 1
 
@@ -1985,7 +1993,7 @@ with tab1:
                 summary = cross_source.get('summary', '')
                 if summary:
                     st.markdown(f"**Summary:** {summary}")
-                    st.markdown("---")
+                    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
 
                 # Create columns for structured display
                 col1, col2 = st.columns(2)
@@ -1994,7 +2002,7 @@ with tab1:
                 with col1:
                     strongest = cross_source.get('strongest_evidence', [])
                     if strongest:
-                        st.markdown("**💪 Strongest Evidence**")
+                        lines = ["**💪 Strongest Evidence**"]
                         for item in strongest[:5]:  # Limit to top 5
                             drug = item.get('drug', 'Unknown')
                             signal = item.get('signal', '')
@@ -2002,51 +2010,55 @@ with tab1:
                             level = item.get('evidence_level', '')
                             rationale = item.get('rationale', '')
                             signal_emoji = "🟢" if signal == "sensitivity" else "🔴" if signal == "resistance" else "⚪"
-                            st.markdown(f"{signal_emoji} **{drug}** ({level})")
-                            st.markdown(f"   Sources: {sources}")
+                            lines.append(f"{signal_emoji} **{drug}** ({level})  ")
+                            lines.append(f"&nbsp;&nbsp;&nbsp;Sources: {sources}  ")
                             if rationale:
-                                st.markdown(f"   _{rationale}_")
+                                lines.append(f"&nbsp;&nbsp;&nbsp;_{rationale}_  ")
+                        st.markdown("<br>".join(lines), unsafe_allow_html=True)
 
                 # Conflicting Signals
                 with col2:
                     conflicts = cross_source.get('conflicting_signals', [])
                     if conflicts:
-                        st.markdown("**⚠️ Conflicting Signals**")
+                        lines = ["**⚠️ Conflicting Signals**"]
                         for item in conflicts[:5]:
                             drug = item.get('drug', 'Unknown')
                             conflict = item.get('conflict', '')
                             reason = item.get('likely_reason', '')
                             question = item.get('research_question', '')
-                            st.markdown(f"**{drug}**: {conflict}")
+                            lines.append(f"**{drug}**: {conflict}  ")
                             if reason:
-                                st.markdown(f"   _Likely reason: {reason}_")
+                                lines.append(f"&nbsp;&nbsp;&nbsp;_Likely reason: {reason}_  ")
                             if question:
-                                st.markdown(f"   ❓ {question}")
+                                lines.append(f"&nbsp;&nbsp;&nbsp;❓ {question}  ")
+                        st.markdown("<br>".join(lines), unsafe_allow_html=True)
 
                 # Emerging Targets (single-source, needs validation)
                 emerging = cross_source.get('emerging_targets', [])
                 if emerging:
-                    st.markdown("---")
-                    st.markdown("**🌱 Emerging Targets** (single-source, needs validation)")
+                    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+                    lines = ["**🌱 Emerging Targets** (single-source, needs validation)"]
                     for item in emerging[:3]:  # Limit to top 3
                         drug = item.get('drug', 'Unknown')
                         source = item.get('source', '')
                         level = item.get('evidence_level', '')
                         rationale = item.get('biological_rationale', '')
                         validation = item.get('validation_needed', '')
-                        st.markdown(f"• **{drug}** ({source}, {level})")
+                        lines.append(f"• **{drug}** ({source}, {level})  ")
                         if rationale:
-                            st.markdown(f"  _{rationale}_")
+                            lines.append(f"&nbsp;&nbsp;_{rationale}_  ")
                         if validation:
-                            st.markdown(f"  📋 Needs: {validation}")
+                            lines.append(f"&nbsp;&nbsp;📋 Needs: {validation}  ")
+                    st.markdown("<br>".join(lines), unsafe_allow_html=True)
 
                 # Key Gaps
                 gaps = cross_source.get('key_gaps', [])
                 if gaps:
-                    st.markdown("---")
-                    st.markdown("**🔍 Key Gaps**")
+                    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+                    lines = ["**🔍 Key Gaps**"]
                     for gap in gaps[:3]:
-                        st.markdown(f"• {gap}")
+                        lines.append(f"• {gap}")
+                    st.markdown("<br>".join(lines), unsafe_allow_html=True)
 
         # ==============================================
         # FOOTER: Download & Clear
