@@ -35,8 +35,10 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 
 ## Screenshots
 
-<!-- Add screenshots here -->
-
+![Title](./images/title.png)
+![Gap Analysis](./images/gap.png)
+![LLM Synthesis](./images/synthesis.png)
+![LLM Cross Source Drug Analysis](./images/cross_source.png)
 ---
 
 ## What This Demonstrates
