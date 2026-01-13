@@ -867,6 +867,60 @@ def _fetch_initial_approval_date(drug_name: str, brand_names: list[str] | None =
     return None
 
 
+async def _fetch_initial_approval_date_async(
+    client: httpx.AsyncClient,
+    drug_name: str,
+    brand_names: list[str] | None = None,
+) -> str | None:
+    """Async version: Fetch initial FDA approval date from drugsfda endpoint.
+
+    The drugsfda endpoint contains the full approval history with submissions.
+    The initial approval is the ORIG submission with status AP.
+
+    Args:
+        client: httpx.AsyncClient instance for making requests
+        drug_name: Drug name to search for
+        brand_names: Optional list of brand names to try
+
+    Returns:
+        Initial approval date in YYYY-MM-DD format, or None if not found
+    """
+    drugsfda_url = "https://api.fda.gov/drug/drugsfda.json"
+
+    # Try brand names first (more reliable), then drug name
+    search_terms = []
+    if brand_names:
+        search_terms.extend(brand_names)
+    search_terms.append(drug_name)
+
+    for term in search_terms:
+        params = {
+            "search": f'openfda.brand_name:"{term}"',
+            "limit": 1
+        }
+        try:
+            resp = await client.get(drugsfda_url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("results"):
+                    result = data["results"][0]
+                    submissions = result.get("submissions", [])
+
+                    # Find the original approval (ORIG with status AP)
+                    for sub in submissions:
+                        if sub.get("submission_type") == "ORIG" and sub.get("submission_status") == "AP":
+                            status_date = sub.get("submission_status_date")
+                            if status_date and len(status_date) == 8:
+                                # Convert YYYYMMDD to YYYY-MM-DD
+                                return f"{status_date[:4]}-{status_date[4:6]}-{status_date[6:8]}"
+
+        except httpx.RequestError as e:
+            logger.debug(f"Error fetching approval date for {term}: {e}")
+            continue
+
+    return None
+
+
 def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]:
     """Process raw OpenFDA label result into structured label data.
 
