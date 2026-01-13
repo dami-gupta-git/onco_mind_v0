@@ -49,21 +49,28 @@ class CIViCEvidence(EvidenceItemBase):
     @computed_field
     @property
     def is_sensitivity(self) -> bool:
+        """Check if this evidence SUPPORTS sensitivity/response.
 
-        # Check if this evidence SUPPORTS sensitivity/response.\n"
-        #          CIViC has two fields:\n"
-        #          - clinical_significance: What the evidence is ABOUT (e.g., \"Sensitivity/Response\")\n"
-        #          - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance\n"
+        CIViC has two fields:
+        - clinical_significance: What the evidence is ABOUT (e.g., "Sensitivity/Response")
+        - evidence_direction: Whether the study SUPPORTS or DOES_NOT_SUPPORT that significance
+
+        True sensitivity requires:
+        - clinical_significance contains "sensitiv" or "response"
+        - AND evidence_direction is "SUPPORTS" (or missing, for backward compatibility)
+        """
         if not self.clinical_significance:
             return False
         significance = self.clinical_significance.upper()
-        direction = self.evidence_direction.upper()
+        direction = (self.evidence_direction or "").upper()
 
         if "SENSITIV" in significance or "RESPONSE" in significance:
-            if direction=="SUPPORTS":
+            # If direction is missing/empty, assume SUPPORTS for backward compatibility
+            if not direction or direction == "SUPPORTS":
                 return True
             else:
                 return False
+        return False
 
 
 
@@ -84,11 +91,12 @@ class CIViCEvidence(EvidenceItemBase):
         if not self.clinical_significance:
             return False
         sig_upper = self.clinical_significance.upper()
-        direction = self.evidence_direction.upper()
+        direction = (self.evidence_direction or "").upper()
 
         is_resist_topic = "RESIST" in sig_upper
-        if is_resist_topic and direction == "SUPPORTS":
-                return True
+        # If direction is missing/empty, assume SUPPORTS for backward compatibility
+        if is_resist_topic and (not direction or direction == "SUPPORTS"):
+            return True
 
         return False
 

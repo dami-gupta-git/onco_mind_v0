@@ -585,7 +585,7 @@ class Evidence(BaseModel):
 
                         evidence_list.append(TherapeuticData(
                             drug_name=biomarker.drug,
-                            evidence_level=biomarker.evidence_level or "Early Phase",
+                            evidence_level=biomarker.evidence_level or "Unspecified",
                             approval_status="Investigational",
                             clinical_context=biomarker.tumor_type,
                             response_type=response_type,
@@ -740,7 +740,7 @@ class Evidence(BaseModel):
                 for therapy in assertion.therapies:
                     drug_key = therapy.lower()
                     # Determine response type for deduplication key
-                    civic_response = "sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else ""
+                    civic_response = "sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None
                     entry_key = (drug_key, civic_response)
                     if entry_key not in seen_entries:
                         seen_entries.add(entry_key)
@@ -1712,7 +1712,7 @@ class Evidence(BaseModel):
                         if not is_biomarker_selection_drug(t, gene)
                     ]
                     therapies = ", ".join(filtered_therapies[:2]) if filtered_therapies else ""
-                    sig = "sens" if a.is_sensitivity else "res" if a.is_resistance else ""
+                    sig = "sens" if a.is_sensitivity else "res" if a.is_resistance else "unk"
                     if therapies:
                         civic_drugs.append(f"{therapies} ({sig})")
                 if civic_drugs:
