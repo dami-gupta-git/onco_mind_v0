@@ -623,7 +623,7 @@ class ClinicalTrialsClient:
                     for condition in (trial.conditions or [])
                 )
                 cancer_type_match = EvidenceLevel(
-                    level="cancer_specific" if cancer_matches else "pan_cancer",
+                    level="cancer_specific" if cancer_matches else None,
                     scope="specific" if cancer_matches else "unspecified",
                     origin="trial",
                 )
@@ -720,7 +720,7 @@ class ClinicalTrialsClient:
             )
 
             cancer_type_match = EvidenceLevel(
-                level="cancer_specific" if cancer_matches else "pan_cancer",
+                level="cancer_specific" if cancer_matches else None,
                 scope="specific" if cancer_matches else "unspecified",
                 origin="trial",
             )

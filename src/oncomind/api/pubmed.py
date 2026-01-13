@@ -764,7 +764,7 @@ class PubMedClient:
                 full_text = f"{article.title or ''} {article.abstract or ''}"
                 tumor_matches = tumor_types_match(full_text, tumor_type)
                 cancer_type_match = EvidenceLevel(
-                    level="cancer_specific" if tumor_matches else "pan_cancer",
+                    level="cancer_specific" if tumor_matches else None,
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
                 )

@@ -1331,35 +1331,10 @@ class OpenFDAClient:
                             # Gene is in text but not parsed - add it
                             result.target_genes.append(gene_upper)
 
-                    # If variant specified, filter by variant match
-                    if variant:
-                        variant_upper = variant.upper()
-                        # Check if variant is in specific_variants or indications text
-                        variant_matched = False
-
-                        if result.specific_variants:
-                            for v in result.specific_variants:
-                                if variant_upper in v.upper():
-                                    variant_matched = True
-                                    break
-
-                        # Also check indications text for variant mention
-                        if not variant_matched and result.indications_and_usage:
-                            if variant_upper in result.indications_and_usage.upper():
-                                variant_matched = True
-
-                        # For gene-level approvals (any mutation), include them
-                        if not variant_matched:
-                            if result.biomarker_specificity == "gene":
-                                # Gene-level approval covers all variants
-                                variant_matched = True
-                            elif "MUTATION" in (result.indications_and_usage or "").upper():
-                                # Generic mutation language
-                                variant_matched = True
-
-                        if not variant_matched:
-                            continue
-
+                    # Don't filter by variant here - return all gene-matching drugs
+                    # and let downstream code (fda_processor.py) determine locus_match level
+                    # (variant/codon/gene). This ensures gene-level matches are shown
+                    # with appropriate match level indicators.
                     results.append(result)
 
             except httpx.TimeoutException:

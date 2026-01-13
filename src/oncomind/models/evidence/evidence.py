@@ -603,8 +603,9 @@ class Evidence(BaseModel):
                         else:
                             evidence_level = "Phase 2"
 
-                        # Use the tumor_match property already set by the API client
-                        cancer_specificity = "cancer_specific" if trial.tumor_match else "pan_cancer"
+                        # Use the cancer_specificity property from the API client
+                        # (returns "cancer_specific", specific disease name, or None)
+                        cancer_specificity = trial.cancer_specificity
 
                         evidence_list.append(TherapeuticData(
                             drug_name=drug,
@@ -2344,6 +2345,7 @@ class Evidence(BaseModel):
         - cancer_specific: Evidence matches the user's queried tumor type
         - pan_cancer: Evidence is tumor-agnostic (e.g., "Solid Tumor", "MSI-H")
         - other: Evidence is for a different specific tumor type
+        - unknown: Evidence has no tumor type information
 
         Returns:
             Dict with counts, other tumor types found, and summary text for LLM prompt
@@ -2351,11 +2353,12 @@ class Evidence(BaseModel):
         cancer_specific_count = 0
         pan_cancer_count = 0
         other_count = 0
+        unknown_count = 0
         other_tumor_types: set[str] = set()
 
         def count_tumor_match(item) -> None:
             """Count tumor match for an evidence item."""
-            nonlocal cancer_specific_count, pan_cancer_count, other_count
+            nonlocal cancer_specific_count, pan_cancer_count, other_count, unknown_count
             # Try tumor_match property first (bool: True = cancer_specific)
             tumor_match = getattr(item, 'tumor_match', None)
             if tumor_match is True:
@@ -2376,8 +2379,8 @@ class Evidence(BaseModel):
                 other_count += 1
                 other_tumor_types.add(specificity)
             else:
-                # No tumor info - treat as pan_cancer (unknown)
-                pan_cancer_count += 1
+                # No tumor info - count as unknown (NOT pan_cancer)
+                unknown_count += 1
 
         # FDA approvals
         for approval in self.fda_approvals:
@@ -2403,7 +2406,7 @@ class Evidence(BaseModel):
         for trial in self.clinical_trials:
             count_tumor_match(trial)
 
-        total = cancer_specific_count + pan_cancer_count + other_count
+        total = cancer_specific_count + pan_cancer_count + other_count + unknown_count
         queried_tumor = self.context.tumor_type or "unknown"
 
         # Build summary text
@@ -2416,6 +2419,8 @@ class Evidence(BaseModel):
             summary_text = f"All {total} evidence items are from other tumor types ({others_str})."
         elif pan_cancer_count == total:
             summary_text = f"All {total} evidence items are pan-cancer/tumor-agnostic."
+        elif unknown_count == total:
+            summary_text = f"All {total} evidence items have unknown tumor type."
         else:
             parts = []
             if cancer_specific_count > 0:
@@ -2427,12 +2432,15 @@ class Evidence(BaseModel):
                 if len(other_tumor_types) > 3:
                     others_str += f" +{len(other_tumor_types) - 3} more"
                 parts.append(f"{other_count} other ({others_str})")
+            if unknown_count > 0:
+                parts.append(f"{unknown_count} unknown")
             summary_text = f"Tumor match: {', '.join(parts)}."
 
         return {
             "cancer_specific_count": cancer_specific_count,
             "pan_cancer_count": pan_cancer_count,
             "other_count": other_count,
+            "unknown_count": unknown_count,
             "other_tumor_types": sorted(other_tumor_types),
             "total": total,
             "summary_text": summary_text,
