@@ -571,11 +571,17 @@ def parse_mechanism_of_action(text: str) -> MechanismOfActionData | None:
     if akt_match:
         targets = ["AKT1", "AKT2", "AKT3"]
     else:
-        # Pattern 2: Generic kinase/gene targets
+        # Pattern 2: Look for primary target mentioned prominently
+        # Prioritize patterns that describe the main mechanism
         target_patterns = [
+            # "inhibits the kinase activity of... EGFR" or "inhibitor of EGFR"
+            r"inhibit(?:s|or of)\s+(?:the\s+)?(?:kinase\s+activity\s+of\s+)?(?:wild-type\s+and\s+)?(?:certain\s+)?(?:activating\s+)?(?:mutations\s+of\s+)?([A-Z][A-Z0-9]{1,10})",
+            # "X receptor (GENE)" - e.g., "epidermal growth factor receptor (EGFR)"
+            r"(?:receptor|kinase)\s*\(([A-Z][A-Z0-9]{1,10})\)",
+            # "inhibitor of (GENE1, GENE2)"
             r"inhibitor of[^(]*\(([A-Z0-9]+(?:\s*,\s*[A-Z0-9]+)*(?:\s*and\s+[A-Z0-9]+)?)\)",
-            r"inhibits?\s+([A-Z0-9]+(?:\s*,\s*[A-Z0-9]+)*)",
-            r"targets?\s*(?:include)?\s*([A-Z0-9]+(?:\s*,\s*[A-Z0-9]+)*)",
+            # "targets include GENE"
+            r"targets?\s*(?:include)?\s*([A-Z][A-Z0-9]{1,10}(?:\s*,\s*[A-Z0-9]+)*)",
         ]
         for pattern in target_patterns:
             target_match = re.search(pattern, text)

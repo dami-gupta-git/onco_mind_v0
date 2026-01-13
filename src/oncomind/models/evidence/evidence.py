@@ -680,11 +680,18 @@ class Evidence(BaseModel):
         # e.g., Imatinib Responsive + Imatinib Resistant should both appear
         seen_entries: set[tuple[str, str]] = set()
 
+        gene = self.identifiers.gene if self.identifiers else None
+
         # From FDA approvals - only include those that match the queried variant
         # Unmatched codon-level near-misses are shown separately in get_evidence_summary_for_llm()
         for approval in self.fda_approvals:
             if not approval.biomarker_matched:
                 continue  # Skip approvals that don't cover this variant
+
+            # Skip biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
+            drug_name_check = approval.drug_name or approval.generic_name or approval.brand_name
+            if drug_name_check and gene and is_biomarker_selection_drug(drug_name_check, gene):
+                continue
             # For combinations (contain "+"), use drug_name as key; otherwise use generic/brand
             is_combination = approval.drug_name and "+" in approval.drug_name
             if is_combination:
@@ -717,13 +724,17 @@ class Evidence(BaseModel):
                     elif "RESPONS" in assoc_upper or "SENSITIV" in assoc_upper:
                         response_type = "Sensitivity"
 
-                # Generate DailyMed URL for FDA drug label
-                # Use brand name if available, otherwise generic name
-                # For combinations (e.g., "Erlotinib + gemcitabine"), use just the first drug
-                dailymed_search = approval.brand_name or approval.generic_name or approval.drug_name
-                if dailymed_search and "+" in dailymed_search:
-                    dailymed_search = dailymed_search.split("+")[0].strip()
-                dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={dailymed_search.replace(' ', '+')}" if dailymed_search else None
+                # Generate FDA label URL using set_id for direct link
+                # For combinations, use just the first drug for search fallback
+                fda_url = None
+                if hasattr(approval, 'set_id') and approval.set_id:
+                    fda_url = f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={approval.set_id}"
+                else:
+                    search_drug = approval.brand_name or approval.generic_name or approval.drug_name
+                    if search_drug and "+" in search_drug:
+                        search_drug = search_drug.split("+")[0].strip()
+                    if search_drug:
+                        fda_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_drug.replace(' ', '+')}"
 
                 evidence_list.append(TherapeuticData(
                     drug_name=drug_name,
@@ -734,7 +745,7 @@ class Evidence(BaseModel):
                     mechanism=None,
                     tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
                     source="FDA",
-                    source_url=dailymed_url,
+                    source_url=fda_url,
                     confidence="high",
                     locus_match=approval.locus_match,
                     cancer_specificity=cancer_specificity,
@@ -744,6 +755,9 @@ class Evidence(BaseModel):
         for assertion in self.civic_assertions:
             if assertion.amp_tier == "Tier I" and assertion.fda_companion_test and assertion.therapies:
                 for therapy in assertion.therapies:
+                    # Skip biomarker selection drugs
+                    if gene and is_biomarker_selection_drug(therapy, gene):
+                        continue
                     drug_key = therapy.lower()
                     # Determine response type for deduplication key
                     civic_response = "sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None
@@ -771,6 +785,9 @@ class Evidence(BaseModel):
         # From CGI biomarkers - fda_approved=True
         for biomarker in self.cgi_biomarkers:
             if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
+                # Skip biomarker selection drugs
+                if gene and is_biomarker_selection_drug(biomarker.drug, gene):
+                    continue
                 drug_key = biomarker.drug.lower()
                 assoc_key = (biomarker.association or "").lower()
                 entry_key = (drug_key, assoc_key)
@@ -791,8 +808,14 @@ class Evidence(BaseModel):
 
                     cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
 
-                    # Generate DailyMed URL for CGI-sourced FDA approvals
-                    dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={biomarker.drug.replace(' ', '+')}"
+                    # Use CGI's FDA URL if available, otherwise search DailyMed
+                    # For combinations (e.g., "Erlotinib + gemcitabine"), use just the first drug
+                    source_url = biomarker.fda_url
+                    if not source_url and biomarker.drug:
+                        search_drug = biomarker.drug
+                        if "+" in search_drug:
+                            search_drug = search_drug.split("+")[0].strip()
+                        source_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_drug.replace(' ', '+')}"
 
                     evidence_list.append(TherapeuticData(
                         drug_name=biomarker.drug,
@@ -803,11 +826,27 @@ class Evidence(BaseModel):
                         mechanism=None,
                         tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
                         source="CGI",
-                        source_url=dailymed_url,
+                        source_url=source_url,
                         confidence="high",
                         locus_match=biomarker.locus_match,
                         cancer_specificity=cancer_specificity,
                     ))
+
+        # Sort FDA drugs: variant-in-indication first, then sensitivity, then others, resistance last
+        def sort_key(therapy: TherapeuticData) -> tuple[int, int, str]:
+            # Priority 1: Variant in indication (most relevant)
+            in_indication = 0 if therapy.approval_status == "Approved in indication" else 1
+            # Priority 2: Response type (sensitivity > unknown > resistance)
+            if therapy.response_type == "Sensitivity":
+                response_priority = 0
+            elif therapy.response_type is None:
+                response_priority = 1
+            else:  # Resistance
+                response_priority = 2
+            # Priority 3: Alphabetical by drug name for stable sorting
+            return (in_indication, response_priority, therapy.drug_name.lower())
+
+        evidence_list.sort(key=sort_key)
 
         return evidence_list
 

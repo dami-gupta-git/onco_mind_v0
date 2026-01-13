@@ -21,6 +21,7 @@ Key Design:
 
 import asyncio
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -598,16 +599,21 @@ class EvidenceAggregator:
         self,
         variant: ParsedVariant | str,
         tumor_type: str | None = None,
+        enable_timing: bool = False,
     ) -> Evidence:
         """Build an Evidence for a single variant.
 
         Args:
             variant: ParsedVariant object or variant string (e.g., "BRAF V600E")
             tumor_type: Optional tumor type for context
+            enable_timing: If True, print timing breakdown to console
 
         Returns:
             Evidence with all aggregated evidence
         """
+        total_start = time.time()
+        source_timings: dict[str, float] = {}
+
         # Parse string input if needed
         if isinstance(variant, str):
             from oncomind.normalization import parse_variant_input
@@ -622,15 +628,22 @@ class EvidenceAggregator:
         tracker.sources_queried = ["MyVariant", "FDA", "CGI"]
 
         # Resolve tumor type
+        t0 = time.time()
         resolved_tumor = await self._resolve_tumor_type(tumor)
+        source_timings["OncoTree"] = time.time() - t0
 
         # Parallel fetch from all sources
-        results = await self._fetch_all_sources(gene, normalized_variant, resolved_tumor, tracker)
+        t0 = time.time()
+        results, fetch_timings = await self._fetch_all_sources(gene, normalized_variant, resolved_tumor, tracker)
+        source_timings.update(fetch_timings)
+        parallel_fetch_time = time.time() - t0
 
         # Process results
+        t0 = time.time()
         evidence = self._assemble_evidence(
             results, variant, normalized_variant, tumor, resolved_tumor, tracker
         )
+        source_timings["assemble"] = time.time() - t0
 
         # Collect FDA-approved drug names from evidence
         # Then build therapies (which internally fetches labels and converts them)
@@ -650,11 +663,14 @@ class EvidenceAggregator:
                 logger.debug(f"Added {normalized_name} from FDA biomarker search")
 
         # Fetch FDA labels for drugs and populate locus_variant_match (async parallel)
+        t0 = time.time()
         evidence.fda_labels = await get_fda_labels_for_drugs_async(
             drugs=all_drugs,
             gene=gene,
             fetch_missing=True,
         )
+        source_timings["FDA_labels"] = time.time() - t0
+
         populate_locus_variant_match(
             evidence.fda_labels,
             query_variant=normalized_variant,
@@ -667,6 +683,19 @@ class EvidenceAggregator:
             evidence.fda_labels
         )
 
+        total_time = time.time() - total_start
+
+        # Print timing breakdown if enabled
+        if enable_timing:
+            print(f"\n⏱️  Evidence aggregation timing for {gene} {normalized_variant}:")
+            print(f"   Total: {total_time:.2f}s (parallel fetch: {parallel_fetch_time:.2f}s)")
+            print("   Per-source breakdown:")
+            # Sort by time descending to show slowest first
+            sorted_timings = sorted(source_timings.items(), key=lambda x: x[1], reverse=True)
+            for source, t in sorted_timings:
+                if t >= 0.01:  # Only show sources that took >= 10ms
+                    print(f"     {source:20s} {t:.2f}s")
+
         return evidence
 
     async def _fetch_all_sources(
@@ -675,8 +704,24 @@ class EvidenceAggregator:
         variant: str,
         tumor_type: str | None,
         tracker: FetchResults,
-    ) -> tuple:
-        """Fetch data from all sources in parallel."""
+    ) -> tuple[tuple, dict[str, float]]:
+        """Fetch data from all sources in parallel.
+
+        Returns:
+            Tuple of (results, timings) where timings maps source name to seconds
+        """
+        timings: dict[str, float] = {}
+
+        async def timed_fetch(name: str, coro):
+            """Wrap a coroutine with timing."""
+            t0 = time.time()
+            try:
+                result = await coro
+                timings[name] = time.time() - t0
+                return result
+            except Exception as e:
+                timings[name] = time.time() - t0
+                raise e
 
         async def fetch_vicc():
             if self.vicc_client:
@@ -761,21 +806,23 @@ class EvidenceAggregator:
                 logger.warning(f"FDA biomarker search failed for {gene}: {e}")
                 return []
 
-        return await asyncio.gather(
-            self.myvariant_client.fetch_evidence(gene=gene, variant=variant),
-            self.fda_client.fetch_approval_evidence(gene=gene, variant=variant),
-            asyncio.to_thread(self.cgi_client.fetch_biomarker_evidence, gene, variant, tumor_type),
-            fetch_vicc(),
-            fetch_civic_assertions(),
-            fetch_civic_evidence(),
-            fetch_trials(),
-            fetch_literature(),
-            fetch_cbioportal(),
-            fetch_cell_lines(),
-            fetch_depmap(),
-            fetch_fda_biomarker(),
+        results = await asyncio.gather(
+            timed_fetch("MyVariant", self.myvariant_client.fetch_evidence(gene=gene, variant=variant)),
+            timed_fetch("FDA", self.fda_client.fetch_approval_evidence(gene=gene, variant=variant)),
+            timed_fetch("CGI", asyncio.to_thread(self.cgi_client.fetch_biomarker_evidence, gene, variant, tumor_type)),
+            timed_fetch("VICC", fetch_vicc()),
+            timed_fetch("CIViC_assertions", fetch_civic_assertions()),
+            timed_fetch("CIViC_evidence", fetch_civic_evidence()),
+            timed_fetch("ClinicalTrials", fetch_trials()),
+            timed_fetch("Literature", fetch_literature()),
+            timed_fetch("cBioPortal", fetch_cbioportal()),
+            timed_fetch("CellLines", fetch_cell_lines()),
+            timed_fetch("DepMap", fetch_depmap()),
+            timed_fetch("FDA_biomarker", fetch_fda_biomarker()),
             return_exceptions=True,
         )
+
+        return results, timings
 
     def _assemble_evidence(
         self,

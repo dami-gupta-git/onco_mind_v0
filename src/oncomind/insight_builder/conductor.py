@@ -156,7 +156,9 @@ class Conductor:
 
         # Step 1: Aggregate evidence from all sources in parallel
         t0 = time.time()
-        evidence = await self._aggregator.build_evidence(parsed, parsed.tumor_type)
+        evidence = await self._aggregator.build_evidence(
+            parsed, parsed.tumor_type, enable_timing=self.config.enable_timing
+        )
         timings["evidence_aggregation"] = time.time() - t0
         logger.debug(f"Evidence aggregation completed in {timings['evidence_aggregation']:.2f}s")
 

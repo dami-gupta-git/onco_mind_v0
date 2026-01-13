@@ -420,13 +420,17 @@ with tab1:
             else:
                 mode_label = "LLM" if enable_llm else "Annotation"
                 with st.spinner(f"🔬 Getting insight for {gene} {variant} ({mode_label} mode)..."):
+                    # Check for timing flag via environment variable
+                    import os
+                    enable_timing = os.environ.get("ONCOMIND_TIMING", "").lower() in ("1", "true", "yes")
                     result = asyncio.run(get_variant_insight(
                         gene, variant, tumor or None,
                         enable_llm=enable_llm,
                         enable_literature=enable_literature,
                         literature_source=literature_source,
                         model=MODELS[model_name],
-                        temperature=temperature
+                        temperature=temperature,
+                        enable_timing=enable_timing,
                     ))
                     if "error" in result:
                         st.error(result["error"])

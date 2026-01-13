@@ -175,6 +175,7 @@ class FDALabelEvidence(EvidenceItemBase):
             indication=self.indications_and_usage,
             approval_date=self.initial_approval_date,
             gene=self.gene,
+            set_id=self.set_id,  # For FDA label URL linking
             locus_variant_match=self.locus_variant_match,
             cancer_type_match=self.cancer_type_match,
             # Flattened biomarker match fields
@@ -202,6 +203,7 @@ class FDAApproval(EvidenceItemBase):
     indication: str | None = None
     approval_date: str | None = None
     gene: str | None = None
+    set_id: str | None = None  # FDA label set_id for direct URL linking
     variant_in_indications: bool = False
     variant_in_clinical_studies: bool = False
     # Additional fields for clinical context

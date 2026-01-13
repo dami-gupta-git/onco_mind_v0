@@ -80,6 +80,51 @@ class TestBiomarkerSelectionDrugs:
         assert is_biomarker_selection_drug("", "EGFR") is False
         assert is_biomarker_selection_drug("OSIMERTINIB", "") is False
 
+    def test_biomarker_selection_drugs_filtered_from_fda_therapies(self):
+        """Biomarker selection drugs should be excluded from get_fda_approved_therapies()."""
+        from oncomind.models.evidence.evidence import Evidence, VariantContext, VariantIdentifiers
+        from oncomind.models.evidence.fda import FDAApproval
+
+        context = VariantContext(tumor_type="NSCLC")
+        identifiers = VariantIdentifiers(variant_id="EGFR:L858R", gene="EGFR", variant="L858R")
+
+        fda_approvals = [
+            # Real EGFR inhibitor - should be included
+            FDAApproval(
+                drug_name="Osimertinib",
+                brand_name="TAGRISSO",
+                generic_name="OSIMERTINIB",
+                indication="EGFR L858R mutation-positive NSCLC",
+                variant_in_indications=True,
+                biomarker_matched=True,
+            ),
+            # Biomarker selection drug (targets TROP2, not EGFR) - should be excluded
+            FDAApproval(
+                drug_name="Datopotamab Deruxtecan",
+                brand_name="DATROWAY",
+                generic_name="DATOPOTAMAB DERUXTECAN",
+                indication="EGFR-mutated NSCLC",
+                variant_in_indications=False,
+                biomarker_matched=True,  # Even though biomarker matched, it's a selection drug
+            ),
+        ]
+
+        evidence = Evidence(
+            context=context,
+            identifiers=identifiers,
+            fda_approvals=fda_approvals,
+        )
+
+        therapies = evidence.get_fda_approved_therapies()
+        drug_names = [t.drug_name.lower() for t in therapies]
+
+        # Osimertinib should be included (direct EGFR inhibitor)
+        assert any("osimertinib" in name for name in drug_names)
+
+        # Datopotamab should be excluded (biomarker selection drug)
+        assert not any("datopotamab" in name for name in drug_names)
+        assert not any("datroway" in name for name in drug_names)
+
 
 @pytest.mark.integration
 class TestFDAResponseType:

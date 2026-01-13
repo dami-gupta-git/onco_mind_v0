@@ -32,6 +32,7 @@ async def get_variant_insight(
     literature_source: str = "pubmed",
     model: str = LLM_DEFAULT_MODEL,
     temperature: float = LLM_DEFAULT_TEMPERATURE,
+    enable_timing: bool = False,
 ) -> Dict[str, Any]:
     """
     Generate insight for a single variant.
@@ -45,6 +46,7 @@ async def get_variant_insight(
         literature_source: "none", "pubmed", or "semantic_scholar"
         model: LLM model to use (if enable_llm=True)
         temperature: LLM temperature (0.0-1.0)
+        enable_timing: Print timing breakdown to console
 
     Returns:
         Dict containing insight results with identifiers, evidence, etc.
@@ -60,6 +62,7 @@ async def get_variant_insight(
             enable_llm=enable_llm,
             llm_model=model,
             llm_temperature=temperature,
+            enable_timing=enable_timing,
         )
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor_type)
@@ -132,6 +135,36 @@ async def batch_get_variant_insights(
 
 
 # === Private helper functions ===
+
+
+def _sort_fda_labels(labels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Sort FDA labels by match level (variant > codon > gene).
+
+    Args:
+        labels: List of FDA label dicts with biomarker_match info
+
+    Returns:
+        Sorted list with variant-level matches first
+    """
+    def sort_key(label: Dict[str, Any]) -> tuple:
+        # Get match level from biomarker_match
+        biomarker_match = label.get("biomarker_match") or {}
+        match_level = biomarker_match.get("match_level", "gene")
+
+        # Priority: variant (0) > codon (1) > gene (2) > unknown (3)
+        level_priority = {
+            "variant": 0,
+            "codon": 1,
+            "gene": 2,
+        }
+        priority = level_priority.get(match_level, 3)
+
+        # Secondary sort by drug name for stability
+        drug_name = (label.get("drug") or "").lower()
+
+        return (priority, drug_name)
+
+    return sorted(labels, key=sort_key)
 
 
 def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
@@ -251,7 +284,7 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for a in evidence.fda_approvals
         ],
-        "fda_labels": [
+        "fda_labels": _sort_fda_labels([
             {
                 "drug": l.drug,
                 "gene": l.gene,
@@ -303,7 +336,7 @@ def _build_response(result) -> Dict[str, Any]:
             # Filter: gene must match AND tumor must match (or be pan-cancer)
             if (l.gene and l.gene.upper() == queried_gene
                 and l.biomarker_match and l.biomarker_match.tumor_matched)
-        ],
+        ]),
         "civic_assertions": [
             {
                 "id": a.assertion_id,
