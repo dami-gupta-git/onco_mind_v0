@@ -818,115 +818,12 @@ def extract_approved_indications(indications_text: str) -> list[str]:
     return found
 
 
-def _fetch_initial_approval_date(drug_name: str, brand_names: list[str] | None = None) -> str | None:
-    """Fetch initial FDA approval date from drugsfda endpoint.
-
-    The drugsfda endpoint contains the full approval history with submissions.
-    The initial approval is the ORIG submission with status AP.
-
-    Args:
-        drug_name: Drug name to search for
-        brand_names: Optional list of brand names to try
-
-    Returns:
-        Initial approval date in YYYY-MM-DD format, or None if not found
-    """
-    drugsfda_url = "https://api.fda.gov/drug/drugsfda.json"
-
-    # Try brand names first (more reliable), then drug name
-    search_terms = []
-    if brand_names:
-        search_terms.extend(brand_names)
-    search_terms.append(drug_name)
-
-    for term in search_terms:
-        params = {
-            "search": f'openfda.brand_name:"{term}"',
-            "limit": 1
-        }
-        try:
-            resp = requests.get(drugsfda_url, params=params, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("results"):
-                    result = data["results"][0]
-                    submissions = result.get("submissions", [])
-
-                    # Find the original approval (ORIG with status AP)
-                    for sub in submissions:
-                        if sub.get("submission_type") == "ORIG" and sub.get("submission_status") == "AP":
-                            status_date = sub.get("submission_status_date")
-                            if status_date and len(status_date) == 8:
-                                # Convert YYYYMMDD to YYYY-MM-DD
-                                return f"{status_date[:4]}-{status_date[4:6]}-{status_date[6:8]}"
-
-        except requests.RequestException as e:
-            logger.debug(f"Error fetching approval date for {term}: {e}")
-            continue
-
-    return None
-
-
-async def _fetch_initial_approval_date_async(
-    client: httpx.AsyncClient,
-    drug_name: str,
-    brand_names: list[str] | None = None,
-) -> str | None:
-    """Async version: Fetch initial FDA approval date from drugsfda endpoint.
-
-    The drugsfda endpoint contains the full approval history with submissions.
-    The initial approval is the ORIG submission with status AP.
-
-    Args:
-        client: httpx.AsyncClient instance for making requests
-        drug_name: Drug name to search for
-        brand_names: Optional list of brand names to try
-
-    Returns:
-        Initial approval date in YYYY-MM-DD format, or None if not found
-    """
-    drugsfda_url = "https://api.fda.gov/drug/drugsfda.json"
-
-    # Try brand names first (more reliable), then drug name
-    search_terms = []
-    if brand_names:
-        search_terms.extend(brand_names)
-    search_terms.append(drug_name)
-
-    for term in search_terms:
-        params = {
-            "search": f'openfda.brand_name:"{term}"',
-            "limit": 1
-        }
-        try:
-            resp = await client.get(drugsfda_url, params=params)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("results"):
-                    result = data["results"][0]
-                    submissions = result.get("submissions", [])
-
-                    # Find the original approval (ORIG with status AP)
-                    for sub in submissions:
-                        if sub.get("submission_type") == "ORIG" and sub.get("submission_status") == "AP":
-                            status_date = sub.get("submission_status_date")
-                            if status_date and len(status_date) == 8:
-                                # Convert YYYYMMDD to YYYY-MM-DD
-                                return f"{status_date[:4]}-{status_date[4:6]}-{status_date[6:8]}"
-
-        except httpx.RequestError as e:
-            logger.debug(f"Error fetching approval date for {term}: {e}")
-            continue
-
-    return None
-
-
 def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]:
     """Process raw OpenFDA label result into structured label data.
 
     Args:
         result: Raw result dict from OpenFDA API
-        drug_name: Drug name (for fetching approval date)
+        drug_name: Drug name (unused, kept for API compatibility)
 
     Returns:
         Processed label data dict with all extracted fields
@@ -940,9 +837,6 @@ def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]
     brand_names = openfda.get("brand_name", [])
     generic_names = openfda.get("generic_name", [])
     manufacturer_names = openfda.get("manufacturer_name", [])
-
-    # Get initial approval date from drugsfda endpoint
-    initial_approval_date = _fetch_initial_approval_date(drug_name, brand_names)
 
     # Extract effective_time (label revision date) - format is YYYYMMDD
     effective_time_raw = result.get("effective_time")
@@ -973,7 +867,6 @@ def _process_raw_label(result: dict[str, Any], drug_name: str) -> dict[str, Any]
         "brand_name": brand_names,
         "generic_name": generic_names,
         "manufacturer_name": manufacturer_names,
-        "initial_approval_date": initial_approval_date,
         "effective_time": effective_time,
         "set_id": set_id,
         "version": version,
@@ -1067,7 +960,6 @@ def update_fda_labels_json(drug: str, label_data: dict[str, Any], genes: list[st
         "brand_name": label_data.get("brand_name", []),
         "generic_name": label_data.get("generic_name", []),
         "manufacturer_name": label_data.get("manufacturer_name", []),
-        "initial_approval_date": label_data.get("initial_approval_date"),
         "effective_time": label_data.get("effective_time"),  # Label revision date
         "set_id": set_id,
         "version": version,
@@ -1207,14 +1099,13 @@ def _create_fda_label_evidence(
         therapy_name = drug
 
     # Create FDALabelEvidence directly (locus_variant_match will be None initially)
-    x= FDALabelEvidence(
+    x = FDALabelEvidence(
         drug=therapy_name,  # e.g., "capivasertib + FASLODEX"
         gene=gene,
         brand_name=brand_name,
         generic_name=generic_name,
         manufacturer=manufacturer,
         indications_and_usage=indications,
-        initial_approval_date=label_data.get("initial_approval_date"),
         effective_time=label_data.get("effective_time"),
         set_id=label_data.get("set_id"),
         version=str(label_data.get("version")) if label_data.get("version") else None,

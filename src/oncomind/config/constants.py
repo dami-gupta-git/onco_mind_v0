@@ -1272,9 +1272,13 @@ def is_biomarker_selection_drug(drug_name: str, gene: str) -> bool:
     drug_lower = drug_name.lower()
     gene_upper = gene.upper()
 
+    # For combination drugs like "Osimertinib + pemetrexed", only check the PRIMARY drug
+    # (before the first '+'), not combination partners
+    primary_drug = drug_lower.split("+")[0].strip()
+
     for drug_key, info in BIOMARKER_SELECTION_DRUGS.items():
-        # Check if drug name matches (substring match in both directions)
-        if drug_key in drug_lower or drug_lower in drug_key:
+        # Check if PRIMARY drug name matches (substring match in both directions)
+        if drug_key in primary_drug or primary_drug in drug_key:
             if gene_upper in [g.upper() for g in info.get("biomarker_genes", [])]:
                 return True
     return False

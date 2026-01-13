@@ -1,7 +1,6 @@
 """Integration tests for FDA label data flow.
 
-Verifies that all fields (especially initial_approval_date) are correctly
-passed through the entire data pipeline:
+Verifies that all fields are correctly passed through the entire data pipeline:
 1. OpenFDA API fetch -> FDALabelEvidence (directly)
 2. FDALabelEvidence -> backend serialization (for Streamlit UI)
 
@@ -21,44 +20,41 @@ from oncomind.models.evidence.fda import FDALabelEvidence, ClinicalStudyEvidence
 class TestFDALabelDataFlow:
     """Test that all fields flow through the entire pipeline."""
 
-    def test_fetch_returns_initial_approval_date(self):
-        """Verify fetch_latest_labels extracts initial_approval_date."""
+    def test_fetch_returns_effective_time(self):
+        """Verify fetch_latest_labels extracts effective_time."""
         # This test hits the real API - skip in CI if needed
         results = fetch_latest_labels("capivasertib")
 
         assert results is not None and len(results) > 0, "Should return data for capivasertib"
         result = results[0]  # Take first label
-        assert "initial_approval_date" in result, "Should have initial_approval_date key"
-        assert result["initial_approval_date"] is not None, "initial_approval_date should not be None"
-        # Format should be YYYY-MM-DD
-        assert len(result["initial_approval_date"]) == 10, "Date should be in YYYY-MM-DD format"
-        assert result["initial_approval_date"][4] == "-", "Date should have dash at position 4"
+        assert "effective_time" in result, "Should have effective_time key"
+        # effective_time may be None for some drugs, but key should exist
 
-    def test_fda_label_evidence_has_initial_approval_date(self):
-        """Verify FDALabelEvidence model has initial_approval_date field."""
+    def test_fda_label_evidence_has_effective_time(self):
+        """Verify FDALabelEvidence model has effective_time field."""
         evidence = FDALabelEvidence(
             drug="test_drug",
             gene="TEST",
-            initial_approval_date="2023-11-14",
+            effective_time="2023-11-14",
         )
 
-        assert evidence.initial_approval_date == "2023-11-14"
+        assert evidence.effective_time == "2023-11-14"
 
-    def test_fda_label_evidence_model_dump_includes_initial_approval_date(self):
-        """Verify FDALabelEvidence.model_dump() includes initial_approval_date."""
+    def test_fda_label_evidence_model_dump_includes_effective_time(self):
+        """Verify FDALabelEvidence.model_dump() includes effective_time."""
         evidence = FDALabelEvidence(
             drug="test_drug",
             gene="TEST",
-            initial_approval_date="2023-11-14",
+            effective_time="2023-11-14",
         )
 
         result = evidence.model_dump()
 
-        assert "initial_approval_date" in result
-        assert result["initial_approval_date"] == "2023-11-14"
+        assert "effective_time" in result
+        assert result["effective_time"] == "2023-11-14"
 
-    def test_backend_serialization_includes_initial_approval_date(self):
-        """Verify backend serialization includes initial_approval_date.
+    def test_backend_serialization_includes_effective_time(self):
+        """Verify backend serialization includes effective_time.
 
         This simulates what backend.py does when serializing fda_labels.
         """
@@ -67,14 +63,14 @@ class TestFDALabelDataFlow:
             drug="capivasertib",
             gene="AKT1",
             brand_name="TRUQAP",
-            initial_approval_date="2023-11-14",
+            effective_time="2023-11-14",
             clinical_studies=ClinicalStudyEvidence(
                 trial_name="CAPItello-291",
                 nct_id="NCT04305496",
             ),
         )
 
-        # Simulate backend serialization (from backend.py lines 252-288)
+        # Simulate backend serialization (from backend.py)
         serialized = {
             "drug": evidence.drug,
             "gene": evidence.gene,
@@ -82,7 +78,7 @@ class TestFDALabelDataFlow:
             "generic_name": evidence.generic_name,
             "manufacturer": evidence.manufacturer,
             "indications_and_usage": evidence.indications_and_usage,
-            "initial_approval_date": evidence.initial_approval_date,
+            "effective_time": evidence.effective_time,
             "clinical_studies": {
                 "trial_name": evidence.clinical_studies.trial_name,
                 "nct_id": evidence.clinical_studies.nct_id,
@@ -91,7 +87,7 @@ class TestFDALabelDataFlow:
             "update_reason": evidence.update_reason,
         }
 
-        assert serialized["initial_approval_date"] == "2023-11-14"
+        assert serialized["effective_time"] == "2023-11-14"
         assert serialized["clinical_studies"]["trial_name"] == "CAPItello-291"
 
 
@@ -107,7 +103,7 @@ class TestFDALabelEvidenceFields:
             "generic_name",
             "manufacturer",
             "indications_and_usage",
-            "initial_approval_date",
+            "effective_time",
             "approved_indications",
             "clinical_studies",
             "mechanism_of_action",
@@ -136,8 +132,8 @@ class TestLocusVariantMatchPopulation:
             indications_and_usage="Treatment of KRAS G12C-mutated NSCLC",
         )
 
-        # Populate with exact matching variant
-        populate_locus_variant_match([evidence], query_variant="G12C")
+        # Populate with exact matching variant and tumor type
+        populate_locus_variant_match([evidence], query_variant="G12C", query_tumor="NSCLC")
 
         # Should match at variant level (exact match)
         assert evidence.locus_variant_match is not None
@@ -155,30 +151,35 @@ class TestLocusVariantMatchPopulation:
             indications_and_usage="Treatment of KRAS G12C-mutated NSCLC",
         )
 
-        # Query with G12D (same codon, different variant)
-        populate_locus_variant_match([evidence], query_variant="G12D")
+        # Query with G12D (same codon, different variant) - codon match means NOT covered
+        # (G12D is not the same as G12C approval)
+        populate_locus_variant_match([evidence], query_variant="G12D", query_tumor="NSCLC")
 
-        assert evidence.locus_variant_match is not None
-        assert evidence.locus_variant_match.level == "codon"
-        assert evidence.locus_variant_match.scope == "specific"
+        # Codon-level match means biomarker is NOT covered (different variant at same position)
+        # So locus_variant_match should be None
+        assert evidence.locus_variant_match is None
+        # But biomarker_match should indicate codon-level (not covered)
+        assert evidence.biomarker_match is not None
+        assert evidence.biomarker_match.matched is False  # Not covered
+        assert evidence.biomarker_match.match_level is None  # No match level when not covered
 
     def test_cap(self):
-        """Test locus_variant_match for gene-level approvals."""
+        """Test locus_variant_match for gene-level approvals (multi-gene pattern)."""
         from oncomind.insight_builder.fda_processor import populate_locus_variant_match
 
-        # Capivasertib is approved for AKT1 alterations (gene-level)
+        # Capivasertib is approved for AKT1 alterations (gene-level, multi-gene pattern)
         evidence = FDALabelEvidence(
             drug="capivasertib",
             gene="AKT1",
-            indications_and_usage="cancer with one or more PIK3CA/AKT1/PTEN -alterations as detected by an FDA",
+            indications_and_usage="breast cancer with one or more PIK3CA/AKT1/PTEN -alterations as detected by an FDA",
         )
 
-        # Query with E17K
-        populate_locus_variant_match([evidence], query_variant="E17K")
+        # Query with E17K and tumor type
+        populate_locus_variant_match([evidence], query_variant="E17K", query_tumor="breast cancer")
 
         bm = evidence.biomarker_match
         assert bm.matched
-        assert bm.match_level=='gene'
+        assert bm.match_level == 'gene'
 
     def test_populate_locus_variant_match_gene_level(self):
         """Test locus_variant_match for gene-level approvals."""
@@ -191,8 +192,8 @@ class TestLocusVariantMatchPopulation:
             indications_and_usage="Treatment of AKT1 alteration-positive breast cancer",
         )
 
-        # Query with E17K
-        populate_locus_variant_match([evidence], query_variant="E17K")
+        # Query with E17K and tumor type
+        populate_locus_variant_match([evidence], query_variant="E17K", query_tumor="breast cancer")
 
         # Should match at gene level
         assert evidence.locus_variant_match is not None
@@ -242,14 +243,19 @@ class TestGetFDALabelsForDrugsReturnsEvidence:
     @patch('oncomind.api.fda_label_service.load_fda_labels_json')
     def test_returns_fda_label_evidence(self, mock_load):
         """Verify get_fda_labels_for_drugs returns FDALabelEvidence objects."""
-        # Mock the cache to return data
+        # Mock the cache to return data - format matches what load_fda_labels_json returns
+        # The key is set_id_version, and drug_name is inside the value
         mock_load.return_value = {
-            "sotorasib": {
+            "fake-set-id_1": {
+                "drug_name": "Sotorasib",
+                "genes": ["KRAS"],
                 "brand_name": ["LUMAKRAS"],
                 "generic_name": ["sotorasib"],
                 "manufacturer_name": ["Amgen Inc."],
                 "indications_and_usage": ["Treatment of KRAS G12C-mutated NSCLC"],
-                "initial_approval_date": "2021-05-28",
+                "effective_time": "2021-05-28",
+                "set_id": "fake-set-id",
+                "version": "1",
                 "clinical_studies": {
                     "trial_name": "CodeBreaK 100",
                     "nct_id": "NCT03600883",
@@ -261,9 +267,10 @@ class TestGetFDALabelsForDrugsReturnsEvidence:
 
         assert len(results) == 1
         assert isinstance(results[0], FDALabelEvidence)
-        assert results[0].drug == "sotorasib"
+        # Drug name comes from the search key, which is lowercased
+        assert results[0].drug.lower() == "sotorasib"
         assert results[0].gene == "KRAS"
         assert results[0].brand_name == "LUMAKRAS"
-        assert results[0].initial_approval_date == "2021-05-28"
+        assert results[0].effective_time == "2021-05-28"
         assert results[0].clinical_studies is not None
         assert results[0].clinical_studies.trial_name == "CodeBreaK 100"

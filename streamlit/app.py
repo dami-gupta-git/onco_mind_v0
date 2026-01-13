@@ -1221,9 +1221,6 @@ with tab1:
                                     moa = label.get('mechanism_of_action') or {}
                                     targets = moa.get('targets', [])
 
-                                    # Initial approval date
-                                    approval_date = label.get('initial_approval_date')
-
                                     # Biomarker match icons:
                                     # - 🟢/🔴 for whether variant is covered by FDA approval
                                     # - 🎯/◐/🧬 for match level (variant/codon/gene)
@@ -1255,8 +1252,6 @@ with tab1:
                                         header_parts.append(f"NCT: {nct_id}")
                                     if hr_str:
                                         header_parts.append(f"HR: {hr_str}")
-                                    if approval_date:
-                                        header_parts.append(f"Approved: {approval_date}")
                                     # Add tumor icon at the end of the header
                                     if tumor_icon:
                                         header_parts.append(tumor_icon)

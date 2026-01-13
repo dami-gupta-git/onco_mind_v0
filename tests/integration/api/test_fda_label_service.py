@@ -15,7 +15,6 @@ from pathlib import Path
 
 from oncomind.api.fda_label_service import (
     collect_all_drugs,
-    get_drugs_from_fda_biomarkers,
     get_fda_labels_for_drugs,
     fetch_latest_labels,
 )
@@ -24,26 +23,6 @@ from oncomind.models.evidence.fda import FDALabelEvidence
 
 class TestFDALabelServiceDrugCollection:
     """Test drug collection from various sources."""
-
-    def test_collect_drugs_from_fda_biomarkers_akt1(self):
-        """Test collecting drugs for AKT1 from FDA biomarkers file."""
-        drugs = get_drugs_from_fda_biomarkers("AKT1")
-
-        print(f"\nDrugs from FDA biomarkers for AKT1: {drugs}")
-
-        # AKT1 should have capivasertib (Truqap)
-        # The exact drugs depend on the fda_oncology_biomarkers.xlsx content
-        assert isinstance(drugs, set)
-        # May be empty if fda_oncology_biomarkers.xlsx doesn't exist or doesn't have AKT1
-
-    def test_collect_drugs_from_fda_biomarkers_braf(self):
-        """Test collecting drugs for BRAF from FDA biomarkers file."""
-        drugs = get_drugs_from_fda_biomarkers("BRAF")
-
-        print(f"\nDrugs from FDA biomarkers for BRAF: {drugs}")
-
-        # BRAF should have vemurafenib, dabrafenib, etc.
-        assert isinstance(drugs, set)
 
     def test_collect_all_drugs_akt1_e17k(self):
         """Test collecting all drugs for AKT1 E17K from all sources."""
@@ -215,13 +194,6 @@ class TestFDALabelServiceEdgeCases:
 
         # Should return empty since drug not in cache
         assert labels == []
-
-    def test_collect_drugs_unknown_gene(self):
-        """Test collecting drugs for unknown gene."""
-        drugs = get_drugs_from_fda_biomarkers("FAKE_GENE_XYZ")
-
-        # Should return empty set, not error
-        assert drugs == set()
 
     def test_collect_all_drugs_with_empty_lists(self):
         """Test collect_all_drugs with empty/None lists."""

@@ -138,6 +138,7 @@ resistance to BRAF/MEK inhibition via parallel pathway activation.
 - Biomarker specificity extraction (variant vs gene vs phenotype level) has edge cases
 - FDA label cache can become stale
 - **Combination therapy not handled:** FDA approvals for combination regimens (e.g., Adagrasib + cetuximab for KRAS G12C CRC) are not parsed or displayed as combinations. Each drug appears separately without indicating the approved combination context.
+- **Combination partners extracted from wrong indication:** When a drug has multiple indications for different tumor types (e.g., Sotorasib for NSCLC monotherapy AND CRC with panitumumab), combination partners are extracted from the entire label text without tumor context. This causes incorrect display like "Sotorasib + panitumumab" showing for NSCLC queries when that combo is only for CRC. Need to extract combination partners only from indication sections matching the queried tumor type.
 
 **Implementation:**
 1. **Multi-source drug resolution:**

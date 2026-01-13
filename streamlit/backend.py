@@ -18,7 +18,12 @@ from typing import Any, Dict, List, Optional, Callable
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.config.debug import get_logger
-from oncomind.config.constants import LLM_DEFAULT_MODEL, LLM_DEFAULT_TEMPERATURE
+from oncomind.config.constants import (
+    LLM_DEFAULT_MODEL,
+    LLM_DEFAULT_TEMPERATURE,
+    is_biomarker_selection_drug,
+    FDA_KIT_EXCLUSION_PATTERNS,
+)
 
 logger = get_logger(__name__)
 
@@ -167,6 +172,32 @@ def _sort_fda_labels(labels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(labels, key=sort_key)
 
 
+def _is_kit_false_positive(indication_text: str | None) -> bool:
+    """Check if an FDA label is a KIT false positive (diagnostic kit, not KIT gene).
+
+    Args:
+        indication_text: The indications_and_usage text from FDA label
+
+    Returns:
+        True if this appears to be a diagnostic/preparation kit, not a KIT oncogene drug
+    """
+    if not indication_text:
+        return False
+
+    text_lower = indication_text.lower()
+
+    # Check for KIT exclusion patterns (diagnostic kit, test kit, etc.)
+    has_exclusion = any(pattern in text_lower for pattern in FDA_KIT_EXCLUSION_PATTERNS)
+
+    # Check for oncology context
+    oncology_terms = ["cancer", "tumor", "malignant", "neoplasm", "carcinoma", "leukemia",
+                      "lymphoma", "melanoma", "sarcoma", "gist", "mastocytosis"]
+    has_oncology = any(term in text_lower for term in oncology_terms)
+
+    # If it has exclusion patterns and no oncology context, it's a false positive
+    return has_exclusion and not has_oncology
+
+
 def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
     """Deduplicate CIViC evidence items by evidence_id.
 
@@ -275,7 +306,6 @@ def _build_response(result) -> Dict[str, Any]:
                 "brand_name": a.brand_name,
                 "generic_name": a.generic_name,
                 "indication": a.indication,
-                "approval_date": a.approval_date,
                 "companion_diagnostic": a.companion_diagnostic,
                 "black_box_warning": a.black_box_warning,
                 "dosing_for_variant": a.dosing_for_variant,
@@ -314,7 +344,6 @@ def _build_response(result) -> Dict[str, Any]:
                     "serious_rate": l.adverse_reactions.serious_rate,
                     "discontinuation_rate": l.adverse_reactions.discontinuation_rate,
                 } if l.adverse_reactions else None,
-                "initial_approval_date": l.initial_approval_date,
                 "effective_time": l.effective_time,
                 "approved_indications": l.approved_indications or [],
                 "last_label_update": l.last_label_update,
@@ -334,8 +363,12 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for l in evidence.fda_labels
             # Filter: gene must match AND tumor must match (or be pan-cancer)
+            # Also filter out biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
+            # And filter out KIT false positives (diagnostic kits, not KIT oncogene)
             if (l.gene and l.gene.upper() == queried_gene
-                and l.biomarker_match and l.biomarker_match.tumor_matched)
+                and l.biomarker_match and l.biomarker_match.tumor_matched
+                and not is_biomarker_selection_drug(l.drug or l.generic_name or l.brand_name or "", queried_gene)
+                and not (queried_gene == "KIT" and _is_kit_false_positive(l.indications_and_usage)))
         ]),
         "civic_assertions": [
             {

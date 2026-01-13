@@ -224,7 +224,6 @@ class TestFDAApproval:
         assert data.brand_name is None
         assert data.generic_name is None
         assert data.indication is None
-        assert data.approval_date is None
         assert data.gene is None
         assert data.variant_in_indications is False
         assert data.variant_in_clinical_studies is False
@@ -240,7 +239,6 @@ class TestFDAApproval:
             brand_name="LUMAKRAS",
             generic_name="sotorasib",
             indication="KRAS G12C-mutated NSCLC",
-            approval_date="2021-05-28",
             gene="KRAS",
             variant_in_indications=True,
             association="Responsive",

@@ -129,7 +129,6 @@ class FDALabelEvidence(EvidenceItemBase):
     generic_name: str | None = None
     manufacturer: str | None = None
     indications_and_usage: str | None = None
-    initial_approval_date: str | None = None
     effective_time: str | None = None  # Label revision date (YYYY-MM-DD)
     approved_indications: list[str] = Field(default_factory=list)  # List of approved diseases
 
@@ -173,7 +172,6 @@ class FDALabelEvidence(EvidenceItemBase):
             brand_name=self.brand_name,
             generic_name=self.generic_name,
             indication=self.indications_and_usage,
-            approval_date=self.initial_approval_date,
             gene=self.gene,
             set_id=self.set_id,  # For FDA label URL linking
             locus_variant_match=self.locus_variant_match,
@@ -201,7 +199,6 @@ class FDAApproval(EvidenceItemBase):
     brand_name: str | None = None
     generic_name: str | None = None
     indication: str | None = None
-    approval_date: str | None = None
     gene: str | None = None
     set_id: str | None = None  # FDA label set_id for direct URL linking
     variant_in_indications: bool = False

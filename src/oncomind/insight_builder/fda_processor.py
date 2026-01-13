@@ -199,7 +199,32 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     if re.search(rf"{gene}\s+wild[- ]?type", text, re.IGNORECASE):
         return {"level": "wild_type_required", "target_genes": [gene_upper]}
 
-    # 5. Multiple variants: "BRAF V600E or V600K"
+    # 5. EGFR "exon 19 deletions or exon 21 L858R" pattern (MUST come before multi-variant)
+    # This is extremely common in EGFR TKI labels and needs special handling
+    # because it combines two different specificity types in one approval
+    # Match both "EGFR exon 19" and "(EGFR) exon 19" formats
+    egfr_combined_match = re.search(
+        rf"(?:{gene}|\({gene}\))\s+exon\s+19\s+deletion.*?(?:or|and).*?(?:exon\s+21\s+)?L858R",
+        text, re.IGNORECASE
+    )
+    if egfr_combined_match:
+        return {
+            "level": "variant_list",
+            "specified_variants": ["L858R"],
+            "exons": ["19"],  # Also covers exon 19 deletions
+            "target_genes": [gene_upper],
+        }
+
+    # 6. Exon-specific: "EGFR exon 19" or "(EGFR) exon 19" (before multi-variant)
+    exon_match = re.search(rf"(?:{gene}|\({gene}\))\s+exon\s+(\d+)", text, re.IGNORECASE)
+    if exon_match:
+        return {
+            "level": "exon",
+            "exon": exon_match.group(1),
+            "target_genes": [gene_upper],
+        }
+
+    # 7. Multiple variants: "BRAF V600E or V600K"
     multi_variant_match = re.findall(
         rf"{gene}\s+([A-Z]\d+[A-Z])", text, re.IGNORECASE
     )
@@ -210,7 +235,7 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
             "target_genes": [gene_upper],
         }
 
-    # 6. Variant-specific: "KRAS G12C" - captures ref, position, alt
+    # 8. Variant-specific: "KRAS G12C" - captures ref, position, alt
     variant_match = re.search(
         rf"{gene}\s+([A-Z])(\d+)([A-Z])", text, re.IGNORECASE
     )
@@ -223,7 +248,7 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
             "target_genes": [gene_upper],
         }
 
-    # 7. Codon-specific: "BRAF V600" (no trailing AA)
+    # 9. Codon-specific: "BRAF V600" (no trailing AA)
     codon_match = re.search(
         rf"{gene}\s+([A-Z]\d+)(?:\s|[-]|$|[^A-Z0-9])", text, re.IGNORECASE
     )
@@ -234,23 +259,15 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
             "target_genes": [gene_upper],
         }
 
-    # 8. Exon-specific: "EGFR exon 19"
-    exon_match = re.search(rf"{gene}\s+exon\s+(\d+)", text, re.IGNORECASE)
-    if exon_match:
-        return {
-            "level": "exon",
-            "exon": exon_match.group(1),
-            "target_genes": [gene_upper],
-        }
-
     # 9. Gene-level: "AKT1 alteration", "BRCA-mutated", "ALK-positive"
     # Also handles "(IDH1) or ... (IDH2) mutation" format from FDA labels
+    # NOTE: The "(GENE)...mutation" pattern should NOT match if followed by exon/variant info
     gene_level_patterns = [
         rf"{gene}\s*-?\s*(?:alter|mutat)",
         rf"{gene}[- ]?positive",
         rf"{gene}\s+rearrangement",
         rf"{gene}\s+fusion",
-        rf"\({gene}\).*?mutation",  # "(IDH1) ... mutation" format
+        rf"\({gene}\)\s+(?!exon).*?mutation",  # "(IDH1) mutation" but NOT "(EGFR) exon 19...mutation"
     ]
     for pattern in gene_level_patterns:
         if re.search(pattern, text, re.IGNORECASE):
