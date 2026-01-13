@@ -55,9 +55,16 @@ FDA_TUMOR_PATTERNS = [
     (r"multiple myeloma", "Multiple Myeloma"),
     (r"lymphoma", "Lymphoma"),
     (r"leukemia", "Leukemia"),
-    # Pan-cancer/tumor-agnostic
-    (r"solid tumor", "Solid Tumor"),
-    (r"advanced.*cancer|metastatic.*cancer", "Advanced Cancer"),
+    # Pan-cancer/tumor-agnostic biomarker approvals
+    # These are tumor-agnostic approvals based on molecular biomarkers
+    (r"MSI-?H|microsatellite instability.high", "Solid Tumor"),
+    (r"dMMR|mismatch repair deficien", "Solid Tumor"),
+    (r"TMB-?H|tumor mutational burden.high", "Solid Tumor"),
+    (r"NTRK.*fusion", "Solid Tumor"),
+    (r"RET.*fusion", "Solid Tumor"),
+    # Note: "advanced [specific] cancer" is stage, not pan-cancer
+    # Only "solid tumor(s)" without specific type is truly tumor-agnostic
+    (r"solid tumou?rs?(?!\s+(?:breast|lung|colon|prostate|pancreatic))", "Solid Tumor"),
 ]
 
 
@@ -107,8 +114,8 @@ def match_fda_tumor(
     if not indication_tumors:
         return False, None
 
-    # Check for pan-cancer approvals
-    if "Solid Tumor" in indication_tumors or "Advanced Cancer" in indication_tumors:
+    # Check for pan-cancer approvals (e.g., "solid tumors" without specific type)
+    if "Solid Tumor" in indication_tumors:
         return True, "pan_cancer"
 
     # Check if query tumor matches any indication tumor
@@ -459,13 +466,24 @@ def populate_locus_variant_match(
                     origin="kb"
                 )
 
-            # Set cancer_type_match
+            # Set cancer_type_match - always set this so we know what cancer the drug is approved for
             if tumor_matched:
                 label.cancer_type_match = EvidenceLevel(
                     level=tumor_match_type or "cancer_specific",
                     scope="specific",
                     origin="kb"
                 )
+            else:
+                # Not matched - extract what cancer the drug IS approved for
+                indication_tumors = extract_tumor_from_indication(label.indications_and_usage)
+                if indication_tumors:
+                    # Use the first extracted tumor as the cancer type
+                    label.cancer_type_match = EvidenceLevel(
+                        level=indication_tumors[0].lower(),  # e.g., "breast cancer"
+                        scope="unspecified",
+                        origin="kb"
+                    )
+                # If no tumors extracted, cancer_type_match remains None (not pan_cancer)
         else:
             # No query variant - check if gene-level approval
             biomarker_spec = parse_biomarker_specificity(
@@ -496,6 +514,15 @@ def populate_locus_variant_match(
                         scope="specific",
                         origin="kb"
                     )
+                else:
+                    # Not matched - extract what cancer the drug IS approved for
+                    indication_tumors = extract_tumor_from_indication(label.indications_and_usage)
+                    if indication_tumors:
+                        label.cancer_type_match = EvidenceLevel(
+                            level=indication_tumors[0].lower(),
+                            scope="unspecified",
+                            origin="kb"
+                        )
 
 
 def convert_fda_labels_to_approvals(

@@ -269,7 +269,7 @@ class TestVICCClient:
                             "publication_url": "https://pubmed.ncbi.nlm.nih.gov/12345",
                             "oncogenic": "BRAF V600E",
                             "evidence": [
-                                {"evidenceType": {"sourceName": "civic"}}
+                                {"evidenceType": {"sourceName": "jax"}}
                             ],
                         },
                         "features": [
@@ -284,7 +284,7 @@ class TestVICCClient:
                             "description": "BRAF V600E resistant to drug X",
                             "response_type": "resistant",
                             "evidence": [
-                                {"evidenceType": {"sourceName": "jax"}}
+                                {"evidenceType": {"sourceName": "oncokb"}}
                             ],
                         },
                         "features": [
@@ -326,7 +326,7 @@ class TestVICCClient:
                         "association": {
                             "description": "Melanoma sensitivity",
                             "response_type": "Sensitivity",
-                            "evidence": [{"evidenceType": {"sourceName": "civic"}}],
+                            "evidence": [{"evidenceType": {"sourceName": "jax"}}],
                         },
                         "features": [{"geneSymbol": "BRAF", "name": "BRAF V600E"}],
                         "diseases": "melanoma",
@@ -337,7 +337,7 @@ class TestVICCClient:
                         "association": {
                             "description": "CRC resistance",
                             "response_type": "resistant",
-                            "evidence": [{"evidenceType": {"sourceName": "civic"}}],
+                            "evidence": [{"evidenceType": {"sourceName": "oncokb"}}],
                         },
                         "features": [{"geneSymbol": "BRAF", "name": "BRAF V600E"}],
                         "diseases": "colorectal cancer",

@@ -176,6 +176,7 @@ def _build_response(result) -> Dict[str, Any]:
     """
     llm = result.llm  # May be None if LLM was not enabled
     evidence = result.evidence  # Evidence object with flat list structure
+    queried_gene = result.identifiers.gene.upper() if result.identifiers.gene else ""
 
     # Get therapeutic evidence - always use evidence.get_therapeutic_evidence() as primary source
     # LLM therapeutic_evidence is typically empty since the LLM doesn't populate it
@@ -299,6 +300,9 @@ def _build_response(result) -> Dict[str, Any]:
                 } if l.biomarker_match else None,
             }
             for l in evidence.fda_labels
+            # Filter: gene must match AND tumor must match (or be pan-cancer)
+            if (l.gene and l.gene.upper() == queried_gene
+                and l.biomarker_match and l.biomarker_match.tumor_matched)
         ],
         "civic_assertions": [
             {

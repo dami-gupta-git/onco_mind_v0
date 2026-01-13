@@ -216,7 +216,7 @@ class CIViCClient:
         molecular_profile: str,
         gene: str,
         variant: str | None,
-    ) -> str:
+    ) -> str | None:
         """Determine the match specificity level for a molecular profile.
 
         CIViC-specific: Extracts variant from molecular profile string (e.g., "EGFR L858R")
@@ -228,7 +228,8 @@ class CIViCClient:
             variant: The queried variant (e.g., "L858R")
 
         Returns:
-            Match level: 'variant' (exact), 'codon' (same position), or 'gene' (gene-only)
+            Match level: 'variant' (exact), 'codon' (same position), 'gene' (gene-only),
+            or None if gene doesn't match
         """
         if not variant:
             return "gene"
@@ -238,7 +239,7 @@ class CIViCClient:
 
         # Check if gene is even in the profile
         if gene_upper not in profile_upper:
-            return "gene"  # Shouldn't happen but fallback
+            return None  # Gene doesn't match - can't determine locus
 
         # Clean variant for comparison
         clean_variant = variant.replace("p.", "").replace("P.", "").upper()
@@ -589,7 +590,7 @@ class CIViCClient:
                     cancer_type_match = None
                     if tumor_type:
                         cancer_type_match = EvidenceLevel(
-                            level="cancer_specific" if tumor_matches else (disease or "pan_cancer"),
+                            level="cancer_specific" if tumor_matches else disease,
                             scope="specific" if tumor_matches else "unspecified",
                             origin="kb",
                         )
@@ -664,7 +665,7 @@ class CIViCClient:
             cancer_type_match = None
             if tumor_type:
                 cancer_type_match = EvidenceLevel(
-                    level="cancer_specific" if tumor_matches else (assertion.disease or "pan_cancer"),
+                    level="cancer_specific" if tumor_matches else assertion.disease,
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
                 )

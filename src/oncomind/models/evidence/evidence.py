@@ -963,8 +963,9 @@ class Evidence(BaseModel):
 
         Returns:
             - "cancer_specific": if the FDA indication matches the queried tumor type
-            - "pan_cancer": if tumor-agnostic or unknown
-            - The actual cancer type (e.g., "ovarian cancer"): if no match but we know the cancer
+            - "pan_cancer": if tumor-agnostic (e.g., solid tumors)
+            - The actual cancer type (e.g., "breast cancer"): if approved for a different tumor
+            - "unknown": if we can't determine the cancer type (should NOT be treated as pan_cancer)
         """
         # Use the property from FDAApproval (reads from cancer_type_match)
         if approval.cancer_specificity:
@@ -979,11 +980,12 @@ class Evidence(BaseModel):
         # No match - extract what cancer the drug IS approved for
         indication_cancer = approval.extract_indication_cancer_type()
         if indication_cancer:
-            if "pan-cancer" in indication_cancer.lower():
+            if "pan-cancer" in indication_cancer.lower() or "solid tumor" in indication_cancer.lower():
                 return "pan_cancer"
             return indication_cancer
 
-        return "pan_cancer"
+        # Unknown - do NOT assume pan_cancer, return as unknown so it gets filtered out
+        return "unknown"
 
     def _get_cancer_specificity_from_disease(self, disease: str | None) -> str:
         """Determine cancer_specificity from a disease/tumor type string.
@@ -999,11 +1001,11 @@ class Evidence(BaseModel):
             - "pan_cancer": if unknown or tumor-agnostic
         """
         if not disease:
-            return "pan_cancer"
+            return None
 
         queried_tumor = self.context.tumor_type
         if not queried_tumor:
-            return "pan_cancer"
+            return None
 
         # Check for tumor-agnostic terms using centralized function
         if is_pan_cancer_term(disease):

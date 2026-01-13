@@ -1195,6 +1195,23 @@ def get_fda_labels_for_drugs(
             else:
                 logger.debug(f"Cache miss for {drug} (cache-only mode)")
 
+    # Deduplicate: keep only one entry per drug name (highest version)
+    # This handles cases where a drug has multiple set_ids in FDA database
+    if results:
+        deduplicated: dict[str, FDALabelEvidence] = {}
+        for label in results:
+            drug_key = label.drug.lower()
+            if drug_key not in deduplicated:
+                deduplicated[drug_key] = label
+            else:
+                # Keep the one with higher version
+                existing_version = int(deduplicated[drug_key].version or "0")
+                new_version = int(label.version or "0")
+                if new_version > existing_version:
+                    deduplicated[drug_key] = label
+        results = list(deduplicated.values())
+        logger.debug(f"Deduplicated FDA labels: {len(results)} unique drugs")
+
     return results
 
 

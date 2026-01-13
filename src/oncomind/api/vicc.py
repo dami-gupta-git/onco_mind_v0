@@ -562,7 +562,7 @@ class VICCClient:
             cancer_type_match = None
             if tumor_type:
                 cancer_type_match = EvidenceLevel(
-                    level="cancer_specific" if tumor_matches else (assoc.disease or "pan_cancer"),
+                    level="cancer_specific" if tumor_matches else assoc.disease,
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
                 )

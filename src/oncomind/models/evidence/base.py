@@ -228,7 +228,7 @@ def tumor_types_match(
 def compute_cancer_specificity(
     source_disease: str | None,
     queried_tumor: str | None,
-) -> str:
+) -> str | None:
     """Determine cancer specificity level for evidence.
 
     This is the centralized function for computing cancer_type_match.level.
@@ -236,6 +236,7 @@ def compute_cancer_specificity(
     - "cancer_specific": Evidence matches the user's queried tumor type
     - "pan_cancer": Evidence is tumor-agnostic (e.g., "Solid Tumor", "Cancer")
     - specific cancer name: Evidence is for a different specific tumor type
+    - None: Unknown (no source disease provided)
 
     Args:
         source_disease: Disease/tumor from the knowledge base
@@ -244,11 +245,12 @@ def compute_cancer_specificity(
     Returns:
         "cancer_specific" if matches queried tumor,
         "pan_cancer" if source is tumor-agnostic,
-        or the source disease name if it's a different specific tumor
+        the source disease name if it's a different specific tumor,
+        or None if source_disease is not provided
     """
     # Handle missing source disease
     if not source_disease:
-        return "pan_cancer"
+        return None
 
     # Check if source is a generic pan-cancer term
     if is_pan_cancer_term(source_disease):

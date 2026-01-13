@@ -48,8 +48,7 @@ class TestIsPositive:
         """Should match any keyword in the list."""
         assert is_positive("AKT1 E17K confers sensitivity to AKT inhibitors", ["sensitiv", "respons"]) is True
         assert is_positive("The variant is responsive to treatment", ["sensitiv", "respons"]) is True
-        assert is_positive("The variant is a tumor regressor", ["tumor regress"])
-        pass
+        assert is_positive("The variant causes tumor regression", ["regression"]) is True
 
     @pytest.mark.skip(reason="'lacks' is a negative verb not detected by current negation logic")
     def test_lacks_sensitivity(self):

@@ -475,7 +475,7 @@ class CGIClient:
             cancer_type_match = None
             if tumor_type:
                 cancer_type_match = EvidenceLevel(
-                    level="cancer_specific" if tumor_matches else (biomarker.tumor_type or "pan_cancer"),
+                    level="cancer_specific" if tumor_matches else biomarker.tumor_type,
                     scope="specific" if tumor_matches else "unspecified",
                     origin="kb",
                 )

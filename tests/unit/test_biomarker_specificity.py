@@ -375,10 +375,14 @@ class TestTumorMatching:
         assert label.biomarker_match.matched is True
         assert label.biomarker_match.match_level == "variant"
         assert label.biomarker_match.tumor_matched is True
-        assert label.biomarker_match.tumor_match_type == "exact"
+        assert label.biomarker_match.tumor_match_type == "cancer_specific"
 
     def test_tumor_match_different_cancer(self):
-        """Test tumor mismatch when cancer type differs."""
+        """Test tumor mismatch when cancer type differs.
+
+        When variant matches but tumor doesn't, matched=False because
+        both biomarker AND tumor must match for a full match.
+        """
         from oncomind.insight_builder.fda_processor import populate_locus_variant_match
         from oncomind.models.evidence.fda import FDALabelEvidence
 
@@ -391,11 +395,15 @@ class TestTumorMatching:
         populate_locus_variant_match([label], query_variant="G12C", query_tumor="colorectal cancer")
 
         assert label.biomarker_match is not None
-        assert label.biomarker_match.matched is True  # Variant matches
-        assert label.biomarker_match.tumor_matched is False  # But tumor doesn't
+        assert label.biomarker_match.matched is False  # Full match requires both biomarker AND tumor
+        assert label.biomarker_match.tumor_matched is False  # Tumor doesn't match
 
     def test_tumor_match_no_tumor_provided(self):
-        """Test that tumor_matched is None when no tumor type is provided."""
+        """Test behavior when no tumor type is provided.
+
+        When no tumor is queried, tumor_matched=False (can't match without a query)
+        and matched=False because both biomarker AND tumor must match.
+        """
         from oncomind.insight_builder.fda_processor import populate_locus_variant_match
         from oncomind.models.evidence.fda import FDALabelEvidence
 
@@ -408,12 +416,16 @@ class TestTumorMatching:
         populate_locus_variant_match([label], query_variant="G12C", query_tumor=None)
 
         assert label.biomarker_match is not None
-        assert label.biomarker_match.matched is True
-        assert label.biomarker_match.tumor_matched is None
+        assert label.biomarker_match.matched is False  # No tumor query means no full match
+        assert label.biomarker_match.tumor_matched is False  # Can't match without a query
         assert label.biomarker_match.tumor_match_type is None
 
     def test_tumor_match_pan_cancer_msi_h(self):
-        """Test pan-cancer MSI-H approval matches any solid tumor."""
+        """Test pan-cancer MSI-H approval matches any solid tumor.
+
+        MSI-H/dMMR are biomarker-based tumor-agnostic approvals that apply
+        to any solid tumor with that biomarker.
+        """
         from oncomind.insight_builder.fda_processor import populate_locus_variant_match
         from oncomind.models.evidence.fda import FDALabelEvidence
 
@@ -426,7 +438,7 @@ class TestTumorMatching:
         populate_locus_variant_match([label], query_variant="E17K", query_tumor="endometrial cancer")
 
         assert label.biomarker_match is not None
-        # MSI-H is phenotype-based, not gene-based, so variant match is False
+        # MSI-H/dMMR are tumor-agnostic (pan-cancer) approvals
         assert label.biomarker_match.tumor_matched is True
         assert label.biomarker_match.tumor_match_type == "pan_cancer"
 
@@ -447,7 +459,7 @@ class TestTumorMatching:
         assert label.biomarker_match.matched is True  # Gene-level approval covers E17K
         assert label.biomarker_match.match_level == "gene"
         assert label.biomarker_match.tumor_matched is True
-        assert label.biomarker_match.tumor_match_type == "exact"
+        assert label.biomarker_match.tumor_match_type == "cancer_specific"
 
     def test_tumor_match_melanoma_braf(self):
         """Test tumor matching for melanoma with BRAF V600."""
@@ -468,7 +480,10 @@ class TestTumorMatching:
         assert label.biomarker_match.tumor_matched is True
 
     def test_tumor_match_melanoma_wrong_tumor(self):
-        """Test tumor mismatch when BRAF melanoma drug queried for NSCLC."""
+        """Test tumor mismatch when BRAF melanoma drug queried for NSCLC.
+
+        Full match requires BOTH biomarker AND tumor to match.
+        """
         from oncomind.insight_builder.fda_processor import populate_locus_variant_match
         from oncomind.models.evidence.fda import FDALabelEvidence
 
@@ -481,5 +496,5 @@ class TestTumorMatching:
         populate_locus_variant_match([label], query_variant="V600E", query_tumor="NSCLC")
 
         assert label.biomarker_match is not None
-        assert label.biomarker_match.matched is True  # Variant matches at codon level
-        assert label.biomarker_match.tumor_matched is False  # But tumor doesn't match
+        assert label.biomarker_match.matched is False  # Full match requires both biomarker AND tumor
+        assert label.biomarker_match.tumor_matched is False  # Tumor doesn't match

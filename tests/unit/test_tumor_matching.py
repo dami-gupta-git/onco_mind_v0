@@ -184,18 +184,18 @@ class TestComputeCancerSpecificity:
         result = compute_cancer_specificity("Ovarian Cancer", "Melanoma")
         assert result == "Ovarian Cancer"
 
-    def test_none_source_returns_pan_cancer(self):
-        """None source disease should return 'pan_cancer'."""
-        assert compute_cancer_specificity(None, "NSCLC") == "pan_cancer"
+    def test_none_source_returns_none(self):
+        """None source disease should return None (unknown)."""
+        assert compute_cancer_specificity(None, "NSCLC") is None
 
     def test_none_query_returns_source_disease(self):
         """None queried tumor should return the source disease."""
         assert compute_cancer_specificity("Breast Cancer", None) == "Breast Cancer"
         assert compute_cancer_specificity("NSCLC", None) == "NSCLC"
 
-    def test_both_none_returns_pan_cancer(self):
-        """Both None should return 'pan_cancer'."""
-        assert compute_cancer_specificity(None, None) == "pan_cancer"
+    def test_both_none_returns_none(self):
+        """Both None should return None (unknown)."""
+        assert compute_cancer_specificity(None, None) is None
 
 
 class TestIntegrationWithAPIClients:

@@ -115,8 +115,8 @@ st.markdown("""
     .scrollable-table .col-status { width: 150px; }
     .scrollable-table .col-indication { width: 250px; }
     .scrollable-table .col-links { width: 80px; }
-    .scrollable-table .col-nct { width: 95px; }
-    .scrollable-table .col-phase { width: 60px; }
+    .scrollable-table .col-nct { width: 120px; }
+    .scrollable-table .col-phase { width: 100px; }
     .scrollable-table .col-title { min-width: 300px; }
     /* Truncated text cells - inner div handles the truncation */
     .scrollable-table td.truncated {
@@ -153,6 +153,11 @@ st.markdown("""
     /* Visual hint that cell is clickable */
     .scrollable-table td.truncated:hover {
         background-color: #f0f7ff;
+    }
+    /* Title column gets more width for readability */
+    .scrollable-table td.col-title .cell-content {
+        max-width: 400px;
+        width: 400px;
     }
     /* Tighter section dividers for evidence groupings */
     .evidence-section-divider {
@@ -1368,7 +1373,7 @@ with tab1:
                                 status = t.get('status', '')
                                 title = t.get('title', '') or ''
                                 # Show more of the title (truncation handled by CSS)
-                                title_display = title[:100] + "..." if len(title) > 100 else title
+                                title_display = title[:150] + "..." if len(title) > 150 else title
                                 rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title_display} |")
                             scrollable_table("\n".join(rows))
                     tab_idx += 1
