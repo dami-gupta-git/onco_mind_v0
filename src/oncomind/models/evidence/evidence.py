@@ -533,11 +533,16 @@ class Evidence(BaseModel):
                     if drug_key not in seen_drugs:
                         seen_drugs.add(drug_key)
 
+                        # Determine response type from association field
+                        # CGI values: "Responsive", "Resistant", "No Responsive", "Increased Toxicity"
+                        # Only mark as Sensitivity/Resistance if explicitly stated
                         response_type = None
                         if biomarker.association:
-                            if "RESIST" in biomarker.association.upper():
+                            assoc_upper = biomarker.association.upper()
+                            if "RESIST" in assoc_upper:
                                 response_type = "Resistance"
-                            else:
+                            elif assoc_upper == "RESPONSIVE":
+                                # Only explicit "Responsive" (not "No Responsive" or toxicity)
                                 response_type = "Sensitivity"
 
                         # Determine cancer specificity
@@ -564,11 +569,16 @@ class Evidence(BaseModel):
                     if drug_key not in seen_drugs:
                         seen_drugs.add(drug_key)
 
+                        # Determine response type from association field
+                        # CGI values: "Responsive", "Resistant", "No Responsive", "Increased Toxicity"
+                        # Only mark as Sensitivity/Resistance if explicitly stated
                         response_type = None
                         if biomarker.association:
-                            if "RESIST" in biomarker.association.upper():
+                            assoc_upper = biomarker.association.upper()
+                            if "RESIST" in assoc_upper:
                                 response_type = "Resistance"
-                            else:
+                            elif assoc_upper == "RESPONSIVE":
+                                # Only explicit "Responsive" (not "No Responsive" or toxicity)
                                 response_type = "Sensitivity"
 
                         cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
@@ -761,11 +771,16 @@ class Evidence(BaseModel):
                 if entry_key not in seen_entries:
                     seen_entries.add(entry_key)
 
+                    # Determine response type from association field
+                    # CGI values: "Responsive", "Resistant", "No Responsive", "Increased Toxicity"
+                    # Only mark as Sensitivity/Resistance if explicitly stated
                     response_type = None
                     if biomarker.association:
-                        if "RESIST" in biomarker.association.upper():
+                        assoc_upper = biomarker.association.upper()
+                        if "RESIST" in assoc_upper:
                             response_type = "Resistance"
-                        else:
+                        elif assoc_upper == "RESPONSIVE":
+                            # Only explicit "Responsive" (not "No Responsive" or toxicity)
                             response_type = "Sensitivity"
 
                     cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
@@ -947,8 +962,9 @@ class Evidence(BaseModel):
                                 return True
 
         # Check CGI biomarkers for sensitivity
+        # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
         for biomarker in self.cgi_biomarkers:
-            if biomarker.association and "RESIST" not in biomarker.association.upper():
+            if biomarker.association and biomarker.association.upper() == "RESPONSIVE":
                 if biomarker.drug:
                     if drug_lower in biomarker.drug.lower() or biomarker.drug.lower() in drug_lower:
                         return True
@@ -1494,8 +1510,9 @@ class Evidence(BaseModel):
                             clinical_drugs[drug_lower] = locus
 
         # CGI sensitivity biomarkers (FDA-approved) - with locus match
+        # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
         for biomarker in self.cgi_biomarkers:
-            if biomarker.association and "RESIST" not in biomarker.association.upper():
+            if biomarker.association and biomarker.association.upper() == "RESPONSIVE":
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
@@ -1506,9 +1523,10 @@ class Evidence(BaseModel):
                             clinical_drugs[drug_lower] = locus
 
         # CGI preclinical sensitivity biomarkers - with locus match
+        # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
         cgi_preclinical_drugs: dict[str, str] = {}
         for biomarker in self.preclinical_biomarkers:
-            if biomarker.association and "RESIST" not in biomarker.association.upper():
+            if biomarker.association and biomarker.association.upper() == "RESPONSIVE":
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
@@ -1519,9 +1537,10 @@ class Evidence(BaseModel):
                             cgi_preclinical_drugs[drug_lower] = locus
 
         # CGI early-phase sensitivity biomarkers (clinical trials, case reports) - with locus match
+        # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
         early_phase_drugs: dict[str, str] = {}
         for biomarker in self.early_phase_biomarkers:
-            if biomarker.association and "RESIST" not in biomarker.association.upper():
+            if biomarker.association and biomarker.association.upper() == "RESPONSIVE":
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
@@ -1674,7 +1693,8 @@ class Evidence(BaseModel):
             ]
             if approved:
                 resistance = [b.drug for b in approved if b.association and 'RESIST' in b.association.upper()]
-                sensitivity = [b.drug for b in approved if b.association and 'RESIST' not in b.association.upper()]
+                # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
+                sensitivity = [b.drug for b in approved if b.association and b.association.upper() == 'RESPONSIVE']
                 if resistance:
                     lines.append(f"CGI Resistance: {', '.join(resistance[:3])}")
                 if sensitivity:
