@@ -23,15 +23,12 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-import pandas as pd
 import requests
 
 from oncomind.config.constants import (
     FDA_LABELS_FILE,
-    CGI_BIOMARKERS_FILE,
     DRUG_NAMES_CACHE_FILE,
 )
 

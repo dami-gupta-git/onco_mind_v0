@@ -25,7 +25,6 @@ from oncomind.models.evidence.base import (
     is_pan_cancer_term,
     tumor_types_match,
     determine_locus_match,
-    extract_variant_position,
 )
 
 logger = get_logger(__name__)
