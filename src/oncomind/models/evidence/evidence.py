@@ -680,8 +680,11 @@ class Evidence(BaseModel):
         # e.g., Imatinib Responsive + Imatinib Resistant should both appear
         seen_entries: set[tuple[str, str]] = set()
 
-        # From FDA approvals
+        # From FDA approvals - only include those that match the queried variant
+        # Unmatched codon-level near-misses are shown separately in get_evidence_summary_for_llm()
         for approval in self.fda_approvals:
+            if not approval.biomarker_matched:
+                continue  # Skip approvals that don't cover this variant
             # For combinations (contain "+"), use drug_name as key; otherwise use generic/brand
             is_combination = approval.drug_name and "+" in approval.drug_name
             if is_combination:
@@ -716,7 +719,10 @@ class Evidence(BaseModel):
 
                 # Generate DailyMed URL for FDA drug label
                 # Use brand name if available, otherwise generic name
+                # For combinations (e.g., "Erlotinib + gemcitabine"), use just the first drug
                 dailymed_search = approval.brand_name or approval.generic_name or approval.drug_name
+                if dailymed_search and "+" in dailymed_search:
+                    dailymed_search = dailymed_search.split("+")[0].strip()
                 dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={dailymed_search.replace(' ', '+')}" if dailymed_search else None
 
                 evidence_list.append(TherapeuticData(

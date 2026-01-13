@@ -71,7 +71,7 @@ from oncomind.insight_builder.fda_processor import (
     sort_fda_by_association,
     populate_locus_variant_match,
 )
-from oncomind.api.fda_label_service import get_fda_labels_for_drugs
+from oncomind.api.fda_label_service import get_fda_labels_for_drugs_async
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -649,8 +649,8 @@ class EvidenceAggregator:
                 existing_lower.add(drug_name.lower())
                 logger.debug(f"Added {normalized_name} from FDA biomarker search")
 
-        # Fetch FDA labels for drugs and populate locus_variant_match
-        evidence.fda_labels = get_fda_labels_for_drugs(
+        # Fetch FDA labels for drugs and populate locus_variant_match (async parallel)
+        evidence.fda_labels = await get_fda_labels_for_drugs_async(
             drugs=all_drugs,
             gene=gene,
             fetch_missing=True,
@@ -851,7 +851,7 @@ class EvidenceAggregator:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
 
         # FDA approvals will be populated from FDA labels in build_evidence()
-        # after get_fda_labels_for_drugs() is called
+        # after get_fda_labels_for_drugs_async() is called
         fda_approvals: list[FDAApproval] = []
 
         # Get gene context

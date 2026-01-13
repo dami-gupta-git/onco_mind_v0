@@ -11,7 +11,6 @@ This module handles FDA label data transformation, including:
 import re
 from typing import Any
 
-from oncomind.api.fda_label_service import get_fda_labels_for_drugs
 from oncomind.models.evidence import (
     BiomarkerMatch,
     FDAApproval,

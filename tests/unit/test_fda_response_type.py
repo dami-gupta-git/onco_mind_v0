@@ -100,6 +100,7 @@ class TestFDAResponseType:
         identifiers = VariantIdentifiers(variant_id="EGFR:T790M", gene="EGFR", variant="T790M")
 
         # Create FDA approvals with association field (source of response_type)
+        # biomarker_matched=True means this approval covers the queried variant
         fda_approvals = [
             FDAApproval(
                 drug_name="Gefitinib",
@@ -109,6 +110,7 @@ class TestFDAResponseType:
                 variant_in_indications=False,
                 association="Resistant",  # T790M causes resistance to gefitinib
                 locus_variant_match={"level": "codon", "scope": "specific", "origin": "kb"},
+                biomarker_matched=True,  # Include in get_fda_approved_therapies()
             ),
             FDAApproval(
                 drug_name="TAGRISSO",
@@ -118,6 +120,7 @@ class TestFDAResponseType:
                 variant_in_indications=True,
                 association="Responsive",  # T790M is the target for osimertinib
                 locus_variant_match={"level": "variant", "scope": "specific", "origin": "kb"},
+                biomarker_matched=True,  # Include in get_fda_approved_therapies()
             ),
         ]
 
@@ -160,6 +163,7 @@ class TestFDAResponseType:
                 variant_in_indications=True,
                 # No association field - response_type should be None
                 locus_variant_match={"level": "variant", "scope": "specific", "origin": "kb"},
+                biomarker_matched=True,  # Include in get_fda_approved_therapies()
             ),
         ]
 
@@ -216,6 +220,7 @@ class TestLLMEvidenceSummary:
                 indication="EGFR exon 19 deletions or L858R",
                 variant_in_indications=False,
                 locus_variant_match={"level": "codon", "scope": "specific", "origin": "kb"},
+                biomarker_matched=True,  # Include in get_fda_approved_therapies()
             ),
             FDAApproval(
                 drug_name="TAGRISSO",
@@ -224,6 +229,7 @@ class TestLLMEvidenceSummary:
                 indication="EGFR T790M mutation-positive NSCLC",
                 variant_in_indications=True,
                 locus_variant_match={"level": "variant", "scope": "specific", "origin": "kb"},
+                biomarker_matched=True,  # Include in get_fda_approved_therapies()
             ),
         ]
 

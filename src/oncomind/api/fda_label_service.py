@@ -18,6 +18,7 @@ Usage:
     )
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -25,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
 import requests
 
 from oncomind.config.constants import (
@@ -92,6 +94,52 @@ def fetch_latest_labels(drug_name: str) -> list[dict[str, Any]]:
         return []
 
     # Process each latest result
+    return [_process_raw_label(result, drug_name) for _, result in latest_by_set_id.values()]
+
+
+async def fetch_latest_labels_async(
+    client: httpx.AsyncClient, drug_name: str
+) -> list[dict[str, Any]]:
+    """Async version of fetch_latest_labels.
+
+    Fetches the latest FDA labels from OpenFDA for a drug using async HTTP.
+
+    Args:
+        client: httpx.AsyncClient instance for making requests
+        drug_name: Drug name to search for
+
+    Returns:
+        List of processed label data dicts (one per unique set_id).
+        Empty list if no labels found.
+    """
+    latest_by_set_id: dict[str, tuple[int, dict[str, Any]]] = {}
+
+    for field in ["openfda.brand_name", "openfda.generic_name"]:
+        params = {
+            "search": f'{field}:"{drug_name}"',
+            "limit": 10,
+        }
+        try:
+            resp = await client.get(OPENFDA_BASE, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                for result in data.get("results", []):
+                    set_id = result.get("set_id")
+                    version = result.get("version")
+                    if set_id and version:
+                        try:
+                            version_num = int(version)
+                            if set_id not in latest_by_set_id or version_num > latest_by_set_id[set_id][0]:
+                                latest_by_set_id[set_id] = (version_num, result)
+                        except ValueError:
+                            continue
+        except httpx.RequestError as e:
+            logger.debug(f"Error fetching label for {drug_name}: {e}")
+            continue
+
+    if not latest_by_set_id:
+        return []
+
     return [_process_raw_label(result, drug_name) for _, result in latest_by_set_id.values()]
 
 
@@ -1181,7 +1229,7 @@ def get_fda_labels_for_drugs(
                 results.append(label_evidence)
 
             # Rate limiting between API calls
-            time.sleep(0.2)
+            time.sleep(0.05)
         else:
             # Cache-only mode: search by drug_name field (no API calls)
             cached_entry = lookup_by_drug_name(drug, labels_cache)
@@ -1202,6 +1250,93 @@ def get_fda_labels_for_drugs(
                 deduplicated[drug_key] = label
             else:
                 # Keep the one with higher version
+                existing_version = int(deduplicated[drug_key].version or "0")
+                new_version = int(label.version or "0")
+                if new_version > existing_version:
+                    deduplicated[drug_key] = label
+        results = list(deduplicated.values())
+        logger.debug(f"Deduplicated FDA labels: {len(results)} unique drugs")
+
+    return results
+
+
+async def get_fda_labels_for_drugs_async(
+    drugs: set[str],
+    gene: str,
+    fetch_missing: bool = True,
+) -> list[FDALabelEvidence]:
+    """Async version of get_fda_labels_for_drugs.
+
+    Fetches FDA labels for all drugs in parallel using async HTTP.
+
+    Args:
+        drugs: Set of drug names to look up
+        gene: Gene symbol for context
+        fetch_missing: Whether to fetch from OpenFDA (if False, only uses cache)
+
+    Returns:
+        List of FDALabelEvidence for found drugs
+    """
+    results: list[FDALabelEvidence] = []
+
+    # Load cache
+    labels_cache = load_fda_labels_json()
+
+    if not fetch_missing:
+        # Cache-only mode - no async needed
+        for drug in drugs:
+            cached_entry = lookup_by_drug_name(drug, labels_cache)
+            if cached_entry:
+                logger.debug(f"Cache hit for {drug}")
+                label_evidence = _create_fda_label_evidence(drug, gene, cached_entry)
+                results.append(label_evidence)
+            else:
+                logger.debug(f"Cache miss for {drug} (cache-only mode)")
+    else:
+        # Online mode: fetch all drugs in parallel
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Create tasks for all drugs
+            tasks = [fetch_latest_labels_async(client, drug) for drug in drugs]
+            # Execute all fetches in parallel
+            all_labels_data = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results
+            for drug, labels_data in zip(drugs, all_labels_data):
+                if isinstance(labels_data, Exception):
+                    logger.debug(f"Error fetching FDA labels for {drug}: {labels_data}")
+                    continue
+                if not labels_data:
+                    logger.debug(f"No FDA labels found for {drug}")
+                    continue
+
+                for label_data in labels_data:
+                    set_id = label_data.get("set_id")
+                    version = label_data.get("version")
+                    if not set_id or not version:
+                        logger.warning(f"FDA label for {drug} missing set_id or version, skipping")
+                        continue
+
+                    # Check if already in cache
+                    cached_entry = lookup_by_set_id_version(set_id, version, labels_cache)
+                    if cached_entry:
+                        logger.debug(f"Cache hit for {drug} (set_id={set_id}, version={version})")
+                        label_evidence = _create_fda_label_evidence(drug, gene, cached_entry)
+                    else:
+                        # Cache miss - save to cache
+                        logger.debug(f"Cache miss for {drug}, saving to cache...")
+                        update_fda_labels_json(drug, label_data, [gene])
+                        label_evidence = _create_fda_label_evidence(drug, gene, label_data)
+
+                    results.append(label_evidence)
+
+    # Deduplicate: keep only one entry per drug name (highest version)
+    if results:
+        deduplicated: dict[str, FDALabelEvidence] = {}
+        for label in results:
+            drug_key = label.drug.lower()
+            if drug_key not in deduplicated:
+                deduplicated[drug_key] = label
+            else:
                 existing_version = int(deduplicated[drug_key].version or "0")
                 new_version = int(label.version or "0")
                 if new_version > existing_version:
