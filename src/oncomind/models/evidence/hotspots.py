@@ -165,17 +165,61 @@ class HotspotsEvidence(EvidenceItemBase):
         """Get the Cancer Hotspots URL."""
         return "https://www.cancerhotspots.org/"
 
-    def to_prompt_context(self) -> str:
-        """Format hotspot evidence for LLM prompt.
+    def _tumor_matches_hotspot(self, tumor_type: str | None, hotspot: HotspotEntry) -> bool:
+        """Check if the queried tumor type matches the hotspot's tumor distribution.
+
+        Args:
+            tumor_type: Clinical tumor type (e.g., "Glioma", "NSCLC", "Melanoma")
+            hotspot: The hotspot entry to check
 
         Returns:
-            Formatted string with hotspot context
+            True if tumor type is None (pan-cancer query) or matches hotspot tumor distribution
+        """
+        if not tumor_type:
+            # No tumor type specified - include all hotspot data
+            return True
+
+        from oncomind.config.constants import HOTSPOT_TUMOR_MAPPING
+
+        # Get the hotspot organ terms for this clinical tumor type
+        tumor_lower = tumor_type.lower()
+        expected_organs = HOTSPOT_TUMOR_MAPPING.get(tumor_lower, [])
+
+        if not expected_organs:
+            # Unknown tumor type - be conservative and exclude from LLM
+            # (hotspot data will still be shown in UI, just not sent to LLM)
+            return False
+
+        # Check if any of the expected organs appear in hotspot tumor composition
+        hotspot_organs = {t.tumor_type.lower() for t in hotspot.tumor_type_composition}
+
+        for organ in expected_organs:
+            if organ.lower() in hotspot_organs:
+                return True
+
+        return False
+
+    def to_prompt_context(self, tumor_type: str | None = None) -> str:
+        """Format hotspot evidence for LLM prompt.
+
+        Args:
+            tumor_type: Optional tumor type to filter relevance. If the queried tumor
+                       type doesn't match the hotspot's tumor distribution, returns empty
+                       string to avoid sending irrelevant data to LLM synthesis.
+
+        Returns:
+            Formatted string with hotspot context, or empty string if tumor doesn't match
         """
         lines = []
 
         # Direct hotspot match
         if self.hotspot:
             h = self.hotspot
+
+            # Check if this hotspot is relevant to the queried tumor type
+            if not self._tumor_matches_hotspot(tumor_type, h):
+                # Hotspot exists but not relevant to this tumor - skip for LLM
+                return ""
 
             # Header with match status
             if self.is_exact_variant_match:
@@ -209,6 +253,11 @@ class HotspotsEvidence(EvidenceItemBase):
         # Adjacent hotspot (not at hotspot, but near one)
         elif self.is_adjacent_to_hotspot() and self.adjacent_hotspot:
             h = self.adjacent_hotspot
+
+            # Check if the adjacent hotspot is relevant to the queried tumor type
+            if not self._tumor_matches_hotspot(tumor_type, h):
+                # Adjacent hotspot not relevant to this tumor - skip for LLM
+                return ""
 
             lines.append(
                 f"NEAR HOTSPOT: {self.gene} {self.variant} is {self.adjacent_distance} codon(s) "

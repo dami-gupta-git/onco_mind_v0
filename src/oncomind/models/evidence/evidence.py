@@ -1952,10 +1952,13 @@ class Evidence(BaseModel):
 
         # Cancer Hotspots data (mutation recurrence across cancers)
         # Include both direct hotspot matches AND adjacent hotspots
+        # Pass tumor_type to filter hotspot data - only include if relevant to queried tumor
         if self.hotspots_evidence and (
             self.hotspots_evidence.has_data() or self.hotspots_evidence.is_adjacent_to_hotspot()
         ):
-            hotspot_context = self.hotspots_evidence.to_prompt_context()
+            hotspot_context = self.hotspots_evidence.to_prompt_context(
+                tumor_type=self.context.tumor_type
+            )
             if hotspot_context:
                 lines.append(hotspot_context)
                 lines.append("")

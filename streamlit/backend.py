@@ -14,7 +14,10 @@ Modes:
     - Full mode: Evidence + Literature + LLM narrative
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
+
+import streamlit as st
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.config.debug import get_logger
@@ -57,6 +60,8 @@ async def get_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
         logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
         logger.debug(f"  enable_llm={enable_llm}, enable_literature={enable_literature}, model={model}")
 

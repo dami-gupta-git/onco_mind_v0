@@ -1056,7 +1056,7 @@ BROAD_VARIANTS: set[tuple[str, str]] = {
 # Configuration for LLM-based evidence synthesis and paper scoring
 
 # Default model for LLM calls
-LLM_DEFAULT_MODEL = "claude-sonnet-4-20250514"
+LLM_DEFAULT_MODEL = "gemini/gemini-2.0-flash"
 
 # Fast/cheap model for high-volume operations (paper scoring, knowledge extraction)
 LLM_FAST_MODEL = "gpt-4o-mini"
@@ -1352,4 +1352,161 @@ SENSITIVITY_KEYWORDS = [
     "sensitiv",
     "respons"
 ]
+
+# =============================================================================
+# HOTSPOT TUMOR TYPE MAPPING
+# =============================================================================
+# Maps clinical tumor types to hotspot database organ terms
+# Hotspot database uses organ-based terms (brain, lung, skin, bowel, etc.)
+# Clinical queries use disease names (Glioma, NSCLC, Melanoma, CRC, etc.)
+#
+# Format: {clinical_term_lowercase: [list of hotspot organ terms]}
+
+HOTSPOT_TUMOR_MAPPING: dict[str, list[str]] = {
+    # Brain/CNS tumors
+    "glioma": ["brain"],
+    "gbm": ["brain"],
+    "glioblastoma": ["brain"],
+    "astrocytoma": ["brain"],
+    "oligodendroglioma": ["brain"],
+    "lgg": ["brain"],
+    "brain": ["brain"],
+    "cns": ["brain"],
+
+    # Lung cancers
+    "nsclc": ["lung"],
+    "lung": ["lung"],
+    "luad": ["lung"],
+    "lusc": ["lung"],
+    "sclc": ["lung"],
+    "lung adenocarcinoma": ["lung"],
+    "non-small cell lung": ["lung"],
+    "non small cell lung": ["lung"],
+
+    # Skin/Melanoma
+    "melanoma": ["skin"],
+    "mel": ["skin"],
+    "skcm": ["skin"],
+    "cutaneous melanoma": ["skin"],
+    "skin": ["skin"],
+
+    # Colorectal/Bowel
+    "crc": ["bowel"],
+    "colorectal": ["bowel"],
+    "colon": ["bowel"],
+    "rectal": ["bowel"],
+    "coad": ["bowel"],
+    "read": ["bowel"],
+    "bowel": ["bowel"],
+
+    # Thyroid
+    "thyroid": ["thyroid"],
+    "thca": ["thyroid"],
+    "ptc": ["thyroid"],
+    "ftc": ["thyroid"],
+    "atc": ["thyroid"],
+
+    # Breast
+    "breast": ["breast"],
+    "brca": ["breast"],
+    "bc": ["breast"],
+    "tnbc": ["breast"],
+
+    # Pancreatic
+    "pancreatic": ["pancreas"],
+    "paad": ["pancreas"],
+    "pdac": ["pancreas"],
+    "pancreas": ["pancreas"],
+
+    # Stomach/Gastric
+    "gastric": ["stomach"],
+    "stad": ["stomach"],
+    "stomach": ["stomach"],
+
+    # Bladder
+    "bladder": ["bladder"],
+    "blca": ["bladder"],
+    "urothelial": ["bladder"],
+
+    # Kidney/Renal
+    "renal": ["kidney"],
+    "rcc": ["kidney"],
+    "kidney": ["kidney"],
+    "ccrcc": ["kidney"],
+
+    # Ovarian
+    "ovarian": ["ovary"],
+    "ov": ["ovary"],
+    "hgsc": ["ovary"],
+    "ovary": ["ovary"],
+
+    # Liver
+    "liver": ["liver"],
+    "hcc": ["liver"],
+    "hepatocellular": ["liver"],
+    "lihc": ["liver"],
+
+    # Biliary/Cholangiocarcinoma
+    "cholangiocarcinoma": ["biliary_tract"],
+    "chol": ["biliary_tract"],
+    "biliary": ["biliary_tract"],
+    "bile duct": ["biliary_tract"],
+
+    # Head and Neck
+    "head and neck": ["head_neck"],
+    "hnsc": ["head_neck"],
+    "oral": ["head_neck"],
+    "oropharynx": ["head_neck"],
+
+    # Uterine/Endometrial
+    "endometrial": ["uterus"],
+    "uterine": ["uterus"],
+    "ucec": ["uterus"],
+    "uterus": ["uterus"],
+
+    # Cervical
+    "cervical": ["cervix"],
+    "cesc": ["cervix"],
+    "cervix": ["cervix"],
+
+    # Prostate
+    "prostate": ["prostate"],
+    "prad": ["prostate"],
+
+    # Testicular
+    "testicular": ["testis"],
+    "tgct": ["testis"],
+    "testis": ["testis"],
+
+    # Soft tissue/Sarcoma
+    "sarcoma": ["soft_tissue"],
+    "sarc": ["soft_tissue"],
+    "soft tissue": ["soft_tissue"],
+
+    # Hematologic (hotspot uses "blood")
+    "aml": ["blood"],
+    "all": ["blood"],
+    "cml": ["blood"],
+    "cll": ["blood"],
+    "leukemia": ["blood"],
+    "blood": ["blood"],
+
+    # Bone
+    "bone": ["bone"],
+    "osteosarcoma": ["bone"],
+
+    # Adrenal
+    "adrenal": ["adrenal_gland"],
+    "acc": ["adrenal_gland"],
+
+    # Thymus
+    "thymoma": ["thymus"],
+    "thym": ["thymus"],
+    "thymus": ["thymus"],
+
+    # Lymphoma (hotspot uses "lymph")
+    "lymphoma": ["lymph"],
+    "dlbcl": ["lymph"],
+    "fl": ["lymph"],
+}
 

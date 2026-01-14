@@ -250,13 +250,14 @@ This runs in parallel with the main LLM synthesis for faster response times.
 
 ## Configuration
 
-Create a `.env` file:
+Create a `.env` file (or set as Hugging Face Secrets):
 
 ```bash
-# Required for LLM research mode
-ANTHROPIC_API_KEY=your-anthropic-key
+# Required for LLM research mode (Gemini 2.0 Flash is the default)
+GOOGLE_API_KEY=your-google-api-key
 
-# Optional: use OpenAI models instead
+# Optional: use Anthropic or OpenAI models instead
+ANTHROPIC_API_KEY=your-anthropic-key
 OPENAI_API_KEY=your-openai-key
 
 # Optional: better literature context (used in LLM mode)
@@ -265,9 +266,11 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 
 **Supported LLM models:**
 
-- `claude-sonnet-4-20250514` (default, recommended)
-- `claude-3-5-haiku-20241022` (faster, lower cost)
-- `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
+- `gemini/gemini-2.0-flash` (default, fast)
+- `gemini/gemini-1.5-pro`
+- `claude-sonnet-4-20250514`
+- `claude-3-5-haiku-20241022`
+- `gpt-4o-mini`, `gpt-4o`
 
 ---
 
