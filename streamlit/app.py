@@ -45,11 +45,12 @@ st.markdown(
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
+    "Google Gemini 2.0 Flash": "gemini/gemini-2.0-flash",
+    "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
     "Anthropic Claude Sonnet 4": "claude-sonnet-4-20250514",
     "Anthropic Claude 3.5 Haiku": "claude-3-5-haiku-20241022",
     "OpenAI GPT-4o-mini": "gpt-4o-mini",
     "OpenAI GPT-4o": "gpt-4o",
-    "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
     "xAI Grok 3": "xai/grok-3",
 }
 
@@ -110,13 +111,21 @@ with tab1:
             st.session_state.variant_input = variant
             st.session_state.tumor_input = tumor
 
+    # Initialize default values in session state if not present
+    if "gene_input" not in st.session_state:
+        st.session_state.gene_input = "IDH1"
+    if "variant_input" not in st.session_state:
+        st.session_state.variant_input = "R132H"
+    if "tumor_input" not in st.session_state:
+        st.session_state.tumor_input = "Glioma"
+
     input_cols = st.columns([1.5, 1.5, 2, 1.2, 1.2, 1])
     with input_cols[0]:
-        gene = st.text_input("Gene", value="IDH1", placeholder="e.g. IDH1", key="gene_input")
+        gene = st.text_input("Gene", placeholder="e.g. IDH1", key="gene_input")
     with input_cols[1]:
-        variant = st.text_input("Variant", value="R132H", placeholder="e.g. R132H", key="variant_input")
+        variant = st.text_input("Variant", placeholder="e.g. R132H", key="variant_input")
     with input_cols[2]:
-        tumor = st.text_input("Tumor Type", value="Glioma", placeholder="e.g. Glioma", key="tumor_input")
+        tumor = st.text_input("Tumor Type", placeholder="e.g. Glioma", key="tumor_input")
     with input_cols[3]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_literature = st.toggle(

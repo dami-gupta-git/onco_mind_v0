@@ -248,11 +248,11 @@ class LLMService:
 
         print("\n" + "=" * 80)
         print("LLM CALL: SYNTHESIS STAGE")
-        print("=" * 80)
-        for msg in synthesis_messages:
-            print(f"\n--- {msg['role'].upper()} ---")
-            print(msg["content"])
-        print("=" * 80 + "\n")
+        # print("=" * 80)
+        # for msg in synthesis_messages:
+        #     print(f"\n--- {msg['role'].upper()} ---")
+        #     print(msg["content"])
+        # print("=" * 80 + "\n")
 
         synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
 
@@ -299,10 +299,10 @@ class LLMService:
             print("\n" + "=" * 80)
             print("LLM CALL: HYPOTHESIS STAGE")
             print("=" * 80)
-            for msg in hypothesis_messages:
-                print(f"\n--- {msg['role'].upper()} ---")
-                print(msg["content"])
-            print("=" * 80 + "\n")
+            # for msg in hypothesis_messages:
+            #     print(f"\n--- {msg['role'].upper()} ---")
+            #     print(msg["content"])
+            # print("=" * 80 + "\n")
 
             hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS)
 
@@ -485,11 +485,11 @@ Return JSON with these exact fields:
 
         print("\n" + "=" * 80)
         print("LLM CALL: PAPER RELEVANCE SCORING")
-        print("=" * 80)
-        for msg in messages:
-            print(f"\n--- {msg['role'].upper()} ---")
-            print(msg["content"])
-        print("=" * 80 + "\n")
+        # print("=" * 80)
+        # for msg in messages:
+        #     print(f"\n--- {msg['role'].upper()} ---")
+        #     print(msg["content"])
+        # print("=" * 80 + "\n")
 
         try:
             # Use fast/cheap model for paper scoring (high volume operation)
@@ -612,10 +612,10 @@ Return JSON with these exact fields:
         print("\n" + "=" * 80)
         print("LLM CALL: VARIANT KNOWLEDGE EXTRACTION")
         print("=" * 80)
-        for msg in messages:
-            print(f"\n--- {msg['role'].upper()} ---")
-            print(msg["content"])
-        print("=" * 80 + "\n")
+        # for msg in messages:
+        #     print(f"\n--- {msg['role'].upper()} ---")
+        #     print(msg["content"])
+        # print("=" * 80 + "\n")
 
         try:
             # Use fast/cheap model for knowledge extraction (high volume operation)
@@ -694,10 +694,10 @@ Return JSON with:
             {"role": "user", "content": user_prompt},
         ]
 
-        print("\n" + "=" * 80)
-        print("LLM BASELINE KNOWLEDGE TEST (NO EVIDENCE PROVIDED)")
-        print(f"Gene: {gene}, Variant: {variant}, Tumor: {tumor_type or 'None'}")
-        print("=" * 80 + "\n")
+        # print("\n" + "=" * 80)
+        # print("LLM BASELINE KNOWLEDGE TEST (NO EVIDENCE PROVIDED)")
+        # print(f"Gene: {gene}, Variant: {variant}, Tumor: {tumor_type or 'None'}")
+        # print("=" * 80 + "\n")
 
         try:
             response = await acompletion(
@@ -708,9 +708,9 @@ Return JSON with:
             )
 
             content = response.choices[0].message.content.strip()
-            print("RAW LLM RESPONSE:")
-            print(content)
-            print("=" * 80 + "\n")
+            # print("RAW LLM RESPONSE:")
+            # print(content)
+            # print("=" * 80 + "\n")
 
             data = self._parse_json_response(content)
             return data if data else {"error": "Failed to parse response", "raw": content}
