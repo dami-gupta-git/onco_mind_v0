@@ -61,7 +61,18 @@ async def get_variant_insight(
     """
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
+        # Get client IP from Streamlit headers (X-Forwarded-For for proxied requests, or direct)
+        client_ip = "unknown"
+        try:
+            headers = st.context.headers
+            # Debug: print all available headers
+            print(f"DEBUG headers: {dict(headers)}")
+            client_ip = headers.get("X-Forwarded-For", headers.get("X-Real-Ip", headers.get("Host", "unknown")))
+            if client_ip and "," in client_ip:
+                client_ip = client_ip.split(",")[0].strip()
+        except Exception as e:
+            print(f"DEBUG: Exception getting headers: {e}")
+        print(f"[{timestamp}] [{client_ip}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
         logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
         logger.debug(f"  enable_llm={enable_llm}, enable_literature={enable_literature}, model={model}")
 

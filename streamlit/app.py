@@ -35,14 +35,21 @@ st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 apply_styles()
 # scrollable_table function moved to components/utils.py
 
-st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Variant Insight</h1>", unsafe_allow_html=True)
 st.markdown(
-    "<div style='background: linear-gradient(90deg, #ff6b6b, #ffa500); color: white; padding: 8px 16px; "
-    "border-radius: 4px; font-weight: 600; text-align: center; margin: 8px 0;'>"
-    "Proof of  Concept - What DON'T you know about your variant?</div>",
+    "<div style='display: flex; justify-content: space-between; align-items: center;'>"
+    "<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Find the gaps in your Cancer Research</h1>"
+    "<span class='tagline-text'>What's missing — and what you can do.</span>"
+    "</div>",
     unsafe_allow_html=True
 )
-st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
+st.markdown(
+    "<div style='background: #f08080; color: white; padding: 8px 16px; "
+    "border-radius: 4px; font-weight: 600; text-align: center; margin: 8px 0;'>"
+    "PROOF OF CONCEPT | Results are representative </div>",
+    unsafe_allow_html=True
+)
+#st.markdown("<p style='text-align: center; margin-top: -4px; color: #666; font-size: 0.90em;'>What DON'T we know about your variant?</p>", unsafe_allow_html=True)
+# st.caption("**Note:** This tool is for demo purposes only. The results are representative.")
 
 MODELS = {
     "Google Gemini 2.0 Flash": "gemini/gemini-2.0-flash",
@@ -94,6 +101,7 @@ if "batch_results" not in st.session_state:
 if "batch_df" not in st.session_state:
     st.session_state.batch_df = None
 
+st.subheader("Pick a Variant")
 tab1, tab2 = st.tabs(["🔬 Single Variant", "📊 Batch Upload"])
 
 # TAB 1: Single Variant
@@ -147,6 +155,7 @@ with tab1:
         insight_btn = st.button("🔍 Go", type="primary", width="stretch")
 
     # Example variants dropdown (experimental - below the input row)
+    st.caption("Or try an example:")
     st.selectbox(
         "Try an example",
         options=list(EXAMPLE_VARIANTS.keys()),

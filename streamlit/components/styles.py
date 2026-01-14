@@ -7,8 +7,24 @@ def apply_styles() -> None:
     """Apply custom CSS styles to the Streamlit app."""
     st.markdown("""
 <style>
+    /* Global font size reduction */
+    html, body, [class*="css"] {
+        font-size: 13px !important;
+    }
+    .stMarkdown, .stText, p, span, div {
+        font-size: 0.85rem !important;
+    }
+    h1 { font-size: 1.5rem !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.05rem !important; }
+    h4 { font-size: 0.95rem !important; }
+    /* Tagline text on the right of title */
+    .tagline-text {
+        font-size: 16px !important;
+        color: #666 !important;
+    }
     .block-container {
-        padding-top: 1rem;
+        padding-top: 2.5rem;
     }
     /* Make text inputs clearly look like input fields */
     .stTextInput > div > div > input {
