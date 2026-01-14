@@ -61,17 +61,22 @@ async def get_variant_insight(
     """
     try:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Get client IP from Streamlit headers (X-Forwarded-For for proxied requests, or direct)
-        client_ip = "unknown"
+        # Get client IP from Streamlit headers (X-Forwarded-For for proxied requests, or Host for local)
+        client_ip = "local"
         try:
             headers = st.context.headers
-            # Debug: print all available headers
-            print(f"DEBUG headers: {dict(headers)}")
-            client_ip = headers.get("X-Forwarded-For", headers.get("X-Real-Ip", headers.get("Host", "unknown")))
-            if client_ip and "," in client_ip:
-                client_ip = client_ip.split(",")[0].strip()
-        except Exception as e:
-            print(f"DEBUG: Exception getting headers: {e}")
+            # Check for proxy headers first (deployed environment)
+            forwarded_for = headers.get("X-Forwarded-For") or headers.get("X-Real-Ip")
+            if forwarded_for:
+                # Take first IP if multiple (original client)
+                client_ip = forwarded_for.split(",")[0].strip()
+            else:
+                # Local development - extract host without port
+                host = headers.get("Host", "")
+                if host and not host.startswith("localhost"):
+                    client_ip = host.split(":")[0]
+        except Exception:
+            pass
         print(f"[{timestamp}] [{client_ip}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
 
         logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
