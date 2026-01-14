@@ -18,6 +18,7 @@ from oncomind.config.constants import (
 from components import (
     apply_styles,
     scrollable_table,
+    result_to_markdown,
     render_batch_tab,
     render_llm_synthesis,
     render_cross_source_analysis,
@@ -202,14 +203,24 @@ with tab1:
         transcript = result.get('transcript', {})
 
         # ==============================================
-        # HEADER: Variant name + Quick Links (no border)
+        # HEADER: Variant name + Download button (no border)
         # ==============================================
         header_text = f"**{gene_display} {variant_display}**"
         if tumor_display:
             header_text += f" in {tumor_display}"
 
-        # Header panel (just variant info, no summary)
-        st.markdown(f"<span style='font-size: 1.1rem; font-weight: 600;'>✅ {header_text}</span>", unsafe_allow_html=True)
+        # Header row with download button next to it
+        header_col1, header_col2 = st.columns([2, 1])
+        with header_col1:
+            st.markdown(f"<span style='font-size: 1.1rem; font-weight: 600;'>✅ {header_text}</span>", unsafe_allow_html=True)
+        with header_col2:
+            st.download_button(
+                "📥 Download Report (Markdown)",
+                result_to_markdown(result),
+                f"{gene_display}_{variant_display}_report.md",
+                "text/markdown",
+                key="download_top_md"
+            )
 
         # Compact linked identifiers row
         id_links = []
@@ -1669,19 +1680,27 @@ with tab1:
         # FOOTER: Download & Clear
         # ==============================================
         st.markdown("---")
-        footer_cols = st.columns([2, 2, 1])
+        footer_cols = st.columns([2, 2, 2, 1])
         with footer_cols[0]:
             st.download_button(
                 "📥 Download JSON",
                 json.dumps(result, indent=2),
                 f"{gene_display}_{variant_display}_insight.json",
                 "application/json",
-                key="download_single"
+                key="download_single_json"
             )
         with footer_cols[1]:
+            st.download_button(
+                "📥 Download Markdown",
+                result_to_markdown(result),
+                f"{gene_display}_{variant_display}_report.md",
+                "text/markdown",
+                key="download_single_md"
+            )
+        with footer_cols[2]:
             with st.expander("🔧 Raw JSON"):
                 st.json(result)
-        with footer_cols[2]:
+        with footer_cols[3]:
             if st.button("🗑️ Clear", key="clear_single"):
                 st.session_state.single_result = None
                 st.session_state.single_gene = None
