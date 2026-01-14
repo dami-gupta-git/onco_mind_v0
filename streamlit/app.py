@@ -29,6 +29,16 @@ from components import (
 from oncomind.config.debug import get_logger
 logger = get_logger(__name__)
 
+# Access the secret
+api_key = os.getenv("OPENAI_API_KEY")
+anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+semantic_scholar_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
+
+if not api_key:
+    st.error("OPENAI_API_KEY not found! Add it in Space Settings → Variables and secrets.")
+else:
+    st.success("API key loaded successfully!")
+
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 
 # Apply custom styling
