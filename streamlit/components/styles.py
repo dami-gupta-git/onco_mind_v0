@@ -21,7 +21,7 @@ def apply_styles() -> None:
     h4 { font-size: 0.95rem !important; }
     /* Tagline text on the right of title */
     .tagline-text {
-        font-size: 16px !important;
+        font-size: 14px !important;
         color: #666 !important;
     }
     .block-container {

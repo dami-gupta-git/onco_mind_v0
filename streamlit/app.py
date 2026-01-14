@@ -38,7 +38,7 @@ apply_styles()
 st.markdown(
     "<div style='display: flex; justify-content: space-between; align-items: center;'>"
     "<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Find the gaps in your Cancer Research</h1>"
-    "<span class='tagline-text'>What's missing — and what you can do.</span>"
+    "<span class='tagline-text'>What's missing — and what you can do next.</span>"
     "</div>",
     unsafe_allow_html=True
 )
