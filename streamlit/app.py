@@ -36,6 +36,12 @@ apply_styles()
 # scrollable_table function moved to components/utils.py
 
 st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Variant Insight</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='background: linear-gradient(90deg, #ff6b6b, #ffa500); color: white; padding: 8px 16px; "
+    "border-radius: 4px; font-weight: 600; text-align: center; margin: 8px 0;'>"
+    "Proof of  Concept - What DON'T you know about your variant?</div>",
+    unsafe_allow_html=True
+)
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
