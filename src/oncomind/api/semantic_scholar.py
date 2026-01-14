@@ -1,0 +1,910 @@
+"""Semantic Scholar API client for enriching literature with semantic information.
+
+ARCHITECTURE:
+    PMID → Semantic Scholar API → Citation counts, influential citations, TLDR, embeddings
+
+Enriches PubMed articles with:
+- Citation counts and influential citation counts
+- TLDR (AI-generated paper summaries)
+- Fields of study classification
+- Open access status and PDF links
+
+Key Design:
+- Async HTTP with connection pooling (httpx.AsyncClient)
+- Rate limiting (1 RPS without API key, higher with key)
+- Batch lookups to minimize API calls
+- Graceful degradation if enrichment fails
+
+API Documentation: https://www.semanticscholar.org/product/api
+"""
+
+from typing import Any
+from dataclasses import dataclass, field
+import asyncio
+
+import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+    before_sleep_log,
+)
+import logging
+
+# Logger for tenacity retry logging
+_logger = logging.getLogger(__name__)
+
+
+class SemanticScholarError(Exception):
+    """Exception raised for Semantic Scholar API errors."""
+    pass
+
+
+class SemanticScholarRateLimitError(SemanticScholarError):
+    """Exception raised when Semantic Scholar rate limit (429) is hit.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header)
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+@dataclass
+class SemanticPaperInfo:
+    """Semantic Scholar paper information."""
+
+    paper_id: str
+    pmid: str | None
+    doi: str | None
+    title: str
+    abstract: str | None
+    citation_count: int
+    influential_citation_count: int
+    reference_count: int
+    year: int | None
+    venue: str | None
+    is_open_access: bool
+    open_access_pdf_url: str | None
+    tldr: str | None
+    fields_of_study: list[str] = field(default_factory=list)
+    publication_types: list[str] = field(default_factory=list)
+
+    def get_display_id(self) -> str:
+        """Get the best available ID for display purposes.
+
+        Priority: PMID > DOI > S2 paper ID (shortened)
+        """
+        if self.pmid:
+            return self.pmid
+        if self.doi:
+            return f"DOI:{self.doi}"
+        # Shorten S2 paper ID to first 8 chars
+        return f"S2:{self.paper_id[:8]}"
+
+    def get_url(self) -> str:
+        """Get the best URL for this paper.
+
+        Priority: PubMed > DOI > Semantic Scholar
+        """
+        if self.pmid:
+            return f"https://pubmed.ncbi.nlm.nih.gov/{self.pmid}/"
+        if self.doi:
+            return f"https://doi.org/{self.doi}"
+        return f"https://www.semanticscholar.org/paper/{self.paper_id}"
+
+    def get_impact_score(self) -> float:
+        """Calculate a simple impact score based on citations.
+
+        Returns a score from 0-1 based on citation metrics.
+        """
+        if self.citation_count == 0:
+            return 0.0
+
+        # Influential citations are weighted more heavily
+        base_score = min(self.citation_count / 100, 1.0)
+        influential_boost = min(self.influential_citation_count / 20, 0.5)
+
+        return min(base_score + influential_boost, 1.0)
+
+    def is_highly_cited(self, threshold: int = 50) -> bool:
+        """Check if paper is highly cited."""
+        return self.citation_count >= threshold
+
+    def is_influential(self, threshold: int = 5) -> bool:
+        """Check if paper has influential citations."""
+        return self.influential_citation_count >= threshold
+
+    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+        """Check if paper mentions the gene and/or variant with codon-level matching.
+
+        Uses parse_biomarker_specificity() to extract what variant the paper describes,
+        then is_variant_covered() to compare against the query. This enables proper
+        codon-level matching (e.g., G12C paper matches G12D query at codon level).
+
+        Args:
+            variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
+            gene: Gene symbol (e.g., "NRAS", "BRAF"). If provided, ensures
+                  the variant is mentioned in context of this gene.
+
+        Returns:
+            Tuple of (match_type, matched_biomarker):
+            - ("variant", "KRAS G12C") - exact variant match
+            - ("codon", "KRAS G12") - same codon, different variant
+            - ("ambiguous", "KRAS G12") - gene found and ambiguous variant
+            - ("gene", "KRAS") - only gene found in text
+            - ("none", None) - no match found
+        """
+        from oncomind.config.constants import BROAD_VARIANTS
+        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
+
+        gene_upper = gene.upper() if gene else None
+
+        # Combine title, abstract, and TLDR to search
+        full_text = f"{self.title} {self.abstract or ''} {self.tldr or ''}"
+        full_text_upper = full_text.upper()
+
+        gene_found = gene_upper and gene_upper in full_text_upper
+
+        if not gene_found:
+            return ('none', None)
+
+        # Use parse_biomarker_specificity to extract what the paper describes
+        biomarker_spec = parse_biomarker_specificity(full_text, gene)
+
+        if biomarker_spec and variant:
+            # Use is_variant_covered for proper codon-level matching
+            covered, match_level = is_variant_covered(variant, biomarker_spec)
+
+            if match_level == "variant":
+                matched_var = biomarker_spec.get("specified_variant")
+                if not matched_var and biomarker_spec.get("specified_variants"):
+                    matched_var = next(
+                        (v for v in biomarker_spec["specified_variants"]
+                         if v.upper() == variant.upper()),
+                        biomarker_spec["specified_variants"][0]
+                    )
+                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                return ('variant', biomarker)
+
+            elif match_level == "codon":
+                codon = biomarker_spec.get("codon")
+                biomarker = f"{gene} {codon}" if codon else gene
+                return ('codon', biomarker)
+
+            elif match_level == "gene":
+                return ('gene', gene)
+
+        # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
+        ambig_variants = [
+            (g, v) for (g, v) in BROAD_VARIANTS
+            if g.upper() in full_text_upper and v.upper() in full_text_upper
+        ]
+        matched_ambig = next(
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
+            None
+        )
+        if matched_ambig:
+            g, v = matched_ambig
+            return ('ambiguous', f"{g} {v}")
+
+        # Gene-level only
+        if gene_found:
+            return ('gene', gene)
+
+        return ('none', None)
+
+    def mentions_resistance(self) -> bool:
+        """Check if paper mentions resistance."""
+        text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
+        resistance_terms = [
+            'resistance', 'resistant', 'refractory',
+            'acquired resistance', 'secondary resistance',
+            'treatment failure', 'progression on',
+        ]
+        return any(term in text for term in resistance_terms)
+
+    def mentions_sensitivity(self) -> bool:
+        """Check if paper mentions sensitivity/response."""
+        text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
+        sensitivity_terms = [
+            'sensitivity', 'sensitive', 'response',
+            'efficacy', 'effective', 'benefit',
+        ]
+        return any(term in text for term in sensitivity_terms)
+
+    def get_signal_type(self) -> str:
+        """Determine the primary signal from this paper.
+
+        Papers about resistance mutations are classified as 'resistance'
+        even if they discuss overcoming resistance.
+        """
+        text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
+        has_resistance = self.mentions_resistance()
+        has_sensitivity = self.mentions_sensitivity()
+
+        # Check for resistance-dominant patterns
+        resistance_dominant_patterns = [
+            'resistance mutation', 'resistance-conferring',
+            'acquired resistance', 'causes resistance',
+            'resistant mutation', 'mediates resistance',
+            'confers resistance', 'osimertinib-resistant',
+            'osimertinib resistance', 'third-generation',
+            'overcome resistance', 'overcoming resistance',
+        ]
+
+        is_resistance_focused = any(p in text for p in resistance_dominant_patterns)
+
+        if has_resistance and is_resistance_focused:
+            return 'resistance'
+        elif has_resistance and not has_sensitivity:
+            return 'resistance'
+        elif has_sensitivity and not has_resistance:
+            return 'sensitivity'
+        elif has_resistance and has_sensitivity:
+            if 'resist' in self.title.lower():
+                return 'resistance'
+            return 'mixed'
+        return 'unknown'
+
+    def extract_drug_mentions(self, known_drugs: list[str] | None = None) -> list[str]:
+        """Extract drug names mentioned in the paper."""
+        text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
+
+        # Common targeted therapy drugs
+        common_drugs = [
+            'osimertinib', 'tagrisso', 'erlotinib', 'tarceva',
+            'gefitinib', 'iressa', 'afatinib', 'gilotrif',
+            'dacomitinib', 'vizimpro', 'lazertinib',
+            'sotorasib', 'lumakras', 'adagrasib', 'krazati',
+            'vemurafenib', 'zelboraf', 'dabrafenib', 'tafinlar',
+            'trametinib', 'mekinist', 'encorafenib', 'braftovi',
+            'imatinib', 'gleevec', 'sunitinib', 'sutent',
+            'cetuximab', 'erbitux', 'panitumumab', 'vectibix',
+            'crizotinib', 'xalkori', 'alectinib', 'alecensa',
+            'brigatinib', 'alunbrig', 'lorlatinib', 'lorbrena',
+        ]
+
+        drugs_to_check = known_drugs or common_drugs
+        found = []
+        for drug in drugs_to_check:
+            if drug.lower() in text:
+                found.append(drug)
+        return list(set(found))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            'paper_id': self.paper_id,
+            'pmid': self.pmid,
+            'title': self.title,
+            'citation_count': self.citation_count,
+            'influential_citation_count': self.influential_citation_count,
+            'reference_count': self.reference_count,
+            'year': self.year,
+            'venue': self.venue,
+            'is_open_access': self.is_open_access,
+            'tldr': self.tldr,
+            'fields_of_study': self.fields_of_study,
+            'impact_score': self.get_impact_score(),
+            'signal_type': self.get_signal_type(),
+        }
+
+
+class SemanticScholarClient:
+    """Client for Semantic Scholar Academic Graph API.
+
+    Enriches PubMed articles with citation metrics, TLDR summaries,
+    and other semantic information.
+
+    API Documentation: https://www.semanticscholar.org/product/api
+    """
+
+    BASE_URL = "https://api.semanticscholar.org/graph/v1"
+    DEFAULT_TIMEOUT = 30.0
+    # Rate limits: 1 RPS without API key, 10 RPS with API key
+    RATE_LIMIT_DELAY_NO_KEY = 1.1
+    RATE_LIMIT_DELAY_WITH_KEY = 0.12  # ~8 RPS, safely under 10 RPS limit
+
+    # Fields to request from the API
+    PAPER_FIELDS = [
+        "paperId",
+        "externalIds",
+        "title",
+        "abstract",
+        "year",
+        "venue",
+        "citationCount",
+        "influentialCitationCount",
+        "referenceCount",
+        "isOpenAccess",
+        "openAccessPdf",
+        "tldr",
+        "s2FieldsOfStudy",
+        "publicationTypes",
+    ]
+
+    def __init__(self, timeout: float = DEFAULT_TIMEOUT, api_key: str | None = None):
+        """Initialize the Semantic Scholar client.
+
+        Args:
+            timeout: Request timeout in seconds
+            api_key: Optional API key for higher rate limits
+        """
+        self.timeout = timeout
+        self.api_key = api_key
+        self._client: httpx.AsyncClient | None = None
+        self._last_request_time: float = 0
+
+    async def __aenter__(self) -> "SemanticScholarClient":
+        """Async context manager entry."""
+        headers = {}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+        self._client = httpx.AsyncClient(timeout=self.timeout, headers=headers)
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._client is None:
+            headers = {}
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+            self._client = httpx.AsyncClient(timeout=self.timeout, headers=headers)
+        return self._client
+
+    async def _rate_limit(self) -> None:
+        """Enforce rate limiting to respect API limits.
+
+        Uses faster rate limit (10 RPS) when API key is present,
+        otherwise falls back to 1 RPS for unauthenticated requests.
+        """
+        import time
+        delay = self.RATE_LIMIT_DELAY_WITH_KEY if self.api_key else self.RATE_LIMIT_DELAY_NO_KEY
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < delay:
+            await asyncio.sleep(delay - elapsed)
+        self._last_request_time = time.time()
+
+    def _parse_retry_after(self, response: httpx.Response) -> float | None:
+        """Parse Retry-After header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Seconds to wait, or None if header not present/parseable
+        """
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return None
+
+        try:
+            return float(retry_after)
+        except ValueError:
+            return None
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
+        reraise=True,
+    )
+    async def get_paper_by_pmid(self, pmid: str) -> SemanticPaperInfo | None:
+        """Get paper information by PubMed ID.
+
+        Args:
+            pmid: PubMed ID (without "PMID:" prefix)
+
+        Returns:
+            SemanticPaperInfo or None if not found
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
+        """
+        client = self._get_client()
+
+        # Semantic Scholar uses PMID:12345 format
+        paper_id = f"PMID:{pmid}"
+        url = f"{self.BASE_URL}/paper/{paper_id}"
+
+        params = {
+            "fields": ",".join(self.PAPER_FIELDS),
+        }
+
+        try:
+            await self._rate_limit()
+            response = await client.get(url, params=params)
+
+            if response.status_code == 404:
+                # Paper not found in Semantic Scholar
+                return None
+
+            if response.status_code == 429:
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+
+            response.raise_for_status()
+            data = response.json()
+
+            return self._parse_paper(data, pmid=pmid)
+
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
+        except httpx.HTTPStatusError:
+            return None
+        except httpx.HTTPError:
+            return None
+        except Exception:
+            return None
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
+        reraise=True,
+    )
+    async def get_papers_by_pmids(self, pmids: list[str]) -> dict[str, SemanticPaperInfo]:
+        """Get paper information for multiple PMIDs.
+
+        Uses batch endpoint for efficiency when available, falls back to
+        individual requests.
+
+        Args:
+            pmids: List of PubMed IDs
+
+        Returns:
+            Dictionary mapping PMID to SemanticPaperInfo
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
+        """
+        if not pmids:
+            return {}
+
+        # Use batch endpoint for efficiency
+        client = self._get_client()
+        url = f"{self.BASE_URL}/paper/batch"
+
+        # Semantic Scholar batch API accepts paper IDs
+        paper_ids = [f"PMID:{pmid}" for pmid in pmids]
+
+        params = {
+            "fields": ",".join(self.PAPER_FIELDS),
+        }
+
+        try:
+            await self._rate_limit()
+            response = await client.post(
+                url,
+                params=params,
+                json={"ids": paper_ids},
+            )
+
+            if response.status_code == 404:
+                # Batch endpoint not found, fall back to individual requests
+                return await self._get_papers_individually(pmids)
+
+            if response.status_code == 429:
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+
+            response.raise_for_status()
+            data = response.json()
+
+            results = {}
+            for i, paper_data in enumerate(data):
+                if paper_data is not None:
+                    pmid = pmids[i]
+                    paper_info = self._parse_paper(paper_data, pmid=pmid)
+                    if paper_info:
+                        results[pmid] = paper_info
+
+            return results
+
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
+        except httpx.HTTPError:
+            # Fall back to individual requests
+            return await self._get_papers_individually(pmids)
+
+    async def _get_papers_individually(self, pmids: list[str]) -> dict[str, SemanticPaperInfo]:
+        """Fall back to individual paper lookups."""
+        results = {}
+        for pmid in pmids:
+            paper_info = await self.get_paper_by_pmid(pmid)
+            if paper_info:
+                results[pmid] = paper_info
+        return results
+
+    def _parse_paper(self, data: dict[str, Any], pmid: str | None = None, doi: str | None = None) -> SemanticPaperInfo | None:
+        """Parse API response into SemanticPaperInfo."""
+        try:
+            # Extract TLDR if available
+            tldr = None
+            tldr_data = data.get("tldr")
+            if tldr_data and isinstance(tldr_data, dict):
+                tldr = tldr_data.get("text")
+
+            # Extract open access PDF URL
+            open_access_pdf_url = None
+            oa_data = data.get("openAccessPdf")
+            if oa_data and isinstance(oa_data, dict):
+                open_access_pdf_url = oa_data.get("url")
+
+            # Extract fields of study
+            fields_of_study = []
+            s2_fields = data.get("s2FieldsOfStudy", [])
+            if s2_fields:
+                for f in s2_fields:
+                    if isinstance(f, dict) and f.get("category"):
+                        fields_of_study.append(f["category"])
+
+            # Extract DOI from externalIds if not provided
+            if not doi:
+                external_ids = data.get("externalIds", {})
+                if external_ids:
+                    doi = external_ids.get("DOI")
+
+            return SemanticPaperInfo(
+                paper_id=data.get("paperId", ""),
+                pmid=pmid if pmid else None,
+                doi=doi,
+                title=data.get("title", ""),
+                abstract=data.get("abstract"),
+                citation_count=data.get("citationCount", 0) or 0,
+                influential_citation_count=data.get("influentialCitationCount", 0) or 0,
+                reference_count=data.get("referenceCount", 0) or 0,
+                year=data.get("year"),
+                venue=data.get("venue"),
+                is_open_access=data.get("isOpenAccess", False) or False,
+                open_access_pdf_url=open_access_pdf_url,
+                tldr=tldr,
+                fields_of_study=fields_of_study,
+                publication_types=data.get("publicationTypes", []) or [],
+            )
+
+        except Exception:
+            return None
+
+    @retry(
+        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
+        before_sleep=before_sleep_log(_logger, logging.WARNING),
+        reraise=True,
+    )
+    async def search_papers(
+        self,
+        query: str,
+        year_range: tuple[int, int] | None = None,
+        min_citations: int | None = None,
+        limit: int = 10,
+    ) -> list[SemanticPaperInfo]:
+        """Search for papers using Semantic Scholar's relevance search.
+
+        Args:
+            query: Search query (e.g., "EGFR C797S resistance osimertinib")
+            year_range: Optional (start_year, end_year) filter
+            min_citations: Minimum citation count filter
+            limit: Maximum number of results
+
+        Returns:
+            List of SemanticPaperInfo objects
+
+        Raises:
+            SemanticScholarRateLimitError: If rate limited after retries
+        """
+        client = self._get_client()
+        url = f"{self.BASE_URL}/paper/search"
+
+        params: dict[str, Any] = {
+            "query": query,
+            "fields": ",".join(self.PAPER_FIELDS),
+            "limit": limit,
+        }
+
+        if year_range:
+            params["year"] = f"{year_range[0]}-{year_range[1]}"
+
+        if min_citations:
+            params["minCitationCount"] = min_citations
+
+        try:
+            await self._rate_limit()
+            response = await client.get(url, params=params)
+
+            # Check for rate limit before raising for other errors
+            if response.status_code == 429:
+                retry_after = self._parse_retry_after(response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+
+            response.raise_for_status()
+            data = response.json()
+
+            papers = []
+            for paper_data in data.get("data", []):
+                # Extract PMID and DOI from externalIds if available
+                pmid = None
+                doi = None
+                external_ids = paper_data.get("externalIds", {})
+                if external_ids:
+                    pmid = external_ids.get("PubMed")
+                    doi = external_ids.get("DOI")
+
+                paper_info = self._parse_paper(paper_data, pmid=pmid, doi=doi)
+                if paper_info:
+                    papers.append(paper_info)
+
+            return papers
+
+        except (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError):
+            # Let tenacity handle these
+            raise
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                retry_after = self._parse_retry_after(e.response)
+                raise SemanticScholarRateLimitError(
+                    "Semantic Scholar rate limit exceeded", retry_after=retry_after
+                )
+            return []
+        except httpx.HTTPError:
+            return []
+
+    async def search_therapeutic_literature(
+        self,
+        gene: str,
+        variant: str,
+        drug: str | None = None,
+        tumor_type: str | None = None,
+        max_results: int = 5,
+        year_range: tuple[int, int] | None = None,
+    ) -> list[SemanticPaperInfo]:
+        """Search for therapeutic response literature for a variant.
+
+        Finds papers discussing resistance OR sensitivity to therapies.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            drug: Optional specific drug to search for
+            tumor_type: Optional tumor type for more specific search (e.g., "GIST")
+            max_results: Maximum number of articles to return
+            year_range: Optional (start_year, end_year) filter for recent papers
+
+        Returns:
+            List of SemanticPaperInfo objects discussing therapeutic response
+        """
+        # Build query for therapeutic response literature (resistance OR sensitivity)
+        query_parts = [gene, variant, "resistance OR sensitivity OR response"]
+
+        # Use tumor type if provided, otherwise fall back to generic "cancer"
+        if tumor_type:
+            # Simplify tumor type for search (e.g., "Gastrointestinal Stromal Tumor" -> "GIST" or "gastrointestinal stromal")
+            tumor_lower = tumor_type.lower()
+            if "gastrointestinal stromal" in tumor_lower or tumor_lower == "gist":
+                query_parts.append("GIST")
+            else:
+                tumor_simple = tumor_lower.replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+                if tumor_simple:
+                    query_parts.append(tumor_simple)
+                else:
+                    query_parts.append("cancer")
+        else:
+            query_parts.append("cancer")
+
+        if drug:
+            query_parts.append(drug)
+
+        query = " ".join(query_parts)
+
+        # Fetch more results to filter for therapeutic response, require min 5 citations for quality
+        papers = await self.search_papers(
+            query=query,
+            limit=max_results * 2,
+            min_citations=5,
+            year_range=year_range,
+        )
+
+        if not papers:
+            return []
+
+        # Filter to papers that mention either resistance or sensitivity
+        therapeutic_papers = [p for p in papers if p.mentions_resistance() or p.mentions_sensitivity()]
+
+        return therapeutic_papers[:max_results]
+
+    async def search_variant_literature(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = 5,
+        min_citations: int = 5,
+        year_range: tuple[int, int] | None = None,
+    ) -> list[SemanticPaperInfo]:
+        """Search for general literature about a variant.
+
+        Args:
+            gene: Gene symbol
+            variant: Variant notation
+            tumor_type: Optional tumor type filter
+            max_results: Maximum results
+            min_citations: Minimum citation count for quality filtering (default: 5)
+            year_range: Optional (start_year, end_year) filter for recent papers
+
+        Returns:
+            List of SemanticPaperInfo objects
+        """
+        query_parts = [gene, variant]
+        if tumor_type:
+            # Simplify tumor type for search
+            tumor_simple = tumor_type.lower().replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+            if tumor_simple:
+                query_parts.append(tumor_simple)
+
+        query = " ".join(query_parts)
+
+        return await self.search_papers(
+            query=query,
+            limit=max_results,
+            min_citations=min_citations,
+            year_range=year_range,
+        )
+
+    async def search_pubmed_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = 6,
+        year_range: tuple[int, int] | None = None,
+    ) -> list:
+        """Search for literature and convert to PubMedEvidence model.
+
+        This method searches BOTH therapeutic (resistance/sensitivity) and
+        general variant literature, merges and deduplicates.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            tumor_type: Optional tumor type filter
+            max_results: Maximum number of results
+            year_range: Optional (start_year, end_year) filter for recent papers
+
+        Returns:
+            List of PubMedEvidence objects
+        """
+        from oncomind.models.evidence.pubmed import PubMedEvidence
+
+        # Search both therapeutic (resistance + sensitivity) and general literature in parallel
+        variant_papers, therapeutic_papers = await asyncio.gather(
+            self.search_variant_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results,  # Get full count for general search
+                year_range=year_range,
+            ),
+            self.search_therapeutic_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results // 2,  # Supplement with therapeutic papers
+                year_range=year_range,
+            ),
+        )
+
+        # Merge and deduplicate papers
+        seen_ids = set()
+        merged_papers = []
+        for paper in variant_papers + therapeutic_papers:
+            if paper.paper_id not in seen_ids:
+                seen_ids.add(paper.paper_id)
+                merged_papers.append(paper)
+
+        # Sort by impact score (citations) to surface highest-quality papers
+        merged_papers.sort(key=lambda p: p.get_impact_score(), reverse=True)
+        papers = merged_papers[:max_results]
+
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        evidence_list = []
+
+        for paper in papers:
+            # Use display ID (PMID > DOI > S2 short ID) for user-friendly display
+            display_id = paper.get_display_id()
+            url = paper.get_url()
+
+            # Determine locus_variant_match using mentions_variant
+            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
+            match_type, matched_biomarker = paper.mentions_variant(variant, gene=gene)
+
+            locus_variant_match = None
+            if match_type == "variant":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "codon":
+                locus_variant_match = EvidenceLevel(
+                    level="codon",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "ambiguous":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="ambiguous",
+                    origin="kb",
+                )
+            elif match_type == "gene":
+                locus_variant_match = EvidenceLevel(
+                    level="gene",
+                    scope="unspecified",
+                    origin="kb",
+                )
+            # else: match_type == "none", locus_variant_match stays None
+
+            # Build cancer_type_match based on whether paper mentions the queried tumor type
+            # We fetch papers broadly, but track whether each matches the queried tumor
+            cancer_type_match = None
+            if tumor_type:
+                from oncomind.models.evidence.base import tumor_types_match
+                full_text = f"{paper.title or ''} {paper.abstract or ''}"
+                tumor_matches = tumor_types_match(full_text, tumor_type)
+                cancer_type_match = EvidenceLevel(
+                    level="cancer_specific" if tumor_matches else None,
+                    scope="specific" if tumor_matches else "unspecified",
+                    origin="kb",
+                )
+
+            evidence_list.append(PubMedEvidence(
+                pmid=display_id,  # Using display_id for consistent UI display
+                title=paper.title,
+                abstract=paper.abstract or "",
+                authors=[],
+                journal=paper.venue or "",
+                year=str(paper.year) if paper.year else None,
+                doi=paper.doi,
+                url=url,
+                signal_type=paper.get_signal_type(),  # Analyze abstract for resistance/sensitivity signals
+                drugs_mentioned=paper.extract_drug_mentions(),
+                citation_count=paper.citation_count,
+                influential_citation_count=paper.influential_citation_count,
+                tldr=paper.tldr,
+                is_open_access=paper.is_open_access,
+                open_access_pdf_url=paper.open_access_pdf_url,
+                semantic_scholar_id=paper.paper_id,
+                locus_variant_match=locus_variant_match,
+                cancer_type_match=cancer_type_match,
+            ))
+
+        return evidence_list
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None

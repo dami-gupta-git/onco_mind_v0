@@ -1,0 +1,793 @@
+"""PubMed API client for fetching research literature.
+
+ARCHITECTURE:
+    Gene + Variant + "resistance" → NCBI E-utilities → PubMed abstracts
+
+Fetches relevant research papers to support tier classification,
+especially for resistance mutations that may not be in curated databases.
+
+Key Design:
+- Async HTTP with connection pooling (httpx.AsyncClient)
+- Uses NCBI E-utilities (ESearch + EFetch)
+- Searches for resistance/sensitivity patterns
+- Returns structured article information with abstracts
+- Rate limiting to respect NCBI's 3 requests/second limit
+"""
+
+from typing import Any
+from dataclasses import dataclass
+import asyncio
+import xml.etree.ElementTree as ET
+
+import httpx
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
+
+class PubMedError(Exception):
+    """Exception raised for PubMed API errors."""
+    pass
+
+
+class PubMedRateLimitError(PubMedError):
+    """Exception raised when PubMed rate limit (429) is hit.
+
+    Attributes:
+        retry_after: Seconds to wait before retrying (from Retry-After header)
+    """
+
+    def __init__(self, message: str, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+@dataclass
+class PubMedArticle:
+    """A research article from PubMed."""
+
+    pmid: str
+    title: str
+    abstract: str
+    authors: list[str]
+    journal: str
+    year: str | None
+    doi: str | None
+    keywords: list[str]
+    url: str
+
+    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+        """Check if article mentions the gene and/or variant with codon-level matching.
+
+        Uses parse_biomarker_specificity() to extract what variant the article describes,
+        then is_variant_covered() to compare against the query. This enables proper
+        codon-level matching (e.g., G12C article matches G12D query at codon level).
+
+        Args:
+            variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
+            gene: Gene symbol (e.g., "NRAS", "BRAF"). If provided, ensures
+                  the variant is mentioned in context of this gene.
+
+        Returns:
+            Tuple of (match_type, matched_biomarker):
+            - ("variant", "KRAS G12C") - exact variant match
+            - ("codon", "KRAS G12") - same codon, different variant
+            - ("ambiguous", "KRAS G12") - gene found and ambiguous variant
+            - ("gene", "KRAS") - only gene found in text
+            - ("none", None) - no match found
+        """
+        from oncomind.config.constants import BROAD_VARIANTS
+        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
+
+        gene_upper = gene.upper() if gene else None
+
+        # Combine title and abstract to search
+        full_text = f"{self.title or ''} {self.abstract or ''}"
+        full_text_upper = full_text.upper()
+
+        gene_found = gene_upper and gene_upper in full_text_upper
+
+        if not gene_found:
+            return ('none', None)
+
+        # Use parse_biomarker_specificity to extract what the article describes
+        biomarker_spec = parse_biomarker_specificity(full_text, gene)
+
+        if biomarker_spec and variant:
+            # Use is_variant_covered for proper codon-level matching
+            covered, match_level = is_variant_covered(variant, biomarker_spec)
+
+            if match_level == "variant":
+                matched_var = biomarker_spec.get("specified_variant")
+                if not matched_var and biomarker_spec.get("specified_variants"):
+                    matched_var = next(
+                        (v for v in biomarker_spec["specified_variants"]
+                         if v.upper() == variant.upper()),
+                        biomarker_spec["specified_variants"][0]
+                    )
+                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                return ('variant', biomarker)
+
+            elif match_level == "codon":
+                codon = biomarker_spec.get("codon")
+                biomarker = f"{gene} {codon}" if codon else gene
+                return ('codon', biomarker)
+
+            elif match_level == "gene":
+                return ('gene', gene)
+
+        # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
+        ambig_variants = [
+            (g, v) for (g, v) in BROAD_VARIANTS
+            if g.upper() in full_text_upper and v.upper() in full_text_upper
+        ]
+        matched_ambig = next(
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
+            None
+        )
+        if matched_ambig:
+            g, v = matched_ambig
+            return ('ambiguous', f"{g} {v}")
+
+        # Gene-level only
+        if gene_found:
+            return ('gene', gene)
+
+        return ('none', None)
+
+    def mentions_resistance(self) -> bool:
+        """Check if article mentions resistance."""
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
+        resistance_terms = [
+            'resistance', 'resistant', 'refractory',
+            'acquired resistance', 'secondary resistance',
+            'treatment failure', 'progression on',
+        ]
+        return any(term in text for term in resistance_terms)
+
+    def mentions_sensitivity(self) -> bool:
+        """Check if article mentions sensitivity/response."""
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
+        sensitivity_terms = [
+            'sensitive', 'sensitivity', 'response', 'responsive',
+            'effective', 'efficacy', 'benefit',
+        ]
+        return any(term in text for term in sensitivity_terms)
+
+    def get_signal_type(self) -> str:
+        """Determine the primary signal from this article.
+
+        Articles about resistance mutations (like C797S causing resistance to osimertinib)
+        are classified as 'resistance' even if they discuss overcoming resistance,
+        since the primary clinical relevance is that the mutation causes resistance.
+        """
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
+        has_resistance = self.mentions_resistance()
+        has_sensitivity = self.mentions_sensitivity()
+
+        # Check for resistance-dominant patterns
+        resistance_dominant_patterns = [
+            'resistance mutation', 'resistance-conferring',
+            'acquired resistance', 'causes resistance',
+            'resistant mutation', 'mediates resistance',
+            'confers resistance', 'osimertinib-resistant',
+            'osimertinib resistance', 'third-generation',
+            'overcome resistance', 'overcoming resistance',  # Still about resistance
+        ]
+
+        is_resistance_focused = any(p in text for p in resistance_dominant_patterns)
+
+        if has_resistance and is_resistance_focused:
+            return 'resistance'
+        elif has_resistance and not has_sensitivity:
+            return 'resistance'
+        elif has_sensitivity and not has_resistance:
+            return 'sensitivity'
+        elif has_resistance and has_sensitivity:
+            # Even if mixed, if resistance is in the title, prioritize it
+            title_lower = (self.title or '').lower()
+            if 'resist' in title_lower:
+                return 'resistance'
+            return 'mixed'
+        return 'unknown'
+
+    def extract_drug_mentions(self, known_drugs: list[str] | None = None) -> list[str]:
+        """Extract drug names mentioned in the article."""
+        text = f"{self.title or ''} {self.abstract or ''}".lower()
+
+        # Common targeted therapy drugs
+        common_drugs = [
+            'osimertinib', 'tagrisso', 'erlotinib', 'tarceva',
+            'gefitinib', 'iressa', 'afatinib', 'gilotrif',
+            'dacomitinib', 'vizimpro', 'lazertinib',
+            'sotorasib', 'lumakras', 'adagrasib', 'krazati',
+            'vemurafenib', 'zelboraf', 'dabrafenib', 'tafinlar',
+            'trametinib', 'mekinist', 'encorafenib', 'braftovi',
+            'imatinib', 'gleevec', 'sunitinib', 'sutent',
+            'cetuximab', 'erbitux', 'panitumumab', 'vectibix',
+            'crizotinib', 'xalkori', 'alectinib', 'alecensa',
+            'brigatinib', 'alunbrig', 'lorlatinib', 'lorbrena',
+        ]
+
+        drugs_to_check = known_drugs or common_drugs
+        found = []
+        for drug in drugs_to_check:
+            if drug.lower() in text:
+                found.append(drug)
+        return list(set(found))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary."""
+        return {
+            'pmid': self.pmid,
+            'title': self.title,
+            'abstract': self.abstract[:500] if self.abstract else None,
+            'authors': self.authors[:3],
+            'journal': self.journal,
+            'year': self.year,
+            'doi': self.doi,
+            'url': self.url,
+            'signal_type': self.get_signal_type(),
+        }
+
+
+class PubMedClient:
+    """Client for NCBI PubMed E-utilities API.
+
+    Uses ESearch to find articles and EFetch to retrieve abstracts.
+    Free to use without API key (limited to 3 requests/second).
+
+    API Documentation: https://www.ncbi.nlm.nih.gov/books/NBK25501/
+    """
+
+    ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+    EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+    DEFAULT_TIMEOUT = 30.0
+    DEFAULT_MAX_RESULTS = 5
+    # NCBI rate limit: 3 requests/second without API key, 10/second with key
+    RATE_LIMIT_DELAY = 0.35  # ~3 requests/second
+
+    def __init__(self, timeout: float = DEFAULT_TIMEOUT, api_key: str | None = None):
+        """Initialize the PubMed client.
+
+        Args:
+            timeout: Request timeout in seconds
+            api_key: Optional NCBI API key for higher rate limits
+        """
+        self.timeout = timeout
+        self.api_key = api_key
+        self._client: httpx.AsyncClient | None = None
+        self._last_request_time: float = 0
+
+    async def __aenter__(self) -> "PubMedClient":
+        """Async context manager entry."""
+        self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Async context manager exit."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Get or create the HTTP client."""
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    async def _rate_limit(self) -> None:
+        """Enforce rate limiting to respect NCBI's API limits."""
+        import time
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < self.RATE_LIMIT_DELAY:
+            await asyncio.sleep(self.RATE_LIMIT_DELAY - elapsed)
+        self._last_request_time = time.time()
+
+    def _parse_retry_after(self, response: httpx.Response) -> float | None:
+        """Parse Retry-After header from response.
+
+        Args:
+            response: HTTP response object
+
+        Returns:
+            Seconds to wait, or None if header not present/parseable
+        """
+        retry_after = response.headers.get("Retry-After")
+        if not retry_after:
+            return None
+
+        try:
+            return float(retry_after)
+        except ValueError:
+            return None
+
+    def _build_therapeutic_query(
+        self,
+        gene: str,
+        variant: str,
+        drug: str | None = None,
+        tumor_type: str | None = None,
+    ) -> str:
+        """Build a PubMed search query for therapeutic response information.
+
+        Searches for both resistance AND sensitivity evidence in a single query.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            drug: Optional specific drug to search for
+            tumor_type: Optional tumor type for more specific search (e.g., "GIST")
+
+        Returns:
+            PubMed search query string
+        """
+        # Core query: gene + variant + (resistance OR sensitivity terms)
+        query_parts = [
+            f'"{gene}"[Title/Abstract]',
+            f'("{variant}"[Title/Abstract] OR "{gene} {variant}"[Title/Abstract])',
+            '(resistance[Title/Abstract] OR resistant[Title/Abstract] OR refractory[Title/Abstract] OR sensitivity[Title/Abstract] OR sensitive[Title/Abstract] OR response[Title/Abstract] OR efficacy[Title/Abstract])',
+        ]
+
+        if drug:
+            query_parts.append(f'"{drug}"[Title/Abstract]')
+
+        # Add tumor type filter if provided, otherwise use generic cancer filter
+        if tumor_type:
+            tumor_lower = tumor_type.lower()
+            if "gastrointestinal stromal" in tumor_lower or tumor_lower == "gist":
+                query_parts.append('(GIST[Title/Abstract] OR "gastrointestinal stromal"[Title/Abstract])')
+            else:
+                tumor_simple = tumor_lower.replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+                if tumor_simple:
+                    query_parts.append(f'"{tumor_simple}"[Title/Abstract]')
+                else:
+                    query_parts.append('(cancer[Title/Abstract] OR tumor[Title/Abstract] OR neoplasm[Title/Abstract] OR oncology[Title/Abstract])')
+        else:
+            query_parts.append('(cancer[Title/Abstract] OR tumor[Title/Abstract] OR neoplasm[Title/Abstract] OR oncology[Title/Abstract])')
+
+        return ' AND '.join(query_parts)
+
+    def _build_general_query(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+    ) -> str:
+        """Build a general PubMed search query for a variant.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            tumor_type: Optional tumor type
+
+        Returns:
+            PubMed search query string
+        """
+        query_parts = [
+            f'"{gene}"[Title/Abstract]',
+            f'("{variant}"[Title/Abstract] OR "{gene} {variant}"[Title/Abstract])',
+        ]
+
+        if tumor_type:
+            # Simplify tumor type for search
+            tumor_simple = tumor_type.lower().replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+            query_parts.append(f'"{tumor_simple}"[Title/Abstract]')
+
+        return ' AND '.join(query_parts)
+
+    @retry(
+        retry=retry_if_exception_type(PubMedRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=5, jitter=0.5),
+        reraise=True,
+    )
+    async def _search_pmids(self, query: str, max_results: int = 10) -> list[str]:
+        """Search PubMed and return PMIDs.
+
+        Args:
+            query: PubMed search query
+            max_results: Maximum number of results
+
+        Returns:
+            List of PMIDs
+
+        Raises:
+            PubMedRateLimitError: If rate limited after retries
+        """
+        client = self._get_client()
+
+        # Filter to last 10 years
+        from datetime import datetime
+        current_year = datetime.now().year
+        min_year = current_year - 10
+
+        params: dict[str, Any] = {
+            'db': 'pubmed',
+            'term': query,
+            'retmax': max_results,
+            'retmode': 'json',
+            'sort': 'relevance',
+            'mindate': str(min_year),
+            'maxdate': str(current_year),
+            'datetype': 'pdat',  # Publication date
+        }
+
+        if self.api_key:
+            params['api_key'] = self.api_key
+
+        try:
+            await self._rate_limit()
+            response = await client.get(self.ESEARCH_URL, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            result = data.get('esearchresult', {})
+            pmids = result.get('idlist', [])
+            return pmids
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                retry_after = self._parse_retry_after(e.response)
+                raise PubMedRateLimitError("PubMed rate limit exceeded", retry_after=retry_after)
+            return []
+        except httpx.HTTPError:
+            return []
+        except Exception:
+            return []
+
+    @retry(
+        retry=retry_if_exception_type(PubMedRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=0.5, max=5, jitter=0.5),
+        reraise=True,
+    )
+    async def _fetch_articles(self, pmids: list[str]) -> list[PubMedArticle]:
+        """Fetch article details for given PMIDs.
+
+        Args:
+            pmids: List of PubMed IDs
+
+        Returns:
+            List of PubMedArticle objects
+
+        Raises:
+            PubMedRateLimitError: If rate limited after retries
+        """
+        if not pmids:
+            return []
+
+        client = self._get_client()
+
+        params: dict[str, Any] = {
+            'db': 'pubmed',
+            'id': ','.join(pmids),
+            'rettype': 'abstract',
+            'retmode': 'xml',
+        }
+
+        if self.api_key:
+            params['api_key'] = self.api_key
+
+        try:
+            await self._rate_limit()
+            response = await client.get(self.EFETCH_URL, params=params)
+            response.raise_for_status()
+
+            # Parse XML response
+            root = ET.fromstring(response.text)
+            articles = []
+
+            for article_elem in root.findall('.//PubmedArticle'):
+                article = self._parse_article(article_elem)
+                if article:
+                    articles.append(article)
+
+            return articles
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                retry_after = self._parse_retry_after(e.response)
+                raise PubMedRateLimitError("PubMed rate limit exceeded", retry_after=retry_after)
+            return []
+        except httpx.HTTPError:
+            return []
+        except ET.ParseError:
+            return []
+        except Exception:
+            return []
+
+    def _parse_article(self, article_elem: ET.Element) -> PubMedArticle | None:
+        """Parse a PubmedArticle XML element.
+
+        Args:
+            article_elem: XML element for PubmedArticle
+
+        Returns:
+            PubMedArticle object or None if parsing fails
+        """
+        try:
+            # Get PMID
+            pmid_elem = article_elem.find('.//PMID')
+            pmid = pmid_elem.text if pmid_elem is not None else ''
+
+            if not pmid:
+                return None
+
+            # Get article info
+            medline = article_elem.find('.//MedlineCitation')
+            if medline is None:
+                return None
+
+            article = medline.find('.//Article')
+            if article is None:
+                return None
+
+            # Title
+            title_elem = article.find('.//ArticleTitle')
+            title = title_elem.text if title_elem is not None else ''
+
+            # Abstract
+            abstract_parts = []
+            abstract_elem = article.find('.//Abstract')
+            if abstract_elem is not None:
+                for text_elem in abstract_elem.findall('.//AbstractText'):
+                    if text_elem.text:
+                        label = text_elem.get('Label', '')
+                        if label:
+                            abstract_parts.append(f"{label}: {text_elem.text}")
+                        else:
+                            abstract_parts.append(text_elem.text)
+            abstract = ' '.join(abstract_parts)
+
+            # Authors
+            authors = []
+            author_list = article.find('.//AuthorList')
+            if author_list is not None:
+                for author_elem in author_list.findall('.//Author'):
+                    last_name = author_elem.find('.//LastName')
+                    initials = author_elem.find('.//Initials')
+                    if last_name is not None and last_name.text:
+                        author_str = last_name.text
+                        if initials is not None and initials.text:
+                            author_str += f" {initials.text}"
+                        authors.append(author_str)
+
+            # Journal
+            journal_elem = article.find('.//Journal/Title')
+            journal = journal_elem.text if journal_elem is not None else ''
+
+            # Year
+            year = None
+            pub_date = article.find('.//Journal/JournalIssue/PubDate')
+            if pub_date is not None:
+                year_elem = pub_date.find('.//Year')
+                if year_elem is not None:
+                    year = year_elem.text
+
+            # DOI
+            doi = None
+            for id_elem in article_elem.findall('.//ArticleIdList/ArticleId'):
+                if id_elem.get('IdType') == 'doi':
+                    doi = id_elem.text
+                    break
+
+            # Keywords
+            keywords = []
+            keyword_list = medline.find('.//KeywordList')
+            if keyword_list is not None:
+                for kw_elem in keyword_list.findall('.//Keyword'):
+                    if kw_elem.text:
+                        keywords.append(kw_elem.text)
+
+            # MeSH terms as additional keywords
+            mesh_list = medline.find('.//MeshHeadingList')
+            if mesh_list is not None:
+                for mesh_elem in mesh_list.findall('.//MeshHeading/DescriptorName'):
+                    if mesh_elem.text:
+                        keywords.append(mesh_elem.text)
+
+            url = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+
+            return PubMedArticle(
+                pmid=pmid,
+                title=title,
+                abstract=abstract,
+                authors=authors,
+                journal=journal,
+                year=year,
+                doi=doi,
+                keywords=keywords,
+                url=url,
+            )
+
+        except Exception:
+            return None
+
+    async def search_therapeutic_literature(
+        self,
+        gene: str,
+        variant: str,
+        drug: str | None = None,
+        tumor_type: str | None = None,
+        max_results: int = DEFAULT_MAX_RESULTS,
+    ) -> list[PubMedArticle]:
+        """Search for therapeutic response literature for a variant.
+
+        Finds papers discussing resistance OR sensitivity to therapies.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            drug: Optional specific drug to search for
+            tumor_type: Optional tumor type for more specific search (e.g., "GIST")
+            max_results: Maximum number of articles to return
+
+        Returns:
+            List of PubMedArticle objects discussing therapeutic response
+        """
+        query = self._build_therapeutic_query(gene, variant, drug, tumor_type)
+        pmids = await self._search_pmids(query, max_results * 2)  # Fetch extra for filtering
+
+        if not pmids:
+            return []
+
+        articles = await self._fetch_articles(pmids)
+
+        # Filter to articles that mention either resistance or sensitivity
+        therapeutic_articles = [a for a in articles if a.mentions_resistance() or a.mentions_sensitivity()]
+
+        return therapeutic_articles[:max_results]
+
+    async def search_variant_literature(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = DEFAULT_MAX_RESULTS,
+    ) -> list[PubMedArticle]:
+        """Search for general literature about a variant.
+
+        Args:
+            gene: Gene symbol
+            variant: Variant notation
+            tumor_type: Optional tumor type filter
+            max_results: Maximum results
+
+        Returns:
+            List of PubMedArticle objects
+        """
+        query = self._build_general_query(gene, variant, tumor_type)
+        pmids = await self._search_pmids(query, max_results)
+
+        if not pmids:
+            return []
+
+        return await self._fetch_articles(pmids)
+
+    async def search_pubmed_evidence(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+        max_results: int = 5,
+    ) -> list:
+        """Search for literature and convert to PubMedEvidence model.
+
+        This method searches BOTH therapeutic (resistance/sensitivity) and
+        general variant literature, merges and deduplicates by PMID.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR")
+            variant: Variant notation (e.g., "C797S")
+            tumor_type: Optional tumor type filter
+            max_results: Maximum number of results per search type
+
+        Returns:
+            List of PubMedEvidence objects
+        """
+        from oncomind.models.evidence.pubmed import PubMedEvidence
+
+        # Search both therapeutic (resistance + sensitivity) and general literature in parallel
+        therapeutic_articles, variant_articles = await asyncio.gather(
+            self.search_therapeutic_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results,
+            ),
+            self.search_variant_literature(
+                gene=gene,
+                variant=variant,
+                tumor_type=tumor_type,
+                max_results=max_results,
+            ),
+        )
+
+        # Merge and deduplicate by pmid
+        seen_pmids: set[str] = set()
+        merged_articles: list[PubMedArticle] = []
+        for article in therapeutic_articles + variant_articles:
+            if article.pmid not in seen_pmids:
+                seen_pmids.add(article.pmid)
+                merged_articles.append(article)
+
+        # Convert to PubMedEvidence, skipping articles with no title
+        from oncomind.models.evidence.base import EvidenceLevel
+
+        evidence_list = []
+        for article in merged_articles:
+            # Skip articles without titles (malformed records)
+            if not article.title:
+                continue
+
+            # Determine locus_variant_match using mentions_variant
+            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
+            match_type, matched_biomarker = article.mentions_variant(variant, gene=gene)
+
+            locus_variant_match = None
+            if match_type == "variant":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "codon":
+                locus_variant_match = EvidenceLevel(
+                    level="codon",
+                    scope="specific",
+                    origin="kb",
+                )
+            elif match_type == "ambiguous":
+                locus_variant_match = EvidenceLevel(
+                    level="variant",
+                    scope="ambiguous",
+                    origin="kb",
+                )
+            elif match_type == "gene":
+                locus_variant_match = EvidenceLevel(
+                    level="gene",
+                    scope="unspecified",
+                    origin="kb",
+                )
+            # else: match_type == "none", locus_variant_match stays None
+
+            # Build cancer_type_match based on whether article mentions the queried tumor type
+            # We fetch articles broadly, but track whether each matches the queried tumor
+            cancer_type_match = None
+            if tumor_type:
+                from oncomind.models.evidence.base import tumor_types_match
+                full_text = f"{article.title or ''} {article.abstract or ''}"
+                tumor_matches = tumor_types_match(full_text, tumor_type)
+                cancer_type_match = EvidenceLevel(
+                    level="cancer_specific" if tumor_matches else None,
+                    scope="specific" if tumor_matches else "unspecified",
+                    origin="kb",
+                )
+
+            evidence_list.append(PubMedEvidence(
+                pmid=article.pmid,
+                title=article.title,
+                abstract=article.abstract or "",
+                authors=article.authors,
+                journal=article.journal or "",
+                year=article.year,
+                doi=article.doi,
+                url=article.url,
+                signal_type=article.get_signal_type(),
+                drugs_mentioned=article.extract_drug_mentions(),
+                locus_variant_match=locus_variant_match,
+                cancer_type_match=cancer_type_match,
+            ))
+
+        return evidence_list
+
+    async def close(self) -> None:
+        """Close the HTTP client."""
+        if self._client:
+            await self._client.aclose()
+            self._client = None

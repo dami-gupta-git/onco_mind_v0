@@ -1,0 +1,12 @@
+services:
+  oncomind:
+    build:
+      context: ..
+      dockerfile: streamlit/Dockerfile
+    ports:
+      - "8502:8502"
+    env_file:
+      - ../.env
+    volumes:
+      - ../benchmarks:/app/benchmarks
+      - ../data:/app/data

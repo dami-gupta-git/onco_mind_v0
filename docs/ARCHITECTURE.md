@@ -1,0 +1,1058 @@
+# OncoMind Architecture
+
+This document describes the architecture of OncoMind, an AI-powered cancer variant annotation and evidence synthesis tool.
+
+## Overview
+
+OncoMind follows a layered architecture that separates concerns into distinct modules:
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│                       User Interfaces                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌───────────────────────────┐  │
+│  │    CLI      │  │  Streamlit  │  │      Python API           │  │
+│  │   (mind)    │  │    App      │  │   (Conductor)             │  │
+│  └──────┬──────┘  └──────┬──────┘  └─────────────┬─────────────┘  │
+└─────────┼────────────────┼───────────────────────┼────────────────┘
+          │                │                       │
+          ▼                ▼                       ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                      Conductor Layer                              │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  insight_builder/conductor.py                               │  │
+│  │  - Conductor.run(variant, tumor_type) → Result              │  │
+│  │  - Conductor.run_batch(variants, tumor_type) → [Result]     │  │
+│  │  - ConductorConfig                                          │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                     Normalization Layer                           │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  normalization/                                             │  │
+│  │  - input_parser.py: parse_variant_input("BRAF V600E")       │  │
+│  │  utils/variant_normalization.py: normalize_variant          │  │
+│  │  → Output: ParsedVariant                                    │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                   Evidence Aggregation Layer                      │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  insight_builder/builder.py                                 │  │
+│  │  - InsightBuilder (async context manager)                   │  │
+│  │  - build_insight(parsed_variant, tumor_type) → Evidence     │  │
+│  │  - Parallel API fetching with asyncio.gather()              │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+          │
+          ├────────────────────────────────────┐
+          ▼                                    ▼
+┌─────────────────────────────┐  ┌─────────────────────────────────┐
+│     API Clients Layer       │  │      LLM Layer (Optional)       │
+│  ┌───────────────────────┐  │  │  ┌───────────────────────────┐  │
+│  │ api/myvariant.py      │  │  │  │ llm/service.py            │  │
+│  │ api/civic.py          │  │  │  │ - get_llm_insight()       │  │
+│  │ api/vicc.py           │  │  │  │ - score_paper_relevance   │  │
+│  │ api/fda.py            │  │  │  │ - extract_variant_knowledge│ │
+│  │ api/cgi.py            │  │  │  └───────────────────────────┘  │
+│  │ api/pubmed.py         │  │  └─────────────────────────────────┘
+│  │ api/semantic_scholar.py│ │
+│  │ api/clinicaltrials.py │  │
+│  │ api/oncotree.py       │  │
+│  └───────────────────────┘  │
+└─────────────────────────────┘
+          │
+          ▼
+┌───────────────────────────────────────────────────────────────────┐
+│                        Models Layer                               │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │  models/result.py                                           │  │
+│  │  - Result (top-level output)                                │  │
+│  │    ├── evidence: Evidence (structured data)                 │  │
+│  │    │   ├── identifiers: VariantIdentifiers                  │  │
+│  │    │   ├── functional: FunctionalScores                     │  │
+│  │    │   ├── context: VariantContext                          │  │
+│  │    │   ├── fda_approvals, civic_*, vicc_*, cgi_*            │  │
+│  │    │   ├── cbioportal_evidence, depmap_evidence             │  │
+│  │    │   └── evidence_gaps: EvidenceGaps                      │  │
+│  │    ├── llm: LLMInsight | None  ← Optional LLM narrative     │  │
+│  │    └── cross_source_analysis: dict | None  ← Drug synthesis │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+## Core Design Principles
+
+### 1. Separation of Concerns
+
+- **Normalization** is separate from evidence fetching
+- **Evidence aggregation** is separate from LLM synthesis
+- **API clients** are independent and composable
+- **Models** are strongly-typed with Pydantic
+
+### 2. Unified Output Model
+
+All code paths return a single `Result` object that contains:
+- `evidence`: Structured data from databases (always populated)
+- `llm`: Optional LLM-generated narrative (when LLM mode is enabled)
+- `cross_source_analysis`: Optional cross-source drug synthesis (when LLM mode is enabled)
+
+```python
+# The Result model wraps Evidence, optional LLMInsight, and cross-source analysis
+class Result(BaseModel):
+    evidence: Evidence                      # Structured data (always present)
+    llm: LLMInsight | None                  # LLM narrative (when enabled)
+    cross_source_analysis: dict | None      # Cross-source drug synthesis (when LLM enabled)
+
+    # Property shortcuts for convenience:
+    @property
+    def identifiers(self) -> VariantIdentifiers:
+        return self.evidence.identifiers
+    # ... similar for functional, context
+
+class Evidence(BaseModel):
+    identifiers: VariantIdentifiers         # Gene, variant, IDs
+    functional: FunctionalScores            # AlphaMissense, CADD, etc.
+    context: VariantContext                 # tumor_type, gene_role, pathway
+
+    # Evidence lists (flattened, one per source)
+    fda_approvals: list[FDAApproval]
+    civic_assertions: list[CIViCAssertionEvidence]
+    civic_evidence: list[CIViCEvidence]
+    vicc_evidence: list[VICCEvidence]
+    cgi_biomarkers: list[CGIBiomarkerEvidence]
+    clinical_trials: list[ClinicalTrialEvidence]
+    pubmed_articles: list[PubMedEvidence]
+
+    # Rich context sources
+    cbioportal_evidence: CBioPortalEvidence | None
+    depmap_evidence: DepMapEvidence | None
+    literature_knowledge: LiteratureKnowledge | None
+
+    # Computed analysis
+    evidence_gaps: EvidenceGaps | None
+```
+
+### 3. LLM as Optional Enhancement
+
+The core annotation pipeline is deterministic. LLM can be enabled for research narrative synthesis:
+
+```python
+# Annotation mode: structured evidence only (~7s)
+config = ConductorConfig(enable_llm=False)
+async with Conductor(config) as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+print(result.llm)  # None
+print(result.cross_source_analysis)  # None
+
+# LLM mode: + literature search + research narrative + cross-source analysis (~20s)
+config = ConductorConfig(enable_llm=True)
+async with Conductor(config) as conductor:
+    result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+print(result.llm.llm_summary)  # LLM narrative with gaps and hypotheses
+print(result.cross_source_analysis)  # Cross-source drug corroboration/conflicts
+```
+
+**Note:** When LLM mode is enabled, two LLM calls run **in parallel** using `asyncio.gather()`:
+1. **Research Synthesis** → `LLMInsight` with narrative, gaps, hypotheses
+2. **Cross-Source Drug Analysis** → `dict` with corroboration, conflicts, emerging targets
+
+This parallel execution reduces total latency compared to sequential calls.
+
+**CLI equivalent:**
+```bash
+mind insight BRAF V600E -t Melanoma           # Annotation mode (default)
+mind insight BRAF V600E -t Melanoma --llm     # LLM mode (parallel synthesis + drug analysis)
+```
+
+### 4. Async-First Design
+
+All I/O operations are async for efficient parallel fetching:
+
+```python
+# Evidence builder fetches from 8+ sources in parallel
+results = await asyncio.gather(
+    self.myvariant_client.fetch_evidence(...),
+    self.fda_client.fetch_drug_approvals(...),
+    self.vicc_client.fetch_associations(...),
+    self.civic_client.fetch_assertions(...),
+    # ...
+    return_exceptions=True,
+)
+```
+
+### 5. Graceful Degradation
+
+Individual API failures don't break the pipeline:
+
+```python
+if isinstance(vicc_result, Exception):
+    print(f"Warning: VICC API failed: {vicc_result}")
+    sources_failed.append("VICC")
+else:
+    # Process successful result
+    sources_with_data.append("VICC")
+```
+
+### 6. Match Specificity Tracking
+
+Evidence sources often return results at different specificity levels. OncoMind tracks this explicitly:
+
+```python
+# Each evidence item includes match_level
+class CIViCAssertionEvidence(BaseModel):
+    match_level: str | None  # "variant" | "codon" | "gene"
+    matched_profile: str | None  # The profile that was matched
+
+# Match levels:
+# - "variant": Exact match (e.g., V600E → V600E evidence)
+# - "codon": Same position (e.g., V600K → "V600 mutations" evidence)
+# - "gene": Gene-level only (e.g., V600E → "BRAF mutations" evidence)
+```
+
+This helps users distinguish between:
+- **Variant-specific** therapies (e.g., vemurafenib for BRAF V600E)
+- **Codon-level** biomarkers (e.g., EGFR exon 19 deletions)
+- **Gene-level** associations (e.g., BRCA mutations)
+
+### 7. Deterministic Evidence Gap Analysis
+
+OncoMind includes a rule-based gap detector that identifies what's well-characterized vs under-studied:
+
+```python
+# Compute gaps (no LLM required)
+gaps = evidence.compute_evidence_gaps()
+
+# Structured output
+gaps.overall_evidence_quality  # "comprehensive" | "moderate" | "limited" | "minimal"
+gaps.well_characterized        # ["FDA-approved therapies", "Functional impact"]
+gaps.poorly_characterized      # ["Resistance mechanisms", "Preclinical models"]
+gaps.gaps                      # List of EvidenceGap with severity and suggested studies
+```
+
+Gap categories:
+- **Clinical actionability**: FDA approvals, clinical trials, KB assertions
+- **Functional characterization**: Pathogenicity scores, functional studies
+- **Biological context**: Prevalence, co-mutations, pathway data
+- **Preclinical evidence**: DepMap essentiality, drug sensitivity
+- **Literature support**: PubMed coverage, resistance/sensitivity signals
+
+## Module Details
+
+### Conductor (`insight_builder/conductor.py`)
+
+The single entry point for users:
+
+```python
+class Conductor:
+    async def run(
+        self,
+        variant: str,                  # "BRAF V600E" or "EGFR L858R in NSCLC"
+        tumor_type: str | None = None, # Optional tumor context
+    ) -> Result:
+
+    async def run_batch(
+        self,
+        variants: list[str],
+        tumor_type: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[Result]:
+```
+
+**Responsibilities:**
+- Parse variant input
+- Orchestrate evidence building via EvidenceAggregator
+- Apply optional LLM enhancement
+- Return strongly-typed Result
+
+### Normalization (`normalization/`)
+
+Converts various input formats to canonical representation:
+
+```python
+# Supported input formats
+parse_variant_input("BRAF V600E")           # Gene + variant
+parse_variant_input("EGFR L858R in NSCLC")  # With tumor type
+parse_variant_input("BRAF:V600E")           # Colon separator
+parse_variant_input("TP53 p.R248W")         # HGVS notation
+
+# Output: ParsedVariant
+@dataclass
+class ParsedVariant:
+    gene: str                    # "BRAF"
+    variant: str                 # "V600E"
+    variant_normalized: str      # "V600E"
+    variant_type: str            # "missense"
+    tumor_type: str | None       # "NSCLC"
+    parse_confidence: float      # 1.0
+    parse_warnings: list[str]    # []
+```
+
+**Key Features:**
+- Regex-based pattern matching
+- Gene alias resolution (HER2 → ERBB2)
+- Tumor type extraction from free text
+- Variant type classification
+
+### Insight Builder (`insight_builder/builder.py`)
+
+Orchestrates parallel API calls and assembles results:
+
+```python
+class InsightBuilder:
+    """Async context manager for evidence aggregation."""
+
+    async def __aenter__(self):
+        # Initialize all API client sessions
+        await self.myvariant_client.__aenter__()
+        await self.vicc_client.__aenter__()
+        # ...
+        return self
+
+    async def build_insight(
+        self,
+        variant: ParsedVariant,
+        tumor_type: str | None,
+    ) -> Evidence:
+        # Parallel fetch from all sources
+        results = await asyncio.gather(
+            self.myvariant_client.fetch_evidence(...),
+            self.fda_client.fetch_drug_approvals(...),
+            asyncio.to_thread(self.cgi_client.fetch_biomarkers, ...),
+            fetch_vicc(),            # local async function
+            fetch_civic_assertions(), # local async function
+            fetch_clinical_trials(),  # local async function
+            fetch_literature(),       # local async function
+            return_exceptions=True,
+        )
+
+        # Assemble into Evidence
+        return Evidence(
+            identifiers=...,
+            kb=...,
+            functional=...,
+            clinical=...,
+            literature=...,
+        )
+```
+
+### API Clients (`api/`)
+
+Each client follows a consistent pattern:
+
+```python
+class VICCClient:
+    """Client for VICC MetaKB API."""
+
+    def __init__(self):
+        self.base_url = "https://search.cancervariants.org/api/v1"
+        self.session: httpx.AsyncClient | None = None
+
+    async def __aenter__(self):
+        self.session = httpx.AsyncClient(timeout=30.0)
+        return self
+
+    async def __aexit__(self, *args):
+        if self.session:
+            await self.session.aclose()
+
+    async def fetch_associations(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None = None,
+    ) -> list[VICCAssociation]:
+        # API call and response parsing
+        ...
+```
+
+**Available Clients:**
+
+| Client | API | Data |
+|--------|-----|------|
+| `MyVariantClient` | myvariant.info | ClinVar, COSMIC, gnomAD, CADD |
+| `CIViCClient` | CIViC GraphQL | Curated variant-drug evidence |
+| `VICCClient` | VICC MetaKB | Aggregated knowledgebases |
+| `FDAClient` | OpenFDA | Drug approvals |
+| `CGIClient` | Local TSV | Cancer biomarkers |
+| `PubMedClient` | NCBI E-utils | Literature search |
+| `SemanticScholarClient` | S2 API | Literature with citations |
+| `ClinicalTrialsClient` | ClinicalTrials.gov | Active trials |
+| `OncoTreeClient` | OncoTree API | Tumor type resolution |
+| `CBioPortalClient` | cBioPortal API | Co-mutation and prevalence |
+| `DepMapClient` | DepMap Portal | Gene essentiality, drug sensitivity, cell lines |
+
+### Models (`models/`)
+
+Pydantic models for type safety and validation:
+
+```python
+class Result(BaseModel):
+    """Top-level output with structured evidence and optional LLM narrative."""
+
+    evidence: Evidence                 # Structured data (always present)
+    llm: LLMInsight | None             # LLM narrative (when enabled)
+
+    # Property shortcuts for convenience
+    @property
+    def identifiers(self) -> VariantIdentifiers:
+        return self.evidence.identifiers
+
+    def get_summary(self) -> str:
+        """Generate one-line summary of evidence."""
+        ...
+
+    def has_evidence(self) -> bool:
+        """Check if any evidence was found."""
+        ...
+
+class Evidence(BaseModel):
+    """Structured evidence from databases (no LLM field)."""
+
+    identifiers: VariantIdentifiers    # Gene, variant, IDs
+    kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
+    functional: FunctionalScores       # AlphaMissense, CADD, etc.
+    clinical: ClinicalContext          # FDA, trials, gene role
+    literature: LiteratureEvidence     # PubMed, extracted knowledge
+
+    def get_evidence_summary_for_llm(self) -> str:
+        """Generate compact evidence summary for LLM prompt."""
+        ...
+```
+
+**Model Hierarchy:**
+
+```
+Result
+├── evidence: Evidence
+│   ├── VariantIdentifiers
+│   │   ├── gene, variant, variant_type
+│   │   ├── cosmic_id, clinvar_id, dbsnp_id
+│   │   └── hgvs_protein, hgvs_genomic
+│   ├── KnowledgebaseEvidence
+│   │   ├── civic: list[CIViCEvidence]
+│   │   ├── civic_assertions: list[CIViCAssertionEvidence]
+│   │   ├── clinvar: list[ClinVarEvidence]
+│   │   ├── vicc: list[VICCEvidence]
+│   │   └── cgi_biomarkers: list[CGIBiomarkerEvidence]
+│   ├── FunctionalScores
+│   │   ├── alphamissense_score, alphamissense_prediction
+│   │   ├── cadd_score, polyphen2_prediction, sift_prediction
+│   │   └── gnomad_exome_af, gnomad_genome_af
+│   ├── ClinicalContext
+│   │   ├── tumor_type, tumor_type_resolved
+│   │   ├── fda_approvals: list[FDAApproval]
+│   │   ├── clinical_trials: list[ClinicalTrialEvidence]
+│   │   └── gene_role, gene_class, pathway
+│   ├── LiteratureEvidence
+│   │   ├── pubmed_articles: list[PubMedEvidence]
+│   │   └── literature_knowledge: LiteratureKnowledge | None
+│   ├── cbioportal_evidence: CBioPortalEvidence | None
+│   │   ├── co_occurring, mutually_exclusive
+│   │   └── gene_prevalence_pct, variant_prevalence_pct
+│   ├── depmap_evidence: DepMapEvidence | None
+│   │   ├── gene_dependency: GeneDependency (CERES score)
+│   │   ├── drug_sensitivities: list[DrugSensitivity] (IC50s)
+│   │   └── cell_line_models: list[CellLineModel]
+│   └── evidence_gaps: EvidenceGaps | None  ← Deterministic gap analysis
+│       ├── overall_evidence_quality: str
+│       ├── well_characterized: list[str]
+│       ├── poorly_characterized: list[str]
+│       └── gaps: list[EvidenceGap]
+└── llm: LLMInsight | None  ← Optional, when LLM mode enabled
+    ├── llm_summary: str
+    ├── rationale: str
+    ├── evidence_quality: str
+    ├── knowledge_gaps: list[str]
+    ├── well_characterized: list[str]
+    ├── research_implications: str
+    ├── research_hypotheses: list[str]
+    └── references: list[str]
+```
+
+### LLM Service (`llm/service.py`)
+
+Optional LLM-powered analysis:
+
+```python
+class LLMService:
+    """LLM service for generating variant narratives."""
+
+    async def get_llm_insight(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+        evidence_summary: str,           # From Evidence.get_evidence_summary_for_llm()
+        has_clinical_trials: bool,
+    ) -> LLMInsight:
+        """Generate LLM narrative from evidence summary."""
+
+    async def score_paper_relevance(
+        self,
+        title: str,
+        abstract: str | None,
+        tldr: str | None,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+    ) -> dict:
+        """Score paper relevance and extract signals."""
+
+    async def extract_variant_knowledge(
+        self,
+        gene: str,
+        variant: str,
+        tumor_type: str | None,
+        paper_contents: list[dict],
+    ) -> dict:
+        """Extract structured knowledge from papers."""
+```
+
+**LLM Integration Flow:**
+
+```
+                EvidenceBuilder
+                      │
+                      ▼
+                   Evidence (structured data)
+                      │
+                      ▼
+        evidence.get_evidence_summary_for_llm()
+                      │
+                      ▼
+        ┌─────────────────────────────────┐
+        │ LLMService.get_llm_insight()    │
+        │   - evidence_summary: str       │
+        │   - has_clinical_trials: bool   │
+        └─────────────────────────────────┘
+                      │
+                      ▼
+                  LLMInsight
+                      │
+                      ▼
+        Result(evidence=evidence, llm=llm_insight)
+```
+
+## Data Flow
+
+### Single Variant Annotation
+
+```
+User Input: "BRAF V600E in Melanoma"
+              │
+              ▼
+┌─────────────────────────────────┐
+│ 1. Parse Input                  │
+│    parse_variant_input()        │
+│    → ParsedVariant              │
+│      gene="BRAF"                │
+│      variant="V600E"            │
+│      tumor_type="Melanoma"      │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│ 2. Validate Variant Type        │
+│    - Check: missense ✓          │
+│    - Reject: fusion, amp ✗      │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│ 3. Build Evidence               │
+│    EvidenceBuilder              │
+│    ┌────────────────────────┐   │
+│    │ Parallel API Calls:    │   │
+│    │ • MyVariant.info       │   │
+│    │ • FDA OpenAPI          │   │
+│    │ • CGI Biomarkers       │   │
+│    │ • VICC MetaKB          │   │
+│    │ • CIViC Assertions     │   │
+│    │ • ClinicalTrials.gov   │   │
+│    │ • Semantic Scholar     │   │
+│    │ • cBioPortal           │   │
+│    │ • DepMap               │   │
+│    └────────────────────────┘   │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│ 4. Assemble Evidence            │
+│    - Merge results              │
+│    - Track failures             │
+└───────────────┬─────────────────┘
+                │
+                ▼ (if enable_llm=True)
+┌─────────────────────────────────┐
+│ 5. LLM Enhancement              │
+│    - Get evidence summary       │
+│    - Call LLMService            │
+│    → llm_insight = LLMInsight   │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│ 6. Create Result                │
+│    Result(evidence, llm)        │
+└───────────────┬─────────────────┘
+                │
+                ▼
+             Result
+```
+
+### Batch Processing
+
+```
+User Input: ["BRAF V600E", "EGFR L858R", "KRAS G12C"]
+              │
+              ▼
+┌─────────────────────────────────┐
+│ For each variant:               │
+│   1. Parse                      │
+│   2. Validate                   │
+│   3. Queue for processing       │
+└───────────────┬─────────────────┘
+                │
+                ▼
+┌─────────────────────────────────┐
+│ Sequential Processing           │
+│ (to respect API rate limits)    │
+│                                 │
+│ Variant 1 ──► Result 1          │
+│ Variant 2 ──► Result 2          │
+│ Variant 3 ──► Result 3          │
+│                                 │
+│ Progress callback:              │
+│   progress_callback(i, total)   │
+└───────────────┬─────────────────┘
+                │
+                ▼
+         list[Result]
+```
+
+## Configuration
+
+### ConductorConfig
+
+```python
+@dataclass
+class ConductorConfig:
+    # Evidence sources
+    enable_vicc: bool = True
+    enable_civic_assertions: bool = True
+    enable_clinical_trials: bool = True
+    enable_literature: bool = True
+
+    # LLM
+    enable_llm: bool = False
+    llm_model: str = "claude-sonnet-4-20250514"  # Default: Claude Sonnet 4
+    llm_temperature: float = 0.1
+
+    # Limits (from config/constants.py)
+    max_vicc_results: int = 500
+    max_civic_assertions: int = 500
+    max_clinical_trials: int = 500
+    max_literature_results: int = 30
+
+    # Literature source: "none", "pubmed", or "semantic_scholar"
+    literature_source: str = "pubmed"
+
+    # Performance options
+    enable_timing: bool = False
+    batch_concurrency: int = 3
+```
+
+### EvidenceAggregatorConfig
+
+```python
+@dataclass
+class EvidenceAggregatorConfig:
+    # Source toggles
+    enable_vicc: bool = True
+    enable_civic_assertions: bool = True
+    enable_clinical_trials: bool = True
+    enable_literature: bool = True
+
+    # Result limits (from config/constants.py)
+    max_vicc_results: int = 500
+    max_civic_assertions: int = 500
+    max_clinical_trials: int = 500
+    max_literature_results: int = 30
+
+    # API keys
+    semantic_scholar_api_key: str | None = None
+```
+
+## Error Handling
+
+### API Failures
+
+Each API call is wrapped with exception handling:
+
+```python
+results = await asyncio.gather(
+    self._fetch_vicc(),
+    self._fetch_civic(),
+    return_exceptions=True,  # Don't fail on individual errors
+)
+
+for i, result in enumerate(results):
+    if isinstance(result, Exception):
+        sources_failed.append(source_names[i])
+        print(f"Warning: {source_names[i]} failed: {result}")
+    else:
+        sources_with_data.append(source_names[i])
+```
+
+### Rate Limiting & Retry Strategy
+
+All API clients use **tenacity** for standardized retry with exponential backoff and jitter:
+
+```python
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
+
+class ClinicalTrialsClient:
+    @retry(
+        retry=retry_if_exception_type(ClinicalTrialsRateLimitError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential_jitter(initial=2, max=15, jitter=1),
+        reraise=True,
+    )
+    async def _make_request(self, params):
+        # Request logic...
+        if response.status_code == 429:
+            raise ClinicalTrialsRateLimitError("Rate limited")
+```
+
+**Retry Configuration by Client:**
+
+| Client | Trigger | Attempts | Backoff (initial → max) | Jitter |
+|--------|---------|----------|-------------------------|--------|
+| MyVariant | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| FDA | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| OncoTree | `HTTPError`, `TimeoutException` | 3 | 2s → 10s | None |
+| Semantic Scholar | `SemanticScholarRateLimitError` | 3 | 1s → 10s | ±1s |
+| PubMed | `PubMedRateLimitError` | 3 | 0.5s → 5s | ±0.5s |
+| ClinicalTrials | `ClinicalTrialsRateLimitError` | 3 | 2s → 15s | ±1s |
+| cBioPortal | `HTTPError` | 3 | 2s → 10s | None |
+| DepMap | `HTTPError` | 3 | 2s → 10s | None |
+
+### Variant Validation
+
+Invalid variant types are rejected early:
+
+```python
+if config.validate_variant_type:
+    if parsed.variant_type not in ALLOWED_TYPES:
+        raise ValueError(
+            f"Variant type '{parsed.variant_type}' not supported. "
+            f"Only SNPs and small indels are allowed."
+        )
+```
+
+## Experimental Features
+
+### Tiering (`experimental/tiering.py`)
+
+Non-authoritative AMP/ASCO/CAP tier computation:
+
+```python
+from oncomind.experimental import compute_experimental_tier
+
+tier_result = compute_experimental_tier(result)
+# TierResult(
+#     tier="Tier I",
+#     level="A",
+#     confidence=0.8,
+#     rationale="FDA-approved targeted therapy exists...",
+#     caveats=["This tier is NOT authoritative..."]
+# )
+```
+
+### Embeddings (`embeddings/features.py`)
+
+Feature extraction for ML applications:
+
+```python
+from oncomind.embeddings import extract_features
+
+features = extract_features(result)
+# {
+#     "alphamissense_score": 0.98,
+#     "cadd_score": 32.0,
+#     "civic_evidence_count": 12,
+#     "has_fda_approval": True,
+#     ...
+# }
+```
+
+## Performance Considerations
+
+### Parallel Fetching
+
+Evidence sources are queried in parallel:
+- **Annotation mode** (default): ~7 seconds — structured evidence only, no LLM
+- **LLM mode** (`--llm`): ~25 seconds — + literature search + research narrative + hypothesis generation
+
+### Caching (Future)
+
+Planned caching layers:
+- HTTP response caching (httpx)
+- Literature pre-fetching for common genes
+- Redis/SQLite for persistent cache
+
+### Rate Limits
+
+| API | Rate Limit | Strategy |
+|-----|------------|----------|
+| MyVariant.info | 1000/day free | Tenacity retry (3 attempts, 2-10s backoff) |
+| VICC MetaKB | Unlimited | None needed |
+| CIViC | Unlimited | None needed |
+| Semantic Scholar | 1 RPS (free), 10 RPS (key) | Tenacity retry + PubMed fallback |
+| PubMed | 3/sec, 10/sec with key | Tenacity retry (3 attempts, 0.5-5s backoff) |
+| ClinicalTrials.gov | ~50/min | Tenacity retry (3 attempts, 2-15s backoff) |
+| FDA OpenFDA | Reasonable use | Tenacity retry (3 attempts, 2-10s backoff) |
+| OncoTree | Unlimited | Tenacity retry for transient failures |
+| cBioPortal | Unlimited | Tenacity retry for transient failures |
+| DepMap | Unlimited | Tenacity retry for transient failures |
+
+## Testing Strategy
+
+### Unit Tests (`tests/unit/`)
+
+- Model validation
+- Parser edge cases
+- API client mocking
+- Normalization accuracy
+
+```bash
+pytest tests/unit/ -v
+```
+
+### Integration Tests (`tests/integration/`)
+
+- Real API calls (marked with `@pytest.mark.integration`)
+- End-to-end annotation
+- Rate limit handling
+
+```bash
+pytest tests/integration/ -v -m integration
+```
+
+## Future Architecture
+
+### Planned Enhancements
+
+1. **VCF Pipeline**: Batch VCF annotation with streaming
+2. **Structural Variants**: Fusion/amplification support
+3. **Agent Workflow**: Multi-agent analysis with LangGraph
+4. **Caching Layer**: Redis/SQLite for performance
+5. **Webhooks**: Async result delivery for long-running jobs
+
+### Extension Points
+
+- New API clients: Implement base client pattern
+- New evidence types: Add to models/evidence/
+- New normalizers: Add patterns to input_parser.py
+- New LLM tasks: Add methods to llm/service.py
+
+---
+
+## Therapeutic Data Model
+
+**Purpose:** Unified model for therapeutic evidence at all evidence levels (FDA → preclinical).
+
+### TherapeuticData Fields
+
+```python
+class TherapeuticData(BaseModel):
+    # Core fields (from legacy RecommendedTherapy)
+    drug_name: str
+    evidence_level: str | None   # "FDA-approved" | "Phase 3" | "Phase 2" | "Preclinical" | etc.
+    approval_status: str | None  # "Approved in indication" | "Investigational" | etc.
+    clinical_context: str | None # "first-line", "resistance setting", etc.
+
+    # Research-focused fields
+    response_type: str | None    # "Sensitivity" | "Resistance" | "Mixed"
+    mechanism: str | None        # "Constitutive kinase activation"
+    tumor_types_tested: list[str]
+    cell_lines_tested: list[str]
+    ic50_nm: float | None
+    response_rate_pct: float | None
+
+    # Source attribution
+    source: str | None           # "CIViC" | "CGI" | "VICC" | "FDA" | "DepMap"
+    source_url: str | None
+    pmids: list[str]
+    confidence: str              # "high" | "moderate" | "low"
+
+    # Match specificity
+    locus_match: str | None      # "variant" | "codon" | "gene"
+```
+
+### Evidence Tier Ranking
+
+```python
+def get_evidence_tier(self) -> int:
+    """
+    1: FDA-approved
+    2: Phase 3
+    3: Phase 2
+    4: Phase 1 / Case reports
+    5: Preclinical
+    6: In vitro / Computational
+    7: Unknown
+    """
+```
+
+### Getting Therapeutic Data
+
+```python
+# From Evidence model:
+result.evidence.get_therapeutic_evidence(
+    include_preclinical=True,  # Include DepMap/CGI preclinical
+    max_results=20
+) -> list[TherapeuticData]
+
+# Grouped by level:
+result.evidence.get_therapeutic_evidence_by_level() -> {
+    "fda_approved": [...],
+    "clinical": [...],
+    "preclinical": [...]
+}
+
+# Filtered by response:
+result.evidence.get_resistance_evidence() -> list[TherapeuticData]
+result.evidence.get_sensitivity_evidence() -> list[TherapeuticData]
+```
+
+### Source Priority
+
+When building therapeutic evidence, sources are processed in order:
+
+1. **FDA approvals** (Tier 1) - `source="FDA"`
+2. **CIViC assertions** (Tier 1-2) - `source="CIViC"`
+3. **CGI FDA-approved biomarkers** (Tier 1) - `source="CGI"`
+4. **VICC evidence** (Tier 1-3) - `source="VICC ({original_source})"`
+5. **CGI preclinical biomarkers** (Tier 5) - `source="CGI (preclinical)"`
+
+Duplicates are removed by drug name (case-insensitive).
+
+---
+
+## Literature Knowledge Model
+
+**Purpose:** Structured knowledge extracted from literature via LLM.
+
+### LiteratureKnowledge Fields
+
+```python
+class LiteratureKnowledge(BaseModel):
+    mutation_type: str           # "primary" | "secondary" | "both" | "unknown"
+    is_prognostic_only: bool     # True if variant only prognostic, not predictive
+
+    resistant_to: list[LitDrugResistance]
+    sensitive_to: list[LitDrugSensitivity]
+
+    clinical_significance: str
+    evidence_level: str          # "FDA-approved" | "Phase 3" | ... | "None"
+    references: list[str]        # PMIDs
+    key_findings: list[str]
+    confidence: float            # 0-1
+```
+
+### Predictive vs Prognostic Distinction
+
+```python
+class LitDrugResistance(BaseModel):
+    drug: str
+    evidence: str                # "in vitro" | "preclinical" | "clinical" | "FDA-labeled"
+    mechanism: str | None
+    is_predictive: bool          # True = affects drug selection, False = just prognostic
+
+# Usage:
+literature_knowledge.get_resistance_drugs(predictive_only=True)
+literature_knowledge.is_resistance_marker(predictive_only=True)
+```
+
+---
+
+## Evidence Flow Summary
+
+```
+User Query (gene, variant, tumor_type)
+           │
+           ├──► MyVariant.info ──► ClinVar, COSMIC, gnomAD, CADD, AlphaMissense
+           │         │
+           │         └──► VEP (fallback) ──► Functional predictions
+           │
+           ├──► CIViC GraphQL ──► AMP/ASCO/CAP assertions
+           │
+           ├──► VICC MetaKB ──► Harmonized evidence from OncoKB, CIViC, CGI, JAX
+           │
+           ├──► CGI Biomarkers ──► FDA/NCCN approval status
+           │
+           ├──► FDA OpenFDA ──► Drug approval indications
+           │
+           ├──► ClinicalTrials.gov ──► Active clinical trials
+           │
+           ├──► Semantic Scholar ──► Literature with citations, TLDR
+           │
+           ├──► PubMed ──► Research articles
+           │
+           ├──► OncoTree ──► Standardized tumor type
+           │
+           ├──► cBioPortal ──► Prevalence, co-mutations, biological context
+           │
+           ├──► DepMap ──► Gene essentiality, drug sensitivity, cell line models
+           │
+           └──► Cancer Hotspots (local TSV) ──► Recurrent mutation site data
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │           Evidence Model                  │
+           │  ├── identifiers, functional, context     │
+           │  ├── clinical evidence lists              │
+           │  ├── cbioportal_evidence, depmap_evidence │
+           │  ├── hotspots_evidence                    │
+           │  └── literature_knowledge                 │
+           └───────────────────────────────────────────┘
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │         Gap Detection                     │
+           │  detect_evidence_gaps(evidence) →         │
+           │  EvidenceGaps with research_priority      │
+           └───────────────────────────────────────────┘
+                   │
+                   ▼
+           ┌───────────────────────────────────────────┐
+           │      LLM Layer (optional, parallel)       │
+           │                                           │
+           │  ┌─────────────────┐ ┌─────────────────┐  │
+           │  │ Research        │ │ Cross-Source    │  │
+           │  │ Synthesis       │ │ Drug Analysis   │  │
+           │  │ → LLMInsight    │ │ → drug summary  │  │
+           │  └─────────────────┘ └─────────────────┘  │
+           │         │                   │             │
+           │         └───────┬───────────┘             │
+           │                 │ asyncio.gather()        │
+           └─────────────────┼─────────────────────────┘
+                             │
+                             ▼
+           ┌───────────────────────────────────────────┐
+           │              Result                       │
+           │  evidence: Evidence                       │
+           │  llm: LLMInsight | None                   │
+           │  cross_source_analysis: dict | None       │
+           └───────────────────────────────────────────┘
+```

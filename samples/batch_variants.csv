@@ -1,0 +1,4 @@
+gene,variant,tumor_type
+BRAF,V600E,Melanoma
+EGFR,L858R,NSCLC
+KRAS,G12C,NSCLC

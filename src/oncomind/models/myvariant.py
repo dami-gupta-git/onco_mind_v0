@@ -1,0 +1,163 @@
+"""Pydantic models for MyVariant.info API responses."""
+
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class DbSNPGene(BaseModel):
+    """Gene information from dbSNP."""
+
+    geneid: int | None = None
+
+
+class DbSNPData(BaseModel):
+    """dbSNP data structure."""
+
+    rsid: str | None = None
+    # gene can be a single dict or a list of dicts (for variants spanning multiple genes)
+    gene: DbSNPGene | list[DbSNPGene] | None = None
+
+
+class ClinVarCondition(BaseModel):
+    """ClinVar condition/disease information."""
+
+    name: str | None = None
+    synonyms: list[str] | None = None
+    identifiers: dict | None = None
+
+
+class ClinVarRCV(BaseModel):
+    """ClinVar RCV record."""
+
+    accession: str | None = None
+    clinical_significance: str | None = None
+    # conditions can be a single dict, a ClinVarCondition, or a list of either
+    conditions: ClinVarCondition | dict | list[ClinVarCondition | dict] | None = None
+    review_status: str | None = None
+    last_evaluated: str | None = None
+    origin: str | None = None
+    preferred_name: str | None = None
+    number_submitters: int | None = None
+
+
+class ClinVarData(BaseModel):
+    """ClinVar data structure."""
+
+    variant_id: int | str | None = None
+    # rcv can be a single dict or a list of dicts (API returns either depending on variant)
+    rcv: ClinVarRCV | list[ClinVarRCV] | None = None
+
+
+class CosmicData(BaseModel):
+    """COSMIC data structure."""
+
+    cosmic_id: str | None = None
+
+
+class SnpEffAnn(BaseModel):
+    """SnpEff annotation structure."""
+
+    effect: str | None = None
+    feature_id: str | None = None
+
+
+class SnpEffData(BaseModel):
+    """SnpEff data structure."""
+
+    ann: SnpEffAnn | list[SnpEffAnn] | None = None
+
+
+class PolyPhen2Hdiv(BaseModel):
+    """PolyPhen2 HDIV data structure."""
+
+    pred: str | list[str] | None = None
+    score: float | list[float] | None = None
+
+
+class PolyPhen2Data(BaseModel):
+    """PolyPhen2 data structure."""
+
+    hdiv: PolyPhen2Hdiv | None = None
+
+
+class SiftData(BaseModel):
+    """SIFT data structure."""
+
+    pred: str | list[str] | None = None  # "D"=deleterious, "T"=tolerated
+    score: float | list[float] | None = None  # Lower = more deleterious (0-1)
+
+
+class CaddData(BaseModel):
+    """CADD data structure."""
+
+    phred: float | str | None = None
+
+
+class AlphaMissenseData(BaseModel):
+    """AlphaMissense pathogenicity prediction data structure."""
+
+    score: float | list[float] | None = None  # Pathogenicity score (0-1)
+    pred: str | list[str] | None = None  # P=pathogenic, B=benign, Aambiguous
+    rankscore: float | None = None
+
+
+class DbNSFPData(BaseModel):
+    """dbNSFP data structure."""
+
+    polyphen2: PolyPhen2Data | None = None
+    sift: SiftData | None = None
+    cadd: CaddData | None = None
+    alphamissense: AlphaMissenseData | None = None
+
+
+class GnomadAF(BaseModel):
+    """gnomAD allele frequency structure."""
+
+    af: float | str | None = None
+
+
+class GnomadExome(BaseModel):
+    """gnomAD exome data structure."""
+
+    af: GnomadAF | None = None
+
+
+class MyVariantHit(BaseModel):
+    """Single hit from MyVariant API response.
+
+    This model uses Pydantic's automatic JSON parsing instead of
+    manual extraction, making the code cleaner and more maintainable.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    # Variant identifier
+    id: str = Field(alias="_id")
+
+    # Database data
+    dbsnp: DbSNPData | None = None
+    clinvar: ClinVarData | list[ClinVarData] | None = None
+    cosmic: CosmicData | list[CosmicData] | None = None
+    snpeff: SnpEffData | None = None
+    dbnsfp: DbNSFPData | None = None
+    gnomad_exome: GnomadExome | None = None
+    cadd: CaddData | None = None
+
+    # HGVS notations
+    hgvs: str | list[str] | None = None
+
+    # Gene ID
+    entrezgene: int | str | None = None
+
+    # CIViC and other evidence (kept as dict for existing parsers)
+    civic: dict[str, Any] | list[dict[str, Any]] | None = None
+
+
+class MyVariantResponse(BaseModel):
+    """MyVariant API response structure."""
+
+    took: int | None = None
+    total: int = 0  # Default to 0 if not provided
+    max_score: float | None = None
+    hits: list[MyVariantHit] = Field(default_factory=list)
