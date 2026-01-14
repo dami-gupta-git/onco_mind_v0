@@ -48,26 +48,31 @@ MODELS = {
 }
 
 # Pre-populated example variants (Gene, Variant, Tumor Type)
+# EXAMPLE_VARIANTS = {
+#     "-- Select an example --": ("", "", ""),
+#     "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
+#     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+#     "BRAF K601E - Brain (near-hotspot)": ("BRAF", "K601E", "Brain"),
+#     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
+#     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
+#     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
+#     "KRAS G12D - NSCLC": ("KRAS", "G12D", "NSCLC"),
+#     "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
+#     "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
+#     "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
+#     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
+#     "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
+#     "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
+#     "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
+#     "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+#     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
+#     "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
+#     "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
+# }
 EXAMPLE_VARIANTS = {
-    "-- Select an example --": ("", "", ""),
-    "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
-    "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
-    "BRAF K601E - Brain (near-hotspot)": ("BRAF", "K601E", "Brain"),
-    "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
-    "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
-    "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
-    "KRAS G12D - NSCLC": ("KRAS", "G12D", "NSCLC"),
-    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
-    "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
-    "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
-    "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
-    "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
-    "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
-    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
-    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
-    "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
     "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
+    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
 }
 
 # Initialize session state for persisting results
@@ -101,11 +106,11 @@ with tab1:
 
     input_cols = st.columns([1.5, 1.5, 2, 1.2, 1.2, 1])
     with input_cols[0]:
-        gene = st.text_input("Gene", value="AKT1", placeholder="e.g. AKT1", key="gene_input")
+        gene = st.text_input("Gene", value="IDH1", placeholder="e.g. IDH1", key="gene_input")
     with input_cols[1]:
-        variant = st.text_input("Variant", value="E17K", placeholder="e.g. E17K", key="variant_input")
+        variant = st.text_input("Variant", value="R132H", placeholder="e.g. R132H", key="variant_input")
     with input_cols[2]:
-        tumor = st.text_input("Tumor Type", value="Breast Cancer", placeholder="e.g. Breast Cancer", key="tumor_input")
+        tumor = st.text_input("Tumor Type", value="Glioma", placeholder="e.g. Glioma", key="tumor_input")
     with input_cols[3]:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_literature = st.toggle(
