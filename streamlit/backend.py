@@ -77,7 +77,7 @@ async def get_variant_insight(
                     client_ip = host.split(":")[0]
         except Exception:
             pass
-        print(f"****** [{timestamp}] [{client_ip}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
+        print(f"******** [{timestamp}] [{client_ip}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...", flush=True)
 
         logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
         logger.debug(f"  enable_llm={enable_llm}, enable_literature={enable_literature}, model={model}")
