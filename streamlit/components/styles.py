@@ -15,7 +15,7 @@ def apply_styles() -> None:
     .stMarkdown, .stText, p, span, div {
         font-size: 0.85rem !important;
     }
-    h1 { font-size: 1.5rem !important; }
+    h1 { font-size: 1.8rem !important; }
     h2 { font-size: 1.25rem !important; }
     h3 { font-size: 1.05rem !important; }
     h4 { font-size: 0.95rem !important; }
