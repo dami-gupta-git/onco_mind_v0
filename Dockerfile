@@ -21,6 +21,6 @@ COPY streamlit/ ./streamlit/
 
 WORKDIR /app/streamlit
 
-EXPOSE 8502
+EXPOSE 8501
 
-CMD ["streamlit", "run", "app.py", "--server.port=8502", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
