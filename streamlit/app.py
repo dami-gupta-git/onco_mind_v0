@@ -51,6 +51,7 @@ st.markdown(
 #st.markdown("<p style='text-align: center; margin-top: -4px; color: #666; font-size: 0.90em;'>What DON'T we know about your variant?</p>", unsafe_allow_html=True)
 # st.caption("**Note:** This tool is for demo purposes only. The results are representative.")
 
+
 MODELS = {
     "Google Gemini 2.0 Flash": "gemini/gemini-2.0-flash",
     "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
@@ -101,7 +102,9 @@ if "batch_results" not in st.session_state:
 if "batch_df" not in st.session_state:
     st.session_state.batch_df = None
 
+
 st.subheader("Pick a Variant")
+
 tab1, tab2 = st.tabs(["🔬 Single Variant", "📊 Batch Upload"])
 
 # TAB 1: Single Variant
@@ -155,7 +158,9 @@ with tab1:
         insight_btn = st.button("🔍 Go", type="primary", width="stretch")
 
     # Example variants dropdown (experimental - below the input row)
+
     st.caption("Or try an example:")
+
     st.selectbox(
         "Try an example",
         options=list(EXAMPLE_VARIANTS.keys()),

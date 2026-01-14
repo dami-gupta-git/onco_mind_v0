@@ -73,6 +73,7 @@ async def get_variant_insight(
         except Exception as e:
             print(f"DEBUG: Exception getting headers: {e}")
         print(f"[{timestamp}] [{client_ip}] Retrieving data for {gene} {variant} (tumor: {tumor_type or 'not specified'})...")
+
         logger.debug(f"get_variant_insight: {gene} {variant} (tumor={tumor_type})")
         logger.debug(f"  enable_llm={enable_llm}, enable_literature={enable_literature}, model={model}")
 

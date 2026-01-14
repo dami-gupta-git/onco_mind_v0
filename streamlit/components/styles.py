@@ -7,6 +7,7 @@ def apply_styles() -> None:
     """Apply custom CSS styles to the Streamlit app."""
     st.markdown("""
 <style>
+
     /* Global font size reduction */
     html, body, [class*="css"] {
         font-size: 13px !important;
