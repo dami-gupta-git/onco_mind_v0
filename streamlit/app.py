@@ -121,7 +121,7 @@ with tab1:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_literature = st.toggle(
             "Literature",
-            value=True,
+            value=False,
             help="Search recent literature via Semantic Scholar (with citations). Falls back to PubMed if rate limited."
         )
         # Semantic Scholar by default, PubMed is automatic fallback on rate limit
