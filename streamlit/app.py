@@ -13,7 +13,7 @@ from oncomind.config.constants import (
     CADD_DELETERIOUS_THRESHOLD,
     GNOMAD_RARE_THRESHOLD,
 )
-import os
+
 # Import UI components
 from components import (
     apply_styles,
@@ -29,16 +29,6 @@ from components import (
 from oncomind.config.debug import get_logger
 logger = get_logger(__name__)
 
-# Access the secret
-api_key = os.getenv("OPENAI_API_KEY")
-anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-semantic_scholar_key = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
-
-if not api_key:
-    st.error("OPENAI_API_KEY not found! Add it in Space Settings → Variables and secrets.")
-else:
-    st.success("API key loaded successfully!")
-
 st.set_page_config(page_title="OncoMind", page_icon="🧬", layout="wide")
 
 # Apply custom styling
@@ -46,6 +36,12 @@ apply_styles()
 # scrollable_table function moved to components/utils.py
 
 st.markdown("<h1 style='margin-bottom: 0;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Variant Insight</h1>", unsafe_allow_html=True)
+st.markdown(
+    "<div style='background: linear-gradient(90deg, #ff6b6b, #ffa500); color: white; padding: 8px 16px; "
+    "border-radius: 4px; font-weight: 600; text-align: center; margin: 8px 0;'>"
+    "PROOF OF CONCEPT</div>",
+    unsafe_allow_html=True
+)
 st.caption("**Note:** This tool is for research purposes only. Clinical decisions should always be made by qualified healthcare professionals.")
 
 MODELS = {
@@ -125,7 +121,7 @@ with tab1:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_literature = st.toggle(
             "Literature",
-            value=False,
+            value=True,
             help="Search recent literature via Semantic Scholar (with citations). Falls back to PubMed if rate limited."
         )
         # Semantic Scholar by default, PubMed is automatic fallback on rate limit
@@ -134,7 +130,7 @@ with tab1:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_llm = st.toggle(
             "LLM Mode",
-            value=False,
+            value=True,
             help="LLM mode includes AI-powered synthesis (~15s). Without LLM, you get fast annotation (~5s)."
         )
     with input_cols[5]:
