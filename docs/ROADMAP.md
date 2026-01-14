@@ -696,6 +696,9 @@ Public API/downloads.
 
 ## Technical Debt & Infrastructure
 
+### Docker / Deployment
+- [ ] **Unzip FDA labels file in Docker**: Currently FDA labels JSON is copied to Docker image. Consider compressing it and unzipping at runtime to reduce image size, or use a startup script to decompress.
+
 ### Code Quality
 - [ ] **Tumor type matching consistency**: Check if `_tumor_type_matches` should be used everywhere for tumor matching, e.g. in `evidence.py:524` (clinical trial cancer specificity matching). The curated lists in `gene_context.py` are already normalized so simple substring matching is appropriate there, but external data sources (ClinicalTrials.gov, CIViC, CGI) use varied terminology that may benefit from alias resolution.
 

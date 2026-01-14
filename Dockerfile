@@ -19,6 +19,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy streamlit app
 COPY streamlit/ ./streamlit/
 
+# Copy data files (hotspots, CGI biomarkers, FDA labels, etc.)
+COPY data/ ./data/
+
 WORKDIR /app/streamlit
 
 EXPOSE 8501
