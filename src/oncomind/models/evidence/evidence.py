@@ -1470,7 +1470,13 @@ class Evidence(BaseModel):
         # FDA approvals - with cancer specificity and biomarker match level
         # Use biomarker_match_level (not locus_match) for FDA because it indicates
         # whether the approval covers the variant (e.g., "AKT1 alteration" covers E17K)
+        # IMPORTANT: Only include approvals where biomarker_matched=True
+        # e.g., pembrolizumab has pan-cancer MSI-H approval but should NOT appear for
+        # ALK F1174L queries since ALK is not MSI-H
         for approval in self.fda_approvals:
+            # Skip approvals where the biomarker doesn't match
+            if not approval.biomarker_matched:
+                continue
             drug = approval.generic_name or approval.brand_name or approval.drug_name
             if drug:
                 drug_lower = drug.lower()
@@ -2447,9 +2453,11 @@ class Evidence(BaseModel):
                 # No tumor info - count as unknown (NOT pan_cancer)
                 unknown_count += 1
 
-        # FDA approvals
+        # FDA approvals - only count those where biomarker matches
+        # e.g., pembrolizumab (MSI-H pan-cancer) shouldn't count for ALK F1174L
         for approval in self.fda_approvals:
-            count_tumor_match(approval)
+            if approval.biomarker_matched:
+                count_tumor_match(approval)
 
         # VICC evidence
         for vicc in self.vicc_evidence:

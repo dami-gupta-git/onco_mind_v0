@@ -56,11 +56,13 @@ FDA_TUMOR_PATTERNS = [
     (r"leukemia", "Leukemia"),
     # Pan-cancer/tumor-agnostic biomarker approvals
     # These are tumor-agnostic approvals based on molecular biomarkers
-    (r"MSI-?H|microsatellite instability.high", "Solid Tumor"),
-    (r"dMMR|mismatch repair deficien", "Solid Tumor"),
-    (r"TMB-?H|tumor mutational burden.high", "Solid Tumor"),
-    (r"NTRK.*fusion", "Solid Tumor"),
-    (r"RET.*fusion", "Solid Tumor"),
+    # IMPORTANT: MSI-H/dMMR/TMB-H only count as pan-cancer if combined with "solid tumor"
+    # "MSI-H colorectal cancer" is NOT pan-cancer - it's specific to CRC
+    (r"(MSI-?H|microsatellite instability.high).*solid tumou?r", "Solid Tumor"),
+    (r"(dMMR|mismatch repair deficien).*solid tumou?r", "Solid Tumor"),
+    (r"(TMB-?H|tumor mutational burden.high).*solid tumou?r", "Solid Tumor"),
+    (r"NTRK.*fusion.*solid tumou?r", "Solid Tumor"),
+    (r"RET.*fusion.*solid tumou?r", "Solid Tumor"),
     # Note: "advanced [specific] cancer" is stage, not pan-cancer
     # Only "solid tumor(s)" without specific type is truly tumor-agnostic
     (r"solid tumou?rs?(?!\s+(?:breast|lung|colon|prostate|pancreatic))", "Solid Tumor"),
