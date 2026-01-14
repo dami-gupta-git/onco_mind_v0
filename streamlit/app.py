@@ -130,7 +130,7 @@ with tab1:
         st.markdown("<div style='height: 28px'></div>", unsafe_allow_html=True)  # Spacer to align with labels
         enable_llm = st.toggle(
             "LLM Mode",
-            value=True,
+            value=False,
             help="LLM mode includes AI-powered synthesis (~15s). Without LLM, you get fast annotation (~5s)."
         )
     with input_cols[5]:
