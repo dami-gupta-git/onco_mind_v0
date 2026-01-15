@@ -62,26 +62,69 @@ class VICCAssociation:
         self.oncogenic = oncogenic
 
     def is_sensitivity(self) -> bool:
-        """Check if this represents a sensitivity/response association."""
+        """Check if this represents a sensitivity/response association.
+
+        Handles multiple formats:
+        - Standard terms: "Sensitivity", "sensitive", "Response", "Responsive"
+        - Combined: "Sensitivity/Response"
+        - Outcome terms: "Better Outcome"
+        - OncoKB levels: 1A, 1B, 2A, 2B, 2C, 2D, 3A, 3B, 4 (non-R levels = sensitivity)
+        """
         if not self.response_type:
             return False
         rt_upper = self.response_type.upper()
-        return any(term in rt_upper for term in ["SENSITIV", "RESPONSE", "RESPONSIVE"])
+
+        # Standard sensitivity terms
+        if any(term in rt_upper for term in ["SENSITIV", "RESPONSE", "RESPONSIVE", "BETTER OUTCOME"]):
+            return True
+
+        # OncoKB numeric levels (1-4 with optional letter) indicate sensitivity
+        # R1/R2 are resistance and should NOT match here
+        import re
+        oncokb_sensitivity = re.match(r'^[1234][A-D]?$', rt_upper)
+        if oncokb_sensitivity:
+            return True
+
+        return False
 
     def is_resistance(self) -> bool:
-        """Check if this represents a resistance association."""
+        """Check if this represents a resistance association.
+
+        Handles multiple formats:
+        - Standard terms: "Resistant", "resistance"
+        - OncoKB levels: R1, R2 (resistance levels)
+        """
         if not self.response_type:
             return False
-        return "RESIST" in self.response_type.upper()
+        rt_upper = self.response_type.upper()
 
+        # Standard resistance terms
+        if "RESIST" in rt_upper:
+            return True
+
+        # OncoKB R1/R2 levels indicate resistance
+        import re
+        oncokb_resistance = re.match(r'^R[12]$', rt_upper)
+        if oncokb_resistance:
+            return True
+
+        return False
 
     def get_oncokb_level(self) -> str | None:
-        """Extract OncoKB-style level if present (1A, 1B, 2A, 2B, 3A, 3B, 4, R1, R2)."""
+        """Extract OncoKB-style level if present.
+
+        OncoKB levels:
+        - 1A, 1B: FDA-approved / Standard of care
+        - 2A, 2B, 2C, 2D: Standard care in other indication / Off-label
+        - 3A, 3B: Clinical evidence / Compelling biological evidence
+        - 4: Biological evidence
+        - R1, R2: Resistance levels
+        """
         if not self.response_type:
             return None
-        # OncoKB uses levels like 1A, 1B, 2A, 2B, 3A, 3B, 4, R1, R2
         import re
-        match = re.match(r'^([1234][AB]?|R[12])$', self.response_type.upper())
+        # Match 1-4 with optional letter A-D, or R1/R2
+        match = re.match(r'^([1234][A-D]?|R[12])$', self.response_type.upper())
         if match:
             return match.group(1)
         return None

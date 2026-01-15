@@ -58,6 +58,54 @@ class TestVICCAssociation:
         )
         assert assoc2.is_sensitivity() is True
 
+    def test_is_sensitivity_oncokb_levels(self):
+        """Test is_sensitivity returns True for OncoKB numeric levels."""
+        # OncoKB levels 1-4 with various letter suffixes should be sensitivity
+        oncokb_sensitivity_levels = ["1A", "1B", "2A", "2B", "2C", "2D", "3A", "3B", "4"]
+        for level in oncokb_sensitivity_levels:
+            assoc = VICCAssociation(
+                description=f"Level {level}",
+                gene="BRAF",
+                variant="V600E",
+                disease="melanoma",
+                drugs=["vemurafenib"],
+                evidence_level="A",
+                response_type=level,
+                source="oncokb",
+            )
+            assert assoc.is_sensitivity() is True, f"OncoKB level {level} should be sensitivity"
+            assert assoc.is_resistance() is False, f"OncoKB level {level} should NOT be resistance"
+
+    def test_is_sensitivity_better_outcome(self):
+        """Test is_sensitivity returns True for 'Better Outcome' response type."""
+        assoc = VICCAssociation(
+            description="Better Outcome",
+            gene="EGFR",
+            variant="L858R",
+            disease="NSCLC",
+            drugs=["erlotinib"],
+            evidence_level="A",
+            response_type="Better Outcome",
+            source="vicc",
+        )
+        assert assoc.is_sensitivity() is True
+
+    def test_is_resistance_oncokb_levels(self):
+        """Test is_resistance returns True for OncoKB R1/R2 levels."""
+        for level in ["R1", "R2"]:
+            assoc = VICCAssociation(
+                description=f"Level {level}",
+                gene="KRAS",
+                variant="G12D",
+                disease="CRC",
+                drugs=["cetuximab"],
+                evidence_level="A",
+                response_type=level,
+                source="oncokb",
+            )
+            assert assoc.is_resistance() is True, f"OncoKB level {level} should be resistance"
+            assert assoc.is_sensitivity() is False, f"OncoKB level {level} should NOT be sensitivity"
+
     def test_is_sensitivity_false(self):
         """Test is_sensitivity returns False for resistance associations."""
         assoc = VICCAssociation(
