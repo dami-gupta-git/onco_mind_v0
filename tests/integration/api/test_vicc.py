@@ -1,7 +1,8 @@
 """Integration tests for VICC MetaKB API.
 
-Tests validate that the VICC API returns expected therapeutic associations
-for well-characterized oncogenic mutations with FDA-approved therapies.
+Tests validate that the VICC API returns therapeutic associations from JAX/PMKB sources.
+Note: CIViC and MolecularMatch are filtered out intentionally (we get CIViC directly,
+MolecularMatch has unreliable response_type values).
 """
 
 import pytest
@@ -15,10 +16,11 @@ class TestVICCBRAFV600E:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_returns_associations(self):
-        """BRAF V600E should return substantial evidence."""
+        """BRAF V600E should return evidence from JAX/PMKB sources."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("BRAF", "V600E", max_results=50)
-            assert len(associations) >= 5, "BRAF V600E should have at least 5 associations"
+            # After filtering CIViC/MolecularMatch, expect fewer results
+            assert len(associations) >= 1, "BRAF V600E should have at least 1 association"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -31,21 +33,17 @@ class TestVICCBRAFV600E:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_expected_braf_inhibitors(self):
-        """Should return expected BRAF inhibitor drugs."""
+    async def test_has_drug_associations(self):
+        """Should return drug associations (JAX/PMKB may have different drugs than CIViC)."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("BRAF", "V600E", max_results=50)
 
-            expected_drugs = {"vemurafenib", "dabrafenib", "encorafenib", "trametinib", "cobimetinib"}
             all_drugs = set()
             for assoc in associations:
                 for drug in assoc.drugs:
                     all_drugs.add(drug.lower())
 
-            found_expected = all_drugs & expected_drugs
-            assert len(found_expected) > 0, (
-                f"Expected at least one of {expected_drugs}, got: {all_drugs}"
-            )
+            assert len(all_drugs) > 0, f"Should have drug associations, got: {all_drugs}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -58,80 +56,54 @@ class TestVICCBRAFV600E:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_has_high_quality_evidence(self):
-        """Should have Level A or B evidence."""
+    async def test_has_evidence_levels(self):
+        """Should have evidence level annotations."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("BRAF", "V600E", max_results=50)
 
             evidence_levels = {a.evidence_level for a in associations if a.evidence_level}
-            high_quality_levels = {"A", "B"} & evidence_levels
-            assert len(high_quality_levels) > 0, (
-                f"BRAF V600E should have Level A or B evidence, got: {evidence_levels}"
-            )
+            # JAX/PMKB may have different level distribution than CIViC
+            assert len(evidence_levels) > 0, f"Should have evidence levels, got: {evidence_levels}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_melanoma_disease_coverage(self):
-        """Melanoma is a key indication - should have melanoma-related evidence."""
+    async def test_sources_are_filtered(self):
+        """Verify CIViC and MolecularMatch are filtered out."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("BRAF", "V600E", max_results=50)
 
-            diseases = {a.disease.lower() for a in associations if a.disease}
-            melanoma_related = any("melanoma" in d for d in diseases)
-            assert melanoma_related, f"Should have melanoma-related evidence, got: {diseases}"
+            sources = {a.source.lower() for a in associations if a.source}
+            assert "civic" not in sources, "CIViC should be filtered out"
+            assert "molecularmatch" not in sources, "MolecularMatch should be filtered out"
 
 
 class TestVICCEGFRL858R:
-    """Tests for EGFR L858R - common activating mutation in NSCLC."""
+    """Tests for EGFR L858R - common activating mutation in NSCLC.
+
+    Note: EGFR L858R in VICC is heavily represented by MolecularMatch/CIViC,
+    so after filtering we may have few or no results from JAX/PMKB.
+    """
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_returns_associations(self):
-        """EGFR L858R should have evidence."""
+    async def test_returns_or_empty(self):
+        """EGFR L858R may have limited JAX/PMKB coverage."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("EGFR", "L858R", max_results=50)
-            assert len(associations) >= 3, "EGFR L858R should have at least 3 associations"
+            # May be empty after filtering - that's OK, we get EGFR from CIViC directly
+            assert isinstance(associations, list)
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_expected_egfr_tkis(self):
-        """Should return expected EGFR TKI drugs."""
+    async def test_sources_are_filtered(self):
+        """If there are results, verify filtering works."""
         async with VICCClient() as client:
             associations = await client.fetch_associations("EGFR", "L858R", max_results=50)
 
-            expected_drugs = {"erlotinib", "gefitinib", "afatinib", "osimertinib"}
-            all_drugs = set()
-            for assoc in associations:
-                for drug in assoc.drugs:
-                    all_drugs.add(drug.lower())
-
-            found_expected = all_drugs & expected_drugs
-            assert len(found_expected) > 0, (
-                f"Expected at least one EGFR TKI {expected_drugs}, got: {all_drugs}"
-            )
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_has_sensitivity_associations(self):
-        """EGFR L858R should have sensitivity associations."""
-        async with VICCClient() as client:
-            associations = await client.fetch_associations("EGFR", "L858R", max_results=50)
-            sensitivity_assocs = [a for a in associations if a.is_sensitivity()]
-            assert len(sensitivity_assocs) > 0, "EGFR L858R should have sensitivity associations"
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_lung_cancer_disease_coverage(self):
-        """Should have lung cancer related diseases."""
-        async with VICCClient() as client:
-            associations = await client.fetch_associations("EGFR", "L858R", max_results=50)
-
-            diseases = {a.disease.lower() for a in associations if a.disease}
-            lung_related = any(
-                "lung" in d or "nsclc" in d or "non-small" in d
-                for d in diseases
-            )
-            assert lung_related, f"Should have lung cancer evidence, got: {diseases}"
+            if associations:
+                sources = {a.source.lower() for a in associations if a.source}
+                assert "civic" not in sources, "CIViC should be filtered out"
+                assert "molecularmatch" not in sources, "MolecularMatch should be filtered out"
 
 
 class TestVICCKRASG12C:

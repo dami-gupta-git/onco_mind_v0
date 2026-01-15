@@ -75,7 +75,7 @@ def apply_styles() -> None:
         margin-bottom: 0.25rem;
     }
     .scrollable-table table {
-        font-size: 0.85rem !important;
+        font-size: 0.75rem !important;
         width: 100%;
         table-layout: fixed;
         border-collapse: collapse;
