@@ -1,5 +1,5 @@
 ---
-title: Cancer Research Copilot - Gap Analysis
+title: OncoMind Cancer Research Copilot - Gap Analysis
 emoji: 🚀
 colorFrom: blue
 colorTo: red
@@ -27,12 +27,12 @@ thumbnail: https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images
 ---
 
 # OncoMind
-### IN PROGRESS
+**Cancer Research Copilot for Gap Analysis**
+
+### IN PROGRESS 
 
 ---
 **Research intelligence for cancer variants. Find the gaps, not just the facts.**
-
-
 
 For BRAF V600E, databases already agree. For the next 10,000 variants, the key question is **"what don't we know yet?"**
 
@@ -273,37 +273,24 @@ Create a `.env` file (or set as Hugging Face Secrets):
 ```bash
 # Required for LLM research mode (Gemini 2.0 Flash is the default)
 GOOGLE_API_KEY=your-google-api-key
-
 # Optional: use Anthropic or OpenAI models instead
 ANTHROPIC_API_KEY=your-anthropic-key
-=======
-Create a `.env` file:
-
-```bash
-# Required for LLM research mode
-ANTHROPIC_API_KEY=your-anthropic-key
-
 # Optional: use OpenAI models instead
->>>>>>> c152e6547006d83c9403a6881712ee9224a58760
 OPENAI_API_KEY=your-openai-key
-
-# Optional: better literature context (used in LLM mode)
+# Optional: better literature context 
 SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 ```
 
 **Supported LLM models:**
 
-<<<<<<< HEAD
+
 - `gemini/gemini-2.0-flash` (default, fast)
 - `gemini/gemini-1.5-pro`
 - `claude-sonnet-4-20250514`
 - `claude-3-5-haiku-20241022`
-- `gpt-4o-mini`, `gpt-4o`
-=======
-- `claude-sonnet-4-20250514` (default, recommended)
-- `claude-3-5-haiku-20241022` (faster, lower cost)
+- `claude-sonnet-4-20250514` 
+- `claude-3-5-haiku-20241022` 
 - `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
->>>>>>> c152e6547006d83c9403a6881712ee9224a58760
 
 ---
 
