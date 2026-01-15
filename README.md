@@ -267,7 +267,6 @@ This runs in parallel with the main LLM synthesis for faster response times.
 
 ## Configuration
 
-<<<<<<< HEAD
 Create a `.env` file (or set as Hugging Face Secrets):
 
 ```bash
