@@ -15,6 +15,7 @@ Modes:
 """
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Callable
 
 import streamlit as st
@@ -60,7 +61,9 @@ async def get_variant_insight(
         Dict containing insight results with identifiers, evidence, etc.
     """
     try:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Get current time in EST for human-readable logs
+        est = ZoneInfo("America/New_York")
+        timestamp = datetime.now(est).strftime("%b %d %Y %I:%M:%S %p EST")
         # Get client IP from Streamlit headers (X-Forwarded-For for proxied requests, or Host for local)
         client_ip = "local"
         try:
