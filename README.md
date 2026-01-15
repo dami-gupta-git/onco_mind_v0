@@ -1,5 +1,5 @@
 ---
-title: Cancer Research Copilot - Gap Analysis
+title: OncoMind Cancer Research Copilot - Gap Analysis
 emoji: 🚀
 colorFrom: blue
 colorTo: red
@@ -27,12 +27,12 @@ thumbnail: https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images
 ---
 
 # OncoMind
-### IN PROGRESS
+**Cancer Research Copilot for Gap Analysis**
+
+### IN PROGRESS 
 
 ---
 **Research intelligence for cancer variants. Find the gaps, not just the facts.**
-
-
 
 For BRAF V600E, databases already agree. For the next 10,000 variants, the key question is **"what don't we know yet?"**
 
