@@ -7,6 +7,23 @@ sdk: docker
 app_file: app.py
 app_port: 8501
 pinned: false
+tags:
+  - oncology
+  - cancer
+  - genomics
+  - precision-medicine
+  - bioinformatics
+  - llm
+  - biomedical
+  - genetics
+  - variant-analysis
+  - variant-interpretation
+  - structured-llm
+  - evidence-synthesis
+  - research
+  - streamlit
+  - demo
+thumbnail: https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/starter.png
 ---
 
 # OncoMind
@@ -47,21 +64,21 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 
 ## Screenshots
 
-![Title](./images/title.png)
+![Title](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/title.png)
 
 ### Gap Analysis
-![Gap Analysis](./images/gap_large.png)
+![Gap Analysis](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/gap_large.png)
 
 <details>
 
 <summary>📸 Click to see more screenshots</summary>
 
 ### LLM Research Synthesis
-![LLM Synthesis](./images/synthesis.png)
+![LLM Synthesis](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/synthesis.png)
 
 ### Cross-Source Drug Analysis
-![LLM Cross Source Drug Analysis 1](./images/cross_source_1.png)
-![LLM Cross Source Drug Analysis 2](./images/cross_source_2.png)
+![LLM Cross Source Drug Analysis 1](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/cross_source_1.png)
+![LLM Cross Source Drug Analysis 2](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/cross_source_2.png)
 
 
 </details>
@@ -129,7 +146,7 @@ Traditional variant knowledgebases focus on *summarizing what's known*. OncoMind
 - Functional validation studies
 
 The platform works in two layers:
-1. **Deterministic annotation backbone** – structured evidence from knowledge bases, trials, cBioPortal, DepMap, literature
+1. **Deterministic annotation backbone** – structured evidence from knowledge bases, trials, cBioPortal, DepMap, Hotspots, literature
 2. **Optional LLM research layer** – highlights gaps and drafts hypotheses, constrained by that backbone
 
 ---
