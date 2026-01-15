@@ -1,5 +1,5 @@
 ---
-title: Cancer Variant Gap Analysis
+title: Cancer Research Copilot - Gap Analysis
 emoji: 🚀
 colorFrom: blue
 colorTo: red
