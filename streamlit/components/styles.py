@@ -8,20 +8,21 @@ def apply_styles() -> None:
     st.markdown("""
 <style>
 
-    /* Global font size reduction */
+    /* System font stack for reliable rendering across environments */
     html, body, [class*="css"] {
-        font-size: 13px !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+        font-size: 15px !important;
     }
     .stMarkdown, .stText, p, span, div {
-        font-size: 0.85rem !important;
+        font-size: 0.95rem !important;
     }
-    h1, .stMarkdown h1, [data-testid="stMarkdown"] h1 { font-size: 1.8rem !important; }
-    h2 { font-size: 1.25rem !important; }
-    h3 { font-size: 1.05rem !important; }
-    h4 { font-size: 0.95rem !important; }
+    h1, .stMarkdown h1, [data-testid="stMarkdown"] h1 { font-size: 2.2rem !important; }
+    h2 { font-size: 1.5rem !important; }
+    h3 { font-size: 1.25rem !important; }
+    h4 { font-size: 1.1rem !important; }
     /* Tagline text on the right of title */
     .tagline-text {
-        font-size: 14px !important;
+        font-size: 16px !important;
         color: #666 !important;
     }
     .block-container {
@@ -48,19 +49,19 @@ def apply_styles() -> None:
         color: #999 !important;
         font-style: italic !important;
     }
-    /* Smaller text in dataframes/tables */
+    /* Dataframe tables - slightly larger for readability */
     .stDataFrame [data-testid="stDataFrameResizable"] {
-        font-size: 0.8rem !important;
+        font-size: 0.9rem !important;
     }
     .stDataFrame table {
-        font-size: 0.8rem !important;
+        font-size: 0.9rem !important;
     }
     .stDataFrame th {
-        font-size: 0.75rem !important;
+        font-size: 0.85rem !important;
     }
     .stDataFrame td {
-        font-size: 0.8rem !important;
-        padding: 4px 8px !important;
+        font-size: 0.9rem !important;
+        padding: 5px 10px !important;
     }
     /* Scrollable table container for evidence tables */
     .scrollable-table {
@@ -159,6 +160,12 @@ def apply_styles() -> None:
         margin: 0.5rem 0 !important;
         border: none;
         border-top: 1px solid #e0e0e0;
+    }
+    /* LLM synthesis sections - larger text for readability */
+    [data-testid="stVerticalBlockBorderWrapper"] .stMarkdown p,
+    [data-testid="stVerticalBlockBorderWrapper"] .stMarkdown li {
+        font-size: 1.05rem !important;
+        line-height: 1.7 !important;
     }
 </style>
 """, unsafe_allow_html=True)

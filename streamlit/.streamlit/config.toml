@@ -1,2 +1,14 @@
 [server]
 port = 8501
+
+[theme]
+# Primary accent color for interactive elements
+primaryColor = "#f08080"
+# Background color for main content area
+backgroundColor = "#ffffff"
+# Background color for sidebar and other secondary areas
+secondaryBackgroundColor = "#f5f5f5"
+# Color of text and other foreground elements
+textColor = "#262730"
+# Font family - use system fonts that work reliably across environments
+font = "sans serif"
