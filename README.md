@@ -1,5 +1,5 @@
 ---
-title: OncoMind Cancer Research Copilot - Gap Analysis
+title: OncoMind
 emoji: 🚀
 colorFrom: blue
 colorTo: red
@@ -8,22 +8,24 @@ app_file: app.py
 app_port: 8501
 pinned: false
 tags:
-  - oncology
-  - cancer
-  - genomics
-  - precision-medicine
-  - bioinformatics
-  - llm
-  - biomedical
-  - genetics
-  - variant-analysis
-  - variant-interpretation
-  - structured-llm
-  - evidence-synthesis
-  - research
-  - streamlit
-  - demo
-thumbnail: https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/starter.png
+- oncology
+- cancer
+- genomics
+- precision-medicine
+- bioinformatics
+- llm
+- biomedical
+- genetics
+- variant-analysis
+- variant-interpretation
+- structured-llm
+- evidence-synthesis
+- research
+- streamlit
+- demo
+thumbnail: >-
+  https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/starter.png
+short_description: Cancer Research Copilot - Gap Analysis
 ---
 
 # OncoMind
