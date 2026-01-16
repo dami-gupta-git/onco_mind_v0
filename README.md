@@ -23,8 +23,7 @@ tags:
 - research
 - streamlit
 - demo
-thumbnail: >-
-  https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/starter.png
+thumbnail: https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/starter.png
 short_description: Cancer Research Copilot - Gap Analysis
 ---
 
