@@ -15,6 +15,7 @@ Example usage:
 from oncomind.normalization.input_parser import (
     parse_variant_input,
     parse_variant_row,
+    parse_vcf_variant,
     ParsedVariant,
 )
 from oncomind.utils.variant_normalization import (
@@ -32,6 +33,7 @@ __all__ = [
     # Input parsing
     "parse_variant_input",
     "parse_variant_row",
+    "parse_vcf_variant",
     "ParsedVariant",
     # Normalization
     "VariantNormalizer",

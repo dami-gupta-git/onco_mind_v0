@@ -1,0 +1,23 @@
+##fileformat=VCFv4.2
+##fileDate=20240115
+##source=OncoMindTestFixture
+##reference=GRCh38
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=GENE,Number=1,Type=String,Description="Gene Symbol">
+##INFO=<ID=HGVSP,Number=1,Type=String,Description="Protein Change">
+##INFO=<ID=TUMOR_TYPE,Number=1,Type=String,Description="Tumor Type">
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=LowQual,Description="Low quality variant">
+##contig=<ID=1,length=248956422>
+##contig=<ID=7,length=159345973>
+##contig=<ID=10,length=133797422>
+##contig=<ID=12,length=133275309>
+##contig=<ID=17,length=83257441>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+7	140753336	COSV54736915	T	A	99	PASS	DP=250;AF=0.42;GENE=BRAF;HGVSP=p.Val600Glu;TUMOR_TYPE=NSCLC
+12	25245350	COSV55497585	C	A	95	PASS	DP=180;AF=0.38;GENE=KRAS;HGVSP=p.Gly12Cys;TUMOR_TYPE=NSCLC
+17	7673802	rs121913343	G	A	92	PASS	DP=200;AF=0.51;GENE=TP53;HGVSP=p.Arg248Trp;TUMOR_TYPE=NSCLC
+7	55181378	COSV51765119	T	G	88	PASS	DP=150;AF=0.35;GENE=EGFR;HGVSP=p.Leu858Arg;TUMOR_TYPE=NSCLC
+10	87933147	COSV57096636	C	T	85	PASS	DP=175;AF=0.29;GENE=PTEN;HGVSP=p.Arg130Gln;TUMOR_TYPE=NSCLC
+1	114713908	COSV62755182	G	A	90	PASS	DP=220;AF=0.44;GENE=NRAS;HGVSP=p.Gln61Lys;TUMOR_TYPE=NSCLC

@@ -286,12 +286,17 @@ def parse_vcf_variant(
     if info:
         gene = info.get("GENE", info.get("Gene", info.get("gene", "UNKNOWN")))
 
+    # Check INFO for tumor type
+    tumor_type = None
+    if info:
+        tumor_type = info.get("TUMOR_TYPE", info.get("tumor_type"))
+
     return ParsedVariant(
         gene=gene,
         variant=variant_id,
         variant_normalized=None,
         variant_type="snv" if len(ref) == 1 and len(alt) == 1 else "indel",
-        tumor_type=None,
+        tumor_type=tumor_type,
         raw_input=variant_id,
         parse_confidence=0.5 if gene == "UNKNOWN" else 0.8,
         parse_warnings=["VCF parsing is basic - use VEP for full annotation"],

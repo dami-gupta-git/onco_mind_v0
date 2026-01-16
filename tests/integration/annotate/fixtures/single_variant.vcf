@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+##fileDate=20240115
+##source=OncoMindTestFixture
+##reference=GRCh38
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total Depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency">
+##INFO=<ID=GENE,Number=1,Type=String,Description="Gene Symbol">
+##INFO=<ID=HGVSP,Number=1,Type=String,Description="Protein Change">
+##INFO=<ID=TUMOR_TYPE,Number=1,Type=String,Description="Tumor Type">
+##FILTER=<ID=PASS,Description="All filters passed">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+7	140753336	COSV54736915	T	A	99	PASS	DP=250;AF=0.42;GENE=BRAF;HGVSP=p.Val600Glu;TUMOR_TYPE=Melanoma

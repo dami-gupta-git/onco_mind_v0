@@ -30,6 +30,19 @@ class TestMyVariantBasic:
             ])
             assert has_identifiers, "BRAF V600E should have database identifiers"
 
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_fetch_rare(self):
+        """BRAF V600E should return evidence with database identifiers."""
+        async with MyVariantClient() as client:
+            evidence = await client.fetch_evidence("ALK", "F1174L")
+
+            assert evidence is not None
+
+
+
+
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_evidence_structure(self):

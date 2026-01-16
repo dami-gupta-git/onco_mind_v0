@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##fileDate=20240115
+##source=OncoMindTestFixture
+##reference=GRCh38
+##INFO=<ID=TUMOR_TYPE,Number=1,Type=String,Description="Tumor Type">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO

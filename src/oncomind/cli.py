@@ -497,6 +497,49 @@ def batch(
 
 
 @app.command()
+def annotate(
+    vcf_file: Path = typer.Argument(..., help="Input VCF file"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
+    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
+) -> None:
+    """Annotate variants from a VCF file.
+
+    Parses a VCF file and fetches annotations from MyVariant.info API.
+
+    Examples:
+        mind annotate variants.vcf
+        mind annotate variants.vcf --output results.json
+    """
+    set_log_level(log_level)
+    logger = get_logger(__name__)
+
+    if not vcf_file.exists():
+        logger.error(f"VCF file not found: {vcf_file}")
+        raise typer.Exit(1)
+
+    async def run_annotate() -> None:
+        from oncomind.annotator import Annotator
+
+        logger.debug(f"Annotating VCF file: {vcf_file}")
+
+        async with Annotator() as annotator:
+            result = await annotator.run(vcf_file)
+
+        logger.info(f"Annotated {len(result.variants)} variants from {vcf_file}")
+
+        output_data = result.to_dict()
+
+        if output:
+            with open(output, "w") as f:
+                json.dump(output_data, f, indent=2)
+            logger.info(f"Results saved to {output}")
+        else:
+            print(json.dumps(output_data, indent=2))
+
+    asyncio.run(run_annotate())
+
+
+@app.command()
 def version() -> None:
     """Show version information."""
     from oncomind import __version__

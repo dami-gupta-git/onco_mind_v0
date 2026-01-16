@@ -1,0 +1,43 @@
+"""Pydantic models for the annotator module."""
+
+from oncomind.annotator.models.myvariant import (
+    MyVariantAnnotation,
+    VcfData,
+    CaddData,
+    CaddDna,
+    CaddGene,
+    CaddCds,
+    CaddProt,
+    ClinvarData,
+    ClinvarGene,
+    ClinvarRcv,
+    CosmicData,
+    DbnsfpData,
+    Polyphen2,
+    Polyphen2Hdiv,
+    AlphaMissense,
+    DbsnpData,
+    GnomadExomeData,
+    GnomadAf,
+)
+
+__all__ = [
+    "MyVariantAnnotation",
+    "VcfData",
+    "CaddData",
+    "CaddDna",
+    "CaddGene",
+    "CaddCds",
+    "CaddProt",
+    "ClinvarData",
+    "ClinvarGene",
+    "ClinvarRcv",
+    "CosmicData",
+    "DbnsfpData",
+    "Polyphen2",
+    "Polyphen2Hdiv",
+    "AlphaMissense",
+    "DbsnpData",
+    "GnomadExomeData",
+    "GnomadAf",
+]
