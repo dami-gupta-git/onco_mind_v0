@@ -8,6 +8,7 @@ from oncomind.utils.variant_normalization import (
     is_snp_or_small_indel,
     get_protein_position,
     to_hgvs_protein,
+    to_hgvs_protein_three_letter,
 )
 
 
@@ -206,6 +207,59 @@ class TestConvenienceFunctions:
         assert to_hgvs_protein("L858R") == "p.L858R"
         assert to_hgvs_protein("fusion") is None
         assert to_hgvs_protein("amplification") is None
+
+    def test_to_hgvs_protein_three_letter_from_single_letter(self):
+        """Test to_hgvs_protein_three_letter with single-letter input."""
+        # Without p. prefix
+        assert to_hgvs_protein_three_letter("V600E") == "p.Val600Glu"
+        assert to_hgvs_protein_three_letter("L858R") == "p.Leu858Arg"
+        assert to_hgvs_protein_three_letter("G12C") == "p.Gly12Cys"
+        assert to_hgvs_protein_three_letter("H1047R") == "p.His1047Arg"
+        assert to_hgvs_protein_three_letter("R248W") == "p.Arg248Trp"
+
+        # With p. prefix
+        assert to_hgvs_protein_three_letter("p.V600E") == "p.Val600Glu"
+        assert to_hgvs_protein_three_letter("p.L858R") == "p.Leu858Arg"
+        assert to_hgvs_protein_three_letter("p.G12C") == "p.Gly12Cys"
+
+    def test_to_hgvs_protein_three_letter_from_three_letter(self):
+        """Test to_hgvs_protein_three_letter with three-letter input."""
+        # Three-letter input should also work
+        assert to_hgvs_protein_three_letter("Val600Glu") == "p.Val600Glu"
+        assert to_hgvs_protein_three_letter("Leu858Arg") == "p.Leu858Arg"
+        assert to_hgvs_protein_three_letter("Gly12Cys") == "p.Gly12Cys"
+
+    def test_to_hgvs_protein_three_letter_case_insensitive(self):
+        """Test to_hgvs_protein_three_letter is case-insensitive."""
+        assert to_hgvs_protein_three_letter("v600e") == "p.Val600Glu"
+        assert to_hgvs_protein_three_letter("V600e") == "p.Val600Glu"
+        assert to_hgvs_protein_three_letter("val600glu") == "p.Val600Glu"
+
+    def test_to_hgvs_protein_three_letter_non_missense_returns_none(self):
+        """Test to_hgvs_protein_three_letter returns None for non-missense variants."""
+        assert to_hgvs_protein_three_letter("fusion") is None
+        assert to_hgvs_protein_three_letter("amplification") is None
+        assert to_hgvs_protein_three_letter("exon 19 deletion") is None
+        assert to_hgvs_protein_three_letter("L747fs") is None
+        assert to_hgvs_protein_three_letter("") is None
+
+    def test_to_hgvs_protein_three_letter_all_amino_acids(self):
+        """Test to_hgvs_protein_three_letter covers all standard amino acids."""
+        # Test each amino acid as both ref and alt
+        test_cases = [
+            ("A100G", "p.Ala100Gly"),  # Ala, Gly
+            ("C200D", "p.Cys200Asp"),  # Cys, Asp
+            ("E300F", "p.Glu300Phe"),  # Glu, Phe
+            ("H400I", "p.His400Ile"),  # His, Ile
+            ("K500L", "p.Lys500Leu"),  # Lys, Leu
+            ("M600N", "p.Met600Asn"),  # Met, Asn
+            ("P700Q", "p.Pro700Gln"),  # Pro, Gln
+            ("R800S", "p.Arg800Ser"),  # Arg, Ser
+            ("T900V", "p.Thr900Val"),  # Thr, Val
+            ("W100Y", "p.Trp100Tyr"),  # Trp, Tyr
+        ]
+        for single, expected in test_cases:
+            assert to_hgvs_protein_three_letter(single) == expected
 
 
 class TestRealWorldVariants:

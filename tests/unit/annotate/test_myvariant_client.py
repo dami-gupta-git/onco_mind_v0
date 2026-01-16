@@ -24,18 +24,22 @@ class TestAnnotatorMyVariantClient:
         assert client.timeout == 60.0
 
     @pytest.mark.asyncio
-    async def test_context_manager_creates_client(self):
-        """Test async context manager creates HTTP client."""
+    async def test_context_manager_creates_and_closes_client(self):
+        """Test async context manager creates HTTP client on enter and closes on exit."""
+        import httpx
+
         client = AnnotatorMyVariantClient()
+        assert client._client is None
 
         async with client:
-            assert client._client is not None
+            assert isinstance(client._client, httpx.AsyncClient)
+            assert client._client.timeout.connect == 30.0
 
         assert client._client is None
 
     @pytest.mark.asyncio
-    async def test_fetch_annotation_returns_pydantic_model(self):
-        """Test fetch_annotation returns MyVariantAnnotation pydantic model."""
+    async def test_fetch_annotation_returns_pydantic_model_with_vcf_data(self):
+        """Test fetch_annotation returns MyVariantAnnotation with parsed VCF data."""
         client = AnnotatorMyVariantClient()
 
         mock_response = {
@@ -53,6 +57,9 @@ class TestAnnotatorMyVariantClient:
             result = await client.fetch_annotation("BRAF", "p.V600E")
 
         assert isinstance(result, MyVariantAnnotation)
+        assert result.vcf.ref == "A"
+        assert result.vcf.alt == "T"
+        mock_build.assert_called_once_with("BRAF", "p.V600E")
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_returns_all_fields(self):
@@ -124,17 +131,20 @@ class TestAnnotatorMyVariantClient:
         assert 0 <= result.gnomad_exome.af.af <= 1  # AF must be between 0 and 1
 
     @pytest.mark.asyncio
-    async def test_fetch_annotation_no_hits(self):
-        """Test fetch_annotation returns None for all fields when no hits."""
+    async def test_fetch_annotation_no_hits_returns_empty_annotation(self):
+        """Test fetch_annotation returns empty MyVariantAnnotation when API returns no hits."""
         client = AnnotatorMyVariantClient()
 
         mock_response = {"total": 0, "hits": []}
 
         with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
             mock_build.return_value = mock_response
-            result = await client.fetch_annotation("UNKNOWN", "X123Y")
+            result = await client.fetch_annotation("FAKEGENE", "p.X999Z")
 
+        # Verify it's a valid empty annotation object
         assert isinstance(result, MyVariantAnnotation)
+
+        # Verify all annotation fields are None (no data available)
         assert result.vcf is None
         assert result.cadd is None
         assert result.clinvar is None
@@ -143,9 +153,12 @@ class TestAnnotatorMyVariantClient:
         assert result.dbsnp is None
         assert result.gnomad_exome is None
 
+        # Verify the query was made with the unknown variant
+        mock_build.assert_called_once_with("FAKEGENE", "p.X999Z")
+
     @pytest.mark.asyncio
-    async def test_fetch_annotation_missing_fields_in_hit(self):
-        """Test fetch_annotation handles missing fields in hit - returns None for missing."""
+    async def test_fetch_annotation_partial_data_only_clinvar(self):
+        """Test fetch_annotation handles partial API response with only ClinVar data."""
         client = AnnotatorMyVariantClient()
 
         mock_response = {
@@ -165,31 +178,103 @@ class TestAnnotatorMyVariantClient:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("BRAF", "p.V600E")
 
+        # ClinVar data should be populated
+        assert result.clinvar.allele_id == 12345
+        assert result.clinvar.gene.symbol == "BRAF"
+        assert result.clinvar.gene.id == "673"
+
+        # Other fields should be None (not in API response)
         assert result.vcf is None
         assert result.cadd is None
-        assert result.clinvar.allele_id == 12345
         assert result.cosmic is None
         assert result.dbnsfp is None
         assert result.dbsnp is None
         assert result.gnomad_exome is None
 
     @pytest.mark.asyncio
-    async def test_build_annotation_tries_multiple_queries(self):
-        """Test build_annotation tries multiple query strategies."""
+    async def test_build_annotation_tries_fallback_query_on_no_hits(self):
+        """Test build_annotation tries gene:variant query when gene variant query returns no hits."""
         client = AnnotatorMyVariantClient()
 
-        # First query returns no hits, second returns hits
+        # First query "BRAF p.V600E" returns no hits, second "BRAF:p.V600E" returns hits
         mock_responses = [
             {"total": 0, "hits": []},
-            {"total": 1, "hits": [{"_id": "test", "vcf": {"ref": "A", "alt": "T"}}]},
+            {"total": 1, "hits": [{"_id": "chr7:g.140453136A>T", "vcf": {"ref": "A", "alt": "T"}}]},
         ]
 
         with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
             mock_query.side_effect = mock_responses
             result = await client.build_annotation("BRAF", "p.V600E")
 
+        # Verify fallback was attempted
         assert mock_query.call_count == 2
+
+        # Verify first query was "gene variant" format
+        first_call_query = mock_query.call_args_list[0][0][0]
+        assert first_call_query == "BRAF p.V600E"
+
+        # Verify second query was "gene:variant" format
+        second_call_query = mock_query.call_args_list[1][0][0]
+        assert second_call_query == "BRAF:p.V600E"
+
+        # Verify result contains the hit from second query
         assert result["total"] == 1
+        assert result["hits"][0]["_id"] == "chr7:g.140453136A>T"
+
+    @pytest.mark.asyncio
+    async def test_build_annotation_tries_three_letter_fallback(self):
+        """Test build_annotation tries three-letter amino acid query as third fallback."""
+        client = AnnotatorMyVariantClient()
+
+        # First two queries return no hits, third (three-letter) returns hits
+        mock_responses = [
+            {"total": 0, "hits": []},  # "EGFR p.L858R"
+            {"total": 0, "hits": []},  # "EGFR:p.L858R"
+            {"total": 1, "hits": [{"_id": "chr7:g.55259515T>G", "vcf": {"ref": "T", "alt": "G"}}]},  # "EGFR p.Leu858Arg"
+        ]
+
+        with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
+            mock_query.side_effect = mock_responses
+            result = await client.build_annotation("EGFR", "p.L858R")
+
+        # Verify all three strategies were attempted
+        assert mock_query.call_count == 3
+
+        # Verify query sequence
+        assert mock_query.call_args_list[0][0][0] == "EGFR p.L858R"
+        assert mock_query.call_args_list[1][0][0] == "EGFR:p.L858R"
+        assert mock_query.call_args_list[2][0][0] == "EGFR p.Leu858Arg"
+
+        # Verify result from third query
+        assert result["total"] == 1
+        assert result["hits"][0]["_id"] == "chr7:g.55259515T>G"
+
+    @pytest.mark.asyncio
+    async def test_build_annotation_three_letter_fallback_different_variants(self):
+        """Test three-letter fallback works for different cancer variants."""
+        client = AnnotatorMyVariantClient()
+
+        test_cases = [
+            ("KRAS", "p.G12C", "p.Gly12Cys"),
+            ("PIK3CA", "p.H1047R", "p.His1047Arg"),
+            ("TP53", "p.R248W", "p.Arg248Trp"),
+            ("NRAS", "p.Q61R", "p.Gln61Arg"),
+        ]
+
+        for gene, single_letter, three_letter in test_cases:
+            mock_responses = [
+                {"total": 0, "hits": []},
+                {"total": 0, "hits": []},
+                {"total": 1, "hits": [{"_id": f"variant_{gene}"}]},
+            ]
+
+            with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
+                mock_query.side_effect = mock_responses
+                await client.build_annotation(gene, single_letter)
+
+            # Verify three-letter query was used
+            third_query = mock_query.call_args_list[2][0][0]
+            assert third_query == f"{gene} {three_letter}", f"Failed for {gene} {single_letter}"
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_cadd_contains_expected_fields(self):
@@ -292,12 +377,19 @@ class TestAnnotatorMyVariantClient:
         assert cadd.alt == "T"
 
     @pytest.mark.asyncio
-    async def test_close_method(self):
-        """Test close method closes client."""
+    async def test_close_method_closes_http_client(self):
+        """Test close method properly closes the HTTP client."""
+        import httpx
+
         client = AnnotatorMyVariantClient()
 
+        # Enter context to create client
         async with client:
-            assert client._client is not None
+            assert isinstance(client._client, httpx.AsyncClient)
 
+        # Client should be None after context exit
+        assert client._client is None
+
+        # Calling close again should be safe (no error)
         await client.close()
         assert client._client is None

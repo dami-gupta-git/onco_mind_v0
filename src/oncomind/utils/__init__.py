@@ -6,6 +6,7 @@ from oncomind.utils.variant_normalization import (
     is_missense_variant,
     get_protein_position,
     to_hgvs_protein,
+    to_hgvs_protein_three_letter,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     'is_missense_variant',
     'get_protein_position',
     'to_hgvs_protein',
+    'to_hgvs_protein_three_letter',
 ]

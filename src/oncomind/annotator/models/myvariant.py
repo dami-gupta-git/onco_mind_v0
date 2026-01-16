@@ -53,10 +53,11 @@ class CaddData(BaseModel):
 
     phred: float = Field(ge=0, le=100)
     rawscore: float
-    consequence: str
-    annotype: str | None = None
+    # API returns single value or list depending on number of transcripts
+    consequence: str | list[str]
+    annotype: str | list[str] | None = None
     dna: CaddDna | None = None
-    gene: CaddGene | None = None
+    gene: CaddGene | list[CaddGene] | None = None
     oaa: str | None = Field(default=None, min_length=1, max_length=1)
     naa: str | None = Field(default=None, min_length=1, max_length=1)
     type: str | None = None
@@ -87,7 +88,8 @@ class ClinvarData(BaseModel):
     gene: ClinvarGene | None = None
     chrom: str | None = None
     alt: str | None = None
-    rcv: list[ClinvarRcv] | None = None
+    # API returns single dict or list depending on number of RCV records
+    rcv: ClinvarRcv | list[ClinvarRcv] | None = None
 
 
 class CosmicData(BaseModel):
@@ -103,8 +105,9 @@ class CosmicData(BaseModel):
 class Polyphen2Hdiv(BaseModel):
     """PolyPhen2 HDIV prediction."""
 
-    pred: str = Field(pattern=r"^[DBP]$")  # D=Damaging, B=Benign, P=Possibly damaging
-    score: float = Field(ge=0, le=1)
+    # API returns single value or list depending on number of transcripts
+    pred: str | list[str]  # D=Damaging, B=Benign, P=Possibly damaging
+    score: float | list[float]
 
 
 class Polyphen2(BaseModel):
@@ -116,8 +119,9 @@ class Polyphen2(BaseModel):
 class AlphaMissense(BaseModel):
     """AlphaMissense pathogenicity prediction."""
 
-    pred: list[str]  # P=Pathogenic, B=Benign, A=Ambiguous
-    score: list[float]
+    # API returns single value or list depending on number of transcripts
+    pred: str | list[str]  # P=Pathogenic, B=Benign, A=Ambiguous
+    score: float | list[float]
 
 
 class DbnsfpData(BaseModel):

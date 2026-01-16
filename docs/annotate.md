@@ -22,12 +22,12 @@ Standard VCF format (VCFv4.2). Required columns:
 
 Required INFO fields:
 - `GENE` - Gene symbol (e.g., BRAF)
-- `PROTEIN` - Protein change notation (e.g., p.V600E)
+- `HGVSP` or `PROTEIN` - Protein change notation (e.g., p.Val600Glu)
 - `TUMOR_TYPE` - Tumor type (e.g., NSCLC, Melanoma)
 
 Example VCF line:
 ```
-7	140453136	COSV54736915	T	A	.	PASS	GENE=BRAF;PROTEIN=p.V600E;TUMOR_TYPE=Melanoma
+7	140753336	COSV54736915	T	A	.	PASS	GENE=BRAF;HGVSP=p.Val600Glu;TUMOR_TYPE=Melanoma
 ```
 
 ## Output

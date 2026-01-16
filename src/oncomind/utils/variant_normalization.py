@@ -279,6 +279,44 @@ def to_hgvs_protein(variant: str) -> Optional[str]:
     return protein_norm.get('hgvs_protein')
 
 
+def to_hgvs_protein_three_letter(variant: str) -> Optional[str]:
+    """Convert a variant to HGVS protein notation with three-letter amino acid codes.
+
+    Args:
+        variant: Variant string in any format (V600E, p.V600E, Val600Glu, etc.)
+
+    Returns:
+        HGVS protein notation with three-letter codes (p.Val600Glu) if applicable, None otherwise
+
+    Examples:
+        >>> to_hgvs_protein_three_letter('V600E')
+        'p.Val600Glu'
+
+        >>> to_hgvs_protein_three_letter('p.L858R')
+        'p.Leu858Arg'
+
+        >>> to_hgvs_protein_three_letter('Val600Glu')
+        'p.Val600Glu'
+
+        >>> to_hgvs_protein_three_letter('fusion')
+        None
+    """
+    protein_norm = VariantNormalizer.normalize_protein_change(variant)
+    long_form = protein_norm.get('long_form')
+    if long_form:
+        # long_form is like "VAL600GLU", need to convert to "p.Val600Glu"
+        # Extract components and format with proper case
+        ref_aa = protein_norm.get('ref_aa')
+        alt_aa = protein_norm.get('alt_aa')
+        position = protein_norm.get('position')
+        if ref_aa and alt_aa and position:
+            ref_three = AMINO_ACID_1TO3.get(ref_aa)
+            alt_three = AMINO_ACID_1TO3.get(alt_aa)
+            if ref_three and alt_three:
+                return f"p.{ref_three.capitalize()}{position}{alt_three.capitalize()}"
+    return None
+
+
 def is_snp_or_small_indel(gene: str, variant: str) -> bool:
     """Check if a variant is a SNP or small indel (allowed variant type).
 

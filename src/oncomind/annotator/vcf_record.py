@@ -26,6 +26,11 @@ class VCFRecord:
         if self.info:
             gene = self.info.get("GENE", self.info.get("Gene", self.info.get("gene", "UNKNOWN")))
 
+        # Check INFO for protein change (HGVSP or PROTEIN)
+        protein = None
+        if self.info:
+            protein = self.info.get("HGVSP", self.info.get("PROTEIN", self.info.get("protein")))
+
         # Check INFO for tumor type
         tumor_type = None
         if self.info:
@@ -34,6 +39,7 @@ class VCFRecord:
         return AnnParsedVariant(
             gene=gene,
             variant=variant_id,
+            protein=protein,
             variant_normalized=None,
             variant_type="snv" if len(self.ref) == 1 and len(self.alt) == 1 else "indel",
             tumor_type=tumor_type,

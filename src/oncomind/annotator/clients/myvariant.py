@@ -6,6 +6,7 @@ import httpx
 
 from oncomind.annotator.models import MyVariantAnnotation
 from oncomind.config.debug import get_logger
+from oncomind.utils import to_hgvs_protein_three_letter
 
 logger = get_logger(__name__)
 
@@ -121,15 +122,17 @@ class AnnotatorMyVariantClient:
         query = f"{gene} {variant}"
         result = await self._query(query, fields=fields)
 
-        # Strategy 2: If no hits, try simple gene:variant (e.g., "BRAF:V600E")
+        # Strategy 2: If no hits, try simple gene:variant (e.g., "BRAF:p.V600E")
         if result.get("total", 0) == 0:
             query = f"{gene}:{variant}"
             result = await self._query(query, fields=fields)
 
-        # Strategy 3: If still no hits, try searching by gene name and variant without prefix
+        # Strategy 3: If no hits, try three-letter amino acid codes (e.g., "EGFR p.Leu858Arg")
         if result.get("total", 0) == 0:
-            query = f"{gene} {variant}"
-            result = await self._query(query, fields=fields)
+            three_letter = to_hgvs_protein_three_letter(variant)
+            if three_letter:
+                query = f"{gene} {three_letter}"
+                result = await self._query(query, fields=fields)
 
         return result
 

@@ -52,8 +52,17 @@ class TestAnnotateCLI:
         # Verify variant data
         variant = output["variants"][0]
         assert variant["gene"] == "BRAF"
+        assert variant["protein"] == "p.Val600Glu"  # From HGVSP in VCF INFO
         assert variant["tumor_type"] == "Melanoma"
         assert "myvariant" in variant
+
+        # Verify MyVariant returned actual data for BRAF V600E
+        myvariant = variant["myvariant"]
+        assert myvariant["vcf"]["ref"] == "A"
+        assert myvariant["vcf"]["alt"] == "T"
+        assert myvariant["cadd"]["gene"]["genename"] == "BRAF"
+        assert myvariant["cadd"]["consequence"] == "NON_SYNONYMOUS"
+        assert 0 <= myvariant["cadd"]["phred"] <= 100
 
     def test_annotate_empty_vcf(self):
         """Test annotate with empty VCF."""
