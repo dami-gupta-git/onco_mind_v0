@@ -53,11 +53,23 @@ def apply_styles() -> None:
         }
     }
     .block-container {
-        padding-top: 1rem;
+        padding-top: 1rem !important;
+        padding-bottom: 1rem !important;
     }
-    /* Hide Streamlit header bar for more space */
-    header[data-testid="stHeader"] {
-        display: none;
+    /* Hide Streamlit header/toolbar and reduce top space */
+    header, [data-testid="stHeader"], [data-testid="stToolbar"] {
+        display: none !important;
+        height: 0 !important;
+    }
+    /* Remove top margin/padding from main container */
+    .stApp > header {
+        display: none !important;
+    }
+    section[data-testid="stSidebar"] + section .block-container {
+        padding-top: 1rem !important;
+    }
+    .stApp {
+        margin-top: -2rem;
     }
     /* Make text inputs clearly look like input fields */
     .stTextInput > div > div > input {
