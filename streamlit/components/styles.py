@@ -92,6 +92,12 @@ def apply_styles() -> None:
         .wc-table td:nth-child(4) {
             display: none !important;
         }
+        /* Make Evidence Sources tabs scrollable on mobile */
+        [data-testid="stTabs"] > [data-baseweb="tab-list"] {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            flex-wrap: nowrap;
+        }
     }
     /* Make text inputs clearly look like input fields */
     .stTextInput > div > div > input {
