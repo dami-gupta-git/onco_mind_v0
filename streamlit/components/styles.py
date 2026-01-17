@@ -97,6 +97,19 @@ def apply_styles() -> None:
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
             flex-wrap: nowrap;
+            padding-bottom: 8px;
+        }
+        /* Visible scrollbar for tabs */
+        [data-testid="stTabs"] > [data-baseweb="tab-list"]::-webkit-scrollbar {
+            height: 4px;
+        }
+        [data-testid="stTabs"] > [data-baseweb="tab-list"]::-webkit-scrollbar-track {
+            background: #f0f0f0;
+            border-radius: 2px;
+        }
+        [data-testid="stTabs"] > [data-baseweb="tab-list"]::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 2px;
         }
     }
     /* Make text inputs clearly look like input fields */
