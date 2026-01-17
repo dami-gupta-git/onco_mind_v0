@@ -1404,7 +1404,7 @@ with tab1:
             st.caption("What's known vs. unknown about this variant — identifying opportunities for further research.")
             st.markdown(
                 f"<div class='gap-analysis-header'>"
-                f"<span class='gap-analysis-title'>🔍 Gap Analysis</span>"
+                f"<h2 style='margin: 0; font-size: 1.75rem !important;'>🔍 Gap Analysis</h2>"
                 f"<span class='gap-analysis-badges'>"
                 f"<strong>Evidence Quality:</strong> {badge} {evidence_quality.capitalize()} &nbsp;&nbsp; "
                 f"<strong>Research Priority:</strong> {priority_badge} {display_priority}"
@@ -1416,7 +1416,7 @@ with tab1:
             table_cols = st.columns([7, 4])
 
             with table_cols[0]:
-                st.markdown("**✅ Well Characterized** — _what we know_")
+                st.markdown("<span style='font-weight: 600;'>✅ Well Characterized</span> — <em>what we know</em>", unsafe_allow_html=True)
 
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
 

@@ -56,22 +56,6 @@ def apply_styles() -> None:
     }
     .block-container {
         padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
-    /* Hide Streamlit header/toolbar and reduce top space */
-    header, [data-testid="stHeader"], [data-testid="stToolbar"] {
-        display: none !important;
-        height: 0 !important;
-    }
-    /* Remove top margin/padding from main container */
-    .stApp > header {
-        display: none !important;
-    }
-    section[data-testid="stSidebar"] + section .block-container {
-        padding-top: 1rem !important;
-    }
-    .stApp {
-        margin-top: -2rem;
     }
     /* Gap Analysis header - responsive layout */
     .gap-analysis-header {
@@ -115,15 +99,6 @@ def apply_styles() -> None:
         border-radius: 8px !important;
         padding: 0.5rem 0.75rem !important;
         background-color: #fafafa !important;
-        transition: border-color 0.2s, box-shadow 0.2s !important;
-    }
-    .stTextInput > div > div > input:focus {
-        border-color: #ff4b4b !important;
-        box-shadow: 0 0 0 2px rgba(255, 75, 75, 0.2) !important;
-        background-color: #fff !important;
-    }
-    .stTextInput > div > div > input:hover {
-        border-color: #a0a0a0 !important;
     }
     /* Placeholder text styling */
     .stTextInput > div > div > input::placeholder {
