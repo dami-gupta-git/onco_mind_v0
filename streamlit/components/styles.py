@@ -42,14 +42,16 @@ def apply_styles() -> None:
         .header-container {
             flex-direction: column;
             align-items: flex-start;
-            gap: 0.25rem;
+            gap: 0;
         }
         .header-title {
             font-size: 22px !important;
             line-height: 1.3;
+            margin-bottom: 0 !important;
         }
         .tagline-text {
             font-size: 14px !important;
+            margin-top: 0 !important;
         }
     }
     .block-container {
