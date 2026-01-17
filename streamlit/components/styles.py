@@ -20,10 +20,37 @@ def apply_styles() -> None:
     h2 { font-size: 1.5rem !important; }
     h3 { font-size: 1.25rem !important; }
     h4 { font-size: 1.1rem !important; }
+    /* Header container - responsive layout */
+    .header-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .header-title {
+        margin-bottom: 0;
+        font-size: 28px !important;
+    }
     /* Tagline text on the right of title */
     .tagline-text {
         font-size: 16px !important;
         color: #666 !important;
+    }
+    /* Mobile responsive header */
+    @media (max-width: 768px) {
+        .header-container {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+        .header-title {
+            font-size: 22px !important;
+            line-height: 1.3;
+        }
+        .tagline-text {
+            font-size: 14px !important;
+        }
     }
     .block-container {
         padding-top: 2.5rem;

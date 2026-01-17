@@ -36,8 +36,8 @@ apply_styles()
 # scrollable_table function moved to components/utils.py
 
 st.markdown(
-    "<div style='display: flex; justify-content: space-between; align-items: center;'>"
-    "<h1 style='margin-bottom: 0; font-size: 28px !important;'><span style='font-size: 0.85em;'>🧬</span> OncoMind: Find the gaps in your Cancer Research</h1>"
+    "<div class='header-container'>"
+    "<h1 class='header-title'>🧬 OncoMind: Find the gaps in your Cancer Research</h1>"
     "<span class='tagline-text'>What's missing — and what you can do next.</span>"
     "</div>",
     unsafe_allow_html=True
