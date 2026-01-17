@@ -53,7 +53,11 @@ def apply_styles() -> None:
         }
     }
     .block-container {
-        padding-top: 2.5rem;
+        padding-top: 1rem;
+    }
+    /* Hide Streamlit header bar for more space */
+    header[data-testid="stHeader"] {
+        display: none;
     }
     /* Make text inputs clearly look like input fields */
     .stTextInput > div > div > input {
