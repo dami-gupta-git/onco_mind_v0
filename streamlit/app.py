@@ -43,7 +43,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 st.markdown(
-    "<div style='background: #f08080; color: white; padding: 8px 16px; "
+    "<div style='background: #d4a5a5; color: white; padding: 8px 16px; "
     "border-radius: 4px; font-weight: 600; text-align: center; margin: 8px 0;'>"
     "PROOF OF CONCEPT | Results are representative </div>",
     unsafe_allow_html=True
@@ -1403,9 +1403,9 @@ with tab1:
             # Description above title, then title with badges on the right
             st.caption("What's known vs. unknown about this variant — identifying opportunities for further research.")
             st.markdown(
-                f"<div style='display: flex; justify-content: space-between; align-items: flex-start;'>"
-                f"<span style='font-size: 1.5rem; font-weight: 600;'>🔍 Gap Analysis</span>"
-                f"<span style='font-size: 0.9rem; text-align: right;'>"
+                f"<div class='gap-analysis-header'>"
+                f"<span class='gap-analysis-title'>🔍 Gap Analysis</span>"
+                f"<span class='gap-analysis-badges'>"
                 f"<strong>Evidence Quality:</strong> {badge} {evidence_quality.capitalize()} &nbsp;&nbsp; "
                 f"<strong>Research Priority:</strong> {priority_badge} {display_priority}"
                 f"</span></div>",

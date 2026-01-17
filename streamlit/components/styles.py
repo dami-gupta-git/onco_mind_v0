@@ -73,6 +73,42 @@ def apply_styles() -> None:
     .stApp {
         margin-top: -2rem;
     }
+    /* Gap Analysis header - responsive layout */
+    .gap-analysis-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .gap-analysis-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+    }
+    .gap-analysis-badges {
+        font-size: 0.9rem;
+        text-align: right;
+    }
+    @media (max-width: 768px) {
+        .gap-analysis-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        .gap-analysis-title {
+            font-size: 1.25rem;
+        }
+        .gap-analysis-badges {
+            font-size: 0.8rem;
+            text-align: left;
+        }
+        /* Hide Locus Match and Tumor Match columns on mobile */
+        .wc-table th:nth-child(3),
+        .wc-table td:nth-child(3),
+        .wc-table th:nth-child(4),
+        .wc-table td:nth-child(4) {
+            display: none !important;
+        }
+    }
     /* Make text inputs clearly look like input fields */
     .stTextInput > div > div > input {
         border: 1.5px solid #d0d0d0 !important;
