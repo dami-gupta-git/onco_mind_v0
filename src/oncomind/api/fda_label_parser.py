@@ -627,7 +627,11 @@ class FDALabelParser:
                 for v in variants
             )
             if has_full_variant:
-                return SpecificityLevel.VARIANT, variants, codon
+                # Remove codon-only entries if we have full variants
+                # e.g., remove "G12" if we have "G12C"
+                full_variants = [v for v in variants if
+                                 re.match(r'^[A-Z]\d+[A-Z]$', v) or 'del' in v.lower() or 'ins' in v.lower()]
+                return SpecificityLevel.VARIANT, full_variants, codon
             else:
                 return SpecificityLevel.CODON, variants, codon
 

@@ -3,121 +3,14 @@
 This module handles FDA label data transformation, including:
 - Biomarker specificity parsing from indication text
 - Variant coverage determination (is_variant_covered)
-- Tumor type extraction and matching
 """
 
 import re
-from typing import Any
 
-from oncomind.models.evidence.base import extract_variant_codon, tumor_types_match
-from oncomind.models.evidence.fda import extract_combination_partners
+from oncomind.models.evidence.base import extract_variant_codon
 from oncomind.config.debug import get_logger
 
 logger = get_logger(__name__)
-
-
-# Common cancer/tumor type patterns in FDA indications
-# These are used to extract the disease context from indication text
-FDA_TUMOR_PATTERNS = [
-    # Specific cancers (order matters - more specific first)
-    (r"acute myeloid leukemia|AML", "AML"),
-    (r"non-?small cell lung cancer|NSCLC", "NSCLC"),
-    (r"small cell lung cancer|SCLC", "SCLC"),
-    (r"lung cancer|lung adenocarcinoma|lung carcinoma", "Lung Cancer"),
-    (r"colorectal cancer|colon cancer|rectal cancer|CRC", "Colorectal Cancer"),
-    (r"breast cancer|breast carcinoma", "Breast Cancer"),
-    (r"melanoma", "Melanoma"),
-    (r"glioma|astrocytoma|oligodendroglioma|glioblastoma|GBM", "Glioma"),
-    (r"cholangiocarcinoma|bile duct cancer", "Cholangiocarcinoma"),
-    (r"thyroid cancer|thyroid carcinoma", "Thyroid Cancer"),
-    (r"prostate cancer|prostate carcinoma", "Prostate Cancer"),
-    (r"ovarian cancer|ovarian carcinoma", "Ovarian Cancer"),
-    (r"pancreatic cancer|pancreatic carcinoma", "Pancreatic Cancer"),
-    (r"gastric cancer|stomach cancer", "Gastric Cancer"),
-    (r"esophageal cancer", "Esophageal Cancer"),
-    (r"bladder cancer|urothelial cancer|urothelial carcinoma", "Bladder Cancer"),
-    (r"renal cell carcinoma|kidney cancer|RCC", "Kidney Cancer"),
-    (r"hepatocellular carcinoma|liver cancer|HCC", "Liver Cancer"),
-    (r"head and neck.*cancer|HNSCC", "Head and Neck Cancer"),
-    (r"cervical cancer", "Cervical Cancer"),
-    (r"endometrial cancer|uterine cancer", "Endometrial Cancer"),
-    (r"gastrointestinal stromal tumor|GIST", "GIST"),
-    (r"chronic myeloid leukemia|CML", "CML"),
-    (r"chronic lymphocytic leukemia|CLL", "CLL"),
-    (r"multiple myeloma", "Multiple Myeloma"),
-    (r"lymphoma", "Lymphoma"),
-    (r"leukemia", "Leukemia"),
-    # Pan-cancer/tumor-agnostic biomarker approvals
-    # These are tumor-agnostic approvals based on molecular biomarkers
-    # IMPORTANT: MSI-H/dMMR/TMB-H only count as pan-cancer if combined with "solid tumor"
-    # "MSI-H colorectal cancer" is NOT pan-cancer - it's specific to CRC
-    (r"(MSI-?H|microsatellite instability.high).*solid tumou?r", "Solid Tumor"),
-    (r"(dMMR|mismatch repair deficien).*solid tumou?r", "Solid Tumor"),
-    (r"(TMB-?H|tumor mutational burden.high).*solid tumou?r", "Solid Tumor"),
-    (r"NTRK.*fusion.*solid tumou?r", "Solid Tumor"),
-    (r"RET.*fusion.*solid tumou?r", "Solid Tumor"),
-    # Note: "advanced [specific] cancer" is stage, not pan-cancer
-    # Only "solid tumor(s)" without specific type is truly tumor-agnostic
-    (r"solid tumou?rs?(?!\s+(?:breast|lung|colon|prostate|pancreatic))", "Solid Tumor"),
-]
-
-
-def extract_tumor_from_indication(indication_text: str) -> list[str]:
-    """Extract tumor/disease types from FDA indication text.
-
-    Args:
-        indication_text: FDA indications and usage text
-
-    Returns:
-        List of normalized tumor types found (e.g., ["AML", "Cholangiocarcinoma"])
-    """
-    if not indication_text:
-        return []
-
-    tumors_found = []
-    text_lower = indication_text.lower()
-
-    for pattern, tumor_name in FDA_TUMOR_PATTERNS:
-        if re.search(pattern, text_lower, re.IGNORECASE):
-            if tumor_name not in tumors_found:
-                tumors_found.append(tumor_name)
-
-    return tumors_found
-
-
-def match_fda_tumor(
-    indication_text: str,
-    query_tumor: str | None,
-) -> tuple[bool, str | None]:
-    """Match query tumor against FDA indication text.
-
-    Args:
-        indication_text: FDA indications and usage text
-        query_tumor: User's tumor type query (e.g., "Glioma", "NSCLC")
-
-    Returns:
-        Tuple of (matched: bool, match_type: str | None)
-        match_type is "cancer_specific" if tumor matches, "pan_cancer" if solid tumor, None if no match
-    """
-    if not query_tumor or not indication_text:
-        return False, None
-
-    # Extract tumors from indication
-    indication_tumors = extract_tumor_from_indication(indication_text)
-
-    if not indication_tumors:
-        return False, None
-
-    # Check for pan-cancer approvals (e.g., "solid tumors" without specific type)
-    if "Solid Tumor" in indication_tumors:
-        return True, "pan_cancer"
-
-    # Check if query tumor matches any indication tumor
-    for ind_tumor in indication_tumors:
-        if tumor_types_match(ind_tumor, query_tumor):
-            return True, "cancer_specific"
-
-    return False, None
 
 
 def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | None:
@@ -254,7 +147,7 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
             "target_genes": [gene_upper],
         }
 
-    # 9. Gene-level: "AKT1 alteration", "BRCA-mutated", "ALK-positive"
+    # 10. Gene-level: "AKT1 alteration", "BRCA-mutated", "ALK-positive"
     # Also handles "(IDH1) or ... (IDH2) mutation" format from FDA labels
     # NOTE: The "(GENE)...mutation" pattern should NOT match if followed by exon/variant info
     gene_level_patterns = [
@@ -271,78 +164,17 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     return None
 
 
-def get_variant_match_level(
-    query_variant: str,
-    specificity: dict,
-    allow_codon_fallback: bool = True,
-) -> str | None:
-    """Get the match level between a query variant and FDA approval specificity.
-
-    Determines what level of match exists between the queried variant and
-    the biomarker specificity parsed from FDA indication text.
+def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str | None]:
+    """Check if a query variant is covered by the parsed biomarker specificity.
 
     Args:
         query_variant: The variant being queried (e.g., "E17K", "V600E")
         specificity: Dict from parse_biomarker_specificity
-        allow_codon_fallback: If True, a variant-level approval can match at
-            codon level (e.g., G12D matches G12C approval at codon level).
-            If False, variant-level approvals require exact match.
 
     Returns:
-        Match level: "variant", "codon", "gene", "contraindicated", or None if no match
+        Tuple of (covered: bool, match_level: str | None)
+        match_level is "variant", "codon", "gene", "contraindicated", or None
     """
-    level = specificity.get("level")
-
-    # Contraindication/wild-type: explicitly NOT covered
-    if level in ("contraindication", "wild_type_required"):
-        return "contraindicated"
-
-    # Phenotype: not variant-based, can't determine match
-    if level == "phenotype":
-        return None
-
-    if level == "gene":
-        return "gene"
-
-    if level == "variant":
-        # Check for exact variant match
-        if query_variant.upper() == specificity["specified_variant"].upper():
-            return "variant"
-        # Optionally check for codon match (same position, different AA)
-        if allow_codon_fallback:
-            query_codon = extract_variant_codon(query_variant)
-            if query_codon and query_codon == specificity.get("codon"):
-                return "codon"
-        return None
-
-    if level == "variant_list":
-        # Check if query variant is in the list
-        specified = specificity.get("specified_variants", [])
-        if query_variant.upper() in [v.upper() for v in specified]:
-            return "variant"
-        # Check for codon match with any variant in the list
-        if allow_codon_fallback:
-            query_codon = extract_variant_codon(query_variant)
-            for v in specified:
-                if query_codon and query_codon == extract_variant_codon(v):
-                    return "codon"
-        return None
-
-    if level == "codon":
-        # Extract codon from variant: E17K → E17
-        query_codon = extract_variant_codon(query_variant)
-        if query_codon and query_codon == specificity.get("codon"):
-            return "codon"
-        return None
-
-    if level == "exon":
-        # For exon-level, we'd need to know what exon the variant is in
-        # This requires additional mapping - return None for now
-        return None
-
-    return None
-
-def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str | None]:
     if not specificity:
         return (False, None)
 
@@ -364,7 +196,7 @@ def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str
         # Same codon, different variant
         query_codon = extract_variant_codon(query_variant)
         if query_codon and query_codon == specificity.get("codon"):
-            return (False, "codon")  # <-- THIS IS THE KEY LINE
+            return (False, "codon")
         return (False, None)
 
     if level == "codon":
@@ -383,34 +215,3 @@ def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str
         return (False, None)
 
     return (False, None)
-
-def match_fda_approval(
-    query_gene: str,
-    query_variant: str,
-    query_tumor: str,
-    fda_indication: str,
-) -> dict:
-    """Match a query against FDA indication text."""
-
-    specificity = parse_biomarker_specificity(fda_indication, query_gene)
-
-    if not specificity:
-        return {"matched": False, "reason": "gene_not_found"}
-
-    # Check if query gene is in target genes
-    target_genes = specificity.get("target_genes", [])
-    if target_genes and query_gene.upper() not in [g.upper() for g in target_genes]:
-        return {"matched": False, "reason": "gene_not_in_targets"}
-
-    covered, match_level = is_variant_covered(query_variant, specificity)
-    partners = extract_combination_partners(fda_indication)
-
-    return {
-        "matched": covered,
-        "match_level": match_level,  # "gene", "codon", "variant", "contraindicated"
-        "specificity": specificity,
-        "combination_partners": partners,
-        # TODO: add tumor matching
-    }
-
-

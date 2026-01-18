@@ -972,8 +972,8 @@ with tab1:
                         st.warning("Auto-parsed from FDA labels - verify before clinical use")
 
                         # Simple table with drug info
-                        rows = ["| Drug | Gene | Match | Variants | Tumors | Line of Therapy |",
-                                "|------|------|-------|----------|--------|-----------------|"]
+                        rows = ["| Drug | Gene | Match | Variants | Tumors |",
+                                "|------|------|-------|----------|--------|"]
                         for ev in fda_biomarker_evidence:
                             drug = ev.get('drug_name', 'Unknown')
                             brand = ev.get('brand_name', '')
@@ -1005,8 +1005,7 @@ with tab1:
                             else:
                                 variants_display = specificity or '—'
                             tumors = ', '.join(ev.get('tumor_types', []))[:30] or '—'
-                            line = ev.get('line_of_therapy', '') or '—'
-                            rows.append(f"| {drug_display} | {gene} | {match_display} | {variants_display} | {tumors} | {line} |")
+                            rows.append(f"| {drug_display} | {gene} | {match_display} | {variants_display} | {tumors} |")
 
                         scrollable_table("\n".join(rows))
                     tab_idx += 1
