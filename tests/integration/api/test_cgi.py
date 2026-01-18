@@ -170,7 +170,7 @@ class TestCGIBiomarkerStructure:
         expected_keys = {
             "gene", "alteration", "drug", "drug_status", "association",
             "evidence_level", "source", "tumor_type", "tumor_type_full",
-            "fda_approved"
+            "fda_approved", "fda_url", "comments", "drug_full_name"
         }
 
         for biomarker in biomarkers:

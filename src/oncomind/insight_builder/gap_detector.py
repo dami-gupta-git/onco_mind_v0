@@ -1625,8 +1625,6 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
 
     # Check FDA biomarker evidence (only REQUIRED_POSITIVE, always sensitivity)
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
-    gene = evidence.identifiers.gene.upper() if evidence.identifiers and evidence.identifiers.gene else ""
-    variant = evidence.identifiers.variant if evidence.identifiers else ""
     for ev in evidence.fda_biomarker_evidence:
         if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
             continue
@@ -1634,12 +1632,10 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
             continue
         drug_lower = ev.drug_name.lower()
         sensitive_drugs.setdefault(drug_lower, set()).add("FDA")
-        # Check match level
-        if gene and variant:
-            match_result = ev.matches_variant(gene, variant)
-            if match_result.get("match_type") == "variant":
-                fda_sensitive_variant_level[drug_lower] = True
-                sensitive_variant_level.setdefault(drug_lower, set()).add("FDA")
+        # Check match level using locus_match property (consistent with other evidence types)
+        if ev.locus_match == "variant":
+            fda_sensitive_variant_level[drug_lower] = True
+            sensitive_variant_level.setdefault(drug_lower, set()).add("FDA")
 
     # Check CGI biomarkers (FDA-approved)
     for cgi in evidence.cgi_biomarkers:

@@ -347,7 +347,7 @@ class TestDiscordantEvidenceDetection:
         VICC data is less reliable than FDA, so this is SIGNIFICANT not HIGH.
         """
         from oncomind.models.evidence import Evidence
-        from oncomind.models.evidence.fda import FDAApproval
+        from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence, SpecificityLevel, BiomarkerRequirement
         from oncomind.models.evidence.vicc import VICCEvidence
         from oncomind.models.evidence.evidence import VariantIdentifiers
         from oncomind.models.evidence.base import EvidenceLevel
@@ -358,10 +358,12 @@ class TestDiscordantEvidenceDetection:
                 gene="TEST",
                 variant="V123M"
             ),
-            fda_approvals=[
-                FDAApproval(
+            fda_biomarker_evidence=[
+                FDABiomarkerEvidence(
                     drug_name="Erlotinib",
-                    indication="TEST V123M positive cancer",
+                    gene="TEST",
+                    specificity=SpecificityLevel.VARIANT,
+                    requirement=BiomarkerRequirement.REQUIRED_POSITIVE,
                     locus_variant_match=EvidenceLevel(level="variant"),
                 ),
             ],

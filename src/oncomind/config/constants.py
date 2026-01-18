@@ -1444,8 +1444,11 @@ HOTSPOT_TUMOR_MAPPING: dict[str, list[str]] = {
     # Colorectal/Bowel
     "crc": ["bowel"],
     "colorectal": ["bowel"],
+    "colorectal cancer": ["bowel"],
     "colon": ["bowel"],
+    "colon cancer": ["bowel"],
     "rectal": ["bowel"],
+    "rectal cancer": ["bowel"],
     "coad": ["bowel"],
     "read": ["bowel"],
     "bowel": ["bowel"],

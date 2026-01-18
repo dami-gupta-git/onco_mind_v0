@@ -450,7 +450,7 @@ class TestEndToEndPipeline:
         assert result["evidence_gaps"]["overall_quality"] in ("comprehensive", "moderate")
 
         # Should have therapies
-        assert len(result["recommended_therapies"]) > 0 or len(result.get("fda_approvals", [])) > 0
+        assert len(result["recommended_therapies"]) > 0 or len(result.get("fda_biomarker_evidence", [])) > 0
 
         # Should have well-characterized detailed with basis
         wc_detailed = result["evidence_gaps"]["well_characterized_detailed"]

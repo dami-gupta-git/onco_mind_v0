@@ -1,7 +1,7 @@
 """Integration tests for new evidence model fields.
 
 Tests validate that the new fields added to evidence models
-(CIViCEvidence, VICCEvidence, FDAApproval) are properly populated
+(CIViCEvidence, VICCEvidence, FDABiomarkerEvidence) are properly populated
 and passed through to the frontend via the backend API.
 """
 
@@ -16,7 +16,7 @@ sys.path.insert(0, str(streamlit_dir))
 from oncomind.models.evidence import (
     CIViCEvidence,
     VICCEvidence,
-    FDAApproval,
+    FDABiomarkerEvidence,
     CIViCAssertionEvidence,
 )
 from oncomind.models.evidence.cbioportal import CBioPortalEvidence, CoMutationEntry
@@ -125,63 +125,39 @@ class TestVICCEvidenceNewFields:
         assert evidence.oncokb_level == "1A"
 
 
-class TestFDAApprovalNewFields:
-    """Tests for new FDA approval fields: companion_diagnostic, black_box_warning, dosing_for_variant."""
+class TestFDABiomarkerEvidenceFields:
+    """Tests for FDABiomarkerEvidence model fields."""
 
-    def test_fda_approval_companion_diagnostic_field(self):
-        """FDAApproval should accept companion_diagnostic field."""
-        approval = FDAApproval(
+    def test_fda_biomarker_evidence_creation(self):
+        """FDABiomarkerEvidence should be creatable with required fields."""
+        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
+
+        evidence = FDABiomarkerEvidence(
             drug_name="Vemurafenib",
             brand_name="Zelboraf",
-            generic_name="vemurafenib",
-            indication="Treatment of BRAF V600E-mutant melanoma",
-            companion_diagnostic="cobas 4800 BRAF V600 Mutation Test",
-        )
-        assert approval.companion_diagnostic == "cobas 4800 BRAF V600 Mutation Test"
-
-    def test_fda_approval_black_box_warning_field(self):
-        """FDAApproval should accept black_box_warning field."""
-        approval = FDAApproval(
-            drug_name="Vemurafenib",
-            brand_name="Zelboraf",
-            black_box_warning="New primary cutaneous malignancies can occur",
-        )
-        assert approval.black_box_warning == "New primary cutaneous malignancies can occur"
-
-    def test_fda_approval_dosing_for_variant_field(self):
-        """FDAApproval should accept dosing_for_variant field."""
-        approval = FDAApproval(
-            drug_name="Vemurafenib",
-            brand_name="Zelboraf",
-            dosing_for_variant="960 mg orally twice daily",
-        )
-        assert approval.dosing_for_variant == "960 mg orally twice daily"
-
-    def test_fda_approval_all_new_fields(self):
-        """FDAApproval should support all new fields together."""
-        approval = FDAApproval(
-            drug_name="Vemurafenib",
-            brand_name="Zelboraf",
-            generic_name="vemurafenib",
-            indication="Treatment of BRAF V600E-mutant melanoma",
             gene="BRAF",
-            companion_diagnostic="cobas 4800 BRAF V600 Mutation Test",
-            black_box_warning="New primary cutaneous malignancies can occur",
-            dosing_for_variant="960 mg orally twice daily",
+            specificity=SpecificityLevel.VARIANT,
+            requirement=BiomarkerRequirement.REQUIRED_POSITIVE,
         )
-        assert approval.companion_diagnostic is not None
-        assert approval.black_box_warning is not None
-        assert approval.dosing_for_variant is not None
+        assert evidence.drug_name == "Vemurafenib"
+        assert evidence.brand_name == "Zelboraf"
+        assert evidence.gene == "BRAF"
+        assert evidence.specificity == SpecificityLevel.VARIANT
 
-    def test_fda_approval_new_fields_optional(self):
-        """FDAApproval new fields should be optional."""
-        approval = FDAApproval(
+    def test_fda_biomarker_evidence_with_tumor_types(self):
+        """FDABiomarkerEvidence should accept tumor_types."""
+        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
+
+        evidence = FDABiomarkerEvidence(
             drug_name="Vemurafenib",
             brand_name="Zelboraf",
+            gene="BRAF",
+            specificity=SpecificityLevel.VARIANT,
+            requirement=BiomarkerRequirement.REQUIRED_POSITIVE,
+            tumor_types=["Melanoma", "NSCLC"],
         )
-        assert approval.companion_diagnostic is None
-        assert approval.black_box_warning is None
-        assert approval.dosing_for_variant is None
+        assert "Melanoma" in evidence.tumor_types
+        assert "NSCLC" in evidence.tumor_types
 
 
 class TestCIViCAssertionFields:
@@ -271,8 +247,8 @@ class TestBackendNewFields:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_backend_fda_approvals_has_new_fields(self):
-        """Backend fda_approvals should include new clinical fields."""
+    async def test_backend_fda_biomarker_evidence_has_fields(self):
+        """Backend fda_biomarker_evidence should include expected fields."""
         result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
@@ -281,14 +257,15 @@ class TestBackendNewFields:
         )
 
         assert "error" not in result
-        fda_approvals = result.get("fda_approvals", [])
+        fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
 
-        # Verify structure includes new fields (may be None if not populated by API)
-        if fda_approvals:
-            for entry in fda_approvals:
-                assert "companion_diagnostic" in entry
-                assert "black_box_warning" in entry
-                assert "dosing_for_variant" in entry
+        # Verify structure includes expected fields
+        if fda_biomarker_evidence:
+            for entry in fda_biomarker_evidence:
+                assert "drug_name" in entry
+                assert "brand_name" in entry
+                assert "specificity" in entry
+                assert "requirement" in entry
 
 
 class TestBackendAnnotationsTab:
@@ -362,7 +339,7 @@ class TestBackendEvidenceStructure:
 
         # All evidence types should be present (even if empty lists/None)
         expected_keys = [
-            "fda_approvals",
+            "fda_biomarker_evidence",
             "civic_assertions",
             "civic_evidence",
             "vicc_evidence",
@@ -382,8 +359,8 @@ class TestBackendEvidenceStructure:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_backend_kras_g12c_has_fda_approvals(self):
-        """BRAF V600E should have FDA approvals with all expected fields."""
+    async def test_backend_kras_g12c_has_fda_biomarker_evidence(self):
+        """KRAS G12C should have FDA biomarker evidence."""
         result = await get_variant_insight(
             gene="KRAS",
             variant="G12C",
@@ -393,13 +370,18 @@ class TestBackendEvidenceStructure:
         )
 
         assert "error" not in result
-        fda_approvals = result.get("fda_approvals", [])
-        assert fda_approvals
+        fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
+        assert fda_biomarker_evidence
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_backend_kras_g12d(self):
-        """BRAF V600E should have FDA approvals with all expected fields."""
+        """KRAS G12D should NOT have FDA biomarker evidence.
+
+        Unlike KRAS G12C which has sotorasib/adagrasib, G12D has no
+        FDA-approved targeted therapy. This test verifies the API
+        correctly returns no FDA biomarker evidence for this variant.
+        """
         result = await get_variant_insight(
             gene="KRAS",
             variant="G12D",
@@ -409,14 +391,14 @@ class TestBackendEvidenceStructure:
         )
 
         assert "error" not in result
-        fda_approvals = result.get("fda_approvals", [])
-        assert fda_approvals
-
+        fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
+        # KRAS G12D has no FDA-approved targeted therapy (only G12C does)
+        assert len(fda_biomarker_evidence) == 0
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_backend_akt1_e17k(self):
-        """BRAF V600E should have FDA approvals with all expected fields."""
+        """AKT1 E17K should have FDA biomarker evidence."""
         result = await get_variant_insight(
             gene="AKT1",
             variant="E17K",
@@ -426,13 +408,13 @@ class TestBackendEvidenceStructure:
         )
 
         assert "error" not in result
-        fda_approvals = result.get("fda_approvals", [])
-        assert len(fda_approvals) == 1
+        fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
+        assert len(fda_biomarker_evidence) == 1
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_backend_braf_v600e_has_fda_approvals(self):
-        """BRAF V600E should have FDA approvals with all expected fields."""
+    async def test_backend_braf_v600e_has_fda_biomarker_evidence(self):
+        """BRAF V600E should have FDA biomarker evidence with expected fields."""
         result = await get_variant_insight(
             gene="BRAF",
             variant="V600E",
@@ -441,31 +423,22 @@ class TestBackendEvidenceStructure:
         )
 
         assert "error" not in result
-        fda_approvals = result.get("fda_approvals", [])
+        fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
 
         # BRAF V600E has multiple FDA-approved drugs
-        assert len(fda_approvals) >= 1, "BRAF V600E should have at least 1 FDA approval"
+        assert len(fda_biomarker_evidence) >= 1, "BRAF V600E should have at least 1 FDA biomarker evidence"
 
-        # Verify all expected fields are present in each FDA approval
-        # Note: backend.py manually constructs this dict, so it's a subset of FDAApproval fields
+        # Verify expected fields are present
         expected_fields = [
             "drug_name",
             "brand_name",
-            "generic_name",
-            "indication",
-            "companion_diagnostic",
-            "black_box_warning",
-            "dosing_for_variant",
-            "locus_match",
+            "specificity",
+            "requirement",
         ]
 
-        for approval in fda_approvals:
+        for evidence in fda_biomarker_evidence:
             for field in expected_fields:
-                assert field in approval, f"Missing field '{field}' in FDA approval: {approval.get('drug_name')}"
-
-            # locus_match should be one of: variant, codon, gene
-            locus = approval.get("locus_match")
-            assert locus in ("variant", "codon", "gene"), f"Invalid locus_match: {locus}"
+                assert field in evidence, f"Missing field '{field}' in FDA evidence: {evidence.get('drug_name')}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio

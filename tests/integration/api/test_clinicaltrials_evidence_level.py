@@ -61,10 +61,10 @@ class TestClinicalTrialsEvidenceLevelIntegration:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_biomarker_search_gene_level(self):
-        """Test that gene-level trials have locus_variant_match.level == 'gene'.
+        """Test that trials have locus_variant_match with valid levels.
 
-        When a trial mentions the gene but not the specific variant,
-        it should be marked as gene-level.
+        Trials can match at variant, codon, or gene level depending on
+        how the trial describes its biomarker requirements.
         """
         async with ClinicalTrialsClient() as client:
             results = await client.search_trial_evidence(
@@ -80,10 +80,11 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         # Check EvidenceLevel fields
         for trial in results:
             assert trial.locus_variant_match is not None
-            assert trial.locus_variant_match.level in ("variant", "gene")
+            # Level can be variant (exact match), codon (e.g. G12), or gene
+            assert trial.locus_variant_match.level in ("variant", "codon", "gene")
             assert trial.locus_variant_match.origin == "trial"
 
-            if trial.locus_variant_match.level == "variant":
+            if trial.locus_variant_match.level in ("variant", "codon"):
                 # Scope can be "specific" (exact match) or "ambiguous" (codon-level match)
                 assert trial.locus_variant_match.scope in ("specific", "ambiguous")
             else:
@@ -109,7 +110,9 @@ class TestClinicalTrialsEvidenceLevelIntegration:
             assert trial.cancer_type_match is not None, (
                 f"Trial {trial.nct_id} should have cancer_type_match when tumor_type provided"
             )
-            assert trial.cancer_type_match.level in ("cancer_specific", "pan_cancer")
+            # level can be "cancer_specific" if trial conditions match tumor_type,
+            # or None if trial has the biomarker but doesn't match the tumor type
+            assert trial.cancer_type_match.level in ("cancer_specific", "pan_cancer", None)
             assert trial.cancer_type_match.origin == "trial"
 
     @pytest.mark.integration
