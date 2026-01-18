@@ -364,6 +364,9 @@ class FDALabelParser:
             if not section_content:
                 continue
 
+
+
+
             # OpenFDA returns lists of strings
             text = ' '.join(section_content) if isinstance(section_content, list) else section_content
 
@@ -372,6 +375,7 @@ class FDALabelParser:
 
             # Split into indication blocks (numbered sections like "1.1", "1.2")
             indication_blocks = self._split_indication_blocks(text)
+
 
             for block in indication_blocks:
                 block_indications = self._parse_indication_block(
@@ -398,6 +402,12 @@ class FDALabelParser:
 
     def _split_indication_blocks(self, text: str) -> list[str]:
         """Split indication text into separate indication blocks."""
+
+        # Split off "Limitation of Use" sections first - discard them
+        limitation_split = re.split(r'Limitation(?:s)?\s+of\s+Use\s*:', text, flags=re.IGNORECASE)
+        if len(limitation_split) > 1:
+            text = limitation_split[0]
+
         # Pattern for numbered sections like "1.1", "( 1.2 )", etc.
         split_pattern = r'(?:^|\s)(?:\(\s*)?(\d+\.\d+)(?:\s*\))?(?:\s|$)'
 
@@ -769,6 +779,9 @@ class OpenFDAClient:
         """
         Fetch all FDA labels that mention a specific gene/biomarker.
 
+        Searches using both the gene symbol (e.g., "EGFR") and full names
+        (e.g., "epidermal growth factor receptor") to ensure comprehensive coverage.
+
         Args:
             gene: Gene symbol (e.g., "EGFR", "BRAF")
             limit: Maximum number of labels to return
@@ -776,15 +789,24 @@ class OpenFDAClient:
         Returns:
             List of label data dicts
         """
-        # Search in indications_and_usage section
-        search = f'indications_and_usage:"{gene}"'
+        from oncomind.config.constants import GENE_FULL_NAMES
+
+        # Build search terms: gene symbol + full names
+        search_terms = [gene]
+        gene_upper = gene.upper()
+        if gene_upper in GENE_FULL_NAMES:
+            search_terms.extend(GENE_FULL_NAMES[gene_upper])
+
+        # Build OR query for all search terms
+        # Quote each term and join with OR
+        search_parts = [f'indications_and_usage:"{term}"' for term in search_terms]
+        search = " OR ".join(search_parts)
         params = {"search": search, "limit": limit}
 
         try:
             resp = requests.get(self.BASE_URL, params=params, timeout=30)
             resp.raise_for_status()
             data = resp.json()
-
             return data.get("results", [])
         except Exception as e:
             print(f"Error fetching labels for {gene}: {e}")
@@ -813,6 +835,7 @@ def get_fda_approved_drugs_for_variant(
 
     # Fetch all labels mentioning this gene
     labels = client.fetch_labels_by_gene(gene)
+
 
     all_matches = []
 

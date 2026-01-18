@@ -213,36 +213,6 @@ async def batch_get_variant_insights(
 # === Private helper functions ===
 
 
-def _sort_fda_labels(labels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Sort FDA labels by match level (variant > codon > gene).
-
-    Args:
-        labels: List of FDA label dicts with biomarker_match info
-
-    Returns:
-        Sorted list with variant-level matches first
-    """
-    def sort_key(label: Dict[str, Any]) -> tuple:
-        # Get match level from biomarker_match
-        biomarker_match = label.get("biomarker_match") or {}
-        match_level = biomarker_match.get("match_level", "gene")
-
-        # Priority: variant (0) > codon (1) > gene (2) > unknown (3)
-        level_priority = {
-            "variant": 0,
-            "codon": 1,
-            "gene": 2,
-        }
-        priority = level_priority.get(match_level, 3)
-
-        # Secondary sort by drug name for stability
-        drug_name = (label.get("drug") or "").lower()
-
-        return (priority, drug_name)
-
-    return sorted(labels, key=sort_key)
-
-
 def _is_kit_false_positive(indication_text: str | None) -> bool:
     """Check if an FDA label is a KIT false positive (diagnostic kit, not KIT gene).
 
@@ -464,64 +434,7 @@ def _build_response(result) -> Dict[str, Any]:
             "consequence": result.identifiers.transcript_consequence,
         },
         # Per-source evidence (flat lists - frontend decides how to display)
-        # Note: fda_approvals has been removed - using fda_biomarker_evidence exclusively
-        # The frontend FDA tab now uses fda_biomarker_evidence directly
-        "fda_labels": _sort_fda_labels([
-            {
-                "drug": l.drug,
-                "gene": l.gene,
-                "brand_name": l.brand_name,
-                "generic_name": l.generic_name,
-                "manufacturer": l.manufacturer,
-                "indications_and_usage": l.indications_and_usage,
-                "clinical_studies": {
-                    "trial_name": l.clinical_studies.trial_name,
-                    "nct_id": l.clinical_studies.nct_id,
-                    "patients_n": l.clinical_studies.patients_n,
-                    "pfs_months_treatment": l.clinical_studies.pfs_months_treatment,
-                    "pfs_months_control": l.clinical_studies.pfs_months_control,
-                    "hazard_ratio": l.clinical_studies.hazard_ratio,
-                    "hazard_ratio_ci": l.clinical_studies.hazard_ratio_ci,
-                    "orr_treatment": l.clinical_studies.orr_treatment,
-                    "orr_control": l.clinical_studies.orr_control,
-                    "biomarker_breakdown": l.clinical_studies.biomarker_breakdown,
-                } if l.clinical_studies else None,
-                "mechanism_of_action": {
-                    "targets": l.mechanism_of_action.targets,
-                    "mechanism": l.mechanism_of_action.mechanism,
-                    "preclinical": l.mechanism_of_action.preclinical,
-                } if l.mechanism_of_action else None,
-                "adverse_reactions": {
-                    "common_toxicities": l.adverse_reactions.common_toxicities,
-                    "serious_rate": l.adverse_reactions.serious_rate,
-                    "discontinuation_rate": l.adverse_reactions.discontinuation_rate,
-                } if l.adverse_reactions else None,
-                "effective_time": l.effective_time,
-                "approved_indications": l.approved_indications or [],
-                "last_label_update": l.last_label_update,
-                "update_reason": l.update_reason,
-                "clinical_studies_text": l.clinical_studies_text,
-                "mechanism_of_action_text": l.mechanism_of_action_text,
-                "adverse_reactions_text": l.adverse_reactions_text,
-                # Match specificity tracking
-                "locus_match": l.locus_match,
-                "biomarker_match": {
-                    "matched": l.biomarker_match.matched,
-                    "match_level": l.biomarker_match.match_level,
-                    "tumor_matched": l.biomarker_match.tumor_matched,
-                    "tumor_match_type": l.biomarker_match.tumor_match_type,
-                    "combination_partners": l.biomarker_match.combination_partners,
-                } if l.biomarker_match else None,
-            }
-            for l in evidence.fda_labels
-            # Filter: gene must match AND tumor must match (or be pan-cancer)
-            # Also filter out biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
-            # And filter out KIT false positives (diagnostic kits, not KIT oncogene)
-            if (l.gene and l.gene.upper() == queried_gene
-                and l.biomarker_match and l.biomarker_match.tumor_matched
-                and not is_biomarker_selection_drug(l.drug or l.generic_name or l.brand_name or "", queried_gene)
-                and not (queried_gene == "KIT" and _is_kit_false_positive(l.indications_and_usage)))
-        ]),
+        # FDA biomarker evidence with negation detection from FDALabelParser
         "fda_biomarker_evidence": _dedupe_fda_biomarker_evidence([
             {
                 "drug_name": e.drug_name,

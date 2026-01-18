@@ -41,14 +41,6 @@ from oncomind.models.extracted.evidence_gaps import (
     GapCategory,
     GapSeverity,
 )
-from oncomind.models.evidence.fda import (
-    BiomarkerMatch,
-    FDAApproval,
-    FDALabelEvidence,
-    ClinicalStudyEvidence,
-    MechanismEvidence,
-    AdverseReactionsEvidence,
-)
 from oncomind.models.evidence.fda_biomarker import (
     FDABiomarkerEvidence,
     BiomarkerRequirement,
@@ -96,12 +88,6 @@ __all__ = [
     "GeneDependency",
     "DrugSensitivity",
     "CellLineModel",
-    "BiomarkerMatch",
-    "FDAApproval",
-    "FDALabelEvidence",
-    "ClinicalStudyEvidence",
-    "MechanismEvidence",
-    "AdverseReactionsEvidence",
     "FDABiomarkerEvidence",
     "BiomarkerRequirement",
     "SpecificityLevel",

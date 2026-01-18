@@ -313,7 +313,6 @@ with tab1:
             depmap = result.get('depmap_evidence')
             hotspots = result.get('hotspots_evidence')
             therapies = result.get('recommended_therapies', [])
-            fda_labels = result.get('fda_labels', [])
             fda_biomarker_evidence = result.get('fda_biomarker_evidence', [])
 
             # Build tab names
@@ -336,12 +335,9 @@ with tab1:
             all_cgi_count = len(cgi_biomarkers) + len(preclinical) + len(early_phase)
             if all_cgi_count > 0:
                 tab_names.append(f"CGI ({all_cgi_count})")
-            # FDA tab - shows FDA label data (clinical studies, mechanism, toxicity)
-            if fda_labels:
-                tab_names.append(f"💊 FDA ({len(fda_labels)})")
-            # FDA Biomarker tab - new parsed FDA label indications
+            # FDA tab - FDA biomarker-drug indications with negation detection
             if fda_biomarker_evidence:
-                tab_names.append(f"🏷️ FDA Biomarker ({len(fda_biomarker_evidence)})")
+                tab_names.append(f"💊 FDA ({len(fda_biomarker_evidence)})")
             if clinvar_entries or clinvar_sig:
                 tab_names.append("ClinVar")
             if cosmic_id:
@@ -969,130 +965,7 @@ with tab1:
                                 render_cgi_table(preclinical, show_level=True)
                     tab_idx += 1
 
-                # FDA Labels tab - shows detailed drug label information
-                if fda_labels:
-                    with tabs[tab_idx]:
-                        st.caption("FDA drug label data from OpenFDA • Click to expand")
-
-                        # Use columns: drugs on left, legend on right
-                        fda_col, legend_col = st.columns([4, 1])
-
-                        # Render legend (consistent with other tabs)
-                        legend_col.markdown("""<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 10px;'>
-<b>FDA Approval Match:</b><br/>
-🟢 Matched<br/>
-🔴 Not Matched<br/>
-<br/>
-<b>Locus Level:</b><br/>
-🎯 Variant (exact)<br/>
-◐ Codon (same position)<br/>
-🧬 Gene (any alteration)<br/>
-<br/>
-<b>Tumor Match:</b><br/>
-✅ Yes<br/>
-🌐 Pan-cancer<br/>
-🔸 Other
-</div>""", unsafe_allow_html=True)
-
-                        # Scrollable container for FDA labels
-                        with fda_col:
-                            fda_container = st.container(height=400)
-                            with fda_container:
-                                for label in fda_labels:
-                                    drug_name = label.get('drug', 'Unknown')
-                                    brand = label.get('brand_name', '')
-
-                                    # Clinical studies data
-                                    cs = label.get('clinical_studies') or {}
-                                    nct_id = cs.get('nct_id', '')
-                                    hr = cs.get('hazard_ratio')
-                                    hr_ci = cs.get('hazard_ratio_ci')
-
-                                    # Format HR with 95% CI
-                                    if hr:
-                                        hr_str = f"{hr:.2f}"
-                                        if hr_ci:
-                                            hr_str += f" ({hr_ci[0]:.2f}-{hr_ci[1]:.2f})"
-                                    else:
-                                        hr_str = None
-
-                                    # Mechanism targets
-                                    moa = label.get('mechanism_of_action') or {}
-                                    targets = moa.get('targets', [])
-
-                                    # Biomarker match icons:
-                                    # - 🟢/🔴 for whether variant is covered by FDA approval
-                                    # - 🎯/◐/🧬 for match level (variant/codon/gene)
-                                    # - ✅/🌐/🔸 for tumor match
-                                    biomarker_match = label.get('biomarker_match') or {}
-                                    is_matched = biomarker_match.get('matched', False)
-                                    match_icon = "🟢" if is_matched else "🔴"
-                                    match_level = biomarker_match.get('match_level')
-                                    level_icon = {"variant": "🎯", "codon": "◐", "gene": "🧬"}.get(match_level, "")
-
-                                    # Tumor match icon (consistent with other tabs)
-                                    # tumor=✅, pan_cancer=🌐, other=🔸
-                                    tumor_matched = biomarker_match.get('tumor_matched')
-                                    tumor_match_type = biomarker_match.get('tumor_match_type')
-                                    if tumor_matched is True:
-                                        tumor_icon = "🌐" if tumor_match_type == "pan_cancer" else "✅"
-                                    elif tumor_matched is False:
-                                        tumor_icon = "🔸"
-                                    else:
-                                        tumor_icon = ""  # None means no tumor type was queried
-
-                                    # Build expander header with biomarker icons at the beginning, tumor icon at end
-                                    icons = f"{match_icon} {level_icon}".strip()
-                                    drug_display = f"{icons} **{drug_name}** ({brand})" if brand else f"{icons} **{drug_name}**"
-                                    header_parts = [drug_display]
-                                    if targets:
-                                        header_parts.append(f"Targets: {', '.join(targets)}")
-                                    if nct_id:
-                                        header_parts.append(f"NCT: {nct_id}")
-                                    if hr_str:
-                                        header_parts.append(f"HR: {hr_str}")
-                                    # Add tumor icon at the end of the header
-                                    if tumor_icon:
-                                        header_parts.append(tumor_icon)
-                                    header = " | ".join(header_parts)
-
-                                    search_term = brand if brand else drug_name
-                                    fda_url = f"https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&varq={search_term}"
-
-                                    with st.expander(header):
-                                        approved_indications = label.get('approved_indications', [])
-                                        indications = label.get('indications_and_usage', '') or '-'
-
-                                        st.markdown(f"[View FDA Label]({fda_url})")
-                                        if approved_indications:
-                                            st.markdown(f"**Approved for:** {', '.join(approved_indications)}")
-                                        st.markdown(f"**Indications & Usage:** {indications}")
-
-                                        # Add a divider before match status
-                                        st.divider()
-
-                                        # Show match summary at the end (consistent with other tabs)
-                                        match_parts = []
-                                        if is_matched:
-                                            level_text = {"variant": "exact variant", "codon": "codon", "gene": "gene-level"}.get(match_level, "")
-                                            match_parts.append(f"✓ FDA Approval ({level_text})")
-                                        else:
-                                            match_parts.append("✗ FDA Approval not matched")
-
-                                        if tumor_matched is True:
-                                            if tumor_match_type == "pan_cancer":
-                                                match_parts.append("🌐 Tumor (pan-cancer)")
-                                            else:
-                                                match_parts.append("✅ Tumor")
-                                        elif tumor_matched is False:
-                                            match_parts.append("🔸 Tumor (other)")
-
-                                        if match_parts:
-                                            st.markdown(f"**Match Status:** {' | '.join(match_parts)}")
-
-                    tab_idx += 1
-
-                # FDA Biomarker tab - new parsed indications
+                # FDA tab - biomarker-drug indications with negation detection
                 if fda_biomarker_evidence:
                     with tabs[tab_idx]:
                         st.caption("FDA biomarker-drug indications parsed from drug labels")

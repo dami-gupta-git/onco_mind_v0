@@ -30,7 +30,6 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env file before accessing environment variables
 
 from oncomind.api.myvariant import MyVariantClient
-from oncomind.api.fda import FDAClient
 from oncomind.api.cgi import CGIClient
 from oncomind.api.oncotree import OncoTreeClient
 from oncomind.api.vicc import VICCClient
@@ -41,8 +40,7 @@ from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
-from oncomind.api.fda_drugs import ensure_fda_labels_cached, search_fda_by_biomarker, FDALabelInfo, get_fda_labels_for_biomarker
-from oncomind.api.fda_label_service import collect_all_drugs
+from oncomind.api.fda_drugs import search_fda_by_biomarker, FDALabelInfo, get_fda_labels_for_biomarker
 from oncomind.api.fda_label_parser import FDALabelParser
 
 from oncomind.models.evidence import (
@@ -56,10 +54,6 @@ from oncomind.models.evidence import (
     CIViCAssertionEvidence,
     CIViCEvidence,
     ClinicalTrialEvidence,
-    FDALabelEvidence,
-    ClinicalStudyEvidence,
-    MechanismEvidence,
-    AdverseReactionsEvidence,
     FDABiomarkerEvidence,
     HotspotsEvidence,
     PubMedEvidence,
@@ -67,12 +61,6 @@ from oncomind.models.evidence import (
 )
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
-
-from oncomind.insight_builder.fda_processor import (
-    sort_fda_by_association,
-    populate_locus_variant_match,
-)
-from oncomind.api.fda_label_service import get_fda_labels_for_drugs_async
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -183,7 +171,6 @@ class EvidenceAggregator:
         """Initialize all API clients based on configuration."""
         # Core clients (always enabled)
         self.myvariant_client = MyVariantClient()
-        self.fda_client = FDAClient()
         self.cgi_client = CGIClient()
         self.oncotree_client = OncoTreeClient()
         self.cbioportal_client = CBioPortalClient()
@@ -212,7 +199,6 @@ class EvidenceAggregator:
         # Note: cgi_client is synchronous, not an async context manager
         clients = [
             self.myvariant_client,
-            self.fda_client,
             self.oncotree_client,
             self.cbioportal_client,
             self.depmap_client,
@@ -357,61 +343,6 @@ class EvidenceAggregator:
             if not b.fda_approved and b.evidence_level not in ("Pre-clinical", "Cell line", None)
         ]
         return fda_approved, preclinical, early_phase
-
-    def _collect_fda_approved_drugs(
-        self,
-        evidence: Evidence,
-    ) -> set[str]:
-        """Collect FDA-approved drug names from evidence.
-
-        Collects drug names from CGI, CIViC, VICC, and FDA oncology biomarkers.
-        Only includes drugs that have FDA approval status.
-
-        Args:
-            evidence: The assembled Evidence object
-
-        Returns:
-            Set of drug names to look up FDA labels for
-        """
-        gene = evidence.identifiers.gene
-
-        # Only collect FDA-APPROVED drugs for FDA label lookup
-        # We don't want to attempt lookups for experimental drugs (MK-2206, AZD5363, etc.)
-        # as they don't have FDA labels and just create noise in the logs
-        cgi_drugs: list[str] = []
-        civic_drugs: list[str] = []
-        vicc_drugs: list[str] = []
-
-        # Only collect drugs from CGI biomarkers that are FDA-approved
-        for b in evidence.cgi_biomarkers or []:
-            if b.drug and b.fda_approved:
-                cgi_drugs.append(b.drug)
-
-        # From CIViC, only collect drugs with FDA approval level (Level A)
-        for a in evidence.civic_assertions or []:
-            if a.therapies and a.amp_level == "Tier I - Level A":
-                for therapy in a.therapies:
-                    civic_drugs.append(therapy)
-
-        # From VICC, only collect Level 1 FDA-approved evidence
-        for v in evidence.vicc_evidence or []:
-            if v.drugs and v.evidence_level in ("Level 1", "Level A"):
-                for drug in v.drugs:
-                    vicc_drugs.append(drug)
-
-        # Use the FDA label service to collect all drugs
-        # This also adds drugs from fda_oncology_biomarkers.xlsx for the gene
-        all_drugs = collect_all_drugs(
-            gene=gene,
-            cgi_drugs=cgi_drugs,
-            civic_drugs=civic_drugs,
-            vicc_drugs=vicc_drugs,
-        )
-
-        if not all_drugs:
-            logger.debug(f"No drugs found for gene {gene}")
-
-        return all_drugs
 
     def _process_cbioportal_result(
         self, result: Any, tracker: FetchResults
@@ -645,39 +576,7 @@ class EvidenceAggregator:
         )
         source_timings["assemble"] = time.time() - t0
 
-        # Collect FDA-approved drug names from evidence
-        # Then build therapies (which internally fetches labels and converts them)
-        all_drugs = self._collect_fda_approved_drugs(evidence)
-
-        # Add drugs from FDA biomarker search (direct OpenFDA search by gene)
-        # This catches recent FDA approvals not yet in curated databases
-        # Normalize to title case for consistency with existing drug names
-        existing_lower = {d.lower() for d in all_drugs}
-        for fda_label in tracker.fda_biomarker_labels:
-            drug_name = fda_label.generic_name or fda_label.brand_name
-            if drug_name and drug_name.lower() not in existing_lower:
-                # Use title case for consistency
-                normalized_name = drug_name.title()
-                all_drugs.add(normalized_name)
-                existing_lower.add(drug_name.lower())
-                logger.debug(f"Added {normalized_name} from FDA biomarker search")
-
-        # Fetch FDA labels for drugs and populate locus_variant_match (async parallel)
-        t0 = time.time()
-        evidence.fda_labels = await get_fda_labels_for_drugs_async(
-            drugs=all_drugs,
-            gene=gene,
-            fetch_missing=True,
-        )
-        source_timings["FDA_labels"] = time.time() - t0
-
-        populate_locus_variant_match(
-            evidence.fda_labels,
-            query_variant=normalized_variant,
-            query_tumor=resolved_tumor,
-        )
-
-        # Note: fda_approvals has been removed - now using fda_biomarker_evidence exclusively
+        # Note: fda_labels has been removed - using fda_biomarker_evidence exclusively
         # which is populated from FDALabelParser with proper negation detection
 
         total_time = time.time() - total_start
@@ -815,7 +714,7 @@ class EvidenceAggregator:
                     gene=gene,
                     variant=variant,
                     tumor_type=tumor_type,
-                    limit=50,
+                    limit=500,
                 )
 
                 if not raw_labels:
@@ -823,7 +722,7 @@ class EvidenceAggregator:
 
                 # Parse labels into BiomarkerIndication objects
                 parser = FDALabelParser()
-                all_indications = []
+                all_indications: list[FDABiomarkerEvidence] = []
                 for label_data in raw_labels:
                     try:
                         indications = parser.parse_label(label_data)
@@ -843,14 +742,40 @@ class EvidenceAggregator:
                         logger.warning(f"Failed to parse FDA label: {parse_err}")
                         continue
 
-                return all_indications
+                # Match each indication against the query variant
+                matched_indications: list[FDABiomarkerEvidence] = []
+                for evidence in all_indications:
+                    match_result = evidence.matches_variant(gene, variant)
+
+                    # Skip indications for different genes
+                    if match_result["match_type"] is None and "Different gene" in match_result.get("reason", ""):
+                        continue
+
+                    # Populate match result fields on the evidence
+                    evidence.variant_match_result = match_result["match_type"]
+                    evidence.variant_match_reason = match_result["reason"]
+
+                    # Only include:
+                    # 1. True matches (exact, codon, gene level approvals)
+                    # 2. Exclusions (drugs contraindicated for this variant - important safety info)
+                    # Skip: different_variant, different_codon, same_codon_different_variant
+                    if match_result["matches"] or match_result["match_type"] == "excluded":
+                        matched_indications.append(evidence)
+
+                # Sort: matches first, then exclusions
+                matched_indications.sort(key=lambda x: (
+                    not (x.variant_match_result in ("exact", "codon", "gene")),  # Matches first
+                    x.variant_match_result != "exact",  # Exact matches before partial
+                    x.variant_match_result == "excluded",  # Exclusions last
+                ))
+
+                return matched_indications
             except Exception as e:
                 logger.warning(f"FDA biomarker parsed fetch failed for {gene}: {e}")
                 return []
 
         results = await asyncio.gather(
             timed_fetch("MyVariant", self.myvariant_client.fetch_evidence(gene=gene, variant=variant)),
-            timed_fetch("FDA", self.fda_client.fetch_approval_evidence(gene=gene, variant=variant)),
             timed_fetch("CGI", asyncio.to_thread(self.cgi_client.fetch_biomarker_evidence, gene, variant, tumor_type)),
             timed_fetch("VICC", fetch_vicc()),
             timed_fetch("CIViC_assertions", fetch_civic_assertions()),
@@ -878,7 +803,7 @@ class EvidenceAggregator:
     ) -> Evidence:
         """Assemble Evidence from fetch results."""
         (
-            myvariant_result, fda_result, cgi_result, vicc_result, civic_assertions_result,
+            myvariant_result, cgi_result, vicc_result, civic_assertions_result,
             civic_evidence_result, trials_result, literature_result, cbioportal_result,
             cell_lines_result, depmap_result, fda_biomarker_result, fda_biomarker_parsed_result,
         ) = results
@@ -887,11 +812,6 @@ class EvidenceAggregator:
 
         # Process standard results
         myvariant_evidence = tracker.handle_result(myvariant_result, "MyVariant")
-        # FDA Label API results - currently disabled in favor of CGI structured data
-        # FDA Label API can return false positives (e.g., RYDAPT for GIST when it's only
-        # approved for systemic mastocytosis, because both diseases have KIT D816V)
-        # fda_approvals_raw: list[FDAApproval] = tracker.handle_result(fda_result, "FDA") or []
-        _ = tracker.handle_result(fda_result, "FDA")  # Still track for logging but don't use
         all_cgi: list[CGIBiomarkerEvidence] = tracker.handle_result(cgi_result, "CGI") or []
         vicc_evidence: list[VICCEvidence] = tracker.handle_result(vicc_result, "VICC") or []
         civic_assertions: list[CIViCAssertionEvidence] = tracker.handle_result(civic_assertions_result, "CIViC") or []

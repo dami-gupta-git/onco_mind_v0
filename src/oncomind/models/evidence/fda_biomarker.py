@@ -48,7 +48,7 @@ class FDABiomarkerEvidence(EvidenceItemBase):
     """FDA biomarker-drug indication parsed from drug label.
 
     This model represents a single biomarker-drug-tumor association extracted
-    from an FDA drug label. Unlike FDAApproval which is derived from multiple
+    from an FDA drug label. This comes directly from parsing FDA label text
     sources, this comes directly from parsing FDA label text.
 
     Inherits from EvidenceItemBase which provides:

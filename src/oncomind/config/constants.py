@@ -53,6 +53,57 @@ GENE_ALIASES: dict[str, list[str]] = {
     "BRCA2": ["BRCA", "gBRCA"],
 }
 
+# =============================================================================
+# GENE FULL NAMES
+# =============================================================================
+# Maps gene symbols to their full protein/receptor names as used in FDA labels
+# FDA labels often use full names like "epidermal growth factor receptor" instead of "EGFR"
+
+GENE_FULL_NAMES: dict[str, list[str]] = {
+    "EGFR": ["epidermal growth factor receptor", "egfr"],
+    "ERBB2": ["human epidermal growth factor receptor 2", "her2", "her-2", "erbb2"],
+    "HER2": ["human epidermal growth factor receptor 2", "her2", "her-2", "erbb2"],
+    "ALK": ["anaplastic lymphoma kinase", "alk"],
+    "ROS1": ["ros proto-oncogene 1", "ros1", "c-ros"],
+    "BRAF": ["b-raf", "braf", "b-raf proto-oncogene"],
+    "KRAS": ["kirsten rat sarcoma", "kras", "k-ras"],
+    "NRAS": ["neuroblastoma ras", "nras", "n-ras"],
+    "MET": ["met proto-oncogene", "hepatocyte growth factor receptor", "hgfr", "c-met"],
+    "RET": ["ret proto-oncogene", "rearranged during transfection"],
+    "NTRK1": ["neurotrophic tyrosine receptor kinase 1", "trka", "ntrk1"],
+    "NTRK2": ["neurotrophic tyrosine receptor kinase 2", "trkb", "ntrk2"],
+    "NTRK3": ["neurotrophic tyrosine receptor kinase 3", "trkc", "ntrk3"],
+    "FGFR1": ["fibroblast growth factor receptor 1", "fgfr1"],
+    "FGFR2": ["fibroblast growth factor receptor 2", "fgfr2"],
+    "FGFR3": ["fibroblast growth factor receptor 3", "fgfr3"],
+    "KIT": ["kit proto-oncogene", "c-kit", "cd117", "stem cell factor receptor"],
+    "PDGFRA": ["platelet-derived growth factor receptor alpha", "pdgfra", "cd140a"],
+    "PDGFRB": ["platelet-derived growth factor receptor beta", "pdgfrb", "cd140b"],
+    "PIK3CA": ["phosphatidylinositol-4,5-bisphosphate 3-kinase catalytic subunit alpha", "pi3k", "pik3ca"],
+    "AKT1": ["akt serine/threonine kinase 1", "protein kinase b", "pkb", "akt1"],
+    "BRCA1": ["brca1", "breast cancer 1", "brca1 dna repair associated"],
+    "BRCA2": ["brca2", "breast cancer 2", "brca2 dna repair associated"],
+    "IDH1": ["isocitrate dehydrogenase 1", "idh1"],
+    "IDH2": ["isocitrate dehydrogenase 2", "idh2"],
+    "FLT3": ["fms-related tyrosine kinase 3", "flt3", "fms-like tyrosine kinase 3"],
+    "JAK2": ["janus kinase 2", "jak2"],
+    "MPL": ["mpl proto-oncogene", "thrombopoietin receptor", "tpo receptor"],
+    "CALR": ["calreticulin", "calr"],
+    "BCR-ABL1": ["bcr-abl1", "bcr-abl", "philadelphia chromosome"],
+    "ABL1": ["abl proto-oncogene 1", "abl1", "c-abl"],
+    "TP53": ["tumor protein p53", "p53", "tp53"],
+    "PTEN": ["phosphatase and tensin homolog", "pten"],
+    "ATM": ["ataxia telangiectasia mutated", "atm"],
+    "PALB2": ["partner and localizer of brca2", "palb2"],
+    "RAD51C": ["rad51 paralog c", "rad51c"],
+    "RAD51D": ["rad51 paralog d", "rad51d"],
+    "CHEK2": ["checkpoint kinase 2", "chek2", "chk2"],
+    "MSH2": ["muts homolog 2", "msh2"],
+    "MSH6": ["muts homolog 6", "msh6"],
+    "MLH1": ["mutl homolog 1", "mlh1"],
+    "PMS2": ["pms1 homolog 2", "pms2"],
+}
+
 
 # =============================================================================
 # TUMOR TYPE MAPPINGS

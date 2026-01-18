@@ -1,22 +1,15 @@
-"""FDA label processing and evidence conversion.
+"""FDA label processing utilities.
 
 This module handles FDA label data transformation, including:
 - Biomarker specificity parsing from indication text
-- Variant coverage determination
-- Label to evidence model conversion
-- Combination therapy partner linking
-- Tumor type matching
+- Variant coverage determination (is_variant_covered)
+- Tumor type extraction and matching
 """
 
 import re
 from typing import Any
 
-from oncomind.models.evidence import (
-    BiomarkerMatch,
-    FDAApproval,
-    FDALabelEvidence,
-)
-from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term, extract_variant_codon, tumor_types_match
+from oncomind.models.evidence.base import extract_variant_codon, tumor_types_match
 from oncomind.models.evidence.fda import extract_combination_partners
 from oncomind.config.debug import get_logger
 
@@ -419,156 +412,5 @@ def match_fda_approval(
         "combination_partners": partners,
         # TODO: add tumor matching
     }
-
-
-def populate_locus_variant_match(
-    fda_labels: list[FDALabelEvidence],
-    query_variant: str | None = None,
-    query_tumor: str | None = None,
-) -> None:
-    """Populate locus_variant_match, cancer_type_match, and biomarker_match on FDALabelEvidence.
-
-    Determines the relationship between the queried variant and the approved
-    variant (variant/codon/gene match) and sets:
-    - locus_variant_match: EvidenceLevel for variant/codon/gene match level
-    - cancer_type_match: EvidenceLevel for tumor type match (cancer_specific/pan_cancer/other)
-    - biomarker_match: BiomarkerMatch with matched bool, match_level, and tumor_matched
-
-    Modifies fda_labels in place.
-
-    Args:
-        fda_labels: List of FDALabelEvidence to populate
-        query_variant: The variant being queried (e.g., "E17K", "G12C")
-        query_tumor: The tumor type being queried (e.g., "colorectal cancer", "NSCLC")
-    """
-    for label in fda_labels:
-        if not label.indications_and_usage or not label.gene:
-            continue
-
-        # Check tumor match first (applies to all cases)
-        tumor_matched, tumor_match_type = match_fda_tumor(
-            label.indications_and_usage, query_tumor
-        )
-
-        # Use match_fda_approval for biomarker matching logic
-        if query_variant:
-            result = match_fda_approval(
-                query_gene=label.gene,
-                query_variant=query_variant,
-                query_tumor=query_tumor or "",
-                fda_indication=label.indications_and_usage,
-            )
-
-            biomarker_covered = result["matched"]
-            match_level = result.get("match_level")
-            partners = result.get("combination_partners", [])
-
-            # Final "matched" requires BOTH biomarker AND tumor match
-            # A drug approved for AML shouldn't match for a Glioma patient
-            fully_matched = biomarker_covered and tumor_matched
-
-            # Set biomarker_match
-            label.biomarker_match = BiomarkerMatch(
-                matched=fully_matched,
-                match_level=match_level if fully_matched else None,
-                tumor_matched=tumor_matched,
-                tumor_match_type=tumor_match_type,
-                combination_partners=partners,
-            )
-
-            # Also set locus_variant_match for backward compatibility
-            if match_level and fully_matched:
-                label.locus_variant_match = EvidenceLevel(
-                    level=match_level,
-                    scope="specific",
-                    origin="kb"
-                )
-
-            # Set cancer_type_match - always set this so we know what cancer the drug is approved for
-            if tumor_matched:
-                label.cancer_type_match = EvidenceLevel(
-                    level=tumor_match_type or "cancer_specific",
-                    scope="specific",
-                    origin="kb"
-                )
-            else:
-                # Not matched - extract what cancer the drug IS approved for
-                indication_tumors = extract_tumor_from_indication(label.indications_and_usage)
-                if indication_tumors:
-                    # Use the first extracted tumor as the cancer type
-                    label.cancer_type_match = EvidenceLevel(
-                        level=indication_tumors[0].lower(),  # e.g., "breast cancer"
-                        scope="unspecified",
-                        origin="kb"
-                    )
-                # If no tumors extracted, cancer_type_match remains None (not pan_cancer)
-        else:
-            # No query variant - check if gene-level approval
-            biomarker_spec = parse_biomarker_specificity(
-                label.indications_and_usage, label.gene
-            )
-            if biomarker_spec and biomarker_spec.get("level") == "gene":
-                partners = extract_combination_partners(label.indications_and_usage)
-
-                # Gene-level match still requires tumor match
-                fully_matched = tumor_matched
-
-                label.locus_variant_match = EvidenceLevel(
-                    level="gene",
-                    scope="unspecified",
-                    origin="kb"
-                )
-                label.biomarker_match = BiomarkerMatch(
-                    matched=fully_matched,
-                    match_level="gene" if fully_matched else None,
-                    tumor_matched=tumor_matched,
-                    tumor_match_type=tumor_match_type,
-                    combination_partners=partners,
-                )
-
-                if tumor_matched:
-                    label.cancer_type_match = EvidenceLevel(
-                        level=tumor_match_type or "cancer_specific",
-                        scope="specific",
-                        origin="kb"
-                    )
-                else:
-                    # Not matched - extract what cancer the drug IS approved for
-                    indication_tumors = extract_tumor_from_indication(label.indications_and_usage)
-                    if indication_tumors:
-                        label.cancer_type_match = EvidenceLevel(
-                            level=indication_tumors[0].lower(),
-                            scope="unspecified",
-                            origin="kb"
-                        )
-
-
-def sort_fda_by_association(approvals: list) -> list:
-    """Sort FDA approvals by association: Responsive/Sensitive first, Resistant last.
-
-    Sort order:
-    1. Responsive/Sensitivity (drug works for this variant)
-    2. None/Unknown (from FDA labels without CGI association data)
-    3. Resistant (drug does NOT work for this variant)
-
-    This ensures that when displaying FDA approvals, the drugs most likely
-    to be effective appear first, with resistance mutations clearly shown last.
-
-    Args:
-        approvals: List of FDAApproval objects
-
-    Returns:
-        Sorted list with Responsive first, Resistant last
-    """
-    def sort_key(approval: FDAApproval) -> int:
-        assoc = (approval.association or "").lower()
-        if assoc in ("responsive", "sensitivity", "sensitive"):
-            return 0  # Best - drug works
-        elif assoc in ("resistant", "resistance"):
-            return 2  # Worst - drug doesn't work
-        else:
-            return 1  # Unknown - from FDA labels
-
-    return sorted(approvals, key=sort_key)
 
 

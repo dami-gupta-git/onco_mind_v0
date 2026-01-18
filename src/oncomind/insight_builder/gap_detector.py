@@ -14,8 +14,10 @@ from oncomind.config.constants import (
     LITERATURE_WELL_CHARACTERIZED_THRESHOLD,
     COOCCURRENCE_STRONG_THRESHOLD_PCT,
     HOTSPOT_ADJACENCY_WINDOW,
+    MAX_LITERATURE_RESULTS,
 )
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
+from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
 
 # Import Evidence with TYPE_CHECKING to avoid circular imports
 from typing import TYPE_CHECKING
@@ -393,56 +395,57 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 
 
 def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for FDA-approved therapies using biomarker_match from FDA labels.
+    """Check for FDA-approved therapies using fda_biomarker_evidence.
 
-    Uses evidence.fda_labels with biomarker_match to determine clinical actionability.
-    The biomarker_match object contains:
-    - matched: Whether the variant is covered by FDA approval
-    - match_level: "variant", "codon", "gene", or None
-    - tumor_matched: Whether the tumor type matches FDA indication
-    - tumor_match_type: "exact", "pan_cancer", or None
-
-    If biomarker_match.matched is True, the drug covers this variant and clinical
-    actionability is well-characterized. The match_level is informational only.
+    Uses evidence.fda_biomarker_evidence to determine clinical actionability.
+    Filters out REQUIRED_NEGATIVE entries (drugs approved for patients WITHOUT this biomarker).
     """
-    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or bool(evidence.fda_labels)
+    # Filter FDA biomarker evidence to exclude REQUIRED_NEGATIVE
+    fda_filtered = [
+        ev for ev in evidence.fda_biomarker_evidence
+        if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE
+    ]
+
+    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or bool(fda_filtered)
 
     tumor_type = evidence.context.tumor_type
 
-    # Track drugs using biomarker_match from FDA labels
+    # Track drugs from FDA biomarker evidence
     matched_drugs: list[str] = []
     match_counts: dict[str, int] = {"variant": 0, "codon": 0, "gene": 0}
     tumor_match_counts: dict[str, int] = {"tumor": 0, "pan_cancer": 0, "other": 0}
     other_cancers: list[str] = []
 
-    # Check FDA labels using biomarker_match
-    for label in evidence.fda_labels:
-        if not label.biomarker_match or not label.biomarker_match.matched:
-            continue
-
-        drug_name = label.drug or label.brand_name or label.generic_name
+    # Check FDA biomarker evidence
+    for fda_ev in fda_filtered:
+        drug_name = fda_ev.drug_name or fda_ev.brand_name
         if drug_name:
             matched_drugs.append(drug_name)
 
-        # Count by match level from biomarker_match
-        match_level = label.biomarker_match.match_level or "gene"
-        if match_level in match_counts:
-            match_counts[match_level] += 1
+        # Count by specificity level
+        spec_level = fda_ev.specificity.value if fda_ev.specificity else "gene"
+        if spec_level in match_counts:
+            match_counts[spec_level] += 1
+        else:
+            match_counts["gene"] += 1
 
-        # Count tumor match from biomarker_match
-        if tumor_type and label.biomarker_match.tumor_matched is not None:
-            if label.biomarker_match.tumor_matched:
-                if label.biomarker_match.tumor_match_type == "pan_cancer":
-                    tumor_match_counts["pan_cancer"] += 1
-                else:
+        # Check tumor match using tumor_types list
+        if tumor_type and fda_ev.tumor_types:
+            matched_tumor = False
+            for fda_tumor in fda_ev.tumor_types:
+                if tumor_types_match(fda_tumor, tumor_type):
                     tumor_match_counts["tumor"] += 1
-            else:
+                    matched_tumor = True
+                    break
+                elif is_pan_cancer_term(fda_tumor):
+                    tumor_match_counts["pan_cancer"] += 1
+                    matched_tumor = True
+                    break
+            if not matched_tumor:
                 tumor_match_counts["other"] += 1
-                # Try to get the actual cancer type from the label
-                if label.cancer_type_match and label.cancer_type_match.level:
-                    cancer = label.cancer_type_match.level
-                    if cancer not in ("cancer_specific", "pan_cancer") and cancer not in other_cancers:
-                        other_cancers.append(cancer)
+                for fda_tumor in fda_ev.tumor_types:
+                    if fda_tumor not in other_cancers:
+                        other_cancers.append(fda_tumor)
 
     has_matched_drug = bool(matched_drugs)
 
@@ -491,21 +494,18 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
             )
     elif ctx.has_clinical:
         # Has clinical evidence but no FDA-approved drug that matches this variant
-        # Check if we have FDA labels but none match (biomarker_match.matched=False)
-        has_unmatched_fda = any(
-            label.biomarker_match and not label.biomarker_match.matched
-            for label in evidence.fda_labels
+        # Check if there's FDA evidence with REQUIRED_NEGATIVE (excluded drugs)
+        has_excluded_fda = any(
+            ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE
+            for ev in evidence.fda_biomarker_evidence
         )
-        if has_unmatched_fda:
-            # There are FDA drugs for this gene but not for this specific variant
-            ctx.add_gap(
+        if has_excluded_fda:
+            # There are FDA drugs for this gene but they require absence of this biomarker
+            ctx.add_well_characterized(
+                "clinical actionability",
+                "Clinical evidence exists (non-FDA)",
                 category=GapCategory.CLINICAL,
-                severity=GapSeverity.SIGNIFICANT,
-                description=f"FDA drugs exist for {ctx.gene} but not approved for {ctx.variant} specifically",
-                suggested_studies=["Variant-specific efficacy analysis", "Case series for this variant"],
-                addressable_with=["ClinicalTrials.gov variant-specific arms", "Real-world evidence databases"]
             )
-            ctx.add_poorly_characterized("variant-specific drug approval")
         else:
             ctx.add_well_characterized(
                 "clinical actionability",
@@ -1091,9 +1091,11 @@ def _check_literature_depth(evidence: "Evidence", ctx: GapDetectionContext) -> N
     elif pub_count < LITERATURE_WELL_CHARACTERIZED_THRESHOLD:
         ctx.add_poorly_characterized("literature depth (limited publications)")
     else:
+        # Show ">= N" when we hit the limit (indicates more articles may exist)
+        count_str = f">= {pub_count}" if pub_count >= MAX_LITERATURE_RESULTS else str(pub_count)
         ctx.add_well_characterized(
             "published literature",
-            f"{pub_count} PubMed articles",
+            f"{count_str} PubMed articles",
             category=GapCategory.FUNCTIONAL
         )
 

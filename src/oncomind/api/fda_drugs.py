@@ -1279,12 +1279,19 @@ class OpenFDAClient:
             >>> for label in labels:
             ...     print(f"{label.brand_name}: {label.target_genes}")
         """
+        from oncomind.config.constants import GENE_FULL_NAMES
+
         gene_upper = gene.upper()
         results: list[FDALabelInfo] = []
 
-        # Search indications_and_usage for the gene
-        # Use exact word boundary matching where possible
-        search_query = f'indications_and_usage:"{gene_upper}"'
+        # Build search terms: gene symbol + full names
+        search_terms = [gene_upper]
+        if gene_upper in GENE_FULL_NAMES:
+            search_terms.extend(GENE_FULL_NAMES[gene_upper])
+
+        # Build OR query for all search terms
+        search_parts = [f'indications_and_usage:"{term}"' for term in search_terms]
+        search_query = " OR ".join(search_parts)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -1380,7 +1387,7 @@ async def get_fda_labels_for_biomarker(
     gene: str,
     variant: str,
     tumor_type: str,
-    limit: int = 100,
+    limit: int = 500,
 ) -> list[dict]:
     """Fetch raw FDA labels for a gene-variant-tumor combination.
 
@@ -1396,11 +1403,19 @@ async def get_fda_labels_for_biomarker(
     Returns:
         List of raw FDA label dicts from OpenFDA API
     """
+    from oncomind.config.constants import GENE_FULL_NAMES
+
     base_url = "https://api.fda.gov/drug/label.json"
     gene_upper = gene.upper()
 
-    # Search indications_and_usage for the gene
-    search_query = f'indications_and_usage:"{gene_upper}"'
+    # Build search terms: gene symbol + full names
+    search_terms = [gene_upper]
+    if gene_upper in GENE_FULL_NAMES:
+        search_terms.extend(GENE_FULL_NAMES[gene_upper])
+
+    # Build OR query for all search terms
+    search_parts = [f'indications_and_usage:"{term}"' for term in search_terms]
+    search_query = " OR ".join(search_parts)
 
     labels: list[dict] = []
 
@@ -1410,13 +1425,30 @@ async def get_fda_labels_for_biomarker(
             params={"search": search_query, "limit": limit}
         )
 
+        # q1 = 'indications_and_usage:"EGFR"'
+        #
+        # # Query 2: Without quotes
+        # q2 = 'indications_and_usage:EGFR'
+        #
+        # # Query 3: Wildcard
+        # q3 = 'indications_and_usage:*EGFR*'
+        #
+        # # Query 4: Check total labels mentioning osimertinib
+        # q4 = 'openfda.generic_name:"osimertinib"'
+        #
+        # for q in [q1, q2, q3, q4]:
+        #     r = await client.get(
+        #         base_url,
+        #         params={"search": q, "limit": limit}
+        #     )
+        #
+        #     count = len(r.json().get("results", []))
+        #     print(f"{q}: {count} results")
+
         if response.status_code == 200:
             data = response.json()
             labels = data.get("results", [])
 
-    for label in labels:
-        if "ERLOTI" in label:
-            print(label)
     return labels
 
 

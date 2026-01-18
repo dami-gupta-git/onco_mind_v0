@@ -37,7 +37,6 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
-from oncomind.models.evidence.fda import FDALabelEvidence
 from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence, BiomarkerRequirement
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
@@ -194,10 +193,6 @@ class Evidence(BaseModel):
     fda_biomarker_evidence: list[FDABiomarkerEvidence] = Field(
         default_factory=list,
         description="FDA biomarker-drug indications parsed directly from FDA labels"
-    )
-    fda_labels: list[FDALabelEvidence] = Field(
-        default_factory=list,
-        description="FDA drug labels with clinical study data, mechanism, adverse reactions"
     )
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
@@ -1042,7 +1037,7 @@ class Evidence(BaseModel):
     def _get_fda_cancer_specificity(self, approval) -> str:
         """Determine cancer_specificity for an FDA approval.
 
-        Uses the cancer_specificity property from FDAApproval, which reads from
+        Uses the cancer_specificity property from FDABiomarkerEvidence, which reads from
         cancer_type_match set during evidence aggregation. This ensures consistency
         with how ClinicalTrialEvidence handles tumor matching.
 
@@ -1052,7 +1047,7 @@ class Evidence(BaseModel):
             - The actual cancer type (e.g., "breast cancer"): if approved for a different tumor
             - "unknown": if we can't determine the cancer type (should NOT be treated as pan_cancer)
         """
-        # Use the property from FDAApproval (reads from cancer_type_match)
+        # Use the cancer_specificity property (reads from cancer_type_match)
         if approval.cancer_specificity:
             return approval.cancer_specificity
 

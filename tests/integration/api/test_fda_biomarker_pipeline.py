@@ -50,7 +50,7 @@ class TestFDABiomarkerPipeline:
 
         result = await get_variant_insight(
             gene="EGFR",
-            variant="N771H",
+            variant="L858R",
             tumor_type="NSCLC",
             enable_llm=False,
             enable_literature=False,
