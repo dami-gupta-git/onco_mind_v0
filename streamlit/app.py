@@ -314,6 +314,7 @@ with tab1:
             hotspots = result.get('hotspots_evidence')
             therapies = result.get('recommended_therapies', [])
             fda_labels = result.get('fda_labels', [])
+            fda_biomarker_evidence = result.get('fda_biomarker_evidence', [])
 
             # Build tab names
             tab_names = []
@@ -338,6 +339,9 @@ with tab1:
             # FDA tab - shows FDA label data (clinical studies, mechanism, toxicity)
             if fda_labels:
                 tab_names.append(f"💊 FDA ({len(fda_labels)})")
+            # FDA Biomarker tab - new parsed FDA label indications
+            if fda_biomarker_evidence:
+                tab_names.append(f"🏷️ FDA Biomarker ({len(fda_biomarker_evidence)})")
             if clinvar_entries or clinvar_sig:
                 tab_names.append("ClinVar")
             if cosmic_id:
@@ -1086,6 +1090,52 @@ with tab1:
                                         if match_parts:
                                             st.markdown(f"**Match Status:** {' | '.join(match_parts)}")
 
+                    tab_idx += 1
+
+                # FDA Biomarker tab - new parsed indications
+                if fda_biomarker_evidence:
+                    with tabs[tab_idx]:
+                        st.caption("FDA biomarker-drug indications parsed from drug labels")
+                        st.warning("Auto-parsed from FDA labels - verify before clinical use")
+
+                        # Simple table with drug info
+                        rows = ["| Drug | Gene | Match | Variants | Tumors | Line of Therapy |",
+                                "|------|------|-------|----------|--------|-----------------|"]
+                        for ev in fda_biomarker_evidence:
+                            drug = ev.get('drug_name', 'Unknown')
+                            brand = ev.get('brand_name', '')
+                            drug_display = f"{drug} ({brand})" if brand else drug
+                            gene = ev.get('gene', '')
+                            # Use matches and match_type from matches_variant()
+                            matches = ev.get('matches', False)
+                            match_type = ev.get('match_type', '')
+                            if matches:
+                                if match_type == 'exact':
+                                    match_display = '✅ Exact'
+                                elif match_type == 'codon':
+                                    match_display = '✅ Codon'
+                                elif match_type == 'gene':
+                                    match_display = '✅ Gene'
+                                else:
+                                    match_display = '✅ Yes'
+                            elif match_type == 'excluded':
+                                match_display = '❌ Excluded'
+                            else:
+                                match_display = '⚠️ No'
+                            # Show specified variants or specificity level
+                            variants = ev.get('specified_variants', [])
+                            specificity = ev.get('specificity', '')
+                            if variants:
+                                variants_display = ', '.join(variants)[:40]
+                            elif specificity == 'gene':
+                                variants_display = 'Any mutation'
+                            else:
+                                variants_display = specificity or '—'
+                            tumors = ', '.join(ev.get('tumor_types', []))[:30] or '—'
+                            line = ev.get('line_of_therapy', '') or '—'
+                            rows.append(f"| {drug_display} | {gene} | {match_display} | {variants_display} | {tumors} | {line} |")
+
+                        scrollable_table("\n".join(rows))
                     tab_idx += 1
 
                 # ClinVar tab

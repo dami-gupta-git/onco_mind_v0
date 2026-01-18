@@ -38,7 +38,7 @@ from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
 from oncomind.models.evidence.fda import FDAApproval, FDALabelEvidence
-from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence
+from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence, BiomarkerRequirement
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -1676,11 +1676,62 @@ class Evidence(BaseModel):
 
         return "; ".join(summaries) if summaries else ""
 
+    def _get_excluded_drugs_from_fda_biomarker(self) -> set[str]:
+        """Get drug names that have REQUIRED_NEGATIVE for the queried gene.
+
+        These are drugs approved for patients WITHOUT the queried biomarker
+        (e.g., IMJUDO for NSCLC without EGFR/ALK mutations). They should be
+        excluded from VICC/CGI/CIViC evidence to prevent the LLM from incorrectly
+        citing them as approved for the queried variant.
+
+        Returns:
+            Set of lowercased drug names to exclude
+        """
+        excluded = set()
+        if not self.fda_biomarker_evidence:
+            return excluded
+
+        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        if not gene:
+            return excluded
+
+        for ev in self.fda_biomarker_evidence:
+            # Check if this evidence has REQUIRED_NEGATIVE for the queried gene
+            if (ev.gene and ev.gene.upper() == gene and
+                ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE):
+                if ev.drug_name:
+                    excluded.add(ev.drug_name.lower())
+                # Also add combination partners if present
+                for partner in (ev.combination_partners or []):
+                    if partner:
+                        excluded.add(partner.lower())
+
+        return excluded
+
     def get_evidence_summary_for_llm(self) -> str:
         """Generate a compact evidence summary for LLM prompt consumption."""
         lines = []
         tumor_type = self.context.tumor_type
         gene = self.identifiers.gene
+
+        # Get drugs with REQUIRED_NEGATIVE for the queried gene (e.g., IMJUDO for NSCLC without EGFR)
+        # These should be excluded from VICC/CGI/CIViC to avoid misleading the LLM
+        excluded_drugs = self._get_excluded_drugs_from_fda_biomarker()
+
+        # Helper to check if any component of a drug name is excluded
+        def _drug_is_excluded(drug_name: str) -> bool:
+            """Check if any component of a drug name (including combinations) is excluded."""
+            if not drug_name:
+                return False
+            drug_lower = drug_name.lower()
+            # Check exact match
+            if drug_lower in excluded_drugs:
+                return True
+            # Check if any component of a combination is excluded
+            # Combinations use "+" or "," or "and" as separators
+            import re
+            components = re.split(r'\s*[+,]\s*|\s+and\s+', drug_lower)
+            return any(comp.strip() in excluded_drugs for comp in components)
 
         # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
         # Filter out:
@@ -1689,12 +1740,14 @@ class Evidence(BaseModel):
         #    - cancer_specific = matches queried tumor type
         #    - pan_cancer = applies to all tumors
         #    - Other values (e.g., "AML") = approved for different tumor type, EXCLUDE
+        # 3. Drugs with REQUIRED_NEGATIVE for the queried gene (e.g., IMJUDO for EGFR-negative)
         fda_therapies = self.get_fda_approved_therapies()
         fda_from_fda = [
             t for t in fda_therapies
             if t.source == "FDA"
             and not is_biomarker_selection_drug(t.drug_name, gene)
             and t.cancer_specificity in ("cancer_specific", "pan_cancer")
+            and not _drug_is_excluded(t.drug_name)
         ]
         if fda_from_fda:
             fda_drugs = []
@@ -1742,11 +1795,75 @@ class Evidence(BaseModel):
         if codon_near_misses:
             lines.append(f"FDA Codon-Level (not for queried variant): {', '.join(codon_near_misses[:4])}")
 
-        # CGI Biomarkers - compact (filter out biomarker selection drugs)
+        # FDA Biomarker Evidence (from FDALabelParser) - parsed FDA label indications
+        # These have been filtered by matches_variant() and include match semantics
+        if self.fda_biomarker_evidence:
+            variant = self.identifiers.variant if self.identifiers else None
+            matched_biomarker_drugs = []
+            for ev in self.fda_biomarker_evidence:
+                # Skip drugs with unknown names or biomarker selection drugs
+                if not ev.drug_name or ev.drug_name == "Unknown":
+                    continue
+                if gene and is_biomarker_selection_drug(ev.drug_name, gene):
+                    continue
+
+                # Compute match result for this evidence
+                match_result = ev.matches_variant(gene or "", variant or "")
+
+                # Only include items where matches=True
+                if not match_result.get("matches"):
+                    continue
+
+                # Build drug display string
+                match_type = match_result.get("match_type", "")
+                specificity = ev.specificity.value if ev.specificity else ""
+
+                parts = []
+                # Add match type for context
+                if match_type == "exact":
+                    parts.append("exact variant match")
+                elif match_type == "codon":
+                    parts.append(f"codon-level")
+                elif match_type == "gene":
+                    parts.append("any mutation")
+
+                # Add tumor context
+                if ev.tumor_types:
+                    tumor_str = ", ".join(ev.tumor_types[:2])
+                    parts.append(tumor_str)
+
+                # Add line of therapy if available
+                if ev.line_of_therapy:
+                    parts.append(ev.line_of_therapy)
+
+                drug_display = f"{ev.drug_name} ({', '.join(parts)})" if parts else ev.drug_name
+                matched_biomarker_drugs.append(drug_display)
+
+            if matched_biomarker_drugs:
+                lines.append(f"FDA Label Indications: {'; '.join(matched_biomarker_drugs[:5])}")
+
+        # CGI Biomarkers - compact (filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs)
+        # For combinations like "Tremelimumab + Durvalumab", check if ANY component is excluded
         if self.cgi_biomarkers:
+            def _drug_is_excluded(drug_name: str) -> bool:
+                """Check if any component of a drug name (including combinations) is excluded."""
+                if not drug_name:
+                    return False
+                drug_lower = drug_name.lower()
+                # Check exact match
+                if drug_lower in excluded_drugs:
+                    return True
+                # Check if any component of a combination is excluded
+                # Combinations use "+" or "," or "and" as separators
+                import re
+                components = re.split(r'\s*[+,]\s*|\s+and\s+', drug_lower)
+                return any(comp.strip() in excluded_drugs for comp in components)
+
             approved = [
                 b for b in self.cgi_biomarkers
-                if b.fda_approved and not is_biomarker_selection_drug(b.drug or "", gene)
+                if b.fda_approved
+                and not is_biomarker_selection_drug(b.drug or "", gene)
+                and not _drug_is_excluded(b.drug or "")
             ]
             if approved:
                 resistance = [b.drug for b in approved if b.association and 'RESIST' in b.association.upper()]
@@ -1757,12 +1874,16 @@ class Evidence(BaseModel):
                 if sensitivity:
                     lines.append(f"CGI Sensitivity: {', '.join(sensitivity[:3])}")
 
-        # CIViC Assertions - compact (filter out biomarker selection drugs)
+        # CIViC Assertions - compact (filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs)
+        # If ANY therapy in a combination is excluded, skip the entire assertion
         if self.civic_assertions:
             predictive = [a for a in self.civic_assertions if a.assertion_type == "PREDICTIVE"]
             if predictive:
                 civic_drugs = []
                 for a in predictive[:3]:
+                    # Skip entire assertion if ANY therapy is in the excluded set
+                    if any(t.lower() in excluded_drugs for t in (a.therapies or [])):
+                        continue
                     # Filter therapies that are biomarker selection drugs
                     filtered_therapies = [
                         t for t in (a.therapies or [])
@@ -1776,12 +1897,19 @@ class Evidence(BaseModel):
                     lines.append(f"CIViC Assertions: {'; '.join(civic_drugs)}")
 
         # CIViC Evidence Items - compact (includes per-publication drug response data)
-        # Filter out biomarker selection drugs
+        # Filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs
+        # If ANY drug in a combination is excluded, skip the entire evidence item
         if self.civic_evidence:
             civic_eid_drugs = []
             for e in self.civic_evidence[:5]:
                 if e.drugs:
-                    filtered_drugs = [d for d in e.drugs if not is_biomarker_selection_drug(d, gene)]
+                    # Skip entire entry if ANY drug is in the excluded set
+                    if any(d.lower() in excluded_drugs for d in e.drugs):
+                        continue
+                    filtered_drugs = [
+                        d for d in e.drugs
+                        if not is_biomarker_selection_drug(d, gene)
+                    ]
                     if not filtered_drugs:
                         continue
                     drug_str = ", ".join(filtered_drugs[:2])
@@ -1799,12 +1927,20 @@ class Evidence(BaseModel):
                 lines.append(f"CIViC Evidence: {'; '.join(civic_eid_drugs)}")
 
         # VICC MetaKB evidence - compact (aggregated from CIViC, CGI, JAX, OncoKB, PMKB)
-        # Filter out biomarker selection drugs
+        # Filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs
+        # If ANY drug in a combination is excluded, skip the entire entry
         if self.vicc_evidence:
             vicc_drugs = []
             for v in self.vicc_evidence[:5]:
                 if v.drugs:
-                    filtered_drugs = [d for d in v.drugs if not is_biomarker_selection_drug(d, gene)]
+                    # Skip entire entry if ANY drug is in the excluded set
+                    # (e.g., tremelimumab + durvalumab combo should be excluded if tremelimumab is)
+                    if any(d.lower() in excluded_drugs for d in v.drugs):
+                        continue
+                    filtered_drugs = [
+                        d for d in v.drugs
+                        if not is_biomarker_selection_drug(d, gene)
+                    ]
                     if not filtered_drugs:
                         continue
                     drug_str = ", ".join(filtered_drugs[:2])

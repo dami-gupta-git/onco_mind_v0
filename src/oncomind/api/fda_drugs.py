@@ -1396,9 +1396,6 @@ async def get_fda_labels_for_biomarker(
     Returns:
         List of raw FDA label dicts from OpenFDA API
     """
-    from fda_label_parser import FDALabelParser, match_variant_to_indications
-    parser = FDALabelParser()
-
     base_url = "https://api.fda.gov/drug/label.json"
     gene_upper = gene.upper()
 
@@ -1417,16 +1414,9 @@ async def get_fda_labels_for_biomarker(
             data = response.json()
             labels = data.get("results", [])
 
-            indications = parser.parse_label(openfda_result)
-
-            # To check if a drug matches a user's query:
-            results = match_variant_to_indications(
-                indications,
-                gene,
-                variant,
-                tumor_type
-            )
-
+    for label in labels:
+        if "ERLOTI" in label:
+            print(label)
     return labels
 
 

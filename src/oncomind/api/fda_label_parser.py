@@ -28,10 +28,10 @@ class BiomarkerRequirement(Enum):
 
 class SpecificityLevel(Enum):
     """How specific the biomarker requirement is."""
-    VARIANT = "variant"  # e.g., "EGFR L858R", "KRAS G12C"
-    CODON = "codon"  # e.g., "EGFR exon 19 deletions"
-    GENE = "gene"  # e.g., "EGFR mutation-positive"
-    PATHWAY = "pathway"  # e.g., "HRR-deficient"
+    VARIANT = "variant"    # e.g., "EGFR L858R", "KRAS G12C"
+    CODON = "codon"        # e.g., "EGFR exon 19 deletions"
+    GENE = "gene"          # e.g., "EGFR mutation-positive"
+    PATHWAY = "pathway"    # e.g., "HRR-deficient"
 
 
 @dataclass
@@ -175,6 +175,21 @@ class FDALabelParser:
         r"safety\s+and\s+efficacy.*not\s+(?:been\s+)?established",
     ]
 
+    # Patterns indicating prior therapy requirements (not an indication FOR this biomarker)
+    # e.g., "Patients with EGFR mutations should have disease progression on FDA-approved therapy"
+    # This means: if you have EGFR, you must fail targeted therapy first - NOT that this drug treats EGFR
+    PRIOR_THERAPY_PATTERNS = [
+        r"should\s+have\s+disease\s+progression\s+on",
+        r"must\s+have\s+(?:disease\s+)?progression\s+(?:on|following)",
+        r"(?:have|has)\s+progressed\s+(?:on|after|following)\s+(?:FDA[- ]approved|targeted)\s+therapy",
+        r"after\s+(?:failure|progression)\s+(?:of|on)\s+(?:FDA[- ]approved|targeted)\s+therapy",
+        r"who\s+have\s+(?:disease\s+)?progression\s+on\s+FDA[- ]approved\s+therapy\s+for\s+these\s+aberrations",
+        # Conditional prior therapy: "and if BRAF V600 positive, a BRAF inhibitor"
+        # This means: IF you have this mutation, you must have tried this therapy first
+        r"(?:and\s+)?if\s+(?:\w+\s+)?(?:V600|mutation)[- ]?positive,?\s+(?:a\s+)?(?:BRAF|EGFR|ALK)\s+inhibitor",
+        r"if\s+(?:BRAF|EGFR|ALK)\s+(?:V600\s+)?(?:mutation[- ]?)?positive",
+    ]
+
     # Biomarker/gene patterns
     GENE_PATTERNS = {
         'EGFR': r'(?:epidermal\s+growth\s+factor\s+receptor|EGFR)',
@@ -293,6 +308,30 @@ class FDALabelParser:
             '|'.join(f'({p})' for p in self.NEGATIVE_EFFICACY_PATTERNS),
             re.IGNORECASE
         )
+        self._prior_therapy_re = re.compile(
+            '|'.join(f'({p})' for p in self.PRIOR_THERAPY_PATTERNS),
+            re.IGNORECASE
+        )
+
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text by replacing ligatures and special characters."""
+        # Common ligatures found in FDA labels (from PDF extraction)
+        ligature_map = {
+            '\ufb01': 'fi',  # ﬁ -> fi
+            '\ufb02': 'fl',  # ﬂ -> fl
+            '\ufb00': 'ff',  # ﬀ -> ff
+            '\ufb03': 'ffi', # ﬃ -> ffi
+            '\ufb04': 'ffl', # ﬄ -> ffl
+            '\u2019': "'",   # ' -> '
+            '\u2018': "'",   # ' -> '
+            '\u201c': '"',   # " -> "
+            '\u201d': '"',   # " -> "
+            '\u2013': '-',   # – -> -
+            '\u2014': '-',   # — -> -
+        }
+        for ligature, replacement in ligature_map.items():
+            text = text.replace(ligature, replacement)
+        return text
 
     def parse_label(self, label_data: dict) -> list[BiomarkerIndication]:
         """
@@ -314,11 +353,11 @@ class FDALabelParser:
         if not drug_name:
             drug_name = brand_name or "Unknown"
 
-        # Parse each relevant section
+        # Parse only Indications and Usage section
+        # DO NOT parse clinical_studies - it mentions variants in context of
+        # resistance mechanisms, trial eligibility, etc. which are NOT approved indications
         sections_to_parse = [
             ('indications_and_usage', label_data.get('indications_and_usage', [])),
-            ('clinical_studies', label_data.get('clinical_studies', [])),
-            # Can add more sections if needed
         ]
 
         for section_name, section_content in sections_to_parse:
@@ -327,6 +366,9 @@ class FDALabelParser:
 
             # OpenFDA returns lists of strings
             text = ' '.join(section_content) if isinstance(section_content, list) else section_content
+
+            # Normalize text to handle ligatures from PDF extraction
+            text = self._normalize_text(text)
 
             # Split into indication blocks (numbered sections like "1.1", "1.2")
             indication_blocks = self._split_indication_blocks(text)
@@ -370,7 +412,7 @@ class FDALabelParser:
                 if re.match(r'\d+\.\d+', parts[i].strip()):
                     # This is a section number, combine with next part
                     if i + 1 < len(parts):
-                        blocks.append(f"{parts[i]} {parts[i + 1]}")
+                        blocks.append(f"{parts[i]} {parts[i+1]}")
                         i += 2
                     else:
                         i += 1
@@ -378,22 +420,40 @@ class FDALabelParser:
                     if parts[i].strip():
                         blocks.append(parts[i])
                     i += 1
-            return blocks if blocks else [text]
+            if blocks:
+                return blocks
 
-        # If no numbered sections, try splitting by bullet points or sentences
-        # that start with "for the treatment of"
+        # Try splitting by bullet points (•, ·, -, *)
+        # Split on bullet that's followed by text (not just whitespace)
+        bullet_split = re.split(r'(?:^|[\n\r])\s*[•·\-\*]\s+(?=[A-Z])', text)
+        if len(bullet_split) > 1:
+            # Filter out empty blocks and return
+            return [b.strip() for b in bullet_split if b.strip()]
+
+        # Try splitting by "for the treatment of" patterns
         treatment_blocks = re.split(r'(?:•|·|\n)\s*(?=for the treatment)', text, flags=re.IGNORECASE)
         if len(treatment_blocks) > 1:
-            return treatment_blocks
+            return [b.strip() for b in treatment_blocks if b.strip()]
+
+        # Try splitting by "indicated for:" followed by multiple items
+        if re.search(r'indicated\s+for\s*:', text, re.IGNORECASE):
+            # Split after the colon by sentence-like boundaries
+            post_colon = re.split(r'indicated\s+for\s*:', text, flags=re.IGNORECASE)
+            if len(post_colon) > 1:
+                items = post_colon[1]
+                # Split by periods followed by capital letters (new sentences)
+                sentences = re.split(r'\.\s+(?=[A-Z])', items)
+                if len(sentences) > 1:
+                    return [s.strip() for s in sentences if s.strip()]
 
         return [text]
 
     def _parse_indication_block(
-            self,
-            text: str,
-            drug_name: str,
-            brand_name: Optional[str],
-            section: str
+        self,
+        text: str,
+        drug_name: str,
+        brand_name: Optional[str],
+        section: str
     ) -> list[BiomarkerIndication]:
         """Parse a single indication block for biomarker associations."""
         indications = []
@@ -407,6 +467,11 @@ class FDALabelParser:
             gene_matches = list(re.finditer(gene_pattern, text, re.IGNORECASE))
 
             for gene_match in gene_matches:
+                # Check if this gene mention is in a prior therapy requirement context
+                # e.g., "Patients with EGFR should have disease progression on..."
+                if self._is_in_prior_therapy_context(text, gene_match.start()):
+                    continue  # Skip this gene mention - it's not an indication
+
                 # Check if this gene mention is negated
                 requirement = self._check_negation(text, gene_match.start())
 
@@ -477,10 +542,53 @@ class FDALabelParser:
         """Check if this block states the drug was NOT effective."""
         return bool(self._negative_efficacy_re.search(text))
 
+    def _is_prior_therapy_requirement(self, text: str) -> bool:
+        """
+        Check if this block describes a prior therapy requirement rather than an indication.
+
+        e.g., "Patients with EGFR or ALK genomic tumor aberrations should have disease
+        progression on FDA-approved therapy for these aberrations prior to receiving KEYTRUDA"
+
+        This is NOT saying the drug treats EGFR-positive patients - it's saying IF a patient
+        has EGFR, they must have failed targeted therapy first.
+        """
+        return bool(self._prior_therapy_re.search(text))
+
+    def _is_in_prior_therapy_context(self, text: str, gene_position: int) -> bool:
+        """
+        Check if a gene mention at a specific position is in a prior therapy requirement context.
+
+        Looks at the sentence containing the gene mention to see if it's describing
+        prior therapy requirements rather than an indication.
+        """
+        # Find the sentence containing this gene mention
+        # Look backwards for sentence start
+        sentence_start = gene_position
+        for i in range(gene_position - 1, max(0, gene_position - 200), -1):
+            if text[i] in '.!?' and i < gene_position - 1:
+                sentence_start = i + 1
+                break
+        else:
+            sentence_start = max(0, gene_position - 200)
+
+        # Look forwards for sentence end
+        sentence_end = gene_position
+        for i in range(gene_position, min(len(text), gene_position + 200)):
+            if text[i] in '.!?':
+                sentence_end = i + 1
+                break
+        else:
+            sentence_end = min(len(text), gene_position + 200)
+
+        sentence = text[sentence_start:sentence_end]
+
+        # Check if this sentence contains prior therapy patterns
+        return bool(self._prior_therapy_re.search(sentence))
+
     def _extract_variant_specificity(
-            self,
-            text: str,
-            gene: str
+        self,
+        text: str,
+        gene: str
     ) -> tuple[SpecificityLevel, list[str], Optional[str]]:
         """
         Extract variant-level specificity from text.
@@ -559,10 +667,10 @@ class FDALabelParser:
 
 
 def match_variant_to_indications(
-        indications: list[BiomarkerIndication],
-        query_gene: str,
-        query_variant: str,
-        query_tumor: Optional[str] = None
+    indications: list[BiomarkerIndication],
+    query_gene: str,
+    query_variant: str,
+    query_tumor: Optional[str] = None
 ) -> list[dict]:
     """
     Match a user's variant query against parsed FDA indications.
@@ -580,6 +688,10 @@ def match_variant_to_indications(
 
     for ind in indications:
         match_result = ind.matches_variant(query_gene, query_variant)
+
+        # Skip indications for different genes - they're not relevant
+        if match_result["match_type"] is None and "Different gene" in match_result["reason"]:
+            continue
 
         # Filter by tumor if specified
         if query_tumor and ind.tumor_types:
@@ -622,7 +734,6 @@ def match_variant_to_indications(
 
 import requests
 from typing import Optional
-
 
 class OpenFDAClient:
     """Client for fetching FDA labels from OpenFDA API."""
@@ -682,9 +793,9 @@ class OpenFDAClient:
 
 
 def get_fda_approved_drugs_for_variant(
-        gene: str,
-        variant: str,
-        tumor_type: Optional[str] = None
+    gene: str,
+    variant: str,
+    tumor_type: Optional[str] = None
 ) -> list[dict]:
     """
     High-level function to find FDA-approved drugs for a specific variant.
@@ -832,11 +943,3 @@ if __name__ == "__main__":
         print(f"Variants: {ind.specified_variants}")
         print(f"Tumor types: {ind.tumor_types}")
         print(f"Line of therapy: {ind.line_of_therapy}")
-
-    print("\nQuery: EGFR T790M in NSCLC")
-    results = match_variant_to_indications(osi_indications, "EGFR", "T790M", "NSCLC")
-    for r in results:
-        print(f"  Drug: {r['drug']}")
-        print(f"  Matches: {r['matches']}")
-        print(f"  Match type: {r['match_type']}")
-        print(f"  Reason: {r['reason']}")
