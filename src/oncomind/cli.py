@@ -371,6 +371,8 @@ def insight(
                 llm_lines.append(f"\n[dim]Evidence: {tags}[/dim]")
 
             if llm_lines:
+                # Add AI disclaimer at the top
+                llm_lines.insert(0, "[yellow]⚠️ AI-generated — may contain inaccuracies or extrapolations. Verify claims against primary sources.[/yellow]\n")
                 console.print(Panel(
                     "\n".join(llm_lines),
                     title="[bold]🤖 LLM Research Synthesis[/bold]",

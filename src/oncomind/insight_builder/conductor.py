@@ -168,21 +168,21 @@ class Conductor:
         evidence.compute_evidence_gaps()
         timings["gap_computation"] = time.time() - t0
 
-        # Step 3: Generate LLM narrative and cross-source analysis in parallel
+        # Step 3: Generate LLM narrative
+        # NOTE: Cross-source analysis LLM call is disabled (commented out)
         llm_insight = None
-        cross_source_analysis = None
+        cross_source_analysis = None  # Disabled - see below
         if self.config.enable_llm:
             logger.debug(f"Generating LLM insight with model={self.config.llm_model}")
             t0 = time.time()
 
-            # Run both LLM calls in parallel - they are independent
-            llm_insight, cross_source_analysis = await asyncio.gather(
-                self._generate_llm_insight(evidence),
-                self._generate_cross_source_analysis(evidence),
-            )
+            # Run LLM insight generation only
+            # Cross-source analysis disabled for now
+            llm_insight = await self._generate_llm_insight(evidence)
+            # cross_source_analysis = await self._generate_cross_source_analysis(evidence)
 
             timings["llm_parallel"] = time.time() - t0
-            logger.debug(f"LLM calls (parallel) completed in {timings['llm_parallel']:.2f}s")
+            logger.debug(f"LLM call completed in {timings['llm_parallel']:.2f}s")
 
         timings["total"] = time.time() - total_start
         logger.debug(f"Total processing time for {gene_variant}: {timings['total']:.2f}s")

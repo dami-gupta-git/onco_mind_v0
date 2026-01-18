@@ -21,7 +21,7 @@ from components import (
     result_to_markdown,
     render_batch_tab,
     render_llm_synthesis,
-    render_cross_source_analysis,
+    # render_cross_source_analysis,  # Disabled
 )
 
 # Initialize logging from environment variable (ONCOMIND_LOG_LEVEL=DEBUG|INFO|WARN|ERROR)
@@ -1618,9 +1618,9 @@ with tab1:
         render_llm_synthesis(result)
 
         # ==============================================
-        # LLM CROSS-SOURCE DRUG ANALYSIS (after LLM Research Synthesis)
+        # LLM CROSS-SOURCE DRUG ANALYSIS (disabled)
         # ==============================================
-        render_cross_source_analysis(result)
+        # render_cross_source_analysis(result)
 
         # ==============================================
         # FOOTER: Download & Clear

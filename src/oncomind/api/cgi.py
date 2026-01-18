@@ -181,6 +181,9 @@ class CGIClient:
         - "KRAS:." matches any KRAS mutation
         - "KIT:449-514,788-828" matches any mutation in exon ranges (e.g., D816V is in 788-828)
 
+        Consequence-qualified alterations (e.g., "::consequence::inframe_insertion:762-823")
+        only match variants of that type, not point mutations.
+
         Args:
             cgi_alteration: CGI alteration string (e.g., "EGFR:G719.,L858R")
             gene: Gene symbol (e.g., "EGFR")
@@ -192,10 +195,26 @@ class CGIClient:
         if not cgi_alteration:
             return False
 
+        # Check if this is a consequence-qualified alteration (e.g., inframe_insertion, inframe_deletion)
+        # These should NOT match point mutations - only variants of the specified type
+        cgi_alt_lower = cgi_alteration.lower()
+        has_consequence_qualifier = "::consequence::" in cgi_alt_lower
+        is_insertion_specific = "inframe_insertion" in cgi_alt_lower
+        is_deletion_specific = "inframe_deletion" in cgi_alt_lower
+
         # Parse the CGI alteration string: "GENE:variant1,variant2,..."
         # Handle both formats: "EGFR:V600E" and just "V600E" after gene match
         gene_upper = gene.upper()
         variant_upper = variant.upper().replace("P.", "")  # Remove p. prefix if present
+
+        # Point mutations (like C797S) should not match insertion/deletion-specific entries
+        # Point mutations have format: single letter + digits + single letter (e.g., C797S, V600E)
+        is_point_mutation = bool(re.match(r'^[A-Z]\d+[A-Z]$', variant_upper))
+
+        if has_consequence_qualifier and is_point_mutation:
+            # Don't match point mutations to insertion/deletion-specific biomarkers
+            if is_insertion_specific or is_deletion_specific:
+                return False
 
         # Extract variant position for range matching (e.g., 816 from D816V)
         variant_position = None
@@ -267,6 +286,8 @@ class CGIClient:
         - Comma-separated patterns (e.g., "EGFR:G719.,L858R")
         - Wildcard patterns: "G719." for codon-level, "." for gene-level
         - Range patterns: "449-514,788-828" for exon-based matching
+        - Consequence-qualified ranges (e.g., "::consequence::inframe_insertion:762-823")
+          only match variants of that consequence type, not point mutations
 
         After parsing, delegates to the core determine_locus_match() function.
 
@@ -281,8 +302,24 @@ class CGIClient:
         if not cgi_alteration:
             return "gene"
 
-        gene_upper = gene.upper()
+        # Check if this is a consequence-qualified alteration (e.g., inframe_insertion, inframe_deletion)
+        # These should NOT match point mutations - only variants of the specified type
+        cgi_alt_lower = cgi_alteration.lower()
+        has_consequence_qualifier = "::consequence::" in cgi_alt_lower
+        is_insertion_specific = "inframe_insertion" in cgi_alt_lower
+        is_deletion_specific = "inframe_deletion" in cgi_alt_lower
+
+        # Point mutations (like C797S) should not match insertion/deletion-specific entries
+        # Point mutations have format: single letter + digits + single letter (e.g., C797S, V600E)
         variant_upper = variant.upper().replace("P.", "")
+        is_point_mutation = bool(re.match(r'^[A-Z]\d+[A-Z]$', variant_upper))
+
+        if has_consequence_qualifier and is_point_mutation:
+            # Don't match point mutations to insertion/deletion-specific biomarkers
+            if is_insertion_specific or is_deletion_specific:
+                return "gene"
+
+        gene_upper = gene.upper()
         queried_position = extract_variant_position(variant)
 
         # Extract numeric position for range matching

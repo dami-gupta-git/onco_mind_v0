@@ -18,6 +18,7 @@ Key Design:
 - Response types: Responsive/Sensitivity, Resistant, 1A/1B/2A/2B/etc (OncoKB-style)
 - Sources attributed to original KB for provenance tracking
 """
+import re
 from typing import Any
 
 import httpx
@@ -342,8 +343,15 @@ class VICCClient:
             drugs = []
             drug_str = hit.get("drugs", "")
             if drug_str:
-                # VICC concatenates drugs with spaces/commas
-                drugs = [d.strip() for d in drug_str.replace(",", " ").split() if d.strip()]
+                # VICC concatenates drugs with commas
+                raw_drugs = [d.strip() for d in drug_str.split(",") if d.strip()]
+                # Format CAS numbers (pattern: digits-digits-digit) with "CAS #" prefix
+                cas_pattern = re.compile(r'^\d+-\d+-\d+$')
+                for d in raw_drugs:
+                    if cas_pattern.match(d):
+                        drugs.append(f"CAS #{d}")
+                    else:
+                        drugs.append(d)
 
             # Extract evidence info
             evidence_level = hit.get("evidence_label")  # A, B, C, D

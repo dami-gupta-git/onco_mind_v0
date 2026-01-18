@@ -405,8 +405,8 @@ def _build_response(result) -> Dict[str, Any]:
             "evidence_tags": llm.evidence_tags if llm else [],
             "research_hypotheses": llm.research_hypotheses if llm else [],
         },
-        # Cross-source analysis (separate LLM call)
-        "cross_source_analysis": result.cross_source_analysis,
+        # Cross-source analysis (disabled)
+        # "cross_source_analysis": result.cross_source_analysis,
         "identifiers": {
             "cosmic_id": result.identifiers.cosmic_id,
             "ncbi_gene_id": result.identifiers.ncbi_gene_id,

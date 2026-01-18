@@ -182,26 +182,42 @@ def result_to_markdown(result: dict) -> str:
         lines.append("## CIViC Evidence\n")
         lines.append("| Drug | Disease | Evidence Level | Significance |")
         lines.append("|------|---------|----------------|--------------|")
-        for item in civic[:10]:  # Limit to 10
-            drug = ", ".join(item.get('drugs', [])) if item.get('drugs') else 'N/A'
+        seen_entries = set()
+        count = 0
+        for item in civic:
+            if count >= 10:
+                break
+            drugs_list = item.get('drugs', [])
+            # Skip entries without drugs (prognostic/diagnostic evidence)
+            if not drugs_list:
+                continue
+            drug = ", ".join(drugs_list)
             disease = item.get('disease', '')
             level = item.get('evidence_level', '')
             sig = item.get('clinical_significance', '')
+            # Deduplicate by drug+disease+significance
+            entry_key = (drug.lower(), disease.lower(), sig.lower() if sig else '')
+            if entry_key in seen_entries:
+                continue
+            seen_entries.add(entry_key)
             lines.append(f"| {drug} | {disease} | {level} | {sig} |")
+            count += 1
         lines.append("")
 
     # VICC Evidence
     vicc = result.get('vicc_evidence', [])
     if vicc:
         lines.append("## VICC MetaKB Evidence\n")
-        lines.append("| Source | Drug | Disease | Association |")
-        lines.append("|--------|------|---------|-------------|")
+        lines.append("| Source | Drug | Disease | Response |")
+        lines.append("|--------|------|---------|----------|")
         for item in vicc[:10]:
             source = item.get('source', '')
-            drug = item.get('therapy_name', '')
+            # drugs is a list, join them
+            drugs_list = item.get('drugs', [])
+            drug = ', '.join(drugs_list) if drugs_list else ''
             disease = item.get('disease', '')
-            assoc = item.get('direction', '')
-            lines.append(f"| {source} | {drug} | {disease} | {assoc} |")
+            response = item.get('response_type', '')
+            lines.append(f"| {source} | {drug} | {disease} | {response} |")
         lines.append("")
 
     # CGI Biomarkers
@@ -242,17 +258,6 @@ def result_to_markdown(result: dict) -> str:
             lines.append(f"- [{title}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/) ({year})")
         lines.append("")
 
-    # Recommended Therapies
-    therapies = result.get('recommended_therapies', [])
-    if therapies:
-        lines.append("## Recommended Therapies\n")
-        for therapy in therapies:
-            drug = therapy.get('drug_name', '')
-            evidence = therapy.get('evidence_level', '')
-            source = therapy.get('source', '')
-            lines.append(f"- **{drug}** (Evidence: {evidence}, Source: {source})")
-        lines.append("")
-
     # LLM Synthesis (at the bottom, like in the UI)
     insight = result.get('insight', {})
     functional_summary = insight.get('functional_summary')
@@ -276,31 +281,31 @@ def result_to_markdown(result: dict) -> str:
         if not any([functional_summary, biological_context, therapeutic_summary]) and llm_narrative:
             lines.append(f"{llm_narrative}\n")
 
-    # Cross-source analysis (at the bottom, after AI Synthesis)
-    cross_source = result.get('cross_source_analysis', {})
-    if cross_source:
-        lines.append("## Cross-Source Drug Analysis\n")
-        if cross_source.get('summary'):
-            lines.append(f"{cross_source['summary']}\n")
-
-        strongest = cross_source.get('strongest_evidence', [])
-        if strongest:
-            lines.append("### Strongest Evidence\n")
-            for item in strongest:
-                drug = item.get('drug', 'Unknown')
-                signal = item.get('signal', '')
-                sources = ", ".join(item.get('sources', []))
-                level = item.get('evidence_level', '')
-                lines.append(f"- **{drug}** ({signal}, {level}) - Sources: {sources}")
-            lines.append("")
-
-        conflicts = cross_source.get('conflicting_signals', [])
-        if conflicts:
-            lines.append("### Conflicting Signals\n")
-            for item in conflicts:
-                drug = item.get('drug', 'Unknown')
-                conflict = item.get('conflict', '')
-                lines.append(f"- **{drug}**: {conflict}")
-            lines.append("")
+    # Cross-source analysis (disabled)
+    # cross_source = result.get('cross_source_analysis', {})
+    # if cross_source:
+    #     lines.append("## Cross-Source Drug Analysis\n")
+    #     if cross_source.get('summary'):
+    #         lines.append(f"{cross_source['summary']}\n")
+    #
+    #     strongest = cross_source.get('strongest_evidence', [])
+    #     if strongest:
+    #         lines.append("### Strongest Evidence\n")
+    #         for item in strongest:
+    #             drug = item.get('drug', 'Unknown')
+    #             signal = item.get('signal', '')
+    #             sources = ", ".join(item.get('sources', []))
+    #             level = item.get('evidence_level', '')
+    #             lines.append(f"- **{drug}** ({signal}, {level}) - Sources: {sources}")
+    #         lines.append("")
+    #
+    #     conflicts = cross_source.get('conflicting_signals', [])
+    #     if conflicts:
+    #         lines.append("### Conflicting Signals\n")
+    #         for item in conflicts:
+    #             drug = item.get('drug', 'Unknown')
+    #             conflict = item.get('conflict', '')
+    #             lines.append(f"- **{drug}**: {conflict}")
+    #         lines.append("")
 
     return "\n".join(lines)

@@ -119,7 +119,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
         "lung adenocarcinoma", "lung squamous", "lung adenosquamous"
     ],
     "lung": ["lung", "lung cancer", "lung carcinoma"],
-    "l": ["lung", "lung cancer", "lung carcinoma"],  # CGI uses single-letter "L"
+    "l": ["lung", "lung cancer", "lung carcinoma", "nsclc", "non-small cell lung", "sclc", "small cell lung"],  # CGI uses single-letter "L" for all lung cancers
     "sclc": ["small cell lung", "sclc", "small cell lung cancer", "small cell lung carcinoma"],
     "luad": ["lung adenocarcinoma", "luad", "adenocarcinoma of lung"],
     "lusc": ["lung squamous", "lusc", "squamous cell lung", "squamous cell carcinoma of lung"],
