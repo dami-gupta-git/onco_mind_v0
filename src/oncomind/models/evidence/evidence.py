@@ -38,6 +38,7 @@ from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
 from oncomind.models.evidence.fda import FDAApproval, FDALabelEvidence
+from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -195,6 +196,10 @@ class Evidence(BaseModel):
         default_factory=list,
         description="FDA drug labels with clinical study data, mechanism, adverse reactions"
     )
+    fda_biomarker_evidence: list[FDABiomarkerEvidence] = Field(
+        default_factory=list,
+        description="FDA biomarker-drug indications parsed directly from FDA labels"
+    )
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
         default_factory=list, description="CIViC curated assertions"
@@ -274,6 +279,7 @@ class Evidence(BaseModel):
         """Check if any evidence was found."""
         return bool(
             self.fda_approvals or
+            self.fda_biomarker_evidence or
             self.civic_assertions or
             self.civic_evidence or
             self.vicc_evidence or
@@ -292,7 +298,7 @@ class Evidence(BaseModel):
     def get_evidence_sources(self) -> list[str]:
         """Get list of sources that have evidence."""
         sources = []
-        if self.fda_approvals:
+        if self.fda_approvals or self.fda_biomarker_evidence:
             sources.append("FDA")
         if self.civic_assertions or self.civic_evidence:
             sources.append("CIViC")

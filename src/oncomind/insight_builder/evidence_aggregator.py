@@ -41,8 +41,9 @@ from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
-from oncomind.api.fda_drugs import ensure_fda_labels_cached, search_fda_by_biomarker, FDALabelInfo
+from oncomind.api.fda_drugs import ensure_fda_labels_cached, search_fda_by_biomarker, FDALabelInfo, get_fda_labels_for_biomarker
 from oncomind.api.fda_label_service import collect_all_drugs
+from oncomind.api.fda_label_parser import FDALabelParser
 
 from oncomind.models.evidence import (
     Evidence,
@@ -60,6 +61,7 @@ from oncomind.models.evidence import (
     ClinicalStudyEvidence,
     MechanismEvidence,
     AdverseReactionsEvidence,
+    FDABiomarkerEvidence,
     HotspotsEvidence,
     PubMedEvidence,
     VICCEvidence,
@@ -806,6 +808,51 @@ class EvidenceAggregator:
                 logger.warning(f"FDA biomarker search failed for {gene}: {e}")
                 return []
 
+        async def fetch_fda_biomarker_parsed():
+            """Fetch and parse FDA labels using FDALabelParser.
+
+            This uses the new parser to extract structured biomarker-indication
+            associations with proper negation handling and variant specificity.
+            """
+            try:
+                # Fetch raw labels from OpenFDA
+                raw_labels = await get_fda_labels_for_biomarker(
+                    gene=gene,
+                    variant=variant,
+                    tumor_type=tumor_type,
+                    limit=50,
+                )
+
+                if not raw_labels:
+                    return []
+
+                # Parse labels into BiomarkerIndication objects
+                parser = FDALabelParser()
+                all_indications = []
+                for label_data in raw_labels:
+                    try:
+                        indications = parser.parse_label(label_data)
+                        # Extract set_id for linking
+                        set_id = label_data.get("openfda", {}).get("set_id", [None])[0]
+                        spl_version = label_data.get("spl_version")
+
+                        # Convert to FDABiomarkerEvidence models
+                        for ind in indications:
+                            evidence = FDABiomarkerEvidence.from_biomarker_indication(
+                                indication=ind,
+                                set_id=set_id,
+                                spl_version=spl_version,
+                            )
+                            all_indications.append(evidence)
+                    except Exception as parse_err:
+                        logger.warning(f"Failed to parse FDA label: {parse_err}")
+                        continue
+
+                return all_indications
+            except Exception as e:
+                logger.warning(f"FDA biomarker parsed fetch failed for {gene}: {e}")
+                return []
+
         results = await asyncio.gather(
             timed_fetch("MyVariant", self.myvariant_client.fetch_evidence(gene=gene, variant=variant)),
             timed_fetch("FDA", self.fda_client.fetch_approval_evidence(gene=gene, variant=variant)),
@@ -819,6 +866,7 @@ class EvidenceAggregator:
             timed_fetch("CellLines", fetch_cell_lines()),
             timed_fetch("DepMap", fetch_depmap()),
             timed_fetch("FDA_biomarker", fetch_fda_biomarker()),
+            timed_fetch("FDA_biomarker_parsed", fetch_fda_biomarker_parsed()),
             return_exceptions=True,
         )
 
@@ -837,7 +885,7 @@ class EvidenceAggregator:
         (
             myvariant_result, fda_result, cgi_result, vicc_result, civic_assertions_result,
             civic_evidence_result, trials_result, literature_result, cbioportal_result,
-            cell_lines_result, depmap_result, fda_biomarker_result,
+            cell_lines_result, depmap_result, fda_biomarker_result, fda_biomarker_parsed_result,
         ) = results
 
         gene = variant.gene
@@ -862,6 +910,13 @@ class EvidenceAggregator:
         tracker.fda_biomarker_labels = fda_biomarker_labels
         if fda_biomarker_labels:
             logger.info(f"FDA biomarker search found {len(fda_biomarker_labels)} drugs for {gene}")
+
+        # FDA biomarker parsed - structured indications from new parser
+        fda_biomarker_evidence: list[FDABiomarkerEvidence] = tracker.handle_result(
+            fda_biomarker_parsed_result, "FDA Biomarker Parsed"
+        ) or []
+        if fda_biomarker_evidence:
+            logger.info(f"FDA biomarker parser found {len(fda_biomarker_evidence)} indications for {gene}")
 
         # Process CGI biomarkers (split by evidence level)
         cgi_biomarkers, preclinical_biomarkers, early_phase_biomarkers = self._process_cgi_biomarkers(all_cgi)
@@ -917,6 +972,7 @@ class EvidenceAggregator:
                 pathway=pathway,
             ),
             fda_approvals=fda_approvals,
+            fda_biomarker_evidence=fda_biomarker_evidence,
             civic_assertions=civic_assertions,
             civic_evidence=civic_evidence,  # Now from CIViC GraphQL API
             vicc_evidence=vicc_evidence,
