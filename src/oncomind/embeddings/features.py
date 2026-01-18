@@ -132,7 +132,7 @@ def _extract_count_features(panel: Evidence) -> dict[str, int]:
         "cosmic_count": len(panel.cosmic_entries),
         "cgi_biomarker_count": len(panel.cgi_biomarkers),
         "vicc_count": len(panel.vicc_evidence),
-        "fda_approval_count": len(panel.fda_approvals),
+        "fda_approval_count": len(panel.fda_biomarker_evidence),
         "clinical_trial_count": len(panel.clinical_trials),
         "pubmed_article_count": len(panel.pubmed_articles),
         "total_kb_evidence_count": (
@@ -163,7 +163,7 @@ def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
     )
 
     return {
-        "has_fda_approval": bool(panel.fda_approvals),
+        "has_fda_approval": bool(panel.fda_biomarker_evidence),
         "has_clinical_trials": bool(panel.clinical_trials),
         "has_variant_specific_trials": variant_specific_trials > 0,
         "variant_specific_trial_count": variant_specific_trials,

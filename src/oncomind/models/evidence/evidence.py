@@ -7,7 +7,7 @@ For LLM narrative synthesis, see LLMInsight.
 
 ARCHITECTURE (Flat Structure):
     Each evidence source is a simple list field on Evidence:
-    - fda_approvals: list[FDAApproval]
+    - fda_biomarker_evidence: list[FDABiomarkerEvidence]
     - civic_assertions: list[CIViCAssertionEvidence]
     - civic_evidence: list[CIViCEvidence]
     - vicc_evidence: list[VICCEvidence]
@@ -37,7 +37,7 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
-from oncomind.models.evidence.fda import FDAApproval, FDALabelEvidence
+from oncomind.models.evidence.fda import FDALabelEvidence
 from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence, BiomarkerRequirement
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
@@ -159,7 +159,7 @@ class Evidence(BaseModel):
     - context: Variant context (tumor type, gene role, mutation class)
 
     Evidence Lists (one per source):
-    - fda_approvals: FDA drug approvals
+    - fda_biomarker_evidence: FDA biomarker-drug indications (with negation detection)
     - civic_assertions: CIViC curated assertions
     - civic_evidence: CIViC evidence items
     - vicc_evidence: VICC MetaKB evidence
@@ -175,8 +175,8 @@ class Evidence(BaseModel):
         >>> evidence = build_evidence("BRAF V600E", tumor_type="Melanoma")
         >>> print(evidence.identifiers.gene, evidence.identifiers.variant)
         BRAF V600E
-        >>> print([a.brand_name for a in evidence.fda_approvals])
-        ['Tafinlar', 'Zelboraf', 'Braftovi']
+        >>> print([e.drug_name for e in evidence.fda_biomarker_evidence])
+        ['dabrafenib', 'vemurafenib', 'encorafenib']
     """
 
     # Core info
@@ -190,15 +190,14 @@ class Evidence(BaseModel):
 
     # === Evidence lists (one per source) ===
 
-    # FDA
-    fda_approvals: list[FDAApproval] = Field(default_factory=list, description="FDA drug approvals")
-    fda_labels: list[FDALabelEvidence] = Field(
-        default_factory=list,
-        description="FDA drug labels with clinical study data, mechanism, adverse reactions"
-    )
+    # FDA - uses FDABiomarkerEvidence from FDALabelParser (with negation detection)
     fda_biomarker_evidence: list[FDABiomarkerEvidence] = Field(
         default_factory=list,
         description="FDA biomarker-drug indications parsed directly from FDA labels"
+    )
+    fda_labels: list[FDALabelEvidence] = Field(
+        default_factory=list,
+        description="FDA drug labels with clinical study data, mechanism, adverse reactions"
     )
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
@@ -278,7 +277,6 @@ class Evidence(BaseModel):
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""
         return bool(
-            self.fda_approvals or
             self.fda_biomarker_evidence or
             self.civic_assertions or
             self.civic_evidence or
@@ -298,7 +296,7 @@ class Evidence(BaseModel):
     def get_evidence_sources(self) -> list[str]:
         """Get list of sources that have evidence."""
         sources = []
-        if self.fda_approvals or self.fda_biomarker_evidence:
+        if self.fda_biomarker_evidence:
             sources.append("FDA")
         if self.civic_assertions or self.civic_evidence:
             sources.append("CIViC")
@@ -323,10 +321,24 @@ class Evidence(BaseModel):
         return sources
 
     def get_approved_drugs(self) -> list[str]:
-        """Get list of FDA-approved drug names."""
+        """Get list of FDA-approved drug names from fda_biomarker_evidence.
+
+        Only includes drugs with REQUIRED_POSITIVE (matched) status.
+        """
         drugs = []
-        for approval in self.fda_approvals:
-            name = approval.brand_name or approval.generic_name or approval.drug_name
+        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        variant = self.identifiers.variant if self.identifiers else ""
+
+        for ev in self.fda_biomarker_evidence:
+            # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+            # Check if variant matches
+            if gene and variant:
+                match_result = ev.matches_variant(gene, variant)
+                if not match_result.get("matches"):
+                    continue
+            name = ev.brand_name or ev.drug_name
             if name and name not in drugs:
                 drugs.append(name)
         return drugs
@@ -671,7 +683,7 @@ class Evidence(BaseModel):
         """Get all FDA-approved therapies with no limit.
 
         Sources:
-        - FDA approvals (direct)
+        - FDA biomarker evidence (from FDALabelParser with negation detection)
         - CIViC assertions: Tier I with fda_companion_test=True
         - CGI biomarkers: fda_approved=True
 
@@ -687,73 +699,75 @@ class Evidence(BaseModel):
         seen_entries: set[tuple[str, str]] = set()
 
         gene = self.identifiers.gene if self.identifiers else None
+        variant = self.identifiers.variant if self.identifiers else None
 
-        # From FDA approvals - only include those that match the queried variant
-        # Unmatched codon-level near-misses are shown separately in get_evidence_summary_for_llm()
-        for approval in self.fda_approvals:
-            if not approval.biomarker_matched:
-                continue  # Skip approvals that don't cover this variant
+        # From FDA biomarker evidence - only include those that match the queried variant
+        # and have REQUIRED_POSITIVE (not REQUIRED_NEGATIVE)
+        for ev in self.fda_biomarker_evidence:
+            # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
+            # e.g., IMJUDO is approved for NSCLC without EGFR mutations
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+
+            # Skip if drug name is missing
+            if not ev.drug_name or ev.drug_name == "Unknown":
+                continue
 
             # Skip biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
-            drug_name_check = approval.drug_name or approval.generic_name or approval.brand_name
-            if drug_name_check and gene and is_biomarker_selection_drug(drug_name_check, gene):
+            if gene and is_biomarker_selection_drug(ev.drug_name, gene):
                 continue
-            # For combinations (contain "+"), use drug_name as key; otherwise use generic/brand
-            is_combination = approval.drug_name and "+" in approval.drug_name
-            if is_combination:
-                drug_key = approval.drug_name.lower()
+
+            # Check if variant matches using the model's matches_variant method
+            if gene and variant:
+                match_result = ev.matches_variant(gene, variant)
+                if not match_result.get("matches"):
+                    continue
+                match_type = match_result.get("match_type", "gene")
             else:
-                drug_key = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
-            assoc_key = (approval.association or "").lower()
+                match_type = "gene"
+
+            # For combinations, use the full combination name
+            is_combination = ev.combination_partners and len(ev.combination_partners) > 0
+            if is_combination:
+                drug_name = ev.get_display_drug_name()
+            else:
+                drug_name = ev.brand_name or ev.drug_name if ev.brand_name else ev.drug_name
+
+            drug_key = drug_name.lower() if drug_name else ""
+            assoc_key = ""  # FDA biomarker evidence doesn't have association info
             entry_key = (drug_key, assoc_key)
             if drug_key and entry_key not in seen_entries:
                 seen_entries.add(entry_key)
 
-                # For combinations, use the full combination name
-                if is_combination:
-                    drug_name = approval.drug_name
-                elif approval.generic_name and approval.brand_name:
-                    drug_name = f"{approval.generic_name} ({approval.brand_name})"
-                else:
-                    drug_name = approval.brand_name or approval.generic_name or approval.drug_name
-
-                cancer_specificity = self._get_fda_cancer_specificity(approval)
-
-                # FDA labels from OpenFDA don't contain sensitivity/resistance info
-                # That signal comes from CGI/CIViC/VICC therapeutic evidence separately
-                # The association field may be None for FDA label-derived approvals
-                response_type = None
-                if approval.association:
-                    assoc_upper = approval.association.upper()
-                    if "RESIST" in assoc_upper:
-                        response_type = "Resistance"
-                    elif "RESPONS" in assoc_upper or "SENSITIV" in assoc_upper:
-                        response_type = "Sensitivity"
+                # Determine cancer specificity from tumor types
+                cancer_specificity = None
+                if ev.tumor_types:
+                    queried_tumor = self.context.tumor_type
+                    if queried_tumor:
+                        if any(tumor_types_match(t, queried_tumor) for t in ev.tumor_types):
+                            cancer_specificity = "cancer_specific"
+                        elif any(is_pan_cancer_term(t) for t in ev.tumor_types):
+                            cancer_specificity = "pan_cancer"
+                        else:
+                            cancer_specificity = ev.tumor_types[0] if ev.tumor_types else None
+                    else:
+                        cancer_specificity = ev.tumor_types[0] if ev.tumor_types else None
 
                 # Generate FDA label URL using set_id for direct link
-                # For combinations, use just the first drug for search fallback
-                fda_url = None
-                if hasattr(approval, 'set_id') and approval.set_id:
-                    fda_url = f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={approval.set_id}"
-                else:
-                    search_drug = approval.brand_name or approval.generic_name or approval.drug_name
-                    if search_drug and "+" in search_drug:
-                        search_drug = search_drug.split("+")[0].strip()
-                    if search_drug:
-                        fda_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_drug.replace(' ', '+')}"
+                fda_url = ev.fda_label_url
 
                 evidence_list.append(TherapeuticData(
                     drug_name=drug_name,
                     evidence_level="FDA-approved",
-                    approval_status="Approved in indication" if approval.variant_in_indications else "Approved",
-                    clinical_context=self._extract_line_of_therapy(approval),
-                    response_type=response_type,
+                    approval_status="Approved in indication" if match_type == "variant" else "Approved",
+                    clinical_context=ev.line_of_therapy,
+                    response_type=None,  # FDA biomarker evidence doesn't have response type
                     mechanism=None,
-                    tumor_types_tested=[self.context.tumor_type] if self.context.tumor_type else [],
+                    tumor_types_tested=ev.tumor_types,
                     source="FDA",
                     source_url=fda_url,
                     confidence="high",
-                    locus_match=approval.locus_match,
+                    locus_match=match_type,
                     cancer_specificity=cancer_specificity,
                 ))
 
@@ -982,9 +996,12 @@ class Evidence(BaseModel):
         """
         drug_lower = drug_name.lower()
 
-        # Check FDA approvals - these are the strongest evidence
-        for approval in self.fda_approvals:
-            fda_drug = (approval.generic_name or approval.brand_name or approval.drug_name or "").lower()
+        # Check FDA biomarker evidence - these are the strongest evidence
+        # Only include drugs with REQUIRED_POSITIVE (not REQUIRED_NEGATIVE)
+        for ev in self.fda_biomarker_evidence:
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+            fda_drug = (ev.drug_name or "").lower()
             if drug_lower in fda_drug or fda_drug in drug_lower:
                 return True
 
@@ -1473,34 +1490,47 @@ class Evidence(BaseModel):
             # For codon/gene level, exclude if drug has variant-level resistance
             return drug_lower not in variant_resistant_drugs
 
-        # FDA approvals - with cancer specificity and biomarker match level
-        # Use biomarker_match_level (not locus_match) for FDA because it indicates
-        # whether the approval covers the variant (e.g., "AKT1 alteration" covers E17K)
-        # IMPORTANT: Only include approvals where biomarker_matched=True
-        # e.g., pembrolizumab has pan-cancer MSI-H approval but should NOT appear for
-        # ALK F1174L queries since ALK is not MSI-H
-        for approval in self.fda_approvals:
-            # Skip approvals where the biomarker doesn't match
-            if not approval.biomarker_matched:
+        # FDA biomarker evidence - with cancer specificity and match level
+        # Only include drugs with REQUIRED_POSITIVE (not REQUIRED_NEGATIVE)
+        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        variant = self.identifiers.variant if self.identifiers else ""
+        for ev in self.fda_biomarker_evidence:
+            # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
                 continue
-            drug = approval.generic_name or approval.brand_name or approval.drug_name
-            if drug:
-                drug_lower = drug.lower()
-                # Use biomarker_match_level for FDA approvals
-                locus = approval.biomarker_match_level or "gene"
-                cancer_spec = self._get_fda_cancer_specificity(approval)
-                if cancer_spec == "cancer_specific" or cancer_spec == "pan_cancer":
-                    if drug_lower in fda_matching_drugs:
-                        fda_matching_drugs[drug_lower] = get_best_locus(fda_matching_drugs[drug_lower], locus)
-                    else:
-                        fda_matching_drugs[drug_lower] = locus
+            if not ev.drug_name or ev.drug_name == "Unknown":
+                continue
+
+            # Check if variant matches
+            match_result = ev.matches_variant(gene, variant) if gene and variant else {"matches": True, "match_type": "gene"}
+            if not match_result.get("matches"):
+                continue
+
+            drug_lower = ev.drug_name.lower()
+            locus = match_result.get("match_type", "gene")
+
+            # Determine cancer specificity from tumor types
+            cancer_spec = None
+            if ev.tumor_types:
+                if any(tumor_types_match(t, tumor_type) for t in ev.tumor_types):
+                    cancer_spec = "cancer_specific"
+                elif any(is_pan_cancer_term(t) for t in ev.tumor_types):
+                    cancer_spec = "pan_cancer"
                 else:
-                    # FDA approved for a different cancer
-                    if drug_lower in fda_other_drugs:
-                        _, existing_locus = fda_other_drugs[drug_lower]
-                        fda_other_drugs[drug_lower] = (cancer_spec, get_best_locus(existing_locus, locus))
-                    else:
-                        fda_other_drugs[drug_lower] = (cancer_spec, locus)
+                    cancer_spec = ev.tumor_types[0] if ev.tumor_types else None
+
+            if cancer_spec == "cancer_specific" or cancer_spec == "pan_cancer":
+                if drug_lower in fda_matching_drugs:
+                    fda_matching_drugs[drug_lower] = get_best_locus(fda_matching_drugs[drug_lower], locus)
+                else:
+                    fda_matching_drugs[drug_lower] = locus
+            else:
+                # FDA approved for a different cancer
+                if drug_lower in fda_other_drugs:
+                    _, existing_locus = fda_other_drugs[drug_lower]
+                    fda_other_drugs[drug_lower] = (cancer_spec, get_best_locus(existing_locus, locus))
+                else:
+                    fda_other_drugs[drug_lower] = (cancer_spec, locus)
 
         # All FDA drugs for deduplication
         all_fda_drugs = set(fda_matching_drugs.keys()) | set(fda_other_drugs.keys())
@@ -1778,20 +1808,28 @@ class Evidence(BaseModel):
 
         # FDA Codon-Level Near-Misses - drugs approved for OTHER variants at same codon
         # e.g., KRAS G12C drugs (sotorasib, adagrasib) when patient has G12A
-        # These are NOT matched (biomarker_matched=False) but are at codon-level
+        # These are NOT matched but share the same codon
         codon_near_misses = []
-        for approval in self.fda_approvals:
-            # Only include if NOT matched but has codon-level match
-            if not approval.biomarker_matched and approval.biomarker_match_level == "codon":
-                # Use drug_name first - it may contain combination name (e.g., "capivasertib + fulvestrant")
-                drug_name = approval.drug_name or approval.generic_name or approval.brand_name
-                if drug_name and not is_biomarker_selection_drug(drug_name, gene):
-                    # Extract what variant it's actually approved for
-                    approved_variant = approval.extract_approved_variant()
-                    if approved_variant:
-                        codon_near_misses.append(f"{drug_name} (approved for {approved_variant})")
+        variant = self.identifiers.variant if self.identifiers else None
+        for ev in self.fda_biomarker_evidence:
+            # Skip REQUIRED_NEGATIVE drugs
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+            if not ev.drug_name or ev.drug_name == "Unknown":
+                continue
+            if gene and is_biomarker_selection_drug(ev.drug_name, gene):
+                continue
+
+            # Check if this is a codon-level near-miss (same codon but different variant)
+            if gene and variant:
+                match_result = ev.matches_variant(gene, variant)
+                if not match_result.get("matches") and match_result.get("match_type") == "same_codon_different_variant":
+                    # This is a near-miss at codon level
+                    approved_variants = ", ".join(ev.specified_variants) if ev.specified_variants else None
+                    if approved_variants:
+                        codon_near_misses.append(f"{ev.drug_name} (approved for {approved_variants})")
                     else:
-                        codon_near_misses.append(drug_name)
+                        codon_near_misses.append(ev.drug_name)
         if codon_near_misses:
             lines.append(f"FDA Codon-Level (not for queried variant): {', '.join(codon_near_misses[:4])}")
 
@@ -2454,8 +2492,8 @@ class Evidence(BaseModel):
         codon_count = 0
         gene_count = 0
 
-        # FDA approvals
-        fda_counts = self._count_locus_matches(self.fda_approvals)
+        # FDA biomarker evidence
+        fda_counts = self._count_locus_matches(self.fda_biomarker_evidence)
         variant_count += fda_counts['variant']
         codon_count += fda_counts['codon']
         gene_count += fda_counts['gene']
@@ -2598,11 +2636,19 @@ class Evidence(BaseModel):
                 # No tumor info - count as unknown (NOT pan_cancer)
                 unknown_count += 1
 
-        # FDA approvals - only count those where biomarker matches
+        # FDA biomarker evidence - only count those where biomarker matches
         # e.g., pembrolizumab (MSI-H pan-cancer) shouldn't count for ALK F1174L
-        for approval in self.fda_approvals:
-            if approval.biomarker_matched:
-                count_tumor_match(approval)
+        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        variant = self.identifiers.variant if self.identifiers else ""
+        for ev in self.fda_biomarker_evidence:
+            # Skip REQUIRED_NEGATIVE drugs
+            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+            # Check if variant matches
+            if gene and variant:
+                match_result = ev.matches_variant(gene, variant)
+                if match_result.get("matches"):
+                    count_tumor_match(ev)
 
         # VICC evidence
         for vicc in self.vicc_evidence:

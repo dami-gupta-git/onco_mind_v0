@@ -111,7 +111,7 @@ def insight(
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor)
 
-        logger.debug(f"Result received: evidence_sources={len(result.evidence.fda_approvals)} FDA, "
+        logger.debug(f"Result received: evidence_sources={len(result.evidence.fda_biomarker_evidence)} FDA, "
                     f"{len(result.evidence.civic_assertions)} CIViC, llm={'yes' if result.llm else 'no'}")
 
         # LLM Insight (debug logging only)

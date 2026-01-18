@@ -605,9 +605,13 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
     cgi_counts = count_with_levels(evidence.cgi_biomarkers, ctx.tumor_type)
     vicc_counts = count_with_levels(evidence.vicc_evidence, ctx.tumor_type)
 
-    # FDA approvals - use tumor_match property (set by evidence_aggregator)
-    # No custom tumor_check_fn needed; count_with_levels will use the tumor_match property
-    fda_counts = count_with_levels(evidence.fda_approvals, ctx.tumor_type)
+    # FDA biomarker evidence - filter for REQUIRED_POSITIVE only
+    from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    fda_filtered = [
+        ev for ev in evidence.fda_biomarker_evidence
+        if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE
+    ]
+    fda_counts = count_with_levels(fda_filtered, ctx.tumor_type)
 
     # Aggregate counts
     counts = MatchCounts().add(cgi_counts).add(vicc_counts).add(fda_counts)
@@ -1118,11 +1122,12 @@ def _check_literature_database_integration(evidence: "Evidence", ctx: GapDetecti
     # Collect drugs in curated databases
     curated_drugs: set[str] = set()
 
-    # FDA approvals
-    for approval in evidence.fda_approvals:
-        drug = approval.generic_name or approval.brand_name or approval.drug_name
-        if drug:
-            curated_drugs.add(drug.lower())
+    # FDA biomarker evidence (only REQUIRED_POSITIVE)
+    from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    for ev in evidence.fda_biomarker_evidence:
+        if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE:
+            if ev.drug_name:
+                curated_drugs.add(ev.drug_name.lower())
 
     # CIViC assertions
     for assertion in evidence.civic_assertions:
@@ -1185,7 +1190,7 @@ def _check_validation_gap(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 
     has_therapeutic_validation = (
         bool(evidence.civic_assertions) or
-        bool(evidence.fda_approvals) or
+        bool(evidence.fda_biomarker_evidence) or
         bool(evidence.vicc_evidence)
     )
 
@@ -1281,7 +1286,7 @@ def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) ->
         # TUMOR_TYPE gaps: suggest basket trial or cross-histology comparison
         if gap.category == GapCategory.TUMOR_TYPE and tumor_type:
             # Check if we have evidence in other tumor types
-            if evidence.civic_assertions or evidence.fda_approvals:
+            if evidence.civic_assertions or evidence.fda_biomarker_evidence:
                 new_suggestions.append(
                     f"Retrospective analysis of {gene} {variant} response in {tumor_type} vs other histologies"
                 )
@@ -1318,9 +1323,11 @@ def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) ->
 
 def _get_primary_drug(evidence: "Evidence") -> str | None:
     """Get the primary approved drug for this variant."""
-    if evidence.fda_approvals:
-        approval = evidence.fda_approvals[0]
-        return approval.brand_name or approval.generic_name or approval.drug_name
+    # Use FDA biomarker evidence (only REQUIRED_POSITIVE)
+    from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    for ev in evidence.fda_biomarker_evidence:
+        if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE and ev.drug_name:
+            return ev.brand_name or ev.drug_name
     # Fall back to CIViC assertion therapies
     for assertion in evidence.civic_assertions:
         if assertion.therapies:
@@ -1470,10 +1477,15 @@ def _check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tum
     if counts[0] > 0:
         result.add_source_match("CIViC", *counts)
 
-    # FDA approvals - use tumor_match property (set by evidence_aggregator)
+    # FDA biomarker evidence - filter for REQUIRED_POSITIVE only
+    from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    fda_filtered = [
+        ev for ev in evidence.fda_biomarker_evidence
+        if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE
+    ]
     counts = count_matches(
-        evidence.fda_approvals,
-        lambda f: f.indication and f.tumor_match
+        fda_filtered,
+        lambda f: f.tumor_types and any(f.tumor_types)
     )
     if counts[0] > 0:
         result.add_source_match("FDA", *counts)
@@ -1539,7 +1551,7 @@ def _has_pathogenic_signal(evidence: "Evidence") -> bool:
         return True
 
     # Has clinical evidence (strongest signal)
-    if evidence.civic_assertions or evidence.fda_approvals:
+    if evidence.civic_assertions or evidence.fda_biomarker_evidence:
         return True
 
     # ClinVar pathogenic entries
@@ -1606,17 +1618,24 @@ def _detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str
     sensitive_variant_level: dict[str, set[str]] = {}  # Variant-level only
     resistant_variant_level: dict[str, set[str]] = {}  # Variant-level only
 
-    # Track FDA approvals at variant level for FDA vs VICC conflict detection
+    # Track FDA evidence at variant level for FDA vs VICC conflict detection
     fda_sensitive_variant_level: dict[str, bool] = {}
 
-    # Check FDA approvals (always sensitivity)
-    for approval in evidence.fda_approvals:
-        drug = approval.generic_name or approval.brand_name or approval.drug_name
-        if drug:
-            drug_lower = drug.lower()
-            sensitive_drugs.setdefault(drug_lower, set()).add("FDA")
-            # Track if variant-level
-            if approval.locus_match == "variant":
+    # Check FDA biomarker evidence (only REQUIRED_POSITIVE, always sensitivity)
+    from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    gene = evidence.identifiers.gene.upper() if evidence.identifiers and evidence.identifiers.gene else ""
+    variant = evidence.identifiers.variant if evidence.identifiers else ""
+    for ev in evidence.fda_biomarker_evidence:
+        if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+            continue
+        if not ev.drug_name or ev.drug_name == "Unknown":
+            continue
+        drug_lower = ev.drug_name.lower()
+        sensitive_drugs.setdefault(drug_lower, set()).add("FDA")
+        # Check match level
+        if gene and variant:
+            match_result = ev.matches_variant(gene, variant)
+            if match_result.get("match_type") == "variant":
                 fda_sensitive_variant_level[drug_lower] = True
                 sensitive_variant_level.setdefault(drug_lower, set()).add("FDA")
 

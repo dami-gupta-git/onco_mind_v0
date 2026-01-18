@@ -290,7 +290,7 @@ class Conductor:
             "has_tumor_specific_cbioportal": _check_tumor_specific_cbioportal(evidence, tumor_type),
             # Check if we have curated clinical evidence
             "has_civic_assertions": bool(evidence.civic_assertions),
-            "has_fda_approvals": bool(evidence.fda_approvals),
+            "has_fda_biomarker_evidence": bool(evidence.fda_biomarker_evidence),
             # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
             "has_vicc_evidence": bool(evidence.get_vicc_unique()),
         }

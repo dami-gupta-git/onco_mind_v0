@@ -56,7 +56,6 @@ from oncomind.models.evidence import (
     CIViCAssertionEvidence,
     CIViCEvidence,
     ClinicalTrialEvidence,
-    FDAApproval,
     FDALabelEvidence,
     ClinicalStudyEvidence,
     MechanismEvidence,
@@ -70,7 +69,6 @@ from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
 from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
 
 from oncomind.insight_builder.fda_processor import (
-    convert_fda_labels_to_approvals,
     sort_fda_by_association,
     populate_locus_variant_match,
 )
@@ -679,11 +677,8 @@ class EvidenceAggregator:
             query_tumor=resolved_tumor,
         )
 
-        # Convert FDA labels to FDAApproval objects for LLM consumption
-        # Uses already-processed FDALabelEvidence which has locus_variant_match computed
-        evidence.fda_approvals = convert_fda_labels_to_approvals(
-            evidence.fda_labels
-        )
+        # Note: fda_approvals has been removed - now using fda_biomarker_evidence exclusively
+        # which is populated from FDALabelParser with proper negation detection
 
         total_time = time.time() - total_start
 
@@ -952,9 +947,7 @@ class EvidenceAggregator:
         if not_actionable:
             logger.debug(f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}")
 
-        # FDA approvals will be populated from FDA labels in build_evidence()
-        # after get_fda_labels_for_drugs_async() is called
-        fda_approvals: list[FDAApproval] = []
+        # Note: fda_approvals has been removed - using fda_biomarker_evidence exclusively
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
@@ -971,7 +964,6 @@ class EvidenceAggregator:
                 mutation_class=None,
                 pathway=pathway,
             ),
-            fda_approvals=fda_approvals,
             fda_biomarker_evidence=fda_biomarker_evidence,
             civic_assertions=civic_assertions,
             civic_evidence=civic_evidence,  # Now from CIViC GraphQL API

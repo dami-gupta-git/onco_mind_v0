@@ -543,33 +543,7 @@ def populate_locus_variant_match(
                         )
 
 
-def convert_fda_labels_to_approvals(
-    fda_label_evidence: list[FDALabelEvidence]
-) -> list[FDAApproval]:
-    """Convert FDALabelEvidence to FDAApproval objects for LLM consumption.
-
-    Takes the already-processed FDALabelEvidence (which has locus_variant_match
-    already computed) and converts to FDAApproval for LLM prompt.
-
-    Note: FDA labels do not contain sensitivity/resistance associations.
-    Those signals come from CGI/CIViC/VICC therapeutic evidence separately.
-
-    Args:
-        fda_label_evidence: List of FDALabelEvidence (already processed)
-
-    Returns:
-        List of FDAApproval objects for LLM prompt
-    """
-    fda_approvals = []
-    for label in fda_label_evidence:
-        try:
-            fda_approvals.append(label.to_approval())
-        except Exception as e:
-            logger.warning(f"Failed to convert FDA label to FDA approval: {e}")
-    return fda_approvals
-
-
-def sort_fda_by_association(approvals: list[FDAApproval]) -> list[FDAApproval]:
+def sort_fda_by_association(approvals: list) -> list:
     """Sort FDA approvals by association: Responsive/Sensitive first, Resistant last.
 
     Sort order:

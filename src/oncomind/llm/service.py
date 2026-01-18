@@ -222,7 +222,7 @@ class LLMService:
             data_availability = {
                 "has_tumor_specific_cbioportal": False,
                 "has_civic_assertions": False,
-                "has_fda_approvals": False,
+                "has_fda_biomarker_evidence": False,
                 "has_vicc_evidence": False,
             }
 

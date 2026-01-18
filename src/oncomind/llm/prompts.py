@@ -111,7 +111,7 @@ Tumor Type: {tumor_type}
 ## DATA FLAGS
 has_tumor_specific_cbioportal_data: {has_tumor_specific_cbioportal}
 has_civic_assertions: {has_civic_assertions}
-has_fda_approvals: {has_fda_approvals}
+has_fda_biomarker_evidence: {has_fda_biomarker_evidence}
 has_vicc_evidence: {has_vicc_evidence}
 
 ## LOCUS MATCH SUMMARY
@@ -295,7 +295,7 @@ def create_synthesis_prompt(
         tumor_type=tumor_display,
         has_tumor_specific_cbioportal=str(data_availability.get("has_tumor_specific_cbioportal", False)).upper(),
         has_civic_assertions=str(data_availability.get("has_civic_assertions", False)).upper(),
-        has_fda_approvals=str(data_availability.get("has_fda_approvals", False)).upper(),
+        has_fda_biomarker_evidence=str(data_availability.get("has_fda_biomarker_evidence", False)).upper(),
         has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
         locus_match_text=locus_match_text,
         tumor_match_text=tumor_match_text,

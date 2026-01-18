@@ -163,17 +163,17 @@ def result_to_markdown(result: dict) -> str:
             lines.append(f"- **HGVS Protein:** {hgvs['protein']}")
         lines.append("")
 
-    # FDA Approvals
-    fda = result.get('fda_approvals', [])
+    # FDA Biomarker Evidence (from fda_biomarker_evidence)
+    fda = result.get('fda_biomarker_evidence', [])
     if fda:
-        lines.append("## FDA Approvals\n")
-        lines.append("| Drug | Indication | Biomarker Match |")
-        lines.append("|------|------------|-----------------|")
+        lines.append("## FDA Biomarker Evidence\n")
+        lines.append("| Drug | Tumor Types | Match Type |")
+        lines.append("|------|-------------|------------|")
         for item in fda:
-            drug = item.get('drug', '')
-            indication = item.get('indication', '')
-            matched = "Yes" if item.get('biomarker_matched') else "No"
-            lines.append(f"| {drug} | {indication} | {matched} |")
+            drug = item.get('drug_name', '')
+            tumors = ", ".join(item.get('tumor_types', [])[:2]) if item.get('tumor_types') else ''
+            match_type = item.get('match_type', '')
+            lines.append(f"| {drug} | {tumors} | {match_type} |")
         lines.append("")
 
     # CIViC Evidence

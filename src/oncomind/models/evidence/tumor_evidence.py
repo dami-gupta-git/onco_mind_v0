@@ -40,7 +40,7 @@ class TumorEvidenceMatch(BaseModel):
     # Per-source match info
     civic_assertions: SourceMatch | None = Field(default=None)
     civic_evidence: SourceMatch | None = Field(default=None)
-    fda_approvals: SourceMatch | None = Field(default=None)
+    fda_biomarker_evidence: SourceMatch | None = Field(default=None)
     vicc_evidence: SourceMatch | None = Field(default=None)
     cgi_biomarkers: SourceMatch | None = Field(default=None)
 
@@ -80,7 +80,7 @@ class TumorEvidenceMatch(BaseModel):
         for source_match in [
             self.civic_assertions,
             self.civic_evidence,
-            self.fda_approvals,
+            self.fda_biomarker_evidence,
             self.vicc_evidence,
             self.cgi_biomarkers,
         ]:
@@ -113,7 +113,7 @@ class TumorEvidenceMatch(BaseModel):
         elif source_lower == "civic_evidence" or source == "CIViC":
             self.civic_evidence = source_match
         elif source_lower == "fda" or source == "FDA":
-            self.fda_approvals = source_match
+            self.fda_biomarker_evidence = source_match
         elif source_lower == "vicc" or source == "VICC" or "vicc" in source_lower:
             self.vicc_evidence = source_match
         elif source_lower == "cgi" or source == "CGI":

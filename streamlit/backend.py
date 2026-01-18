@@ -143,7 +143,7 @@ async def get_variant_insight(
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor_type)
 
-        logger.debug(f"  Result: {len(result.evidence.fda_approvals)} FDA, "
+        logger.debug(f"  Result: {len(result.evidence.fda_biomarker_evidence)} FDA, "
                     f"{len(result.evidence.civic_assertions)} CIViC")
 
         # Build response
@@ -398,7 +398,7 @@ def _build_response(result) -> Dict[str, Any]:
     """Build the standard response dict from a Result object.
 
     Uses the flat Evidence structure where each source is a simple list:
-    - evidence.fda_approvals, .civic_assertions, .civic_evidence, etc.
+    - evidence.fda_biomarker_evidence, .civic_assertions, .civic_evidence, etc.
     """
     llm = result.llm  # May be None if LLM was not enabled
     evidence = result.evidence  # Evidence object with flat list structure
@@ -464,20 +464,8 @@ def _build_response(result) -> Dict[str, Any]:
             "consequence": result.identifiers.transcript_consequence,
         },
         # Per-source evidence (flat lists - frontend decides how to display)
-        "fda_approvals": [
-            {
-                "drug_name": a.drug_name,
-                "brand_name": a.brand_name,
-                "generic_name": a.generic_name,
-                "indication": a.indication,
-                "companion_diagnostic": a.companion_diagnostic,
-                "black_box_warning": a.black_box_warning,
-                "dosing_for_variant": a.dosing_for_variant,
-                # Match specificity tracking
-                "locus_match": a.locus_match,
-            }
-            for a in evidence.fda_approvals
-        ],
+        # Note: fda_approvals has been removed - using fda_biomarker_evidence exclusively
+        # The frontend FDA tab now uses fda_biomarker_evidence directly
         "fda_labels": _sort_fda_labels([
             {
                 "drug": l.drug,

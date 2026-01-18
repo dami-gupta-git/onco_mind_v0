@@ -106,7 +106,7 @@ async def show_prompt_data(gene: str, variant: str, tumor_type: str | None):
             evidence, tumor_type
         ),
         "has_civic_assertions": bool(evidence.civic_assertions),
-        "has_fda_approvals": bool(evidence.fda_approvals),
+        "has_fda_biomarker_evidence": bool(evidence.fda_biomarker_evidence),
         "has_vicc_evidence": bool(evidence.get_vicc_unique()),
     }
 
@@ -236,7 +236,7 @@ async def generate_and_run_prompt(
             evidence, tumor_type
         ),
         "has_civic_assertions": bool(evidence.civic_assertions),
-        "has_fda_approvals": bool(evidence.fda_approvals),
+        "has_fda_biomarker_evidence": bool(evidence.fda_biomarker_evidence),
         "has_vicc_evidence": bool(evidence.get_vicc_unique()),
     }
 

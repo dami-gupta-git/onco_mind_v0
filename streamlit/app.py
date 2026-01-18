@@ -296,7 +296,7 @@ with tab1:
             st.markdown("<span style='font-size: 1.5rem; font-weight: 600;'>📚 Evidence Sources</span>", unsafe_allow_html=True)
 
             # Collect available sources
-            fda_approvals = result.get('fda_approvals', [])
+            # Note: fda_approvals has been removed - using fda_biomarker_evidence exclusively
             civic_assertions = result.get('civic_assertions', [])
             civic_evidence = result.get('civic_evidence', [])
             vicc = result.get('vicc_evidence', [])
@@ -1506,19 +1506,9 @@ with tab1:
                     drug_match_parts.append(f"🧬 {drug_gene} gene")
                 drug_match_str = ", ".join(drug_match_parts) if drug_match_parts else ""
 
-                # Compute FDA approval match breakdown
-                fda_variant = len([a for a in fda_approvals if a.get('locus_match') == 'variant']) if fda_approvals else 0
-                fda_codon = len([a for a in fda_approvals if a.get('locus_match') == 'codon']) if fda_approvals else 0
-                fda_gene = len([a for a in fda_approvals if a.get('locus_match') == 'gene']) if fda_approvals else 0
-
-                fda_match_parts = []
-                if fda_variant > 0:
-                    fda_match_parts.append(f"🎯 {fda_variant} variant")
-                if fda_codon > 0:
-                    fda_match_parts.append(f"📍 {fda_codon} codon")
-                if fda_gene > 0:
-                    fda_match_parts.append(f"🧬 {fda_gene} gene")
-                fda_match_str = ", ".join(fda_match_parts) if fda_match_parts else ""
+                # FDA match breakdown now comes from fda_biomarker_evidence
+                # This is handled in the FDA Biomarker tab directly
+                fda_match_str = ""
 
                 # Helper to convert matches_on value to icon string
                 def format_locus_match(matches_on: str) -> str:
