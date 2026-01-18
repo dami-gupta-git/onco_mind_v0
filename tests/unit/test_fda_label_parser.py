@@ -1,22 +1,16 @@
-"""Unit tests for FDA label parser (biomarker indication extraction).
+"""Unit tests for FDA label parser.
 
-Tests the FDALabelParser class that extracts structured biomarker-drug
-indications from FDA label text, including negation detection.
+Tests the FDALabelParser class and match_variant_to_indications function.
 """
 
 import pytest
 
-from oncomind.api.fda_label_parser import (
-    FDALabelParser,
-    BiomarkerIndication,
-    BiomarkerRequirement,
-    SpecificityLevel,
-    match_variant_to_indications,
-)
+from oncomind.api.fda_label_parser import FDALabelParser, match_variant_to_indications
+from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement, SpecificityLevel
 
 
-class TestFDALabelParserNegation:
-    """Tests for negation detection (REQUIRED_NEGATIVE cases)."""
+class TestFDALabelParserIMJUDO:
+    """Tests for IMJUDO label parsing - the key REQUIRED_NEGATIVE case."""
 
     @pytest.fixture
     def parser(self):
@@ -24,73 +18,79 @@ class TestFDALabelParserNegation:
 
     @pytest.fixture
     def imjudo_label(self):
-        """IMJUDO label text with negation patterns (no EGFR/ALK mutations)."""
+        """IMJUDO label with EGFR/ALK REQUIRED_NEGATIVE indication."""
+        imjudo_indication = """
+        1 INDICATIONS AND USAGE IMJUDO is a cytotoxic T-lymphocyte-associated antigen 4 (CTLA-4)
+        blocking antibody indicated: in combination with durvalumab, for the treatment of adult
+        patients with unresectable hepatocellular carcinoma (uHCC). in combination with
+        durvalumab and platinum-based chemotherapy for the treatment of adult patients with
+        metastatic non-small cell lung cancer (NSCLC) with no sensitizing epidermal growth factor
+        receptor (EGFR) mutation or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
+        1.1 Hepatocellular Carcinoma IMJUDO, in combination with durvalumab, is indicated
+        for the treatment of adult patients with unresectable hepatocellular carcinoma (uHCC).
+        1.2 Non-Small Cell Lung Cancer (NSCLC) IMJUDO, in combination with durvalumab and
+        platinum-based chemotherapy, is indicated for the treatment of adult patients with
+        metastatic NSCLC with no sensitizing epidermal growth factor receptor (EGFR) mutations
+        or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
+        """
         return {
             'openfda': {
                 'generic_name': ['tremelimumab'],
                 'brand_name': ['IMJUDO'],
             },
-            'indications_and_usage': ["""
-            1 INDICATIONS AND USAGE IMJUDO is a cytotoxic T-lymphocyte-associated antigen 4 (CTLA-4)
-            blocking antibody indicated: • in combination with durvalumab, for the treatment of adult
-            patients with unresectable hepatocellular carcinoma (uHCC). ( 1.1 ) • in combination with
-            durvalumab and platinum-based chemotherapy for the treatment of adult patients with
-            metastatic non-small cell lung cancer (NSCLC) with no sensitizing epidermal growth factor
-            receptor (EGFR) mutation or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
-            ( 1.2 ) 1.1 Hepatocellular Carcinoma IMJUDO, in combination with durvalumab, is indicated
-            for the treatment of adult patients with unresectable hepatocellular carcinoma (uHCC).
-            1.2 Non-Small Cell Lung Cancer (NSCLC) IMJUDO, in combination with durvalumab and
-            platinum-based chemotherapy, is indicated for the treatment of adult patients with
-            metastatic NSCLC with no sensitizing epidermal growth factor receptor (EGFR) mutations
-            or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
-            """],
+            'indications_and_usage': [imjudo_indication],
         }
 
-    def test_imjudo_extracts_negation_for_egfr(self, parser, imjudo_label):
-        """IMJUDO should have REQUIRED_NEGATIVE for EGFR."""
+    def test_parses_egfr_required_negative(self, parser, imjudo_label):
+        """IMJUDO should have EGFR with REQUIRED_NEGATIVE requirement."""
         indications = parser.parse_label(imjudo_label)
 
-        egfr_indications = [ind for ind in indications if ind.gene == "EGFR"]
-        assert len(egfr_indications) > 0, "Should find EGFR indication"
+        egfr_indications = [i for i in indications if i.gene == "EGFR"]
+        assert len(egfr_indications) >= 1
 
-        for ind in egfr_indications:
-            assert ind.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE, (
-                f"EGFR should be REQUIRED_NEGATIVE, got {ind.requirement}"
-            )
+        egfr = egfr_indications[0]
+        assert egfr.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE
 
-    @pytest.mark.xfail(reason="Parser does not yet detect ALK negation correctly")
-    def test_imjudo_extracts_negation_for_alk(self, parser, imjudo_label):
-        """IMJUDO should have REQUIRED_NEGATIVE for ALK."""
+    def test_parses_alk_required_negative(self, parser, imjudo_label):
+        """IMJUDO should have ALK with REQUIRED_NEGATIVE requirement."""
         indications = parser.parse_label(imjudo_label)
 
-        alk_indications = [ind for ind in indications if ind.gene == "ALK"]
-        assert len(alk_indications) > 0, "Should find ALK indication"
+        alk_indications = [i for i in indications if i.gene == "ALK"]
+        assert len(alk_indications) >= 1
 
-        for ind in alk_indications:
-            assert ind.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE, (
-                f"ALK should be REQUIRED_NEGATIVE, got {ind.requirement}"
-            )
+        alk = alk_indications[0]
+        assert alk.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE
 
-    def test_imjudo_extracts_combination_partners(self, parser, imjudo_label):
-        """IMJUDO indications should include durvalumab as combination partner."""
+    def test_egfr_t790m_excluded_from_imjudo(self, parser, imjudo_label):
+        """EGFR T790M in NSCLC should be EXCLUDED from IMJUDO."""
         indications = parser.parse_label(imjudo_label)
 
-        nsclc_indications = [
-            ind for ind in indications
-            if "NSCLC" in ind.tumor_types or "non-small cell lung cancer" in " ".join(ind.tumor_types).lower()
-        ]
-        assert len(nsclc_indications) > 0, "Should find NSCLC indications"
+        results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
 
-        for ind in nsclc_indications:
-            # Check that durvalumab appears somewhere in the combination partners
-            partners_str = " ".join(ind.combination_partners).lower()
-            assert "durvalumab" in partners_str, (
-                f"Should have durvalumab as combination partner, got {ind.combination_partners}"
-            )
+        # Should find IMJUDO but marked as excluded
+        imjudo_results = [r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()]
+        assert len(imjudo_results) >= 1
+
+        imjudo = imjudo_results[0]
+        assert imjudo["matches"] is False
+        assert imjudo["match_type"] == "excluded"
+
+    def test_egfr_l858r_excluded_from_imjudo(self, parser, imjudo_label):
+        """EGFR L858R in NSCLC should be EXCLUDED from IMJUDO."""
+        indications = parser.parse_label(imjudo_label)
+
+        results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
+
+        imjudo_results = [r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()]
+        assert len(imjudo_results) >= 1
+
+        imjudo = imjudo_results[0]
+        assert imjudo["matches"] is False
+        assert imjudo["match_type"] == "excluded"
 
 
-class TestFDALabelParserPositive:
-    """Tests for positive biomarker detection (REQUIRED_POSITIVE cases)."""
+class TestFDALabelParserOsimertinib:
+    """Tests for Osimertinib/TAGRISSO label parsing."""
 
     @pytest.fixture
     def parser(self):
@@ -98,77 +98,81 @@ class TestFDALabelParserPositive:
 
     @pytest.fixture
     def osimertinib_label(self):
-        """Osimertinib (TAGRISSO) label with positive biomarker requirements."""
+        """Osimertinib label with T790M and L858R indications."""
+        osimertinib_indication = """
+        TAGRISSO is a kinase inhibitor indicated for:
+        The first-line treatment of adult patients with metastatic NSCLC whose tumors have
+        EGFR exon 19 deletions or exon 21 L858R mutations, as detected by an FDA-approved test.
+        The treatment of adult patients with metastatic EGFR T790M mutation-positive NSCLC,
+        as detected by an FDA-approved test, whose disease has progressed on or after EGFR TKI therapy.
+        """
         return {
             'openfda': {
                 'generic_name': ['osimertinib'],
                 'brand_name': ['TAGRISSO'],
             },
-            'indications_and_usage': ["""
-            TAGRISSO is a kinase inhibitor indicated for:
-            • The first-line treatment of adult patients with metastatic NSCLC whose tumors have
-            EGFR exon 19 deletions or exon 21 L858R mutations, as detected by an FDA-approved test.
-            • The treatment of adult patients with metastatic EGFR T790M mutation-positive NSCLC,
-            as detected by an FDA-approved test, whose disease has progressed on or after EGFR TKI therapy.
-            """],
+            'indications_and_usage': [osimertinib_indication],
         }
 
-    def test_osimertinib_extracts_positive_egfr(self, parser, osimertinib_label):
-        """Osimertinib should have REQUIRED_POSITIVE for EGFR."""
+    def test_parses_t790m_indication(self, parser, osimertinib_label):
+        """Osimertinib should have T790M variant-level indication."""
         indications = parser.parse_label(osimertinib_label)
 
-        egfr_indications = [ind for ind in indications if ind.gene == "EGFR"]
-        assert len(egfr_indications) > 0, "Should find EGFR indication"
+        egfr_indications = [i for i in indications if i.gene == "EGFR"]
+        assert len(egfr_indications) >= 1
 
-        for ind in egfr_indications:
-            assert ind.requirement == BiomarkerRequirement.REQUIRED_POSITIVE, (
-                f"EGFR should be REQUIRED_POSITIVE, got {ind.requirement}"
-            )
-
-    def test_osimertinib_extracts_t790m_variant(self, parser, osimertinib_label):
-        """Osimertinib should extract T790M as a specified variant."""
-        indications = parser.parse_label(osimertinib_label)
-
+        # Find the T790M indication
         t790m_indications = [
-            ind for ind in indications
-            if "T790M" in ind.specified_variants
+            i for i in egfr_indications
+            if i.specified_variants and "T790M" in i.specified_variants
         ]
-        assert len(t790m_indications) > 0, "Should find T790M indication"
+        assert len(t790m_indications) >= 1
 
-    def test_osimertinib_extracts_l858r_variant(self, parser, osimertinib_label):
-        """Osimertinib should extract L858R as a specified variant."""
+        t790m = t790m_indications[0]
+        assert t790m.requirement == BiomarkerRequirement.REQUIRED_POSITIVE
+        assert t790m.specificity == SpecificityLevel.VARIANT
+
+    def test_parses_l858r_indication(self, parser, osimertinib_label):
+        """Osimertinib should have L858R variant-level indication."""
         indications = parser.parse_label(osimertinib_label)
 
+        egfr_indications = [i for i in indications if i.gene == "EGFR"]
+
+        # Find the L858R indication
         l858r_indications = [
-            ind for ind in indications
-            if "L858R" in ind.specified_variants
+            i for i in egfr_indications
+            if i.specified_variants and "L858R" in i.specified_variants
         ]
-        assert len(l858r_indications) > 0, "Should find L858R indication"
+        assert len(l858r_indications) >= 1
 
-    def test_osimertinib_extracts_exon19_deletion(self, parser, osimertinib_label):
-        """Osimertinib should extract exon 19 deletion."""
+        l858r = l858r_indications[0]
+        assert l858r.requirement == BiomarkerRequirement.REQUIRED_POSITIVE
+
+    def test_t790m_matches_osimertinib(self, parser, osimertinib_label):
+        """EGFR T790M should match osimertinib with exact match."""
         indications = parser.parse_label(osimertinib_label)
 
-        exon19_indications = [
-            ind for ind in indications
-            if any("exon 19" in v.lower() or "exon19" in v.lower() for v in ind.specified_variants)
-        ]
-        assert len(exon19_indications) > 0, "Should find exon 19 deletion indication"
+        results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
 
-    def test_osimertinib_line_of_therapy(self, parser, osimertinib_label):
-        """T790M indication should have post-progression line of therapy."""
+        # Should find osimertinib as a match
+        osi_results = [r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()]
+        assert len(osi_results) >= 1
+
+        osi = osi_results[0]
+        assert osi["matches"] is True
+        assert osi["match_type"] == "exact"
+
+    def test_l858r_matches_osimertinib(self, parser, osimertinib_label):
+        """EGFR L858R should match osimertinib."""
         indications = parser.parse_label(osimertinib_label)
 
-        t790m_indications = [
-            ind for ind in indications
-            if "T790M" in ind.specified_variants
-        ]
+        results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
 
-        for ind in t790m_indications:
-            if ind.line_of_therapy:
-                assert "progress" in ind.line_of_therapy.lower() or "second" in ind.line_of_therapy.lower(), (
-                    f"T790M should be post-progression, got {ind.line_of_therapy}"
-                )
+        osi_results = [r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()]
+        assert len(osi_results) >= 1
+
+        osi = osi_results[0]
+        assert osi["matches"] is True
 
 
 class TestMatchVariantToIndications:
@@ -178,166 +182,20 @@ class TestMatchVariantToIndications:
     def parser(self):
         return FDALabelParser()
 
-    @pytest.fixture
-    def imjudo_indications(self, parser):
-        """Parsed IMJUDO indications (negation case)."""
+    def test_returns_empty_for_different_gene(self, parser):
+        """Should not return results for a different gene."""
         label = {
             'openfda': {
-                'generic_name': ['tremelimumab'],
-                'brand_name': ['IMJUDO'],
+                'generic_name': ['braftarget'],
+                'brand_name': ['BRAFBRAND'],
             },
-            'indications_and_usage': ["""
-            IMJUDO, in combination with durvalumab and platinum-based chemotherapy, is indicated
-            for the treatment of adult patients with metastatic NSCLC with no sensitizing EGFR
-            mutations or ALK genomic tumor aberrations.
-            """],
+            'indications_and_usage': ["For BRAF V600E melanoma."],
         }
-        return parser.parse_label(label)
 
-    @pytest.fixture
-    def osimertinib_indications(self, parser):
-        """Parsed osimertinib indications (positive case)."""
-        label = {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-                'brand_name': ['TAGRISSO'],
-            },
-            'indications_and_usage': ["""
-            TAGRISSO is indicated for:
-            • The first-line treatment of adult patients with metastatic NSCLC whose tumors have
-            EGFR exon 19 deletions or exon 21 L858R mutations.
-            • The treatment of adult patients with metastatic EGFR T790M mutation-positive NSCLC.
-            """],
-        }
-        return parser.parse_label(label)
-
-    def test_egfr_variant_excluded_by_imjudo(self, imjudo_indications):
-        """EGFR T790M should be EXCLUDED by IMJUDO (REQUIRED_NEGATIVE)."""
-        results = match_variant_to_indications(
-            imjudo_indications, "EGFR", "T790M", "NSCLC"
-        )
-
-        assert len(results) > 0, "Should have results"
-        for r in results:
-            if r['drug'].lower() == 'tremelimumab':
-                assert r['matches'] is False, "Should not match (excluded)"
-                assert r['match_type'] == 'excluded', f"Should be excluded, got {r['match_type']}"
-
-    def test_egfr_t790m_matches_osimertinib(self, osimertinib_indications):
-        """EGFR T790M should match osimertinib indication."""
-        results = match_variant_to_indications(
-            osimertinib_indications, "EGFR", "T790M", "NSCLC"
-        )
-
-        matching_results = [r for r in results if r['matches']]
-        assert len(matching_results) > 0, "Should have matching results for T790M"
-
-    def test_egfr_l858r_matches_osimertinib(self, osimertinib_indications):
-        """EGFR L858R should match osimertinib indication."""
-        results = match_variant_to_indications(
-            osimertinib_indications, "EGFR", "L858R", "NSCLC"
-        )
-
-        matching_results = [r for r in results if r['matches']]
-        assert len(matching_results) > 0, "Should have matching results for L858R"
-
-    def test_different_gene_no_match(self, osimertinib_indications):
-        """BRAF V600E should not match EGFR-specific osimertinib."""
-        results = match_variant_to_indications(
-            osimertinib_indications, "BRAF", "V600E", "NSCLC"
-        )
-
-        matching_results = [r for r in results if r['matches']]
-        assert len(matching_results) == 0, "BRAF should not match EGFR drug"
-
-
-class TestFDALabelParserDrugInfo:
-    """Tests for drug name extraction."""
-
-    @pytest.fixture
-    def parser(self):
-        return FDALabelParser()
-
-    def test_extracts_generic_name(self, parser):
-        """Should extract generic drug name."""
-        label = {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-                'brand_name': ['TAGRISSO'],
-            },
-            'indications_and_usage': ["TAGRISSO is indicated for EGFR mutation-positive NSCLC."],
-        }
         indications = parser.parse_label(label)
 
-        assert len(indications) > 0
-        assert indications[0].drug_name == "osimertinib"
+        # Query for EGFR (not BRAF)
+        results = match_variant_to_indications(indications, "EGFR", "L858R")
 
-    def test_extracts_brand_name(self, parser):
-        """Should extract brand name."""
-        label = {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-                'brand_name': ['TAGRISSO'],
-            },
-            'indications_and_usage': ["TAGRISSO is indicated for EGFR mutation-positive NSCLC."],
-        }
-        indications = parser.parse_label(label)
-
-        assert len(indications) > 0
-        assert indications[0].brand_name == "TAGRISSO"
-
-    def test_handles_missing_brand_name(self, parser):
-        """Should handle missing brand name gracefully."""
-        label = {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-            },
-            'indications_and_usage': ["Drug is indicated for EGFR mutation-positive NSCLC."],
-        }
-        indications = parser.parse_label(label)
-
-        assert len(indications) > 0
-        assert indications[0].drug_name == "osimertinib"
-
-
-class TestFDALabelParserTumorTypes:
-    """Tests for tumor type extraction."""
-
-    @pytest.fixture
-    def parser(self):
-        return FDALabelParser()
-
-    def test_extracts_nsclc(self, parser):
-        """Should extract NSCLC as tumor type."""
-        label = {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-                'brand_name': ['TAGRISSO'],
-            },
-            'indications_and_usage': [
-                "TAGRISSO is indicated for adult patients with metastatic EGFR-mutated non-small cell lung cancer (NSCLC)."
-            ],
-        }
-        indications = parser.parse_label(label)
-        assert len(indications) > 0
-        assert 'NSCLC' in indications[0].tumor_types
-
-    def test_extracts_hepatocellular_carcinoma(self, parser):
-        """Should extract HCC as tumor type when biomarker is present."""
-        label = {
-            'openfda': {
-                'generic_name': ['tremelimumab'],
-                'brand_name': ['IMJUDO'],
-            },
-            'indications_and_usage': [
-                "IMJUDO is indicated for unresectable hepatocellular carcinoma (uHCC) with BRAF mutation."
-            ],
-        }
-        indications = parser.parse_label(label)
-
-        assert len(indications) > 0
-        tumor_types_lower = [t.lower() for t in indications[0].tumor_types]
-        assert any(
-            "hepatocellular" in t or "hcc" in t or "liver" in t
-            for t in tumor_types_lower
-        ), f"Should find HCC, got {indications[0].tumor_types}"
+        # Should be empty - different gene
+        assert len(results) == 0

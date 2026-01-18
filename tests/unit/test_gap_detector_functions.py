@@ -64,8 +64,7 @@ def mock_evidence():
     # Evidence lists (empty by default)
     evidence.civic_assertions = []
     evidence.civic_evidence = []
-    evidence.fda_approvals = []
-    evidence.fda_labels = []  # FDA label evidence (used by _check_clinical_evidence)
+    evidence.fda_biomarker_evidence = []  # FDA biomarker-drug indications
     evidence.vicc_evidence = []
     evidence.cgi_biomarkers = []
     evidence.preclinical_biomarkers = []
@@ -303,23 +302,18 @@ class TestCheckGeneMechanism:
 class TestCheckClinicalEvidence:
     """Tests for _check_clinical_evidence function."""
 
-    def test_with_fda_labels_variant_level(self, mock_evidence, base_context):
-        """FDA labels with VARIANT-level biomarker_match should mark as well-characterized.
+    def test_with_fda_biomarker_variant_level(self, mock_evidence, base_context):
+        """FDA biomarker evidence with VARIANT-level specificity should mark as well-characterized."""
+        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
 
-        Only variant-level evidence is marked well-characterized for clinical actionability.
-        """
-        # Set up FDA label with variant-level biomarker_match
-        fda_label = MagicMock()
-        fda_label.drug = "TestDrug"
-        fda_label.brand_name = "TestBrand"
-        fda_label.generic_name = "testgeneric"
-        fda_label.biomarker_match = MagicMock()
-        fda_label.biomarker_match.matched = True
-        fda_label.biomarker_match.match_level = "variant"
-        fda_label.biomarker_match.tumor_matched = True
-        fda_label.biomarker_match.tumor_match_type = "exact"
-        fda_label.cancer_type_match = None
-        mock_evidence.fda_labels = [fda_label]
+        # Set up FDA biomarker evidence with variant-level specificity
+        fda_ev = MagicMock()
+        fda_ev.drug_name = "TestDrug"
+        fda_ev.brand_name = "TestBrand"
+        fda_ev.specificity = SpecificityLevel.VARIANT
+        fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        fda_ev.tumor_types = ["NSCLC"]
+        mock_evidence.fda_biomarker_evidence = [fda_ev]
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -337,34 +331,29 @@ class TestCheckClinicalEvidence:
         # has_clinical should be True (there IS clinical data)
         assert base_context.has_clinical is True
 
-    def test_fda_labels_gene_level_is_well_characterized(self, mock_evidence, base_context):
-        """FDA labels with GENE-level biomarker_match should mark as well-characterized.
+    def test_fda_biomarker_gene_level_is_well_characterized(self, mock_evidence, base_context):
+        """FDA biomarker evidence with GENE-level specificity should mark as well-characterized."""
+        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
 
-        If biomarker_match.matched=True, the drug covers this variant regardless of match_level.
-        """
-        # Set up FDA label with gene-level biomarker_match
-        fda_label = MagicMock()
-        fda_label.drug = "TestDrug"
-        fda_label.brand_name = "TestBrand"
-        fda_label.generic_name = "testgeneric"
-        fda_label.biomarker_match = MagicMock()
-        fda_label.biomarker_match.matched = True
-        fda_label.biomarker_match.match_level = "gene"  # Gene-level match
-        fda_label.biomarker_match.tumor_matched = True
-        fda_label.biomarker_match.tumor_match_type = "exact"
-        fda_label.cancer_type_match = None
-        mock_evidence.fda_labels = [fda_label]
+        # Set up FDA biomarker evidence with gene-level specificity
+        fda_ev = MagicMock()
+        fda_ev.drug_name = "TestDrug"
+        fda_ev.brand_name = "TestBrand"
+        fda_ev.specificity = SpecificityLevel.GENE
+        fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        fda_ev.tumor_types = ["NSCLC"]
+        mock_evidence.fda_biomarker_evidence = [fda_ev]
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
 
-        # Should be marked well-characterized (matched=True means drug covers variant)
+        # Should be marked well-characterized
         assert any("clinical" in w.lower() for w in base_context.well_characterized)
         assert base_context.has_clinical is True
 
     def test_no_clinical_evidence_adds_critical_gap(self, mock_evidence, base_context):
         """Missing clinical evidence should add a CRITICAL gap."""
-        # fda_labels is already empty from fixture
+        # fda_biomarker_evidence is already empty from fixture
         # civic_assertions is already empty from fixture
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -532,13 +521,15 @@ class TestCheckTumorSpecificEvidence:
         assert tumor_match.cgi_biomarkers.count == 3
 
     def test_tumor_evidence_fda_parsing(self, mock_evidence):
-        """TumorEvidenceMatch should use FDA approval's tumor_match property."""
-        # Create FDA approval with tumor_match set (by evidence_aggregator)
+        """TumorEvidenceMatch should use FDA biomarker evidence's tumor_types."""
+        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
+        # Create FDA biomarker evidence with tumor_types set
         fda = MagicMock()
-        fda.indication = "Non-small cell lung cancer"
-        fda.tumor_match = True  # Set by evidence_aggregator via parse_indication_for_tumor
+        fda.tumor_types = ["Non-small cell lung cancer"]
         fda.locus_variant_match = None
-        mock_evidence.fda_approvals = [fda]
+        fda.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        mock_evidence.fda_biomarker_evidence = [fda]
 
         tumor_match = _check_tumor_specific_evidence(mock_evidence, "NSCLC")
 
@@ -595,6 +586,8 @@ class TestCheckDrugResponse:
 
     def test_drug_response_counts_sources_correctly(self, mock_evidence, base_context):
         """Drug response should count CGI, VICC, and FDA sources correctly."""
+        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
         # Create 2 CGI biomarkers
         cgi1 = MagicMock()
         cgi1.locus_variant_match = None
@@ -610,13 +603,12 @@ class TestCheckDrugResponse:
             v.locus_variant_match = None
             v.disease = "Other Cancer"
 
-        # Create 1 FDA approval
+        # Create 1 FDA biomarker evidence
         fda = MagicMock()
         fda.locus_variant_match = None
-        fda.locus_match = "variant"
-        fda.indication = "Melanoma"
-        fda.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": False})
-        mock_evidence.fda_approvals = [fda]
+        fda.tumor_types = ["Melanoma"]
+        fda.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        mock_evidence.fda_biomarker_evidence = [fda]
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -675,6 +667,7 @@ class TestCheckDrugResponse:
     def test_drug_response_locus_variant_match_levels(self, mock_evidence, base_context):
         """Drug response should track match levels (variant, codon, gene)."""
         from oncomind.models.evidence.base import EvidenceLevel
+        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
 
         # Create CGI biomarker with variant-level match
         cgi_variant = MagicMock()
@@ -690,12 +683,13 @@ class TestCheckDrugResponse:
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
-        # Create FDA approval with codon-level match
+        # Create FDA biomarker evidence with codon-level match
         fda_codon = MagicMock()
         fda_codon.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
         fda_codon.locus_match = "codon"  # Computed property value for MagicMock
-        fda_codon.indication = None
-        mock_evidence.fda_approvals = [fda_codon]
+        fda_codon.tumor_types = None
+        fda_codon.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        mock_evidence.fda_biomarker_evidence = [fda_codon]
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -1503,9 +1497,9 @@ class TestHasPathogenicSignal:
 
         assert _has_pathogenic_signal(mock_evidence) is True
 
-    def test_fda_approvals(self, mock_evidence):
-        """FDA approvals should return True."""
-        mock_evidence.fda_approvals = [MagicMock()]
+    def test_fda_biomarker_evidence(self, mock_evidence):
+        """FDA biomarker evidence should return True."""
+        mock_evidence.fda_biomarker_evidence = [MagicMock()]
 
         assert _has_pathogenic_signal(mock_evidence) is True
 
@@ -1553,17 +1547,18 @@ class TestDetectEvidenceGapsIntegration:
         mock_evidence.functional.cadd_score = 30.0
 
         # Create properly mocked evidence items with string disease attributes
+        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
         civic_assertion = MagicMock()
         civic_assertion.disease = "Melanoma"
         civic_assertion.locus_variant_match = None
         mock_evidence.civic_assertions = [civic_assertion]
 
-        fda_approval = MagicMock()
-        fda_approval.indication = "Melanoma"
-        fda_approval.locus_variant_match = None
-        fda_approval.locus_match = "variant"
-        fda_approval.parse_indication_for_tumor = MagicMock(return_value={"tumor_match": True})
-        mock_evidence.fda_approvals = [fda_approval]
+        fda_ev = MagicMock()
+        fda_ev.tumor_types = ["Melanoma"]
+        fda_ev.locus_variant_match = None
+        fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        mock_evidence.fda_biomarker_evidence = [fda_ev]
 
         cgi_biomarker = MagicMock()
         cgi_biomarker.tumor_type = "Melanoma"

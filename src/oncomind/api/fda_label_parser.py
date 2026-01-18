@@ -15,23 +15,9 @@ Author: Dami (OncoMind)
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Optional
 
-
-class BiomarkerRequirement(Enum):
-    """Whether a biomarker is required present or absent for the indication."""
-    REQUIRED_POSITIVE = "required_positive"  # Must HAVE the mutation
-    REQUIRED_NEGATIVE = "required_negative"  # Must NOT have the mutation (wild-type)
-    NOT_SPECIFIED = "not_specified"
-
-
-class SpecificityLevel(Enum):
-    """How specific the biomarker requirement is."""
-    VARIANT = "variant"    # e.g., "EGFR L858R", "KRAS G12C"
-    CODON = "codon"        # e.g., "EGFR exon 19 deletions"
-    GENE = "gene"          # e.g., "EGFR mutation-positive"
-    PATHWAY = "pathway"    # e.g., "HRR-deficient"
+from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement, SpecificityLevel
 
 
 @dataclass
@@ -869,104 +855,3 @@ def get_fda_approved_drugs_for_variant(
     return unique_matches
 
 
-# ============================================================================
-# Example usage and tests
-# ============================================================================
-
-if __name__ == "__main__":
-    # Test with IMJUDO label text (the problematic case)
-    imjudo_indication = """
-    1 INDICATIONS AND USAGE IMJUDO is a cytotoxic T-lymphocyte-associated antigen 4 (CTLA-4) 
-    blocking antibody indicated: • in combination with durvalumab, for the treatment of adult 
-    patients with unresectable hepatocellular carcinoma (uHCC). ( 1.1 ) • in combination with 
-    durvalumab and platinum-based chemotherapy for the treatment of adult patients with 
-    metastatic non-small cell lung cancer (NSCLC) with no sensitizing epidermal growth factor 
-    receptor (EGFR) mutation or anaplastic lymphoma kinase (ALK) genomic tumor aberrations. 
-    ( 1.2 ) 1.1 Hepatocellular Carcinoma IMJUDO, in combination with durvalumab, is indicated 
-    for the treatment of adult patients with unresectable hepatocellular carcinoma (uHCC). 
-    1.2 Non-Small Cell Lung Cancer (NSCLC) IMJUDO, in combination with durvalumab and 
-    platinum-based chemotherapy, is indicated for the treatment of adult patients with 
-    metastatic NSCLC with no sensitizing epidermal growth factor receptor (EGFR) mutations 
-    or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
-    """
-
-    parser = FDALabelParser()
-
-    # Create a mock label_data structure
-    mock_label = {
-        'openfda': {
-            'generic_name': ['tremelimumab'],
-            'brand_name': ['IMJUDO'],
-        },
-        'indications_and_usage': [imjudo_indication],
-    }
-
-    indications = parser.parse_label(mock_label)
-
-    print("=" * 80)
-    print("PARSED INDICATIONS FROM IMJUDO LABEL")
-    print("=" * 80)
-
-    for i, ind in enumerate(indications, 1):
-        print(f"\n--- Indication {i} ---")
-        print(f"Gene: {ind.gene}")
-        print(f"Requirement: {ind.requirement.value}")
-        print(f"Specificity: {ind.specificity.value}")
-        print(f"Variants: {ind.specified_variants}")
-        print(f"Tumor types: {ind.tumor_types}")
-        print(f"Combination: {ind.combination_partners}")
-
-    print("\n" + "=" * 80)
-    print("TESTING VARIANT MATCHING")
-    print("=" * 80)
-
-    # Test: EGFR T790M in NSCLC
-    print("\nQuery: EGFR T790M in NSCLC")
-    results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
-    for r in results:
-        print(f"  Drug: {r['drug']}")
-        print(f"  Matches: {r['matches']}")
-        print(f"  Match type: {r['match_type']}")
-        print(f"  Reason: {r['reason']}")
-        print(f"  Requirement: {r['requirement']}")
-
-    # Test: EGFR L858R in NSCLC
-    print("\nQuery: EGFR L858R in NSCLC")
-    results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
-    for r in results:
-        print(f"  Drug: {r['drug']}")
-        print(f"  Matches: {r['matches']}")
-        print(f"  Match type: {r['match_type']}")
-        print(f"  Reason: {r['reason']}")
-
-    # Test with Osimertinib label (should match T790M)
-    print("\n" + "=" * 80)
-    print("TESTING WITH OSIMERTINIB LABEL")
-    print("=" * 80)
-
-    osimertinib_indication = """
-    TAGRISSO is a kinase inhibitor indicated for:
-    • The first-line treatment of adult patients with metastatic NSCLC whose tumors have 
-    EGFR exon 19 deletions or exon 21 L858R mutations, as detected by an FDA-approved test.
-    • The treatment of adult patients with metastatic EGFR T790M mutation-positive NSCLC, 
-    as detected by an FDA-approved test, whose disease has progressed on or after EGFR TKI therapy.
-    """
-
-    mock_osimertinib = {
-        'openfda': {
-            'generic_name': ['osimertinib'],
-            'brand_name': ['TAGRISSO'],
-        },
-        'indications_and_usage': [osimertinib_indication],
-    }
-
-    osi_indications = parser.parse_label(mock_osimertinib)
-
-    for i, ind in enumerate(osi_indications, 1):
-        print(f"\n--- Indication {i} ---")
-        print(f"Gene: {ind.gene}")
-        print(f"Requirement: {ind.requirement.value}")
-        print(f"Specificity: {ind.specificity.value}")
-        print(f"Variants: {ind.specified_variants}")
-        print(f"Tumor types: {ind.tumor_types}")
-        print(f"Line of therapy: {ind.line_of_therapy}")

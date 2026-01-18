@@ -508,38 +508,3 @@ def create_cross_source_prompt(
     ]
 
 
-# =============================================================================
-# BACKWARDS COMPATIBILITY
-# =============================================================================
-
-def create_research_prompt(
-    gene: str,
-    variant: str,
-    tumor_type: str | None,
-    biological_context: str,
-    evidence_summary: str,
-    evidence_assessment: dict,
-    literature_summary: str = "",
-    data_availability: dict | None = None,
-    resistance_summary: str = "",
-    sensitivity_summary: str = "",
-    locus_match_summary: dict | None = None,
-) -> list[dict]:
-    """Create prompt for research-focused variant synthesis.
-
-    DEPRECATED: Use create_synthesis_prompt + create_hypothesis_prompt instead.
-    This function is kept for backwards compatibility.
-    """
-    return create_synthesis_prompt(
-        gene=gene,
-        variant=variant,
-        tumor_type=tumor_type,
-        biological_context=biological_context,
-        evidence_summary=evidence_summary,
-        evidence_assessment=evidence_assessment,
-        literature_summary=literature_summary,
-        data_availability=data_availability,
-        resistance_summary=resistance_summary,
-        sensitivity_summary=sensitivity_summary,
-        locus_match_summary=locus_match_summary,
-    )
