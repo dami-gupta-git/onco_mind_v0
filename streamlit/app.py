@@ -63,32 +63,34 @@ MODELS = {
 }
 
 # Pre-populated example variants (Gene, Variant, Tumor Type)
-EXAMPLE_VARIANTS = {
-    "-- Select an example --": ("", "", ""),
-    "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
-    "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
-    "BRAF K601E - Brain (near-hotspot)": ("BRAF", "K601E", "Brain"),
-    "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
-    "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
-    "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
-    "KRAS G12D - NSCLC": ("KRAS", "G12D", "NSCLC"),
-    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
-    "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
-    "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
-    "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
-    "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
-    "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
-    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
-    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
-    "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
-    "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
-    "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
-}
 # EXAMPLE_VARIANTS = {
-#     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
-#     "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
+#     "-- Select an example --": ("", "", ""),
+#     "EGFR C797S - NSCLC": ("EGFR", "C797S", "NSCLC"),
+#     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+#     "BRAF K601E - Brain (near-hotspot)": ("BRAF", "K601E", "Brain"),
+#     "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
+#     "EGFR T790M - NSCLC": ("EGFR", "T790M", "NSCLC"),
+#     "KRAS G12A - Lung Cancer": ("KRAS", "G12A", "Lung Cancer"),
+#     "KRAS G12D - NSCLC": ("KRAS", "G12D", "NSCLC"),
+#     "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
+#     "EGFR N771H - NSCLC": ("EGFR", "N771H", "NSCLC"),
+#     "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
+#     "AKT1 E17K - Breast Cancer": ("AKT1", "E17K", "Breast Cancer"),
+#     "GNAQ Q209L - Uveal Melanoma": ("GNAQ", "Q209L", "Uveal Melanoma"),
+#     "KIT D816V - GIST": ("KIT", "D816V", "GIST"),
 #     "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
+#     "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+#     "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
+#     "NRAS Q61R - Melanoma": ("NRAS", "Q61R", "Melanoma"),
+#     "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
 # }
+EXAMPLE_VARIANTS = {
+    "IDH1 R132H - Glioma": ("IDH1", "R132H", "Glioma"),
+    "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
+    "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
+    "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
+    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+}
 
 # Initialize session state for persisting results
 if "single_result" not in st.session_state:
