@@ -1,0 +1,842 @@
+"""
+FDA Label Parser for OncoMind
+============================
+
+Parses FDA drug labels to extract structured biomarker-indication associations,
+properly handling:
+- Negation patterns ("no EGFR mutation", "without ALK aberrations")
+- Variant-level specificity (gene, codon, specific variant)
+- Tumor type extraction
+- Combination therapy detection
+- Exclusion criteria vs inclusion criteria
+
+Author: Dami (OncoMind)
+"""
+
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
+
+
+class BiomarkerRequirement(Enum):
+    """Whether a biomarker is required present or absent for the indication."""
+    REQUIRED_POSITIVE = "required_positive"  # Must HAVE the mutation
+    REQUIRED_NEGATIVE = "required_negative"  # Must NOT have the mutation (wild-type)
+    NOT_SPECIFIED = "not_specified"
+
+
+class SpecificityLevel(Enum):
+    """How specific the biomarker requirement is."""
+    VARIANT = "variant"  # e.g., "EGFR L858R", "KRAS G12C"
+    CODON = "codon"  # e.g., "EGFR exon 19 deletions"
+    GENE = "gene"  # e.g., "EGFR mutation-positive"
+    PATHWAY = "pathway"  # e.g., "HRR-deficient"
+
+
+@dataclass
+class BiomarkerIndication:
+    """Structured representation of a biomarker-drug-tumor association."""
+    drug_name: str
+    brand_name: Optional[str]
+    gene: str
+    requirement: BiomarkerRequirement
+    specificity: SpecificityLevel
+
+    # Variant details (if specificity is VARIANT or CODON)
+    specified_variants: list[str] = field(default_factory=list)  # ["L858R", "exon 19 del"]
+    codon: Optional[str] = None  # "600" for V600E
+
+    # Tumor context
+    tumor_types: list[str] = field(default_factory=list)
+    tumor_stage: Optional[str] = None  # "metastatic", "locally advanced"
+
+    # Combination therapy
+    combination_partners: list[str] = field(default_factory=list)
+    is_monotherapy: bool = True
+
+    # Line of therapy
+    line_of_therapy: Optional[str] = None  # "first-line", "after progression on TKI"
+
+    # Source
+    indication_text: str = ""
+    section: str = "indications_and_usage"  # Which label section this came from
+
+    def matches_variant(self, query_gene: str, query_variant: str) -> dict:
+        """
+        Check if a user's variant query matches this indication.
+
+        Returns dict with:
+        - matches: bool
+        - match_type: "exact", "codon", "gene", "excluded"
+        - reason: explanation
+        """
+        query_gene = query_gene.upper()
+        query_variant = query_variant.upper()
+
+        if self.gene.upper() != query_gene:
+            return {"matches": False, "match_type": None, "reason": "Different gene"}
+
+        # If this indication EXCLUDES the biomarker, it's a negative match
+        if self.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+            return {
+                "matches": False,
+                "match_type": "excluded",
+                "reason": f"This indication is for patients WITHOUT {self.gene} mutations"
+            }
+
+        # Check specificity levels
+        if self.specificity == SpecificityLevel.GENE:
+            return {
+                "matches": True,
+                "match_type": "gene",
+                "reason": f"Gene-level approval: any {self.gene} mutation"
+            }
+
+        if self.specificity == SpecificityLevel.VARIANT:
+            # Check for exact variant match
+            if query_variant in [v.upper() for v in self.specified_variants]:
+                return {
+                    "matches": True,
+                    "match_type": "exact",
+                    "reason": f"Exact variant match: {query_variant}"
+                }
+
+            # Check for same codon
+            query_codon = self._extract_codon(query_variant)
+            if self.codon and query_codon == self.codon:
+                return {
+                    "matches": False,
+                    "match_type": "same_codon_different_variant",
+                    "reason": f"Same codon ({self.codon}) but different variant. Approved: {self.specified_variants}, Query: {query_variant}"
+                }
+
+            return {
+                "matches": False,
+                "match_type": "different_variant",
+                "reason": f"Different variant. Approved: {self.specified_variants}, Query: {query_variant}"
+            }
+
+        if self.specificity == SpecificityLevel.CODON:
+            query_codon = self._extract_codon(query_variant)
+            if self.codon and query_codon == self.codon:
+                return {
+                    "matches": True,
+                    "match_type": "codon",
+                    "reason": f"Codon-level match: codon {self.codon}"
+                }
+            return {
+                "matches": False,
+                "match_type": "different_codon",
+                "reason": f"Different codon. Approved: {self.codon}, Query: {query_codon}"
+            }
+
+        return {"matches": False, "match_type": None, "reason": "Unknown specificity"}
+
+    @staticmethod
+    def _extract_codon(variant: str) -> Optional[str]:
+        """Extract codon number from variant notation. E.g., V600E -> 600"""
+        match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
+        return match.group(1) if match else None
+
+
+class FDALabelParser:
+    """
+    Parser for FDA drug labels from OpenFDA API.
+
+    Handles the full complexity of FDA label text including:
+    - Multiple indications per drug
+    - Negation patterns
+    - Combination therapies
+    - Variant specificity
+    """
+
+    # Negation patterns that indicate biomarker should be ABSENT
+    NEGATION_PATTERNS = [
+        r"with\s+no\s+(?:sensitizing\s+)?",
+        r"without\s+(?:sensitizing\s+)?",
+        r"(?:who\s+)?do\s+not\s+have\s+",
+        r"negative\s+for\s+",
+        r"wild[- ]?type\s+",
+        r"lacking\s+",
+        r"absence\s+of\s+",
+        r"no\s+(?:known\s+)?(?:sensitizing\s+)?",
+        r"excluding\s+(?:patients\s+with\s+)?",
+        r"tumors?\s+(?:that\s+)?(?:do\s+)?not\s+(?:have|harbor|express)\s+",
+    ]
+
+    # Patterns that indicate the drug is NOT effective (different from negation)
+    NEGATIVE_EFFICACY_PATTERNS = [
+        r"has\s+not\s+been\s+(?:established|demonstrated|evaluated)",
+        r"efficacy\s+(?:was|has)\s+not\s+(?:been\s+)?(?:established|demonstrated)",
+        r"not\s+(?:indicated|approved|recommended)\s+for",
+        r"should\s+not\s+be\s+used\s+(?:in|for)",
+        r"is\s+not\s+effective\s+(?:in|for)",
+        r"safety\s+and\s+efficacy.*not\s+(?:been\s+)?established",
+    ]
+
+    # Biomarker/gene patterns
+    GENE_PATTERNS = {
+        'EGFR': r'(?:epidermal\s+growth\s+factor\s+receptor|EGFR)',
+        'ALK': r'(?:anaplastic\s+lymphoma\s+kinase|ALK)',
+        'BRAF': r'BRAF',
+        'KRAS': r'KRAS',
+        'NRAS': r'NRAS',
+        'HER2': r'(?:HER2|ERBB2|human\s+epidermal\s+growth\s+factor\s+receptor\s+2)',
+        'ROS1': r'ROS1',
+        'RET': r'RET',
+        'MET': r'\bMET\b(?!\s*(?:astatic|hod|ric|al))',  # Exclude "metastatic", "method", etc.
+        'NTRK': r'(?:NTRK[123]?|neurotrophic\s+tyrosine\s+receptor\s+kinase)',
+        'PIK3CA': r'PIK3CA',
+        'AKT1': r'AKT1',
+        'IDH1': r'(?:isocitrate\s+dehydrogenase[- ]?1|IDH1)',
+        'IDH2': r'(?:isocitrate\s+dehydrogenase[- ]?2|IDH2)',
+        'FGFR': r'(?:fibroblast\s+growth\s+factor\s+receptor|FGFR[1234]?)',
+        'BRCA': r'BRCA[12]?',
+        'MSI': r'(?:microsatellite\s+instability|MSI[- ]?(?:H|high)?)',
+        'TMB': r'(?:tumor\s+mutational\s+burden|TMB[- ]?(?:H|high)?)',
+        'PD-L1': r'(?:PD[- ]?L1|CD274)',
+    }
+
+    # Variant patterns (gene-specific)
+    VARIANT_PATTERNS = {
+        'EGFR': [
+            (r'exon\s+19\s+deletion', 'exon 19 del', SpecificityLevel.CODON),
+            (r'exon\s+21\s+(?:\()?L858R(?:\))?', 'L858R', SpecificityLevel.VARIANT),
+            (r'L858R', 'L858R', SpecificityLevel.VARIANT),
+            (r'T790M', 'T790M', SpecificityLevel.VARIANT),
+            (r'exon\s+20\s+insertion', 'exon 20 ins', SpecificityLevel.CODON),
+            (r'C797S', 'C797S', SpecificityLevel.VARIANT),
+        ],
+        'BRAF': [
+            (r'V600E', 'V600E', SpecificityLevel.VARIANT),
+            (r'V600K', 'V600K', SpecificityLevel.VARIANT),
+            (r'V600', 'V600', SpecificityLevel.CODON),
+        ],
+        'KRAS': [
+            (r'G12C', 'G12C', SpecificityLevel.VARIANT),
+            (r'G12D', 'G12D', SpecificityLevel.VARIANT),
+            (r'G12', 'G12', SpecificityLevel.CODON),
+        ],
+        'IDH1': [
+            (r'R132H', 'R132H', SpecificityLevel.VARIANT),
+            (r'R132C', 'R132C', SpecificityLevel.VARIANT),
+            (r'R132', 'R132', SpecificityLevel.CODON),
+        ],
+        'IDH2': [
+            (r'R172K', 'R172K', SpecificityLevel.VARIANT),
+            (r'R140Q', 'R140Q', SpecificityLevel.VARIANT),
+        ],
+    }
+
+    # Tumor type patterns (order matters - more specific first)
+    TUMOR_PATTERNS = {
+        'NSCLC': r'(?:non[- ]?small\s+cell\s+lung\s+cancer|NSCLC(?![A-Z]))',
+        'SCLC': r'(?:(?<!non[- ])(?<!non)small\s+cell\s+lung\s+cancer|(?<![N])SCLC(?![A-Z]))',
+        'breast cancer': r'(?:breast\s+(?:cancer|carcinoma))',
+        'colorectal cancer': r'(?:colorectal\s+(?:cancer|carcinoma)|CRC|colon\s+cancer)',
+        'melanoma': r'melanoma',
+        'glioma': r'(?:glioma|glioblastoma|astrocytoma|oligodendroglioma)',
+        'thyroid cancer': r'(?:thyroid\s+(?:cancer|carcinoma))',
+        'gastric cancer': r'(?:gastric\s+(?:cancer|carcinoma)|stomach\s+cancer)',
+        'hepatocellular carcinoma': r'(?:hepatocellular\s+carcinoma|HCC|liver\s+cancer)',
+        'cholangiocarcinoma': r'(?:cholangiocarcinoma|bile\s+duct\s+cancer)',
+        'ovarian cancer': r'(?:ovarian\s+(?:cancer|carcinoma))',
+        'pancreatic cancer': r'(?:pancreatic\s+(?:cancer|carcinoma|adenocarcinoma))',
+        'AML': r'(?:acute\s+myeloid\s+leukemia|AML)',
+        'MDS': r'(?:myelodysplastic\s+syndrome|MDS)',
+        'solid tumor': r'(?:solid\s+tumor|solid\s+malignancies)',
+    }
+
+    # Combination therapy patterns
+    COMBINATION_PATTERNS = [
+        r'in\s+combination\s+with\s+([^,\.]+?)(?:\s+for|\s+in|\s+is|\.|,|$)',
+        r'combined\s+with\s+([^,\.]+?)(?:\s+for|\s+in|\.|,|$)',
+        r'coadministered\s+with\s+([^,\.]+?)(?:\s+for|\s+in|\.|,|$)',
+        r'(?:plus|and)\s+([a-z]+(?:mab|nib|lib|tib|tinib|ciclib))',
+        r'with\s+([a-z]+(?:mab|nib|lib|tib|tinib|ciclib))\s+(?:for|in)',
+    ]
+
+    # Stage patterns
+    STAGE_PATTERNS = [
+        (r'metastatic', 'metastatic'),
+        (r'locally\s+advanced', 'locally advanced'),
+        (r'unresectable', 'unresectable'),
+        (r'advanced', 'advanced'),
+        (r'stage\s+(?:III|IV|3|4)', 'advanced'),
+        (r'grade\s+2', 'grade 2'),
+        (r'recurrent', 'recurrent'),
+    ]
+
+    # Line of therapy patterns
+    LINE_OF_THERAPY_PATTERNS = [
+        (r'first[- ]?line', 'first-line'),
+        (r'1L', 'first-line'),
+        (r'second[- ]?line', 'second-line'),
+        (r'2L', 'second-line'),
+        (r'after\s+(?:prior\s+)?(?:treatment|therapy)\s+with', 'subsequent'),
+        (r'(?:whose\s+disease\s+)?(?:has\s+)?progress(?:ed|ion)\s+(?:on|after|following)', 'post-progression'),
+        (r'previously\s+treated', 'previously treated'),
+        (r'treatment[- ]?na[ïi]ve', 'first-line'),
+    ]
+
+    def __init__(self):
+        self._compile_patterns()
+
+    def _compile_patterns(self):
+        """Pre-compile regex patterns for performance."""
+        self._negation_re = re.compile(
+            '|'.join(f'({p})' for p in self.NEGATION_PATTERNS),
+            re.IGNORECASE
+        )
+        self._negative_efficacy_re = re.compile(
+            '|'.join(f'({p})' for p in self.NEGATIVE_EFFICACY_PATTERNS),
+            re.IGNORECASE
+        )
+
+    def parse_label(self, label_data: dict) -> list[BiomarkerIndication]:
+        """
+        Parse a complete FDA label from OpenFDA API response.
+
+        Args:
+            label_data: Single result from OpenFDA /drug/label.json
+
+        Returns:
+            List of BiomarkerIndication objects
+        """
+        indications = []
+
+        # Extract drug names
+        openfda = label_data.get('openfda', {})
+        drug_name = openfda.get('generic_name', [None])[0]
+        brand_name = openfda.get('brand_name', [None])[0]
+
+        if not drug_name:
+            drug_name = brand_name or "Unknown"
+
+        # Parse each relevant section
+        sections_to_parse = [
+            ('indications_and_usage', label_data.get('indications_and_usage', [])),
+            ('clinical_studies', label_data.get('clinical_studies', [])),
+            # Can add more sections if needed
+        ]
+
+        for section_name, section_content in sections_to_parse:
+            if not section_content:
+                continue
+
+            # OpenFDA returns lists of strings
+            text = ' '.join(section_content) if isinstance(section_content, list) else section_content
+
+            # Split into indication blocks (numbered sections like "1.1", "1.2")
+            indication_blocks = self._split_indication_blocks(text)
+
+            for block in indication_blocks:
+                block_indications = self._parse_indication_block(
+                    block, drug_name, brand_name, section_name
+                )
+                indications.extend(block_indications)
+
+        # Deduplicate indications (same gene + requirement + tumor combo)
+        seen = set()
+        unique_indications = []
+        for ind in indications:
+            key = (
+                ind.gene,
+                ind.requirement,
+                ind.specificity,
+                tuple(sorted(ind.specified_variants)),
+                tuple(sorted(ind.tumor_types)),
+            )
+            if key not in seen:
+                seen.add(key)
+                unique_indications.append(ind)
+
+        return unique_indications
+
+    def _split_indication_blocks(self, text: str) -> list[str]:
+        """Split indication text into separate indication blocks."""
+        # Pattern for numbered sections like "1.1", "( 1.2 )", etc.
+        split_pattern = r'(?:^|\s)(?:\(\s*)?(\d+\.\d+)(?:\s*\))?(?:\s|$)'
+
+        # First, try to split by section numbers
+        parts = re.split(split_pattern, text)
+
+        if len(parts) > 1:
+            # Recombine section numbers with their content
+            blocks = []
+            i = 0
+            while i < len(parts):
+                if re.match(r'\d+\.\d+', parts[i].strip()):
+                    # This is a section number, combine with next part
+                    if i + 1 < len(parts):
+                        blocks.append(f"{parts[i]} {parts[i + 1]}")
+                        i += 2
+                    else:
+                        i += 1
+                else:
+                    if parts[i].strip():
+                        blocks.append(parts[i])
+                    i += 1
+            return blocks if blocks else [text]
+
+        # If no numbered sections, try splitting by bullet points or sentences
+        # that start with "for the treatment of"
+        treatment_blocks = re.split(r'(?:•|·|\n)\s*(?=for the treatment)', text, flags=re.IGNORECASE)
+        if len(treatment_blocks) > 1:
+            return treatment_blocks
+
+        return [text]
+
+    def _parse_indication_block(
+            self,
+            text: str,
+            drug_name: str,
+            brand_name: Optional[str],
+            section: str
+    ) -> list[BiomarkerIndication]:
+        """Parse a single indication block for biomarker associations."""
+        indications = []
+
+        # Check for negative efficacy statements first
+        if self._is_negative_efficacy(text):
+            return []  # Skip blocks that say the drug wasn't effective
+
+        # Find all genes mentioned
+        for gene, gene_pattern in self.GENE_PATTERNS.items():
+            gene_matches = list(re.finditer(gene_pattern, text, re.IGNORECASE))
+
+            for gene_match in gene_matches:
+                # Check if this gene mention is negated
+                requirement = self._check_negation(text, gene_match.start())
+
+                # Find variant specificity
+                specificity, variants, codon = self._extract_variant_specificity(text, gene)
+
+                # Find tumor types
+                tumor_types = self._extract_tumor_types(text)
+
+                # Find tumor stage
+                stage = self._extract_stage(text)
+
+                # Find combination partners
+                partners = self._extract_combination_partners(text)
+
+                # Find line of therapy
+                line = self._extract_line_of_therapy(text)
+
+                indication = BiomarkerIndication(
+                    drug_name=drug_name,
+                    brand_name=brand_name,
+                    gene=gene,
+                    requirement=requirement,
+                    specificity=specificity,
+                    specified_variants=variants,
+                    codon=codon,
+                    tumor_types=tumor_types,
+                    tumor_stage=stage,
+                    combination_partners=partners,
+                    is_monotherapy=len(partners) == 0,
+                    line_of_therapy=line,
+                    indication_text=text[:500],  # Store first 500 chars for reference
+                    section=section,
+                )
+
+                indications.append(indication)
+
+        return indications
+
+    def _check_negation(self, text: str, gene_position: int) -> BiomarkerRequirement:
+        """
+        Check if the gene mention is negated (e.g., "no EGFR mutation").
+
+        Args:
+            text: Full indication text
+            gene_position: Character position of the gene mention
+
+        Returns:
+            BiomarkerRequirement indicating if biomarker should be present or absent
+        """
+        # Look at the 100 characters before the gene mention
+        context_start = max(0, gene_position - 100)
+        context = text[context_start:gene_position].lower()
+
+        # Check for negation patterns
+        if self._negation_re.search(context):
+            return BiomarkerRequirement.REQUIRED_NEGATIVE
+
+        # Also check for "without X or Y" patterns where gene might be Y
+        # e.g., "without EGFR mutation or ALK aberrations"
+        extended_context = text[context_start:gene_position + 50].lower()
+        if re.search(r'without\s+\w+\s+(?:mutation|aberration|alteration)s?\s+or', extended_context):
+            return BiomarkerRequirement.REQUIRED_NEGATIVE
+
+        return BiomarkerRequirement.REQUIRED_POSITIVE
+
+    def _is_negative_efficacy(self, text: str) -> bool:
+        """Check if this block states the drug was NOT effective."""
+        return bool(self._negative_efficacy_re.search(text))
+
+    def _extract_variant_specificity(
+            self,
+            text: str,
+            gene: str
+    ) -> tuple[SpecificityLevel, list[str], Optional[str]]:
+        """
+        Extract variant-level specificity from text.
+
+        Returns:
+            (specificity_level, list_of_variants, codon_number)
+        """
+        variants = []
+        codon = None
+
+        # Check gene-specific variant patterns
+        if gene in self.VARIANT_PATTERNS:
+            for pattern, variant_name, level in self.VARIANT_PATTERNS[gene]:
+                if re.search(pattern, text, re.IGNORECASE):
+                    variants.append(variant_name)
+
+                    # Extract codon if it's a variant
+                    codon_match = re.search(r'[A-Z]?(\d+)[A-Z]?', variant_name)
+                    if codon_match:
+                        codon = codon_match.group(1)
+
+        if variants:
+            # Check if we have full variants or just codons
+            has_full_variant = any(
+                re.match(r'^[A-Z]\d+[A-Z]$', v) or 'del' in v.lower() or 'ins' in v.lower()
+                for v in variants
+            )
+            if has_full_variant:
+                return SpecificityLevel.VARIANT, variants, codon
+            else:
+                return SpecificityLevel.CODON, variants, codon
+
+        # Check for generic mutation mentions
+        gene_pattern = self.GENE_PATTERNS.get(gene, gene)
+        if re.search(rf'{gene_pattern}[- ](?:positive|mutant|mutated|altered|mutation)', text, re.IGNORECASE):
+            return SpecificityLevel.GENE, [], None
+
+        return SpecificityLevel.GENE, [], None
+
+    def _extract_tumor_types(self, text: str) -> list[str]:
+        """Extract tumor types from indication text."""
+        tumor_types = []
+        for tumor_name, tumor_pattern in self.TUMOR_PATTERNS.items():
+            if re.search(tumor_pattern, text, re.IGNORECASE):
+                tumor_types.append(tumor_name)
+        return tumor_types
+
+    def _extract_stage(self, text: str) -> Optional[str]:
+        """Extract tumor stage/setting from indication text."""
+        for pattern, stage_name in self.STAGE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return stage_name
+        return None
+
+    def _extract_combination_partners(self, text: str) -> list[str]:
+        """Extract combination therapy partners from indication text."""
+        partners = []
+        for pattern in self.COMBINATION_PATTERNS:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                # Clean up the partner name
+                partner = match.strip().lower()
+                # Remove common suffixes/prefixes
+                partner = re.sub(r'^(?:and|or|with)\s+', '', partner)
+                partner = re.sub(r'\s+(?:for|in|after|until).*$', '', partner)
+                if partner and len(partner) > 2:
+                    partners.append(partner)
+        return list(set(partners))  # Deduplicate
+
+    def _extract_line_of_therapy(self, text: str) -> Optional[str]:
+        """Extract line of therapy from indication text."""
+        for pattern, line_name in self.LINE_OF_THERAPY_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return line_name
+        return None
+
+
+def match_variant_to_indications(
+        indications: list[BiomarkerIndication],
+        query_gene: str,
+        query_variant: str,
+        query_tumor: Optional[str] = None
+) -> list[dict]:
+    """
+    Match a user's variant query against parsed FDA indications.
+
+    Args:
+        indications: List of parsed BiomarkerIndication objects
+        query_gene: Gene symbol (e.g., "EGFR")
+        query_variant: Variant notation (e.g., "L858R", "T790M")
+        query_tumor: Optional tumor type filter
+
+    Returns:
+        List of match results with full context
+    """
+    results = []
+
+    for ind in indications:
+        match_result = ind.matches_variant(query_gene, query_variant)
+
+        # Filter by tumor if specified
+        if query_tumor and ind.tumor_types:
+            tumor_match = any(
+                query_tumor.lower() in t.lower() or t.lower() in query_tumor.lower()
+                for t in ind.tumor_types
+            )
+            if not tumor_match:
+                continue
+
+        results.append({
+            "drug": ind.drug_name,
+            "brand": ind.brand_name,
+            "matches": match_result["matches"],
+            "match_type": match_result["match_type"],
+            "reason": match_result["reason"],
+            "requirement": ind.requirement.value,
+            "specificity": ind.specificity.value,
+            "specified_variants": ind.specified_variants,
+            "tumor_types": ind.tumor_types,
+            "tumor_stage": ind.tumor_stage,
+            "combination_partners": ind.combination_partners,
+            "is_monotherapy": ind.is_monotherapy,
+            "line_of_therapy": ind.line_of_therapy,
+        })
+
+    # Sort: exact matches first, then excluded (so user sees what NOT to use)
+    results.sort(key=lambda x: (
+        not x["matches"],  # Matches first
+        x["match_type"] != "exact",  # Exact matches before partial
+        x["match_type"] == "excluded",  # Exclusions last among non-matches
+    ))
+
+    return results
+
+
+# ============================================================================
+# OpenFDA Integration
+# ============================================================================
+
+import requests
+from typing import Optional
+
+
+class OpenFDAClient:
+    """Client for fetching FDA labels from OpenFDA API."""
+
+    BASE_URL = "https://api.fda.gov/drug/label.json"
+
+    def fetch_label_by_drug(self, drug_name: str) -> Optional[dict]:
+        """
+        Fetch FDA label by drug name (generic or brand).
+
+        Args:
+            drug_name: Generic or brand name of the drug
+
+        Returns:
+            Label data dict or None if not found
+        """
+        search = f'openfda.generic_name:"{drug_name}" OR openfda.brand_name:"{drug_name}"'
+        params = {"search": search, "limit": 1}
+
+        try:
+            resp = requests.get(self.BASE_URL, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("results"):
+                return data["results"][0]
+        except Exception as e:
+            print(f"Error fetching label for {drug_name}: {e}")
+
+        return None
+
+    def fetch_labels_by_gene(self, gene: str, limit: int = 100) -> list[dict]:
+        """
+        Fetch all FDA labels that mention a specific gene/biomarker.
+
+        Args:
+            gene: Gene symbol (e.g., "EGFR", "BRAF")
+            limit: Maximum number of labels to return
+
+        Returns:
+            List of label data dicts
+        """
+        # Search in indications_and_usage section
+        search = f'indications_and_usage:"{gene}"'
+        params = {"search": search, "limit": limit}
+
+        try:
+            resp = requests.get(self.BASE_URL, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+
+            return data.get("results", [])
+        except Exception as e:
+            print(f"Error fetching labels for {gene}: {e}")
+
+        return []
+
+
+def get_fda_approved_drugs_for_variant(
+        gene: str,
+        variant: str,
+        tumor_type: Optional[str] = None
+) -> list[dict]:
+    """
+    High-level function to find FDA-approved drugs for a specific variant.
+
+    Args:
+        gene: Gene symbol (e.g., "EGFR")
+        variant: Variant notation (e.g., "T790M", "L858R")
+        tumor_type: Optional tumor type filter (e.g., "NSCLC")
+
+    Returns:
+        List of matching drug information with approval details
+    """
+    client = OpenFDAClient()
+    parser = FDALabelParser()
+
+    # Fetch all labels mentioning this gene
+    labels = client.fetch_labels_by_gene(gene)
+
+    all_matches = []
+
+    for label_data in labels:
+        # Parse the label
+        indications = parser.parse_label(label_data)
+
+        # Match against the query
+        matches = match_variant_to_indications(indications, gene, variant, tumor_type)
+
+        for match in matches:
+            if match["matches"]:
+                all_matches.append(match)
+            elif match["match_type"] == "excluded":
+                # Include exclusions so user knows what NOT to use
+                match["_is_exclusion"] = True
+                all_matches.append(match)
+
+    # Deduplicate by drug name
+    seen_drugs = set()
+    unique_matches = []
+    for match in all_matches:
+        if match["drug"] not in seen_drugs:
+            seen_drugs.add(match["drug"])
+            unique_matches.append(match)
+
+    return unique_matches
+
+
+# ============================================================================
+# Example usage and tests
+# ============================================================================
+
+if __name__ == "__main__":
+    # Test with IMJUDO label text (the problematic case)
+    imjudo_indication = """
+    1 INDICATIONS AND USAGE IMJUDO is a cytotoxic T-lymphocyte-associated antigen 4 (CTLA-4) 
+    blocking antibody indicated: • in combination with durvalumab, for the treatment of adult 
+    patients with unresectable hepatocellular carcinoma (uHCC). ( 1.1 ) • in combination with 
+    durvalumab and platinum-based chemotherapy for the treatment of adult patients with 
+    metastatic non-small cell lung cancer (NSCLC) with no sensitizing epidermal growth factor 
+    receptor (EGFR) mutation or anaplastic lymphoma kinase (ALK) genomic tumor aberrations. 
+    ( 1.2 ) 1.1 Hepatocellular Carcinoma IMJUDO, in combination with durvalumab, is indicated 
+    for the treatment of adult patients with unresectable hepatocellular carcinoma (uHCC). 
+    1.2 Non-Small Cell Lung Cancer (NSCLC) IMJUDO, in combination with durvalumab and 
+    platinum-based chemotherapy, is indicated for the treatment of adult patients with 
+    metastatic NSCLC with no sensitizing epidermal growth factor receptor (EGFR) mutations 
+    or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
+    """
+
+    parser = FDALabelParser()
+
+    # Create a mock label_data structure
+    mock_label = {
+        'openfda': {
+            'generic_name': ['tremelimumab'],
+            'brand_name': ['IMJUDO'],
+        },
+        'indications_and_usage': [imjudo_indication],
+    }
+
+    indications = parser.parse_label(mock_label)
+
+    print("=" * 80)
+    print("PARSED INDICATIONS FROM IMJUDO LABEL")
+    print("=" * 80)
+
+    for i, ind in enumerate(indications, 1):
+        print(f"\n--- Indication {i} ---")
+        print(f"Gene: {ind.gene}")
+        print(f"Requirement: {ind.requirement.value}")
+        print(f"Specificity: {ind.specificity.value}")
+        print(f"Variants: {ind.specified_variants}")
+        print(f"Tumor types: {ind.tumor_types}")
+        print(f"Combination: {ind.combination_partners}")
+
+    print("\n" + "=" * 80)
+    print("TESTING VARIANT MATCHING")
+    print("=" * 80)
+
+    # Test: EGFR T790M in NSCLC
+    print("\nQuery: EGFR T790M in NSCLC")
+    results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
+    for r in results:
+        print(f"  Drug: {r['drug']}")
+        print(f"  Matches: {r['matches']}")
+        print(f"  Match type: {r['match_type']}")
+        print(f"  Reason: {r['reason']}")
+        print(f"  Requirement: {r['requirement']}")
+
+    # Test: EGFR L858R in NSCLC
+    print("\nQuery: EGFR L858R in NSCLC")
+    results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
+    for r in results:
+        print(f"  Drug: {r['drug']}")
+        print(f"  Matches: {r['matches']}")
+        print(f"  Match type: {r['match_type']}")
+        print(f"  Reason: {r['reason']}")
+
+    # Test with Osimertinib label (should match T790M)
+    print("\n" + "=" * 80)
+    print("TESTING WITH OSIMERTINIB LABEL")
+    print("=" * 80)
+
+    osimertinib_indication = """
+    TAGRISSO is a kinase inhibitor indicated for:
+    • The first-line treatment of adult patients with metastatic NSCLC whose tumors have 
+    EGFR exon 19 deletions or exon 21 L858R mutations, as detected by an FDA-approved test.
+    • The treatment of adult patients with metastatic EGFR T790M mutation-positive NSCLC, 
+    as detected by an FDA-approved test, whose disease has progressed on or after EGFR TKI therapy.
+    """
+
+    mock_osimertinib = {
+        'openfda': {
+            'generic_name': ['osimertinib'],
+            'brand_name': ['TAGRISSO'],
+        },
+        'indications_and_usage': [osimertinib_indication],
+    }
+
+    osi_indications = parser.parse_label(mock_osimertinib)
+
+    for i, ind in enumerate(osi_indications, 1):
+        print(f"\n--- Indication {i} ---")
+        print(f"Gene: {ind.gene}")
+        print(f"Requirement: {ind.requirement.value}")
+        print(f"Specificity: {ind.specificity.value}")
+        print(f"Variants: {ind.specified_variants}")
+        print(f"Tumor types: {ind.tumor_types}")
+        print(f"Line of therapy: {ind.line_of_therapy}")
+
+    print("\nQuery: EGFR T790M in NSCLC")
+    results = match_variant_to_indications(osi_indications, "EGFR", "T790M", "NSCLC")
+    for r in results:
+        print(f"  Drug: {r['drug']}")
+        print(f"  Matches: {r['matches']}")
+        print(f"  Match type: {r['match_type']}")
+        print(f"  Reason: {r['reason']}")

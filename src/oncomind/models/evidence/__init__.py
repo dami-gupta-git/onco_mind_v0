@@ -49,6 +49,11 @@ from oncomind.models.evidence.fda import (
     MechanismEvidence,
     AdverseReactionsEvidence,
 )
+from oncomind.models.evidence.fda_biomarker import (
+    FDABiomarkerEvidence,
+    BiomarkerRequirement,
+    SpecificityLevel,
+)
 from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -97,6 +102,9 @@ __all__ = [
     "ClinicalStudyEvidence",
     "MechanismEvidence",
     "AdverseReactionsEvidence",
+    "FDABiomarkerEvidence",
+    "BiomarkerRequirement",
+    "SpecificityLevel",
     "HotspotsEvidence",
     "HotspotEntry",
     "HotspotVariant",

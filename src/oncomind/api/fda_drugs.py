@@ -1376,6 +1376,60 @@ async def search_fda_by_biomarker(
     return await client.search_by_biomarker(gene, variant, limit)
 
 
+async def get_fda_labels_for_biomarker(
+    gene: str,
+    variant: str,
+    tumor_type: str,
+    limit: int = 100,
+) -> list[dict]:
+    """Fetch raw FDA labels for a gene-variant-tumor combination.
+
+    Queries OpenFDA for drug labels that mention the gene in their
+    indications_and_usage field. Returns raw label data for downstream parsing.
+
+    Args:
+        gene: Gene symbol (e.g., "IDH1", "BRAF")
+        variant: Variant (e.g., "R132H", "V600E")
+        tumor_type: Tumor type (e.g., "Glioma", "Melanoma")
+        limit: Maximum number of labels to return
+
+    Returns:
+        List of raw FDA label dicts from OpenFDA API
+    """
+    from fda_label_parser import FDALabelParser, match_variant_to_indications
+    parser = FDALabelParser()
+
+    base_url = "https://api.fda.gov/drug/label.json"
+    gene_upper = gene.upper()
+
+    # Search indications_and_usage for the gene
+    search_query = f'indications_and_usage:"{gene_upper}"'
+
+    labels: list[dict] = []
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            base_url,
+            params={"search": search_query, "limit": limit}
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            labels = data.get("results", [])
+
+            indications = parser.parse_label(openfda_result)
+
+            # To check if a drug matches a user's query:
+            results = match_variant_to_indications(
+                indications,
+                gene,
+                variant,
+                tumor_type
+            )
+
+    return labels
+
+
 # Module-level singleton for OpenFDA client
 _openfda_client: OpenFDAClient | None = None
 
