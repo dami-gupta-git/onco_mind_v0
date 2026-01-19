@@ -603,3 +603,102 @@ class TestCivicSensitivityResistance:
             assert not (e.is_sensitivity and e.is_resistance), (
                 f"Evidence {e.evidence_id} has both is_sensitivity=True and is_resistance=True"
             )
+
+
+# =============================================================================
+# FDA APPROVAL GAP TESTS
+# =============================================================================
+
+@pytest.mark.integration
+class TestFDAApprovalGap:
+    """Integration tests for FDA-approved therapy gap detection.
+
+    These tests verify that variants without FDA-approved therapies
+    correctly show the "No FDA-approved therapy" gap.
+    """
+
+    @pytest.mark.asyncio
+    async def test_variant_without_fda_approval_shows_gap(self):
+        """ERBB2 S310F in Bladder Cancer has no FDA-approved therapy - should show gap."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("ERBB2 S310F", tumor_type="Bladder Cancer")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have "No FDA-approved therapy" gap
+        drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
+        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+
+        assert len(fda_gap) > 0, (
+            f"Expected 'No FDA-approved therapy' gap for ERBB2 S310F. "
+            f"Got gaps: {[g.description for g in drug_response_gaps]}"
+        )
+
+        # The gap should be SIGNIFICANT severity
+        assert fda_gap[0].severity == GapSeverity.SIGNIFICANT
+
+    @pytest.mark.asyncio
+    async def test_variant_without_fda_approval_still_has_drug_response(self):
+        """ERBB2 S310F has VICC/CGI drug response data but no FDA approval."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("ERBB2 S310F", tumor_type="Bladder Cancer")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should have drug response data in well_characterized (from VICC/CGI)
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "drug response data" in well_char_lower, (
+            "Should have 'drug response data' well-characterized from VICC/CGI data"
+        )
+
+        # But should NOT have "FDA-approved therapy" in well_characterized
+        assert "fda-approved therapy" not in well_char_lower, (
+            "Should NOT have 'FDA-approved therapy' since there's none"
+        )
+
+    @pytest.mark.asyncio
+    async def test_variant_with_fda_approval_no_gap(self):
+        """BRAF V600E in Melanoma has FDA-approved therapy - should NOT have FDA gap."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Melanoma")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Should NOT have "No FDA-approved therapy" gap
+        drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
+        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+
+        assert len(fda_gap) == 0, (
+            f"BRAF V600E Melanoma should NOT have 'No FDA-approved therapy' gap. "
+            f"Got: {[g.description for g in fda_gap]}"
+        )
+
+        # Should have "FDA-approved therapy" in well_characterized
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "fda-approved therapy" in well_char_lower, (
+            "BRAF V600E Melanoma should have 'FDA-approved therapy' well-characterized"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fda_biomarker_evidence_determines_approval(self):
+        """FDA approval is determined by fda_biomarker_evidence, not CGI/VICC."""
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("ERBB2 S310F", tumor_type="Bladder Cancer")
+
+        # Verify ERBB2 S310F has VICC evidence but no FDA biomarker evidence
+        assert len(result.evidence.vicc_evidence) > 0, "Should have VICC evidence"
+        assert len(result.evidence.fda_biomarker_evidence) == 0, (
+            "Should NOT have FDA biomarker evidence"
+        )
+
+        # This confirms the gap is correctly based on FDA data, not VICC

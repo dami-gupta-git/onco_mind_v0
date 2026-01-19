@@ -549,7 +549,7 @@ class TestCheckDrugResponse:
 
         _check_drug_response(mock_evidence, base_context)
 
-        assert any("drug response" in w.lower() for w in base_context.well_characterized)
+        assert any("drug response data" in w.lower() for w in base_context.well_characterized)
         assert base_context.has_drug_data is True
 
     def test_with_vicc_evidence(self, mock_evidence, base_context):
@@ -579,13 +579,13 @@ class TestCheckDrugResponse:
         """Missing drug data should add a SIGNIFICANT gap."""
         _check_drug_response(mock_evidence, base_context)
 
-        assert "drug response" in base_context.poorly_characterized
+        assert "drug response data" in base_context.poorly_characterized
         drug_gaps = [g for g in base_context.gaps if g.category == GapCategory.DRUG_RESPONSE]
         assert len(drug_gaps) >= 1
         assert drug_gaps[0].severity == GapSeverity.SIGNIFICANT
 
     def test_drug_response_counts_sources_correctly(self, mock_evidence, base_context):
-        """Drug response should count CGI, VICC, and FDA sources correctly."""
+        """Drug response should count CGI and VICC sources correctly (FDA is separate)."""
         from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
 
         # Create 2 CGI biomarkers
@@ -603,7 +603,7 @@ class TestCheckDrugResponse:
             v.locus_variant_match = None
             v.disease = "Other Cancer"
 
-        # Create 1 FDA biomarker evidence
+        # Create 1 FDA biomarker evidence (tracked separately)
         fda = MagicMock()
         fda.locus_variant_match = None
         fda.tumor_types = ["Melanoma"]
@@ -612,13 +612,19 @@ class TestCheckDrugResponse:
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Check the basis string contains correct counts
-        drug_resp = [w for w in base_context.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        # Check "drug response data" only has CGI and VICC (not FDA)
+        drug_resp = [w for w in base_context.well_characterized_detailed if w.aspect.lower() == "drug response data"]
         assert len(drug_resp) == 1
         basis = drug_resp[0].basis
         assert "2 CGI" in basis
         assert "3 VICC" in basis
-        assert "1 FDA" in basis
+        # FDA is tracked separately as "FDA-approved therapy"
+        assert "FDA" not in basis
+
+        # Check "FDA-approved therapy" is tracked separately
+        fda_resp = [w for w in base_context.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
+        assert len(fda_resp) == 1
+        assert "1 FDA" in fda_resp[0].basis
 
     def test_drug_response_tumor_match_counting(self, mock_evidence):
         """Drug response should track tumor matches vs others."""
@@ -656,7 +662,7 @@ class TestCheckDrugResponse:
         _check_drug_response(mock_evidence, ctx)
 
         # Check tumor_match field
-        drug_resp = [w for w in ctx.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        drug_resp = [w for w in ctx.well_characterized_detailed if "drug response data" in w.aspect.lower()]
         assert len(drug_resp) == 1
         tumor_match = drug_resp[0].tumor_match
         assert tumor_match is not None
@@ -665,7 +671,7 @@ class TestCheckDrugResponse:
         assert "1 other" in tumor_match
 
     def test_drug_response_locus_variant_match_levels(self, mock_evidence, base_context):
-        """Drug response should track match levels (variant, codon, gene)."""
+        """Drug response should track match levels (variant, codon, gene) - FDA tracked separately."""
         from oncomind.models.evidence.base import EvidenceLevel
         from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
 
@@ -683,7 +689,7 @@ class TestCheckDrugResponse:
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
-        # Create FDA biomarker evidence with codon-level match
+        # Create FDA biomarker evidence with codon-level match (tracked separately)
         fda_codon = MagicMock()
         fda_codon.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
         fda_codon.locus_match = "codon"  # Computed property value for MagicMock
@@ -693,14 +699,21 @@ class TestCheckDrugResponse:
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Check matches_on field
-        drug_resp = [w for w in base_context.well_characterized_detailed if "drug response" in w.aspect.lower()]
+        # Check "drug response data" matches_on field (CGI + VICC only, not FDA)
+        drug_resp = [w for w in base_context.well_characterized_detailed if w.aspect.lower() == "drug response data"]
         assert len(drug_resp) == 1
         matches_on = drug_resp[0].matches_on
         assert matches_on is not None
-        assert "1 variant" in matches_on
-        assert "1 codon" in matches_on
-        assert "1 gene" in matches_on
+        assert "1 variant" in matches_on  # CGI
+        assert "1 gene" in matches_on     # VICC
+        # FDA codon-level is tracked separately
+        assert "codon" not in matches_on
+
+        # Check "FDA-approved therapy" has the codon-level match
+        fda_resp = [w for w in base_context.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
+        assert len(fda_resp) == 1
+        fda_matches_on = fda_resp[0].matches_on
+        assert "1 codon" in fda_matches_on
 
     def test_drug_response_excludes_preclinical_biomarkers(self, mock_evidence, base_context):
         """Drug response should NOT include preclinical or early phase biomarkers."""
@@ -710,8 +723,8 @@ class TestCheckDrugResponse:
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Drug response should NOT be well-characterized (no FDA-tier evidence)
-        assert "drug response" in base_context.poorly_characterized
+        # Drug response data should NOT be well-characterized (no FDA-tier evidence)
+        assert "drug response data" in base_context.poorly_characterized
         # But preclinical row should exist
         preclin = [w for w in base_context.well_characterized_detailed
                    if "preclinical" in w.aspect.lower()]

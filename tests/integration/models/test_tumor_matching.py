@@ -179,14 +179,14 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response in well_characterized_detailed
+        # Find drug response data in well_characterized_detailed
         drug_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response" in item.aspect.lower()
+            if "drug response data" in item.aspect.lower()
         ]
 
         # Should have drug response data
-        assert len(drug_resp) > 0, "Should have drug response in well_characterized"
+        assert len(drug_resp) > 0, "Should have drug response data in well_characterized"
 
         # Should have tumor_match field
         drug_resp_item = drug_resp[0]
@@ -208,17 +208,17 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response in well_characterized_detailed
+        # Find drug response data in well_characterized_detailed
         drug_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response" in item.aspect.lower()
+            if "drug response data" in item.aspect.lower()
         ]
 
-        assert len(drug_resp) > 0, "Should have drug response in well_characterized"
+        assert len(drug_resp) > 0, "Should have drug response data in well_characterized"
 
         drug_resp_item = drug_resp[0]
         assert drug_resp_item.matches_on is not None, \
-            f"Drug response should have matches_on, got: {drug_resp_item}"
+            f"Drug response data should have matches_on, got: {drug_resp_item}"
 
         # matches_on should contain locus level info (variant, codon, or gene)
         has_level = any(level in drug_resp_item.matches_on
@@ -238,10 +238,10 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response
+        # Find drug response data
         drug_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response" in item.aspect.lower()
+            if "drug response data" in item.aspect.lower()
         ]
 
         if drug_resp:

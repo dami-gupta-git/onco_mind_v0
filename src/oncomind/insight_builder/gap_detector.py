@@ -592,93 +592,79 @@ def _check_tumor_type_evidence(evidence: "Evidence", ctx: GapDetectionContext) -
 
 
 def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None:
-    """Check for drug sensitivity/resistance data.
+    """Check for FDA-approved therapies and drug response data.
 
-    Drug Response includes only FDA-approved tier evidence:
-    - CGI biomarkers (FDA-approved)
-    - VICC evidence
-    - FDA approvals
+    This function checks two separate things:
+    1. FDA-approved therapies - only from fda_biomarker_evidence
+    2. Drug response data - from VICC, CGI (for general "well characterized" tracking)
 
-    Preclinical/early phase biomarkers are handled separately.
+    A gap is added if there's no FDA-approved therapy for this variant.
     """
-    # Count FDA-approved tier evidence
-    cgi_counts = count_with_levels(evidence.cgi_biomarkers, ctx.tumor_type)
-    vicc_counts = count_with_levels(evidence.vicc_evidence, ctx.tumor_type)
-
-    # FDA biomarker evidence - filter for REQUIRED_POSITIVE only
+    # =========================================================================
+    # 1. Check for FDA-approved therapies (only FDA biomarker evidence)
+    # =========================================================================
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
-    fda_filtered = [
+    fda_approved = [
         ev for ev in evidence.fda_biomarker_evidence
         if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE
     ]
-    fda_counts = count_with_levels(fda_filtered, ctx.tumor_type)
+    fda_counts = count_with_levels(fda_approved, ctx.tumor_type)
 
-    # Aggregate counts
-    counts = MatchCounts().add(cgi_counts).add(vicc_counts).add(fda_counts)
+    if fda_counts.total > 0:
+        ctx.add_well_characterized(
+            "FDA-approved therapy",
+            f"{fda_counts.total} FDA",
+            category=GapCategory.DRUG_RESPONSE,
+            matches_on=fda_counts.matches_on_str,
+            tumor_match=fda_counts.tumor_breakdown_str,
+        )
+    else:
+        # No FDA-approved therapy - this is a significant gap
+        ctx.add_gap(
+            category=GapCategory.DRUG_RESPONSE,
+            severity=GapSeverity.SIGNIFICANT,
+            description=f"No FDA-approved therapy for {ctx.gene} {ctx.variant}",
+            suggested_studies=["Clinical trial enrollment", "Off-label use evaluation"],
+            addressable_with=["ClinicalTrials.gov", "NCCN guidelines", "Basket trials"]
+        )
 
-    # Set context flag for approved drug data
-    ctx.has_drug_data = counts.total > 0
+    # =========================================================================
+    # 2. Check for drug response data (VICC, CGI - for "well characterized")
+    # =========================================================================
+    cgi_counts = count_with_levels(evidence.cgi_biomarkers, ctx.tumor_type)
+    vicc_counts = count_with_levels(evidence.vicc_evidence, ctx.tumor_type)
 
-    if ctx.has_drug_data:
-        # Build source string
+    # Aggregate non-FDA drug response counts
+    drug_response_counts = MatchCounts().add(cgi_counts).add(vicc_counts)
+
+    # Set context flag for any drug data
+    ctx.has_drug_data = drug_response_counts.total > 0 or fda_counts.total > 0
+
+    if drug_response_counts.total > 0:
+        # Build source string for drug response data
         drug_sources = []
         if cgi_counts.total:
             drug_sources.append(f"{cgi_counts.total} CGI")
         if vicc_counts.total:
-            drug_sources.append(f"{vicc_counts.total} VICC (meta-KB)")
-        if fda_counts.total:
-            drug_sources.append(f"{fda_counts.total} FDA")
+            drug_sources.append(f"{vicc_counts.total} VICC")
 
         ctx.add_well_characterized(
-            "drug response",
+            "drug response data",
             " + ".join(drug_sources),
             category=GapCategory.DRUG_RESPONSE,
-            matches_on=counts.matches_on_str,
-            tumor_match=counts.tumor_breakdown_str,
+            matches_on=drug_response_counts.matches_on_str,
+            tumor_match=drug_response_counts.tumor_breakdown_str,
         )
-
-        # Add gap if evidence exists only in other tumors (not tumor-matched)
-        if ctx.tumor_type and counts.tumor == 0 and counts.other_cancers:
-            other_cancers_str = ", ".join(sorted(counts.other_cancers)[:3])
-            ctx.add_gap(
-                category=GapCategory.DRUG_RESPONSE,
-                severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
-                description=f"Drug response data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
-                suggested_studies=["Tumor-specific drug screen", "Basket trial analysis"],
-                addressable_with=["Literature search", "Clinical trial databases"]
-            )
-
-        # Add gap if drug response data exists but not for this specific variant (extrapolated)
-        if counts.variant == 0 and (counts.gene > 0 or counts.codon > 0):
-            if counts.gene > 0 and counts.codon == 0:
-                # Only gene-level (weakest extrapolation) - data exists but not variant-specific
-                ctx.add_gap(
-                    category=GapCategory.DRUG_RESPONSE,
-                    severity=GapSeverity.MODERATE,  # Data exists, just not variant-specific
-                    description=f"Drug response data exists for {ctx.gene} but not specifically for {ctx.variant} (gene-level extrapolation)",
-                    suggested_studies=["Variant-specific drug sensitivity assay", "Isogenic cell line comparison"],
-                    addressable_with=["DepMap variant-specific analysis", "GDSC mutation annotations"]
-                )
-            elif counts.codon > 0:
-                # Codon-level (moderate extrapolation)
-                from oncomind.models.evidence.base import extract_variant_position
-                codon_pos = extract_variant_position(ctx.variant) or ""
-                ctx.add_gap(
-                    category=GapCategory.DRUG_RESPONSE,
-                    severity=GapSeverity.MODERATE,  # Codon-level is close, just noting limitation
-                    description=f"Drug response data exists for {ctx.gene} codon {codon_pos} variants but not specifically for {ctx.variant} (codon-level extrapolation)",
-                    suggested_studies=["Variant-specific response comparison"],
-                    addressable_with=["Published case series", "Functional assay data"]
-                )
-    else:
+    elif fda_counts.total == 0:
+        # No drug response data at all (and no FDA)
         ctx.add_gap(
             category=GapCategory.DRUG_RESPONSE,
-            severity=GapSeverity.SIGNIFICANT,
+            severity=GapSeverity.MODERATE,
             description=f"No drug sensitivity/resistance data for {ctx.gene} {ctx.variant}",
             suggested_studies=["Cell line drug screen", "PDX drug testing", "Clinical correlative study"],
             addressable_with=["GDSC", "CTRP", "DepMap"]
         )
-        ctx.add_poorly_characterized("drug response")
+        ctx.add_poorly_characterized("drug response data")
 
     # Handle preclinical/early phase biomarkers separately
     _check_preclinical_biomarkers(evidence, ctx)
