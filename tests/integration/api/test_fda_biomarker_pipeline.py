@@ -221,3 +221,105 @@ class TestFDABiomarkerPipeline:
             if ev.get("match_type") == "gene"
         ]
         # May or may not have gene-level matches depending on FDA labels
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_braf_v600k_combination_therapy(self):
+        """BRAF V600K in Melanoma should return combination therapy evidence.
+
+        FDA has approved combination therapies for BRAF V600 mutations:
+        - Dabrafenib + Trametinib
+        - Vemurafenib + Cobimetinib
+        - Encorafenib + Binimetinib
+
+        The combination_partners field should capture the partner drugs.
+        """
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600K",
+            tumor_type="Melanoma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        assert result["variant"]["gene"] == "BRAF"
+        assert result["variant"]["variant"] == "V600K"
+
+        fda_biomarker = result.get("fda_biomarker_evidence", [])
+        assert isinstance(fda_biomarker, list)
+
+        # Find entries with combination_partners
+        combination_entries = [
+            ev for ev in fda_biomarker
+            if ev.get("combination_partners") and len(ev.get("combination_partners", [])) > 0
+        ]
+
+        # Should find at least one combination therapy
+        assert len(combination_entries) > 0, (
+            f"Expected at least one combination therapy entry, "
+            f"got: {[e.get('drug_name') for e in fda_biomarker]}"
+        )
+
+        # Check that combination_partners contains expected partner drugs
+        all_partners = []
+        for entry in combination_entries:
+            partners = entry.get("combination_partners", [])
+            all_partners.extend([p.lower() for p in partners])
+
+        # Known combination partners for BRAF inhibitors
+        expected_partners = ["trametinib", "cobimetinib", "binimetinib"]
+        found_partner = any(
+            any(exp in p for exp in expected_partners)
+            for p in all_partners
+        )
+
+        assert found_partner, (
+            f"Expected combination partners like trametinib/cobimetinib/binimetinib, "
+            f"got: {all_partners}"
+        )
+
+        # Verify structure of combination therapy entries
+        for entry in combination_entries:
+            assert "drug_name" in entry
+            assert "combination_partners" in entry
+            assert isinstance(entry["combination_partners"], list)
+            assert len(entry["combination_partners"]) > 0
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_hgvs_protein_notation_present(self):
+        """HGVS protein notation should be populated for variant queries.
+
+        The hgvs.protein field should contain the HGVS protein notation
+        (e.g., p.Val600Lys) from VEP when MyVariant doesn't provide it.
+        """
+        result = await get_variant_insight(
+            gene="BRAF",
+            variant="V600K",
+            tumor_type="Melanoma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+
+        # Check HGVS data structure
+        hgvs = result.get("hgvs", {})
+        assert isinstance(hgvs, dict)
+
+        # HGVS protein notation should be present
+        hgvs_protein = hgvs.get("protein")
+        assert hgvs_protein is not None, (
+            f"Expected HGVS protein notation (p.Val600Lys), got: {hgvs}"
+        )
+
+        # Should start with "p." prefix
+        assert hgvs_protein.startswith("p."), (
+            f"HGVS protein notation should start with 'p.', got: {hgvs_protein}"
+        )
+
+        # For V600K, should contain Val600 (V600)
+        assert "Val600" in hgvs_protein or "600" in hgvs_protein, (
+            f"HGVS protein for V600K should contain Val600, got: {hgvs_protein}"
+        )

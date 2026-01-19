@@ -43,6 +43,7 @@ class VEPAnnotation:
     # Genomic location
     hgvs_genomic: str | None = None
     hgvs_transcript: str | None = None
+    hgvs_protein: str | None = None  # e.g., ENSP00000288602.7:p.Val600Lys
     chromosome: str | None = None
     position: int | None = None
     ref_allele: str | None = None
@@ -363,6 +364,7 @@ class VEPClient:
         chrom = data.get("seq_region_name")
         start = data.get("start")
         allele_string = data.get("allele_string", "")
+        assembly = data.get("assembly_name", "GRCh38")  # VEP defaults to GRCh38
 
         ref, alt = None, None
         if "/" in allele_string:
@@ -370,8 +372,10 @@ class VEPClient:
             if len(parts) == 2:
                 ref, alt = parts
 
-        # Build HGVS genomic for MyVariant query
+        # Build HGVS genomic for MyVariant query (without assembly prefix)
         myvariant_query = None
+        # Build display HGVS genomic with assembly prefix for clarity
+        hgvs_genomic_display = None
         if chrom and start and ref and alt:
             # Handle different variant types
             if ref == "-":
@@ -386,6 +390,9 @@ class VEPClient:
             else:
                 # SNV or complex
                 myvariant_query = f"chr{chrom}:g.{start}{ref}>{alt}"
+
+            # Add assembly prefix for display (e.g., "GRCh38:chr7:g.140753336GT>AA")
+            hgvs_genomic_display = f"{assembly}:{myvariant_query}"
 
         # Get transcript consequences - prefer canonical/MANE
         consequences = data.get("transcript_consequences", [])
@@ -407,9 +414,21 @@ class VEPClient:
         if not best_consequence:
             best_consequence = {}
 
+        # Extract HGVS protein notation, cleaning the format if needed
+        # VEP returns format like "ENSP00000288602.7:p.Val640Lys"
+        # We want to store just the "p.Val640Lys" portion for display
+        hgvsp_raw = best_consequence.get("hgvsp")
+        hgvs_protein = None
+        if hgvsp_raw and ":p." in hgvsp_raw:
+            # Extract just the p.XXX portion
+            hgvs_protein = "p." + hgvsp_raw.split(":p.")[1]
+        elif hgvsp_raw:
+            hgvs_protein = hgvsp_raw
+
         return VEPAnnotation(
-            hgvs_genomic=myvariant_query,
+            hgvs_genomic=hgvs_genomic_display,  # With assembly prefix for display
             hgvs_transcript=best_consequence.get("hgvsc"),
+            hgvs_protein=hgvs_protein,
             chromosome=chrom,
             position=start,
             ref_allele=ref,

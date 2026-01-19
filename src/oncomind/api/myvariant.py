@@ -756,6 +756,7 @@ class MyVariantClient:
                 # Use VEP predictions if available (from Strategy 5)
                 vep_hgvs_genomic = None
                 vep_hgvs_transcript = None
+                vep_hgvs_protein = None
                 vep_polyphen = None
                 vep_cadd = None
                 vep_alphamissense_score = None
@@ -763,6 +764,7 @@ class MyVariantClient:
                 if vep_annotation:
                     vep_hgvs_genomic = vep_annotation.hgvs_genomic
                     vep_hgvs_transcript = vep_annotation.hgvs_transcript
+                    vep_hgvs_protein = vep_annotation.hgvs_protein
                     vep_polyphen = vep_annotation.polyphen_prediction
                     vep_cadd = vep_annotation.cadd_phred
                     vep_alphamissense_score = vep_annotation.alphamissense_score
@@ -781,7 +783,7 @@ class MyVariantClient:
                     clinvar_clinical_significance=clinvar_significance,
                     clinvar_accession=clinvar_accession,
                     hgvs_genomic=vep_hgvs_genomic,
-                    hgvs_protein=None,
+                    hgvs_protein=vep_hgvs_protein,
                     hgvs_transcript=vep_hgvs_transcript,
                     snpeff_effect=None,
                     polyphen2_prediction=vep_polyphen,
@@ -800,6 +802,19 @@ class MyVariantClient:
             # Use the first hit (most relevant) and extract using Pydantic models
             first_hit = parsed_response.hits[0]
             evidence = self._extract_from_hit(first_hit, gene, variant)
+
+            # Supplement with VEP data if MyVariant is missing HGVS protein notation
+            # VEP provides standardized HGVS protein notation (p.Val600Lys)
+            if not evidence.hgvs_protein:
+                try:
+                    from oncomind.api.vep import VEPClient
+                    vep_client = VEPClient()
+                    vep_annotation = await vep_client.annotate_variant(gene, variant)
+                    if vep_annotation and vep_annotation.hgvs_protein:
+                        evidence.hgvs_protein = vep_annotation.hgvs_protein
+                except Exception:
+                    # VEP failed - continue without protein notation
+                    pass
 
             # If MyVariant returned no ClinVar data, try ClinVar fallback
             # Note: CIViC evidence is fetched separately via CIViCClient
