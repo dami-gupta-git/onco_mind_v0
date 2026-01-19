@@ -726,8 +726,8 @@ class EvidenceAggregator:
                 for label_data in raw_labels:
                     try:
                         indications = parser.parse_label(label_data)
-                        # Extract set_id for linking
-                        set_id = label_data.get("openfda", {}).get("set_id", [None])[0]
+                        # Extract spl_set_id for linking (OpenFDA field name)
+                        set_id = label_data.get("openfda", {}).get("spl_set_id", [None])[0]
                         spl_version = label_data.get("spl_version")
 
                         # Convert to FDABiomarkerEvidence models

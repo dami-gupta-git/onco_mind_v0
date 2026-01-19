@@ -255,8 +255,8 @@ class TestCGIClient:
         assert all(b.gene == "EGFR" for b in biomarkers)
         assert all(b.is_fda_approved() for b in biomarkers)
         drugs = [b.drug for b in biomarkers]
-        assert "Afatinib" in drugs
-        assert "Gefitinib" in drugs
+        assert "AFATINIB" in drugs  # Drug names are normalized to uppercase
+        assert "GEFITINIB" in drugs
 
     @patch("oncomind.api.cgi.CGIClient._load_biomarkers")
     def test_fetch_biomarkers_no_match(self, mock_load):
@@ -325,7 +325,7 @@ class TestCGIClient:
         biomarkers = client.fetch_fda_approved("EGFR", "G719S")
 
         assert len(biomarkers) == 1
-        assert biomarkers[0].drug == "Afatinib"
+        assert biomarkers[0].drug == "AFATINIB"  # Drug names are normalized to uppercase
         assert biomarkers[0].is_fda_approved() is True
         assert biomarkers[0].association == "Responsive"
 
@@ -352,7 +352,7 @@ class TestCGIClient:
         biomarkers = client.fetch_biomarkers("NRAS", "Q61K", "Melanoma")
 
         assert len(biomarkers) == 1
-        assert biomarkers[0].drug == "Binimetinib"
+        assert biomarkers[0].drug == "BINIMETINIB"  # Drug names are normalized to uppercase
 
 
 class TestCGIClientIntegration:
@@ -373,6 +373,6 @@ class TestCGIClientIntegration:
         fda_approved = [b for b in biomarkers if b.is_fda_approved()]
         assert len(fda_approved) > 0
 
-        # Should include Afatinib
+        # Should include AFATINIB (drug names are normalized to uppercase)
         drugs = [b.drug for b in biomarkers]
-        assert any("Afatinib" in d for d in drugs)
+        assert any("AFATINIB" in d for d in drugs)

@@ -1435,6 +1435,9 @@ VICC_DRUG_NAME_CORRECTIONS: dict[str, str] = {
     "GSK": "GSK2118436",
     # BGB compounds (JAX truncations)
     "BGB": "BGB-3290",
+    # VX compounds (JAX truncations) - VX-11e is an ERK inhibitor
+    "11E": "VX-11E",
+    "11e": "VX-11E",
     # InChIKey to drug name mappings (JAX sometimes uses InChIKeys instead of names)
     "DPMYVVGAYAPQNS-UHFFFAOYSA-N": "CCT241161",  # ERK5 inhibitor
     # Add more corrections as discovered
@@ -1461,6 +1464,7 @@ _NON_DRUG_PATTERNS = [
     r'-?maltose$',      # Sugars
     r'^d-',             # D-glucose, D-mannose etc (stereoisomer prefix for sugars)
     r'^l-',             # L-glucose etc
+    r'sulfone$',        # Industrial solvents: methyl phenyl sulfone, etc.
 ]
 _NON_DRUG_REGEX = re.compile('|'.join(_NON_DRUG_PATTERNS), re.IGNORECASE)
 
@@ -1489,17 +1493,18 @@ def is_valid_drug_name(drug_name: str) -> bool:
 
 
 def correct_vicc_drug_name(drug_name: str) -> str:
-    """Correct known malformed drug names from VICC MetaKB.
+    """Correct known malformed drug names from VICC MetaKB and normalize to uppercase.
 
     Handles:
     - Known truncated drug names (e.g., "AgI" -> "AGI-5198")
     - InChIKey identifiers (e.g., "DPMYVVGAYAPQNS-UHFFFAOYSA-N" -> "InChIKey: DPMYVVGA...")
+    - Normalizes all drug names to uppercase for consistency
 
     Args:
         drug_name: Drug name as returned by VICC API
 
     Returns:
-        Corrected drug name, or original if no correction needed
+        Corrected and uppercase drug name, or original uppercase if no correction needed
     """
     if not drug_name:
         return drug_name
@@ -1507,14 +1512,15 @@ def correct_vicc_drug_name(drug_name: str) -> str:
     # Check for known corrections first
     corrected = _VICC_DRUG_CORRECTIONS_LOWER.get(drug_name.lower())
     if corrected:
-        return corrected
+        return corrected.upper()
 
     # Format InChIKey identifiers for readability
     if _INCHIKEY_PATTERN.match(drug_name):
         # Show abbreviated InChIKey (first 8 chars of the identifier)
         return f"InChIKey: {drug_name[:8]}..."
 
-    return drug_name
+    # Normalize to uppercase
+    return drug_name.upper()
 
 
 # =============================================================================

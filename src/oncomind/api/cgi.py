@@ -413,6 +413,7 @@ class CGIClient:
                 continue
 
             # Get drug name, falling back to drug family if Drug is empty/placeholder
+            # Normalize to uppercase for consistency
             drug = row.get("Drug", "")
             if not drug or drug == "[]":
                 # Use drug family as fallback, removing brackets if present
@@ -423,6 +424,8 @@ class CGIClient:
                 else:
                     # Skip entries with no drug information
                     continue
+            # Normalize drug name to uppercase
+            drug = drug.upper()
 
             # Create biomarker object
             # Get comments (FDA label text) and drug_full_name if available

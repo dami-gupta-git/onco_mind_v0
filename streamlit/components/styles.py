@@ -180,7 +180,7 @@ def apply_styles() -> None:
     .scrollable-table .col-fda { width: 55px !important; max-width: 55px !important; min-width: 55px !important; text-align: center; }
     .scrollable-table .col-locus { width: 100px; }
     .scrollable-table .col-tumor { width: 70px; }
-    .scrollable-table .col-drugs { width: 250px; min-width: 200px; }
+    .scrollable-table .col-drugs { width: 400px; min-width: 350px; }
     .scrollable-table .col-response { width: 110px; }
     .scrollable-table .col-specificity { width: 100px; }
     .scrollable-table .col-status { width: 150px; }
@@ -195,8 +195,8 @@ def apply_styles() -> None:
         padding: 0 !important;
     }
     .scrollable-table td.truncated .cell-content {
-        max-width: 200px;
-        width: 200px;
+        max-width: 350px;
+        width: 350px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

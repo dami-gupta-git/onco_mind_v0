@@ -261,11 +261,11 @@ class CIViCClient:
             CIViCAssertion or None if parsing fails
         """
         try:
-            # Extract therapies
+            # Extract therapies (normalized to uppercase for consistency)
             therapies = []
             for therapy in node.get("therapies", []):
                 if therapy.get("name"):
-                    therapies.append(therapy["name"])
+                    therapies.append(therapy["name"].upper())
 
             # Extract disease
             disease = node.get("disease", {}).get("name", "")
@@ -562,11 +562,11 @@ class CIViCClient:
                         if not is_pan_cancer and not tumor_matches:
                             continue
 
-                    # Extract therapies/drugs
+                    # Extract therapies/drugs (normalized to uppercase for consistency)
                     drugs = []
                     for therapy in node.get("therapies", []):
                         if therapy.get("name"):
-                            drugs.append(therapy["name"])
+                            drugs.append(therapy["name"].upper())
 
                     # Extract source info
                     source_data = node.get("source", {})

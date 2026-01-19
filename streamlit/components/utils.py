@@ -173,6 +173,11 @@ def result_to_markdown(result: dict) -> str:
         lines.append("|------|-------------|------------|")
         for item in fda:
             drug = item.get('drug_name', '')
+            # Include combination partners if present
+            combination_partners = item.get('combination_partners', [])
+            if combination_partners:
+                partners_str = " + ".join(combination_partners)
+                drug = f"{drug} + {partners_str}"
             tumor_types = item.get('tumor_types', [])
             tumor_stage = item.get('tumor_stage', '')
             # Combine tumor stage with tumor types
@@ -190,8 +195,8 @@ def result_to_markdown(result: dict) -> str:
     civic = result.get('civic_evidence', [])
     if civic:
         lines.append("## CIViC Evidence\n")
-        lines.append("| Drug | Disease | Evidence Level | Significance |")
-        lines.append("|------|---------|----------------|--------------|")
+        lines.append("| Drug | Disease | Evidence Level | Significance | Locus Match | Tumor Match |")
+        lines.append("|------|---------|----------------|--------------|-------------|-------------|")
         seen_entries = set()
         count = 0
         for item in civic:
@@ -206,12 +211,14 @@ def result_to_markdown(result: dict) -> str:
             level = item.get('evidence_level', '')
             sig_raw = item.get('clinical_significance', '')
             sig = format_civic_significance(sig_raw)
+            locus = item.get('locus_match', '')
+            tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
             # Deduplicate by drug+disease+significance
             entry_key = (drug.lower(), disease.lower(), sig_raw.lower() if sig_raw else '')
             if entry_key in seen_entries:
                 continue
             seen_entries.add(entry_key)
-            lines.append(f"| {drug} | {disease} | {level} | {sig} |")
+            lines.append(f"| {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
             count += 1
         lines.append("")
 
@@ -219,8 +226,8 @@ def result_to_markdown(result: dict) -> str:
     vicc = result.get('vicc_evidence', [])
     if vicc:
         lines.append("## VICC MetaKB Evidence\n")
-        lines.append("| Source | Drug | Disease | Response |")
-        lines.append("|--------|------|---------|----------|")
+        lines.append("| Source | Drug | Disease | Response | Locus Match | Tumor Match |")
+        lines.append("|--------|------|---------|----------|-------------|-------------|")
         for item in vicc[:10]:
             source = item.get('source', '')
             # drugs is a list, join them
@@ -228,20 +235,24 @@ def result_to_markdown(result: dict) -> str:
             drug = ', '.join(drugs_list) if drugs_list else ''
             disease = item.get('disease', '')
             response = item.get('response_type', '')
-            lines.append(f"| {source} | {drug} | {disease} | {response} |")
+            locus = item.get('locus_match', '')
+            tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
+            lines.append(f"| {source} | {drug} | {disease} | {response} | {locus} | {tumor} |")
         lines.append("")
 
     # CGI Biomarkers
     cgi = result.get('cgi_biomarkers', [])
     if cgi:
         lines.append("## CGI Biomarkers\n")
-        lines.append("| Drug | Association | Evidence Level |")
-        lines.append("|------|-------------|----------------|")
+        lines.append("| Drug | Association | Evidence Level | Locus Match | Tumor Match |")
+        lines.append("|------|-------------|----------------|-------------|-------------|")
         for item in cgi[:10]:
             drug = item.get('drug', '')
             assoc = item.get('association', '')
             level = item.get('evidence_level', '')
-            lines.append(f"| {drug} | {assoc} | {level} |")
+            locus = item.get('locus_match', '')
+            tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
+            lines.append(f"| {drug} | {assoc} | {level} | {locus} | {tumor} |")
         lines.append("")
 
     # Clinical Trials

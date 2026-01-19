@@ -273,6 +273,44 @@ def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
     return deduped
 
 
+def _dedupe_vicc_evidence(vicc_evidence_list) -> List[Dict[str, Any]]:
+    """Deduplicate VICC evidence items by (drugs, disease, response_type).
+
+    VICC MetaKB entries don't have unique IDs like CIViC evidence_id,
+    so we deduplicate by the combination of drugs, disease, and response type.
+    This prevents the same drug-disease-response combination from appearing
+    multiple times in the UI.
+    """
+    seen_keys = set()
+    deduped = []
+    for v in vicc_evidence_list:
+        # Create a deduplication key from drugs (as sorted tuple), disease, and response
+        drugs_key = tuple(sorted(v.drugs)) if v.drugs else ()
+        disease_key = (v.disease or "").lower().strip()
+        response_key = (v.response_type or "").lower().strip()
+        dedup_key = (drugs_key, disease_key, response_key)
+
+        if dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+
+        deduped.append({
+            "source": v.source,
+            "drugs": v.drugs,
+            "disease": v.disease,
+            "response_type": v.response_type,
+            "evidence_level": v.evidence_level,
+            "molecular_profile": v.molecular_profile,
+            "molecular_profile_score": v.molecular_profile_score,
+            "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
+            # Match specificity tracking
+            "locus_match": v.locus_match,
+            "matched_profile": v.matched_profile,
+            "tumor_match": v.tumor_match,
+        })
+    return deduped
+
+
 def _normalize_drug_name(drug_name: str) -> str:
     """Normalize drug name for deduplication.
 
@@ -461,9 +499,9 @@ def _build_response(result) -> Dict[str, Any]:
             # Compute match result for each evidence item
             for match_result in [e.matches_variant(queried_gene, queried_variant)]
             # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
-            # Also filter out drugs with unknown names
+            # Also filter out drugs with unknown names (case-insensitive)
             if (e.gene and e.gene.upper() == queried_gene
-                and e.drug_name and e.drug_name != "Unknown"
+                and e.drug_name and e.drug_name.upper() != "UNKNOWN"
                 and (not queried_tumor or any(tumor_types_match(t, queried_tumor) for t in e.tumor_types))
                 and match_result["matches"])
         ]),
@@ -487,23 +525,8 @@ def _build_response(result) -> Dict[str, Any]:
         ],
         "civic_evidence": _dedupe_civic_evidence(evidence.civic_evidence),
         # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
-        "vicc_evidence": [
-            {
-                "source": v.source,
-                "drugs": v.drugs,
-                "disease": v.disease,
-                "response_type": v.response_type,
-                "evidence_level": v.evidence_level,
-                "molecular_profile": v.molecular_profile,
-                "molecular_profile_score": v.molecular_profile_score,
-                "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
-                # Match specificity tracking
-                "locus_match": v.locus_match,
-                "matched_profile": v.matched_profile,
-                "tumor_match": v.tumor_match,
-            }
-            for v in evidence.get_vicc_unique()
-        ],
+        # Then deduplicate by (drugs, disease, response_type) to avoid repeated entries
+        "vicc_evidence": _dedupe_vicc_evidence(evidence.get_vicc_unique()),
         "cgi_biomarkers": [
             {
                 "drug": b.drug,
@@ -515,6 +538,7 @@ def _build_response(result) -> Dict[str, Any]:
                 # Match specificity tracking
                 "locus_match": b.locus_match,
                 "matched_alteration": b.matched_alteration,
+                "tumor_match": b.tumor_match,
             }
             for b in evidence.cgi_biomarkers
         ],

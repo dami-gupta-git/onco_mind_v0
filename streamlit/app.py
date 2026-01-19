@@ -241,7 +241,13 @@ with tab1:
         # ==============================================
         # HEADER: Variant name + Download button (no border)
         # ==============================================
-        header_text = f"**{gene_display} {variant_display}**"
+        # Get HGVS protein notation if available (e.g., p.Gly12Cys)
+        hgvs_protein = hgvs.get('protein')
+
+        header_text = f"**{gene_display} {variant_display}"
+        if hgvs_protein:
+            header_text += f" ({hgvs_protein})"
+        header_text += "**"
         if tumor_display:
             header_text += f" in {tumor_display}"
 
@@ -980,7 +986,14 @@ with tab1:
                             drug = ev.get('drug_name', 'Unknown')
                             brand = ev.get('brand_name', '')
                             fda_url = ev.get('fda_label_url', '')
-                            drug_text = f"{drug} ({brand})" if brand else drug
+                            # Include combination partners if present
+                            combination_partners = ev.get('combination_partners', [])
+                            if combination_partners:
+                                partners_str = " + ".join(combination_partners)
+                                drug_with_partners = f"{drug} + {partners_str}"
+                            else:
+                                drug_with_partners = drug
+                            drug_text = f"{drug_with_partners} ({brand})" if brand else drug_with_partners
                             # Make drug name clickable if URL available
                             drug_display = f"[{drug_text}]({fda_url})" if fda_url else drug_text
                             gene = ev.get('gene', '')

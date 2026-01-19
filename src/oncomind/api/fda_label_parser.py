@@ -337,13 +337,15 @@ class FDALabelParser:
         """
         indications = []
 
-        # Extract drug names
+        # Extract drug names (normalized to uppercase for consistency)
         openfda = label_data.get('openfda', {})
         drug_name = openfda.get('generic_name', [None])[0]
         brand_name = openfda.get('brand_name', [None])[0]
 
         if not drug_name:
             drug_name = brand_name or "Unknown"
+        # Normalize drug name to uppercase
+        drug_name = drug_name.upper() if drug_name else drug_name
 
         # Parse only Indications and Usage section
         # DO NOT parse clinical_studies - it mentions variants in context of
