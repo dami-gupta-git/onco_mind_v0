@@ -231,13 +231,19 @@ class FDALabelParser:
     }
 
     # Tumor type patterns (order matters - more specific first)
+    # Note: Specific glioma subtypes are listed separately to preserve FDA indication specificity
     TUMOR_PATTERNS = {
         'NSCLC': r'(?:non[- ]?small\s+cell\s+lung\s+cancer|NSCLC(?![A-Z]))',
         'SCLC': r'(?:(?<!non[- ])(?<!non)small\s+cell\s+lung\s+cancer|(?<![N])SCLC(?![A-Z]))',
         'breast cancer': r'(?:breast\s+(?:cancer|carcinoma))',
         'colorectal cancer': r'(?:colorectal\s+(?:cancer|carcinoma)|CRC|colon\s+cancer)',
         'melanoma': r'melanoma',
-        'glioma': r'(?:glioma|glioblastoma|astrocytoma|oligodendroglioma)',
+        # Glioma subtypes - extract specific types when mentioned
+        # Use word boundaries to avoid matching "glioma" within "oligodendroglioma"
+        'astrocytoma': r'\bastrocytoma\b',
+        'oligodendroglioma': r'\boligodendroglioma\b',
+        'glioblastoma': r'\bglioblastoma\b',
+        'glioma': r'\bglioma\b',  # Generic fallback (only matches standalone "glioma")
         'thyroid cancer': r'(?:thyroid\s+(?:cancer|carcinoma))',
         'gastric cancer': r'(?:gastric\s+(?:cancer|carcinoma)|stomach\s+cancer)',
         'hepatocellular carcinoma': r'(?:hepatocellular\s+carcinoma|HCC|liver\s+cancer)',

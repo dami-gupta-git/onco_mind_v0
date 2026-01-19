@@ -979,7 +979,10 @@ with tab1:
                         for ev in fda_biomarker_evidence:
                             drug = ev.get('drug_name', 'Unknown')
                             brand = ev.get('brand_name', '')
-                            drug_display = f"{drug} ({brand})" if brand else drug
+                            fda_url = ev.get('fda_label_url', '')
+                            drug_text = f"{drug} ({brand})" if brand else drug
+                            # Make drug name clickable if URL available
+                            drug_display = f"[{drug_text}]({fda_url})" if fda_url else drug_text
                             gene = ev.get('gene', '')
                             # Use matches and match_type from matches_variant()
                             matches = ev.get('matches', False)
@@ -1006,7 +1009,16 @@ with tab1:
                                 variants_display = 'Any mutation'
                             else:
                                 variants_display = specificity or '—'
-                            tumors = ', '.join(ev.get('tumor_types', []))[:30] or '—'
+                            tumors_list = ev.get('tumor_types', [])
+                            tumor_stage = ev.get('tumor_stage', '')
+                            # Combine tumor types with stage/grade restriction if present
+                            if tumor_stage and tumors_list:
+                                tumors = f"{tumor_stage} {', '.join(tumors_list)}"
+                            elif tumors_list:
+                                tumors = ', '.join(tumors_list)
+                            else:
+                                tumors = '—'
+                            tumors = tumors[:40]  # Truncate for display
                             rows.append(f"| {drug_display} | {gene} | {match_display} | {variants_display} | {tumors} |")
 
                         scrollable_table("\n".join(rows))

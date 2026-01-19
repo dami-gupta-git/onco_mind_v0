@@ -23,6 +23,7 @@ from typing import Any
 
 import httpx
 from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match, determine_locus_match
+from oncomind.config.constants import correct_vicc_drug_name, is_valid_drug_name
 
 
 class VICCError(Exception):
@@ -351,7 +352,11 @@ class VICCClient:
                     if cas_pattern.match(d):
                         drugs.append(f"CAS #{d}")
                     else:
-                        drugs.append(d)
+                        # Skip non-drug compounds (sugars, metabolites, etc.)
+                        if not is_valid_drug_name(d):
+                            continue
+                        # Correct known malformed drug names from VICC/JAX
+                        drugs.append(correct_vicc_drug_name(d))
 
             # Extract evidence info
             evidence_level = hit.get("evidence_label")  # A, B, C, D

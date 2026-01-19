@@ -4,6 +4,8 @@ import re
 import html as html_module
 import streamlit as st
 
+from oncomind.config.constants import format_civic_significance
+
 
 def scrollable_table(markdown_content: str) -> None:
     """Render a markdown table inside a scrollable container.
@@ -171,7 +173,15 @@ def result_to_markdown(result: dict) -> str:
         lines.append("|------|-------------|------------|")
         for item in fda:
             drug = item.get('drug_name', '')
-            tumors = ", ".join(item.get('tumor_types', [])[:2]) if item.get('tumor_types') else ''
+            tumor_types = item.get('tumor_types', [])
+            tumor_stage = item.get('tumor_stage', '')
+            # Combine tumor stage with tumor types
+            if tumor_stage and tumor_types:
+                tumors = f"{tumor_stage} {', '.join(tumor_types[:2])}"
+            elif tumor_types:
+                tumors = ", ".join(tumor_types[:2])
+            else:
+                tumors = ''
             match_type = item.get('match_type', '')
             lines.append(f"| {drug} | {tumors} | {match_type} |")
         lines.append("")
@@ -194,9 +204,10 @@ def result_to_markdown(result: dict) -> str:
             drug = ", ".join(drugs_list)
             disease = item.get('disease', '')
             level = item.get('evidence_level', '')
-            sig = item.get('clinical_significance', '')
+            sig_raw = item.get('clinical_significance', '')
+            sig = format_civic_significance(sig_raw)
             # Deduplicate by drug+disease+significance
-            entry_key = (drug.lower(), disease.lower(), sig.lower() if sig else '')
+            entry_key = (drug.lower(), disease.lower(), sig_raw.lower() if sig_raw else '')
             if entry_key in seen_entries:
                 continue
             seen_entries.add(entry_key)

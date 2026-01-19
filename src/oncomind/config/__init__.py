@@ -28,4 +28,5 @@ __all__ = [
     "info",
     "warn",
     "error",
+    "format_civic_significance",
 ]

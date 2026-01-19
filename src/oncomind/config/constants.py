@@ -1413,6 +1413,149 @@ SENSITIVITY_KEYWORDS = [
 #
 # Format: {clinical_term_lowercase: [list of hotspot organ terms]}
 
+# =============================================================================
+# VICC DRUG NAME CORRECTIONS
+# =============================================================================
+# VICC MetaKB returns truncated/malformed drug names from some sources (especially JAX).
+# This mapping corrects known bad drug names to their proper forms.
+#
+# Example: JAX data returns "AgI" instead of "AGI-5198", "881" instead of "AG-881"
+# These truncations appear to be upstream data quality issues in VICC/JAX.
+#
+# Format: {malformed_name: corrected_name}
+# Matching is case-insensitive.
+
+VICC_DRUG_NAME_CORRECTIONS: dict[str, str] = {
+    # IDH inhibitors (JAX truncations)
+    "AgI": "AGI-5198",
+    "AGI": "AGI-5198",
+    "881": "AG-881",
+    "AG-881": "AG-881",  # Ensure proper form stays proper
+    # GSK compounds (JAX truncations) - GSK2118436 is dabrafenib
+    "GSK": "GSK2118436",
+    # BGB compounds (JAX truncations)
+    "BGB": "BGB-3290",
+    # InChIKey to drug name mappings (JAX sometimes uses InChIKeys instead of names)
+    "DPMYVVGAYAPQNS-UHFFFAOYSA-N": "CCT241161",  # ERK5 inhibitor
+    # Add more corrections as discovered
+}
+
+# Build lowercase lookup for case-insensitive matching
+_VICC_DRUG_CORRECTIONS_LOWER: dict[str, str] = {
+    k.lower(): v for k, v in VICC_DRUG_NAME_CORRECTIONS.items()
+}
+
+# Regex pattern for InChIKey format (e.g., DPMYVVGAYAPQNS-UHFFFAOYSA-N)
+# Format: 14 uppercase letters - 10 uppercase letters - 1 uppercase letter
+import re
+_INCHIKEY_PATTERN = re.compile(r'^[A-Z]{14}-[A-Z]{10}-[A-Z]$')
+
+# Patterns that indicate a compound is NOT a drug (sugars, alcohols, acids, etc.)
+# These are case-insensitive patterns
+_NON_DRUG_PATTERNS = [
+    r'-?lactose$',      # Sugars: lactose, 4-deoxylactose
+    r'-?glucose$',      # Sugars
+    r'-?fructose$',     # Sugars
+    r'-?galactose$',    # Sugars
+    r'-?sucrose$',      # Sugars
+    r'-?maltose$',      # Sugars
+    r'^d-',             # D-glucose, D-mannose etc (stereoisomer prefix for sugars)
+    r'^l-',             # L-glucose etc
+]
+_NON_DRUG_REGEX = re.compile('|'.join(_NON_DRUG_PATTERNS), re.IGNORECASE)
+
+
+def is_valid_drug_name(drug_name: str) -> bool:
+    """Check if a drug name appears to be a valid therapeutic compound.
+
+    Filters out:
+    - Sugars (lactose, glucose, etc.)
+    - Common metabolites and non-therapeutic compounds
+
+    Args:
+        drug_name: Drug name to validate
+
+    Returns:
+        True if the name appears to be a valid drug, False otherwise
+    """
+    if not drug_name:
+        return False
+
+    # Filter out non-drug compounds based on patterns
+    if _NON_DRUG_REGEX.search(drug_name):
+        return False
+
+    return True
+
+
+def correct_vicc_drug_name(drug_name: str) -> str:
+    """Correct known malformed drug names from VICC MetaKB.
+
+    Handles:
+    - Known truncated drug names (e.g., "AgI" -> "AGI-5198")
+    - InChIKey identifiers (e.g., "DPMYVVGAYAPQNS-UHFFFAOYSA-N" -> "InChIKey: DPMYVVGA...")
+
+    Args:
+        drug_name: Drug name as returned by VICC API
+
+    Returns:
+        Corrected drug name, or original if no correction needed
+    """
+    if not drug_name:
+        return drug_name
+
+    # Check for known corrections first
+    corrected = _VICC_DRUG_CORRECTIONS_LOWER.get(drug_name.lower())
+    if corrected:
+        return corrected
+
+    # Format InChIKey identifiers for readability
+    if _INCHIKEY_PATTERN.match(drug_name):
+        # Show abbreviated InChIKey (first 8 chars of the identifier)
+        return f"InChIKey: {drug_name[:8]}..."
+
+    return drug_name
+
+
+# =============================================================================
+# CIVIC CLINICAL SIGNIFICANCE FORMATTING
+# =============================================================================
+# CIViC API returns significance values like "SENSITIVITYRESPONSE" (no separator).
+# This mapping formats them for human-readable display.
+#
+# Format: {raw_value_upper: formatted_display}
+
+CIVIC_SIGNIFICANCE_DISPLAY: dict[str, str] = {
+    "SENSITIVITYRESPONSE": "Sensitivity/Response",
+    "SENSITIVITY/RESPONSE": "Sensitivity/Response",
+    "RESISTANCE": "Resistance",
+    "REDUCED SENSITIVITY": "Reduced Sensitivity",
+    "ADVERSE RESPONSE": "Adverse Response",
+    "ONCOGENIC": "Oncogenic",
+    "BENIGN": "Benign",
+    "LIKELY BENIGN": "Likely Benign",
+    "PATHOGENIC": "Pathogenic",
+    "LIKELY PATHOGENIC": "Likely Pathogenic",
+    "UNCERTAIN SIGNIFICANCE": "Uncertain Significance",
+    "N/A": "N/A",
+}
+
+
+def format_civic_significance(raw_significance: str | None) -> str:
+    """Format CIViC clinical significance for display.
+
+    Args:
+        raw_significance: Raw significance value from CIViC API (e.g., "SENSITIVITYRESPONSE")
+
+    Returns:
+        Human-readable formatted string (e.g., "Sensitivity/Response")
+    """
+    if not raw_significance:
+        return "Unknown"
+    upper = raw_significance.upper()
+    return CIVIC_SIGNIFICANCE_DISPLAY.get(upper, raw_significance.title())
+
+
 HOTSPOT_TUMOR_MAPPING: dict[str, list[str]] = {
     # Brain/CNS tumors
     "glioma": ["brain"],
