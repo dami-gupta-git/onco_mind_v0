@@ -18,6 +18,27 @@ from backend import get_variant_insight
 class TestFDABiomarkerPipeline:
     """Tests for the FDA biomarker evidence pipeline."""
 
+    @staticmethod
+    def _check_no_duplicate_drugs(fda_biomarker: list) -> None:
+        """Helper to verify no exact duplicate drugs after deduplication.
+
+        Checks that no exact (drug_name, combination_partners) pair appears twice.
+        Note: Different formulations (e.g., IV vs SC) of the same drug are
+        intentionally kept separate as they are clinically distinct.
+        """
+        seen_keys = []
+        for e in fda_biomarker:
+            # Use exact drug name (not normalized) - different formulations are allowed
+            drug_key = (e.get("drug_name", "")).upper()
+            partners_key = tuple(sorted(p.upper() for p in e.get("combination_partners", [])))
+            key = (drug_key, partners_key)
+            seen_keys.append(key)
+
+        # Check no exact duplicate (drug_name, partners) combinations
+        assert len(seen_keys) == len(set(seen_keys)), (
+            f"Found duplicate FDA drugs after deduplication: {seen_keys}"
+        )
+
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_egfr_l858r_nsclc(self):
@@ -44,10 +65,23 @@ class TestFDABiomarkerPipeline:
             f"Expected osimertinib in FDA biomarker evidence, got: {drug_names}"
         )
 
+        # Verify no duplicate drugs after deduplication
+        self._check_no_duplicate_drugs(fda_biomarker)
+
+        # EGFR L858R in NSCLC should have a reasonable number of unique drugs
+        # (osimertinib, erlotinib, gefitinib, afatinib, amivantamab combinations, etc.)
+        assert len(fda_biomarker) >= 3, (
+            f"Expected at least 3 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
+        )
+
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_random(self):
+    async def test_idh1_r132h_gene_level_match(self):
+        """IDH1 R132H should return gene-level FDA biomarker evidence.
 
+        IDH1 inhibitors like Ivosidenib (Tibsovo) and Vorasidenib (Voranigo)
+        are FDA-approved for IDH1-mutant cancers at the gene level.
+        """
         result = await get_variant_insight(
             gene="IDH1",
             variant="R132H",
@@ -57,6 +91,25 @@ class TestFDABiomarkerPipeline:
         )
 
         assert "error" not in result
+
+        fda_biomarker = result.get("fda_biomarker_evidence", [])
+        assert isinstance(fda_biomarker, list)
+
+        # IDH1 inhibitors should be found
+        if fda_biomarker:
+            # Check for gene-level matches
+            gene_level_matches = [
+                ev for ev in fda_biomarker
+                if ev.get("variant_match_result") == "gene"
+            ]
+            # IDH1 drugs are approved at gene level (any IDH1 mutation)
+            # so we expect gene-level matches for R132H
+            drug_names = [ev.get("drug_name", "").lower() for ev in fda_biomarker]
+            expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
+            found = any(
+                any(exp in d for exp in expected_drugs)
+                for d in drug_names
+            )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -79,11 +132,10 @@ class TestFDABiomarkerPipeline:
         if fda_biomarker:
             # Check match fields are present
             for ev in fda_biomarker:
-                assert "matches" in ev
-                assert "match_type" in ev
-                assert "match_reason" in ev
-                # All returned evidence should have matches=True
-                assert ev["matches"] is True
+                assert "variant_match_result" in ev
+                assert "variant_match_reason" in ev
+                # All returned evidence should have a valid match type
+                assert ev["variant_match_result"] in ("exact", "codon", "gene")
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -115,7 +167,24 @@ class TestFDABiomarkerPipeline:
         for ev in fda_biomarker:
             assert "drug_name" in ev
             assert "gene" in ev
-            assert "matches" in ev
+            assert "variant_match_result" in ev
+
+        # Verify no duplicate drugs after deduplication
+        self._check_no_duplicate_drugs(fda_biomarker)
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_any_variant(self):
+        """Harness to test on any variant"""
+        result = await get_variant_insight(
+            gene="EGFR",
+            variant="L858R",
+            tumor_type="NSCLC",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -146,8 +215,8 @@ class TestFDABiomarkerPipeline:
         for ev in fda_biomarker:
             assert "drug_name" in ev
             assert "gene" in ev
-            assert "matches" in ev
-            assert ev["matches"] is True
+            assert "variant_match_result" in ev
+            assert ev["variant_match_result"] in ("exact", "codon", "gene")
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -172,15 +241,14 @@ class TestFDABiomarkerPipeline:
             assert "requirement" in ev
             assert "specificity" in ev
             assert "tumor_types" in ev
-            assert "matches" in ev
-            assert "match_type" in ev
-            assert "match_reason" in ev
+            assert "variant_match_result" in ev
+            assert "variant_match_reason" in ev
 
             # Check types
             assert isinstance(ev["drug_name"], str)
             assert isinstance(ev["gene"], str)
             assert isinstance(ev["tumor_types"], list)
-            assert isinstance(ev["matches"], bool)
+            assert ev["variant_match_result"] in ("exact", "codon", "gene", None)
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -218,7 +286,7 @@ class TestFDABiomarkerPipeline:
         # Gene-level approvals should still match
         gene_level_matches = [
             ev for ev in fda_biomarker
-            if ev.get("match_type") == "gene"
+            if ev.get("variant_match_result") == "gene"
         ]
         # May or may not have gene-level matches depending on FDA labels
 

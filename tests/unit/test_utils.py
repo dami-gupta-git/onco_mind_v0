@@ -116,6 +116,22 @@ class TestNormalizeDrugName:
         result = normalize_drug_name("DRUG SODIUM")
         assert result == "drug"
 
+    def test_preserves_biologic_formulation_differences(self):
+        """Test that different biologic formulations are NOT normalized together.
+
+        IV (AMIVANTAMAB-VMJW) and SC (AMIVANTAMAB AND HYALURONIDASE-LPUJ)
+        formulations are clinically distinct and should remain separate.
+        """
+        iv_form = normalize_drug_name("AMIVANTAMAB-VMJW")
+        sc_form = normalize_drug_name("AMIVANTAMAB AND HYALURONIDASE-LPUJ (HUMAN RECOMBINANT)")
+
+        # These should NOT be equal - they are different formulations
+        assert iv_form != sc_form
+        # IV form keeps the suffix
+        assert iv_form == "amivantamab-vmjw"
+        # SC form keeps its full name
+        assert "hyaluronidase" in sc_form.lower()
+
 
 class TestIsKitFalsePositive:
     """Tests for is_kit_false_positive function."""

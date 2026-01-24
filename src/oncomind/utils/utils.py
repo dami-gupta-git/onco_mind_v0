@@ -9,7 +9,12 @@ def normalize_drug_name(drug_name: str) -> str:
     """Normalize drug name by removing salt/formulation suffixes.
 
     Used for deduplication of FDA evidence where the same drug may appear
-    with different formulations (e.g., ERLOTINIB vs ERLOTINIB HYDROCHLORIDE).
+    with different salt forms (e.g., ERLOTINIB vs ERLOTINIB HYDROCHLORIDE).
+
+    NOTE: This function intentionally does NOT normalize biologic formulations
+    (e.g., IV vs SC formulations like AMIVANTAMAB-VMJW vs AMIVANTAMAB AND
+    HYALURONIDASE-LPUJ) because these are clinically distinct products that
+    should be shown separately.
 
     Args:
         drug_name: Original drug name (e.g., "ERLOTINIB HYDROCHLORIDE")

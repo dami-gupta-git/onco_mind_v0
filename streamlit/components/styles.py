@@ -185,7 +185,7 @@ def apply_styles() -> None:
     .scrollable-table .col-fda { width: 55px !important; max-width: 55px !important; min-width: 55px !important; text-align: center; }
     .scrollable-table .col-locus { width: 100px; }
     .scrollable-table .col-tumor { width: 70px; }
-    .scrollable-table .col-drugs { width: 400px; min-width: 350px; }
+    .scrollable-table .col-drugs { width: 500px; min-width: 300px; max-width: 500px; }
     .scrollable-table .col-response { width: 110px; }
     .scrollable-table .col-specificity { width: 100px; }
     .scrollable-table .col-status { width: 150px; }
@@ -194,6 +194,23 @@ def apply_styles() -> None:
     .scrollable-table .col-nct { width: 120px; }
     .scrollable-table .col-phase { width: 100px; }
     .scrollable-table .col-title { min-width: 300px; }
+    /* Drug column - allow horizontal scroll for long drug names */
+    .scrollable-table td.col-drugs {
+        max-width: 500px;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .scrollable-table td.col-drugs::-webkit-scrollbar {
+        height: 4px;
+    }
+    .scrollable-table td.col-drugs::-webkit-scrollbar-track {
+        background: #f0f0f0;
+        border-radius: 2px;
+    }
+    .scrollable-table td.col-drugs::-webkit-scrollbar-thumb {
+        background: #ccc;
+        border-radius: 2px;
+    }
     /* Truncated text cells - inner div handles the truncation */
     .scrollable-table td.truncated {
         cursor: pointer;
