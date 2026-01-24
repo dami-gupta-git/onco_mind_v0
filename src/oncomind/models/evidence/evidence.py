@@ -275,6 +275,87 @@ class Evidence(BaseModel):
         self.evidence_gaps = detect_evidence_gaps(self)
         return self.evidence_gaps
 
+    def get_filtered_fda_evidence(
+        self,
+        queried_gene: str,
+        queried_variant: str,
+        queried_tumor: str | None = None,
+    ) -> list[FDABiomarkerEvidence]:
+        """Filter FDA biomarker evidence for display and set filtered count.
+
+        Filters evidence where:
+        - Gene matches the query
+        - Drug name is not "UNKNOWN"
+        - Not a biomarker selection drug (e.g., datopotamab targets TROP2, not EGFR)
+        - Not REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
+        - Tumor matches the query (if tumor is specified)
+        - Variant matches via matches_variant() (exact, codon, or gene level)
+
+        Also sets self.filtered_fda_biomarker_count for use by gap_detector.
+
+        Args:
+            queried_gene: Gene symbol being queried (e.g., "BRAF")
+            queried_variant: Variant being queried (e.g., "V600E")
+            queried_tumor: Optional tumor type filter (e.g., "Melanoma")
+
+        Returns:
+            List of filtered FDABiomarkerEvidence objects with match info populated
+        """
+        queried_gene = queried_gene.upper() if queried_gene else ""
+        queried_variant = queried_variant.upper() if queried_variant else ""
+
+        filtered = []
+        seen_drugs: set[str] = set()  # For deduplication
+
+        for e in self.fda_biomarker_evidence:
+            # Gene must match
+            if not e.gene or e.gene.upper() != queried_gene:
+                continue
+
+            # Drug name must not be "UNKNOWN"
+            if not e.drug_name or e.drug_name.upper() == "UNKNOWN":
+                continue
+
+            # Skip biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
+            if queried_gene and is_biomarker_selection_drug(e.drug_name, queried_gene):
+                continue
+
+            # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
+            # e.g., IMJUDO is approved for NSCLC without EGFR mutations
+            if e.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+                continue
+
+            # Tumor must match (if specified)
+            if queried_tumor and not any(tumor_types_match(t, queried_tumor) for t in e.tumor_types):
+                continue
+
+            # Variant must match via matches_variant()
+            match_result = e.matches_variant(queried_gene, queried_variant)
+            if not match_result["matches"]:
+                continue
+
+            # Deduplicate by normalized drug name (sorted combination)
+            # e.g., "TRAMETINIB + dabrafenib" and "DABRAFENIB + trametinib" -> same key
+            all_drugs = [e.drug_name.upper()]
+            if e.combination_partners:
+                all_drugs.extend([p.upper() for p in e.combination_partners])
+            drug_key = " + ".join(sorted(all_drugs))
+
+            if drug_key in seen_drugs:
+                continue
+            seen_drugs.add(drug_key)
+
+            # Set match result fields on the object
+            e.variant_match_result = match_result["match_type"]
+            e.variant_match_reason = match_result["reason"]
+
+            filtered.append(e)
+
+        # Set the filtered count for gap_detector
+        self.filtered_fda_biomarker_count = len(filtered)
+
+        return filtered
+
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""
         return bool(
@@ -701,31 +782,23 @@ class Evidence(BaseModel):
 
         gene = self.identifiers.gene if self.identifiers else None
         variant = self.identifiers.variant if self.identifiers else None
+        queried_tumor = self.context.tumor_type if self.context else None
 
-        # From FDA biomarker evidence - only include those that match the queried variant
-        # and have REQUIRED_POSITIVE (not REQUIRED_NEGATIVE)
-        for ev in self.fda_biomarker_evidence:
-            # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
-            # e.g., IMJUDO is approved for NSCLC without EGFR mutations
-            if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
-                continue
+        # Get filtered FDA evidence (already filters by gene, variant match, and excludes UNKNOWN drugs)
+        # Note: we pass queried_tumor=None here since get_fda_approved_therapies shows all tumor-approved drugs
+        filtered_fda = self.get_filtered_fda_evidence(
+            queried_gene=gene or "",
+            queried_variant=variant or "",
+            queried_tumor=None,  # Don't filter by tumor - show all FDA approvals
+        )
 
-            # Skip if drug name is missing
-            if not ev.drug_name or ev.drug_name == "Unknown":
-                continue
-
-            # Skip biomarker selection drugs (e.g., datopotamab targets TROP2, not EGFR)
-            if gene and is_biomarker_selection_drug(ev.drug_name, gene):
-                continue
-
-            # Check if variant matches using the model's matches_variant method
-            if gene and variant:
-                match_result = ev.matches_variant(gene, variant)
-                if not match_result.get("matches"):
-                    continue
-                match_type = match_result.get("match_type", "gene")
-            else:
-                match_type = "gene"
+        # From FDA biomarker evidence - convert filtered evidence to TherapeuticData
+        # Note: get_filtered_fda_evidence already filters out REQUIRED_NEGATIVE and biomarker selection drugs
+        for ev in filtered_fda:
+            # Use the match_type from the already-computed variant_match_result
+            # Normalize "exact" to "variant" for consistency with TherapeuticData.locus_match
+            match_type = ev.variant_match_result or "gene"
+            locus_match = "variant" if match_type == "exact" else match_type
 
             # For combinations, use the full combination name
             is_combination = ev.combination_partners and len(ev.combination_partners) > 0
@@ -743,7 +816,6 @@ class Evidence(BaseModel):
                 # Determine cancer specificity from tumor types
                 cancer_specificity = None
                 if ev.tumor_types:
-                    queried_tumor = self.context.tumor_type
                     if queried_tumor:
                         if any(tumor_types_match(t, queried_tumor) for t in ev.tumor_types):
                             cancer_specificity = "cancer_specific"
@@ -760,7 +832,7 @@ class Evidence(BaseModel):
                 evidence_list.append(TherapeuticData(
                     drug_name=drug_name,
                     evidence_level="FDA-approved",
-                    approval_status="Approved in indication" if match_type == "variant" else "Approved",
+                    approval_status="Approved in indication" if match_type == "exact" else "Approved",
                     clinical_context=ev.line_of_therapy,
                     response_type=None,  # FDA biomarker evidence doesn't have response type
                     mechanism=None,
@@ -768,7 +840,7 @@ class Evidence(BaseModel):
                     source="FDA",
                     source_url=fda_url,
                     confidence="high",
-                    locus_match=match_type,
+                    locus_match=locus_match,
                     cancer_specificity=cancer_specificity,
                 ))
 

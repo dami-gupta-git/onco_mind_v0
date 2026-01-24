@@ -998,22 +998,19 @@ with tab1:
                             # Make drug name clickable if URL available
                             drug_display = f"[{drug_text}]({fda_url})" if fda_url else drug_text
                             gene = ev.get('gene', '')
-                            # Use matches and match_type from matches_variant()
-                            matches = ev.get('matches', False)
-                            match_type = ev.get('match_type', '')
-                            if matches:
-                                if match_type == 'exact':
-                                    match_display = '✅ Exact'
-                                elif match_type == 'codon':
-                                    match_display = '✅ Codon'
-                                elif match_type == 'gene':
-                                    match_display = '✅ Gene'
-                                else:
-                                    match_display = '✅ Yes'
-                            elif match_type == 'excluded':
-                                match_display = '❌ Excluded'
+                            # Use variant_match_result from FDABiomarkerEvidence
+                            # All evidence returned by get_filtered_fda_evidence is a match
+                            match_type = ev.get('variant_match_result', '')
+                            if match_type == 'exact':
+                                match_display = '✅ Variant'
+                            elif match_type == 'codon':
+                                match_display = '✅ Codon'
+                            elif match_type == 'gene':
+                                match_display = '✅ Gene'
+                            elif match_type:
+                                match_display = '✅ Yes'
                             else:
-                                match_display = '⚠️ No'
+                                match_display = '✅ Yes'
                             # Show specified variants or specificity level
                             variants = ev.get('specified_variants', [])
                             specificity = ev.get('specificity', '')

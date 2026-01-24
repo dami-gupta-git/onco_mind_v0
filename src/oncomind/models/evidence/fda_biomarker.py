@@ -141,7 +141,7 @@ class FDABiomarkerEvidence(EvidenceItemBase):
 
         Args:
             query_gene: Gene symbol to match (e.g., "EGFR")
-            query_variant: Variant notation to match (e.g., "L858R")
+            query_variant: Variant notation to match (e.g., "L858R", "p.Leu858Arg")
 
         Returns:
             Dict with keys:
@@ -150,9 +150,16 @@ class FDABiomarkerEvidence(EvidenceItemBase):
             - reason: str - explanation
         """
         import re
+        from oncomind.utils.variant_normalization import to_short_form
 
         query_gene = query_gene.upper()
-        query_variant = query_variant.upper()
+
+        # Normalize query variant to short form (e.g., "p.Leu858Arg" -> "L858R")
+        normalized_variant = to_short_form(query_variant)
+        if normalized_variant:
+            query_variant = normalized_variant.upper()
+        else:
+            query_variant = query_variant.upper()
 
         if self.gene.upper() != query_gene:
             return {"matches": False, "match_type": None, "reason": "Different gene"}

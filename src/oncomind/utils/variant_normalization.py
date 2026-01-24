@@ -360,6 +360,35 @@ def normalize_protein_change(variant: str) -> Dict[str, Optional[str]]:
     return VariantNormalizer.normalize_protein_change(variant)
 
 
+def to_short_form(variant: str) -> Optional[str]:
+    """Convert a variant to short form (single-letter amino acid codes).
+
+    This is the canonical form for variant matching: three-letter codes like
+    'p.Leu858Arg' or 'Leu858Arg' are converted to single-letter 'L858R'.
+
+    Args:
+        variant: Variant string in any format (V600E, Val600Glu, p.V600E, p.Leu858Arg, etc.)
+
+    Returns:
+        Short form (e.g., 'V600E', 'L858R') if parseable, None otherwise
+
+    Examples:
+        >>> to_short_form('V600E')
+        'V600E'
+
+        >>> to_short_form('p.Leu858Arg')
+        'L858R'
+
+        >>> to_short_form('Val600Glu')
+        'V600E'
+
+        >>> to_short_form('fusion')
+        None
+    """
+    protein_norm = VariantNormalizer.normalize_protein_change(variant)
+    return protein_norm.get('short_form')
+
+
 def classify_variant_type(variant: str) -> str:
     """Classify the type of variant.
 

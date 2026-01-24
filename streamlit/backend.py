@@ -227,42 +227,12 @@ def _build_response(result) -> Dict[str, Any]:
     therapeutic_list = evidence.get_therapeutic_evidence()
 
     # Filter FDA biomarker evidence for display (already deduplicated in evidence_aggregator)
-    # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
-    # Also filter out drugs with unknown names (case-insensitive)
-    filtered_fda_evidence = [
-        {
-            "drug_name": e.drug_name,
-            "brand_name": e.brand_name,
-            "set_id": e.set_id,
-            "gene": e.gene,
-            "requirement": e.requirement.value if e.requirement else None,
-            "specificity": e.specificity.value if e.specificity else None,
-            "specified_variants": e.specified_variants,
-            "codon": e.codon,
-            "tumor_types": e.tumor_types,
-            "tumor_stage": e.tumor_stage,
-            "combination_partners": e.combination_partners,
-            "is_monotherapy": e.is_monotherapy,
-            "line_of_therapy": e.line_of_therapy,
-            "indication_text": e.indication_text[:200] if e.indication_text else None,
-            "fda_label_url": e.fda_label_url,
-            # Match result from matches_variant()
-            "matches": match_result["matches"],
-            "match_type": match_result["match_type"],
-            "match_reason": match_result["reason"],
-        }
-        for e in evidence.fda_biomarker_evidence
-        # Compute match result for each evidence item
-        for match_result in [e.matches_variant(queried_gene, queried_variant)]
-        # Filter for display: gene, tumor, and variant must match
-        if (e.gene and e.gene.upper() == queried_gene
-            and e.drug_name and e.drug_name.upper() != "UNKNOWN"
-            and (not queried_tumor or any(tumor_types_match(t, queried_tumor) for t in e.tumor_types))
-            and match_result["matches"])
-    ]
-
-    # Set the filtered count on the evidence object so gap_detector can use it
-    evidence.filtered_fda_biomarker_count = len(filtered_fda_evidence)
+    # This also sets evidence.filtered_fda_biomarker_count for gap_detector
+    filtered_fda_evidence = evidence.get_filtered_fda_evidence(
+        queried_gene,
+        queried_variant,
+        queried_tumor,
+    )
 
     return {
         "variant": {
@@ -319,7 +289,7 @@ def _build_response(result) -> Dict[str, Any]:
         },
         # Per-source evidence (flat lists - frontend decides how to display)
         # FDA biomarker evidence (pre-computed above for consistency with gap analysis)
-        "fda_biomarker_evidence": filtered_fda_evidence,
+        "fda_biomarker_evidence": [e.model_dump() for e in filtered_fda_evidence],
         "civic_assertions": [
             {
                 "id": a.assertion_id,
