@@ -160,6 +160,7 @@ def apply_styles() -> None:
         border-bottom: 1px solid #e0e0e0;
         text-align: left;
         vertical-align: top;
+        font-size: 0.75rem !important;
     }
     .scrollable-table th {
         background-color: #f5f5f5;
@@ -167,6 +168,9 @@ def apply_styles() -> None:
         position: sticky;
         top: 0;
         z-index: 1;
+    }
+    .scrollable-table td * {
+        font-size: inherit !important;
     }
     .scrollable-table a {
         color: #1a73e8;

@@ -176,6 +176,18 @@ class FDALabelParser:
         r"if\s+(?:BRAF|EGFR|ALK)\s+(?:V600\s+)?(?:mutation[- ]?)?positive",
     ]
 
+    # Patterns indicating mechanism-of-action (drug targets the protein, NOT a mutation requirement)
+    # e.g., "EGFR antagonist" means the drug targets EGFR protein, not that patients need EGFR mutations
+    # These patterns match text FOLLOWING a gene name
+    MECHANISM_OF_ACTION_PATTERNS = [
+        r"antagonist",
+        r"inhibitor",
+        r"antibody",
+        r"blocker",
+        r"targeting\s+(?:agent|drug|therapy)",
+        r"directed\s+(?:therapy|treatment|agent)",
+    ]
+
     # Biomarker/gene patterns
     GENE_PATTERNS = {
         'EGFR': r'(?:epidermal\s+growth\s+factor\s+receptor|EGFR)',
@@ -480,6 +492,11 @@ class FDALabelParser:
                 if self._is_in_prior_therapy_context(text, gene_match.start()):
                     continue  # Skip this gene mention - it's not an indication
 
+                # Check if this gene mention describes mechanism of action
+                # e.g., "EGFR antagonist" means drug targets EGFR protein, not mutation
+                if self._is_mechanism_of_action_context(text, gene_match.end()):
+                    continue  # Skip - this is mechanism of action, not biomarker
+
                 # Check if this gene mention is negated
                 requirement = self._check_negation(text, gene_match.start())
 
@@ -592,6 +609,36 @@ class FDALabelParser:
 
         # Check if this sentence contains prior therapy patterns
         return bool(self._prior_therapy_re.search(sentence))
+
+    def _is_mechanism_of_action_context(self, text: str, gene_match_end: int) -> bool:
+        """
+        Check if a gene mention is describing mechanism of action, not a biomarker requirement.
+
+        e.g., "EGFR antagonist" or "epidermal growth factor receptor (EGFR) antibody"
+        means the drug targets EGFR protein - NOT that patients need EGFR mutations.
+
+        Args:
+            text: Full indication text
+            gene_match_end: Character position where the gene pattern match ends
+
+        Returns:
+            True if this is a mechanism-of-action description (should skip this gene)
+        """
+        # Look at the text following the gene mention (within 60 chars)
+        following_text = text[gene_match_end:gene_match_end + 60].lower()
+
+        # Handle patterns like "receptor (EGFR) antagonist" by removing parenthetical abbreviations
+        # This regex removes patterns like "(EGFR)" or "( EGFR )"
+        following_text = re.sub(r'\s*\([A-Z0-9]+\)\s*', ' ', following_text, flags=re.IGNORECASE)
+
+        # Strip leading whitespace and closing parentheses (for cases where gene is inside parens)
+        # e.g., "(EGFR) antagonist" -> after matching EGFR, remaining is ") antagonist"
+        following_text = following_text.lstrip(' \t)')
+
+        for pattern in self.MECHANISM_OF_ACTION_PATTERNS:
+            if re.match(pattern, following_text, re.IGNORECASE):
+                return True
+        return False
 
     def _extract_variant_specificity(
         self,
