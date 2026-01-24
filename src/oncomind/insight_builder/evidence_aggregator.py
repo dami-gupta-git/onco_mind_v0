@@ -72,7 +72,75 @@ from oncomind.config.constants import (
     MAX_VICC_RESULTS,
 )
 
+from oncomind.utils import normalize_drug_name
+
 logger = get_logger(__name__)
+
+
+# =============================================================================
+# FDA EVIDENCE DEDUPLICATION
+# =============================================================================
+
+
+def _dedupe_fda_biomarker_evidence(
+    evidence_list: list[FDABiomarkerEvidence],
+) -> list[FDABiomarkerEvidence]:
+    """Deduplicate FDA biomarker evidence by drug + gene + tumor + combination partners.
+
+    Multiple entries for the same drug (e.g., different formulations like
+    ERLOTINIB vs ERLOTINIB HYDROCHLORIDE) are deduplicated, keeping the one
+    with the most specific match (exact > codon > gene).
+
+    Different combination regimens (e.g., encorafenib + cetuximab vs
+    encorafenib + cetuximab + mFOLFOX6) are considered separate indications
+    and are NOT deduplicated.
+
+    Args:
+        evidence_list: List of FDABiomarkerEvidence objects
+
+    Returns:
+        Deduplicated list preserving distinct indications
+    """
+    # Group by (drug_name, gene, tumor_types, combination_partners)
+    # Keep the best match for each unique indication
+    best_by_indication: dict[tuple, FDABiomarkerEvidence] = {}
+
+    # Priority: exact > codon > gene (lower is better)
+    match_priority = {
+        "exact": 0,
+        "codon": 1,
+        "gene": 2,
+    }
+
+    for ev in evidence_list:
+        drug_key = normalize_drug_name(ev.drug_name or "")
+        gene_key = (ev.gene or "").upper()
+        match_type = getattr(ev, "variant_match_result", None) or "gene"
+
+        # Include tumor types and combination partners in the key
+        # to preserve distinct FDA indications
+        tumor_key = tuple(sorted(t.lower() for t in ev.tumor_types)) if ev.tumor_types else ()
+        partners_key = (
+            tuple(sorted(p.lower() for p in ev.combination_partners))
+            if ev.combination_partners
+            else ()
+        )
+
+        key = (drug_key, gene_key, tumor_key, partners_key)
+        current_priority = match_priority.get(match_type, 3)
+
+        if key not in best_by_indication:
+            best_by_indication[key] = ev
+        else:
+            existing = best_by_indication[key]
+            existing_match = getattr(existing, "variant_match_result", None) or "gene"
+            existing_priority = match_priority.get(existing_match, 3)
+
+            # Keep the more specific match
+            if current_priority < existing_priority:
+                best_by_indication[key] = ev
+
+    return list(best_by_indication.values())
 
 
 # =============================================================================
@@ -827,11 +895,18 @@ class EvidenceAggregator:
             logger.info(f"FDA biomarker search found {len(fda_biomarker_labels)} drugs for {gene}")
 
         # FDA biomarker parsed - structured indications from new parser
-        fda_biomarker_evidence: list[FDABiomarkerEvidence] = tracker.handle_result(
+        fda_biomarker_evidence_raw: list[FDABiomarkerEvidence] = tracker.handle_result(
             fda_biomarker_parsed_result, "FDA Biomarker Parsed"
         ) or []
+
+        # Deduplicate FDA evidence (e.g., ERLOTINIB vs ERLOTINIB HYDROCHLORIDE)
+        # keeping the most specific match for each drug+gene+tumor+combination
+        fda_biomarker_evidence = _dedupe_fda_biomarker_evidence(fda_biomarker_evidence_raw)
         if fda_biomarker_evidence:
-            logger.info(f"FDA biomarker parser found {len(fda_biomarker_evidence)} indications for {gene}")
+            logger.info(
+                f"FDA biomarker parser found {len(fda_biomarker_evidence_raw)} indications, "
+                f"{len(fda_biomarker_evidence)} after deduplication for {gene}"
+            )
 
         # Process CGI biomarkers (split by evidence level)
         cgi_biomarkers, preclinical_biomarkers, early_phase_biomarkers = self._process_cgi_biomarkers(all_cgi)

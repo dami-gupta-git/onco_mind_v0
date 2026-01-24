@@ -26,9 +26,9 @@ from oncomind.config.constants import (
     LLM_DEFAULT_MODEL,
     LLM_DEFAULT_TEMPERATURE,
     is_biomarker_selection_drug,
-    FDA_KIT_EXCLUSION_PATTERNS,
 )
 from oncomind.models.evidence.base import tumor_types_match, extract_variant_position
+from oncomind.utils import dedupe_civic_evidence, dedupe_vicc_evidence
 
 logger = get_logger(__name__)
 
@@ -210,210 +210,6 @@ async def batch_get_variant_insights(
     return results
 
 
-# === Private helper functions ===
-
-
-def _is_kit_false_positive(indication_text: str | None) -> bool:
-    """Check if an FDA label is a KIT false positive (diagnostic kit, not KIT gene).
-
-    Args:
-        indication_text: The indications_and_usage text from FDA label
-
-    Returns:
-        True if this appears to be a diagnostic/preparation kit, not a KIT oncogene drug
-    """
-    if not indication_text:
-        return False
-
-    text_lower = indication_text.lower()
-
-    # Check for KIT exclusion patterns (diagnostic kit, test kit, etc.)
-    has_exclusion = any(pattern in text_lower for pattern in FDA_KIT_EXCLUSION_PATTERNS)
-
-    # Check for oncology context
-    oncology_terms = ["cancer", "tumor", "malignant", "neoplasm", "carcinoma", "leukemia",
-                      "lymphoma", "melanoma", "sarcoma", "gist", "mastocytosis"]
-    has_oncology = any(term in text_lower for term in oncology_terms)
-
-    # If it has exclusion patterns and no oncology context, it's a false positive
-    return has_exclusion and not has_oncology
-
-
-def _dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
-    """Deduplicate CIViC evidence items by evidence_id.
-
-    Defensive measure to ensure no duplicate EIDs appear in the UI,
-    even if the API returns them.
-    """
-    seen_ids = set()
-    deduped = []
-    for e in civic_evidence_list:
-        if e.evidence_id in seen_ids:
-            continue
-        seen_ids.add(e.evidence_id)
-        deduped.append({
-            "evidence_id": e.evidence_id,
-            "eid": e.eid,  # Formatted ID (e.g., "EID5586")
-            "civic_url": e.civic_url,  # Direct link to CIViC
-            "evidence_type": e.evidence_type,
-            "evidence_level": e.evidence_level,
-            "clinical_significance": e.clinical_significance,
-            "disease": e.disease,
-            "drugs": e.drugs,
-            "description": e.description,
-            "pmid": e.pmid,
-            "source_url": e.source_url,
-            "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
-            "evidence_direction": e.evidence_direction,
-            # Match specificity tracking
-            "locus_match": e.locus_match,
-            "matched_profile": e.matched_profile,
-            "tumor_match": e.tumor_match,
-        })
-    return deduped
-
-
-def _dedupe_vicc_evidence(vicc_evidence_list) -> List[Dict[str, Any]]:
-    """Deduplicate VICC evidence items by (drugs, disease, response_type).
-
-    VICC MetaKB entries don't have unique IDs like CIViC evidence_id,
-    so we deduplicate by the combination of drugs, disease, and response type.
-    This prevents the same drug-disease-response combination from appearing
-    multiple times in the UI.
-    """
-    seen_keys = set()
-    deduped = []
-    for v in vicc_evidence_list:
-        # Create a deduplication key from drugs (as sorted tuple), disease, and response
-        drugs_key = tuple(sorted(v.drugs)) if v.drugs else ()
-        disease_key = (v.disease or "").lower().strip()
-        response_key = (v.response_type or "").lower().strip()
-        dedup_key = (drugs_key, disease_key, response_key)
-
-        if dedup_key in seen_keys:
-            continue
-        seen_keys.add(dedup_key)
-
-        deduped.append({
-            "source": v.source,
-            "drugs": v.drugs,
-            "disease": v.disease,
-            "response_type": v.response_type,
-            "evidence_level": v.evidence_level,
-            "molecular_profile": v.molecular_profile,
-            "molecular_profile_score": v.molecular_profile_score,
-            "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
-            # Match specificity tracking
-            "locus_match": v.locus_match,
-            "matched_profile": v.matched_profile,
-            "tumor_match": v.tumor_match,
-        })
-    return deduped
-
-
-def _normalize_drug_name(drug_name: str) -> str:
-    """Normalize drug name for deduplication.
-
-    Removes common suffixes like HYDROCHLORIDE, MESYLATE, etc.
-    and converts to lowercase for comparison.
-
-    Args:
-        drug_name: Original drug name (e.g., "ERLOTINIB HYDROCHLORIDE")
-
-    Returns:
-        Normalized drug name (e.g., "erlotinib")
-    """
-    if not drug_name:
-        return ""
-
-    name = drug_name.upper().strip()
-
-    # Common salt/formulation suffixes to remove
-    suffixes = [
-        " HYDROCHLORIDE",
-        " MESYLATE",
-        " MALEATE",
-        " FUMARATE",
-        " SUCCINATE",
-        " TARTRATE",
-        " CITRATE",
-        " SULFATE",
-        " PHOSPHATE",
-        " SODIUM",
-        " POTASSIUM",
-        " CALCIUM",
-        " DIMESYLATE",
-        " DIHYDROCHLORIDE",
-        " TOSYLATE",
-        " ACETATE",
-        " BESYLATE",
-    ]
-
-    for suffix in suffixes:
-        if name.endswith(suffix):
-            name = name[:-len(suffix)]
-            break
-
-    return name.lower()
-
-
-def _dedupe_fda_biomarker_evidence(evidence_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deduplicate FDA biomarker evidence by drug + gene + tumor + combination partners.
-
-    Multiple entries for the same drug (e.g., different formulations like
-    ERLOTINIB vs ERLOTINIB HYDROCHLORIDE) are deduplicated, keeping the one
-    with the most specific match (exact > codon > gene).
-
-    Different combination regimens (e.g., encorafenib + cetuximab vs
-    encorafenib + cetuximab + mFOLFOX6) are considered separate indications
-    and are NOT deduplicated.
-
-    Args:
-        evidence_list: List of FDA biomarker evidence dicts
-
-    Returns:
-        Deduplicated list preserving distinct indications
-    """
-    # Group by (drug_name, gene, tumor_types, combination_partners)
-    # Keep the best match for each unique indication
-    best_by_indication: Dict[tuple, Dict[str, Any]] = {}
-
-    # Priority: exact > codon > gene (lower is better)
-    match_priority = {
-        "exact": 0,
-        "codon": 1,
-        "gene": 2,
-    }
-
-    for ev in evidence_list:
-        drug_key = _normalize_drug_name(ev.get("drug_name", ""))
-        gene_key = (ev.get("gene") or "").upper()
-        match_type = ev.get("match_type", "gene")
-
-        # Include tumor types and combination partners in the key
-        # to preserve distinct FDA indications
-        tumor_types = ev.get("tumor_types", [])
-        tumor_key = tuple(sorted(t.lower() for t in tumor_types)) if tumor_types else ()
-
-        combination_partners = ev.get("combination_partners", [])
-        partners_key = tuple(sorted(p.lower() for p in combination_partners)) if combination_partners else ()
-
-        key = (drug_key, gene_key, tumor_key, partners_key)
-        current_priority = match_priority.get(match_type, 3)
-
-        if key not in best_by_indication:
-            best_by_indication[key] = ev
-        else:
-            existing = best_by_indication[key]
-            existing_priority = match_priority.get(existing.get("match_type", "gene"), 3)
-
-            # Keep the more specific match
-            if current_priority < existing_priority:
-                best_by_indication[key] = ev
-
-    return list(best_by_indication.values())
-
-
 def _build_response(result) -> Dict[str, Any]:
     """Build the standard response dict from a Result object.
 
@@ -430,9 +226,10 @@ def _build_response(result) -> Dict[str, Any]:
     # LLM therapeutic_evidence is typically empty since the LLM doesn't populate it
     therapeutic_list = evidence.get_therapeutic_evidence()
 
-    # Pre-compute filtered FDA biomarker evidence (used for both table display and gap analysis)
-    # This ensures gap analysis uses the exact same count as the FDA Biomarker Evidence table
-    filtered_fda_evidence = _dedupe_fda_biomarker_evidence([
+    # Filter FDA biomarker evidence for display (already deduplicated in evidence_aggregator)
+    # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
+    # Also filter out drugs with unknown names (case-insensitive)
+    filtered_fda_evidence = [
         {
             "drug_name": e.drug_name,
             "brand_name": e.brand_name,
@@ -457,13 +254,12 @@ def _build_response(result) -> Dict[str, Any]:
         for e in evidence.fda_biomarker_evidence
         # Compute match result for each evidence item
         for match_result in [e.matches_variant(queried_gene, queried_variant)]
-        # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
-        # Also filter out drugs with unknown names (case-insensitive)
+        # Filter for display: gene, tumor, and variant must match
         if (e.gene and e.gene.upper() == queried_gene
             and e.drug_name and e.drug_name.upper() != "UNKNOWN"
             and (not queried_tumor or any(tumor_types_match(t, queried_tumor) for t in e.tumor_types))
             and match_result["matches"])
-    ])
+    ]
 
     # Set the filtered count on the evidence object so gap_detector can use it
     evidence.filtered_fda_biomarker_count = len(filtered_fda_evidence)
@@ -542,10 +338,10 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for a in evidence.civic_assertions
         ],
-        "civic_evidence": _dedupe_civic_evidence(evidence.civic_evidence),
+        "civic_evidence": dedupe_civic_evidence(evidence.civic_evidence),
         # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
         # Then deduplicate by (drugs, disease, response_type) to avoid repeated entries
-        "vicc_evidence": _dedupe_vicc_evidence(evidence.get_vicc_unique()),
+        "vicc_evidence": dedupe_vicc_evidence(evidence.get_vicc_unique()),
         "cgi_biomarkers": [
             {
                 "drug": b.drug,

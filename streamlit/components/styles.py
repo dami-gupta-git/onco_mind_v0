@@ -171,6 +171,7 @@ def apply_styles() -> None:
     .scrollable-table a {
         color: #1a73e8;
         text-decoration: none;
+        font-size: inherit !important;
     }
     .scrollable-table a:hover {
         text-decoration: underline;
