@@ -37,34 +37,59 @@ from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge, 
 
 @pytest.fixture
 def mock_evidence():
-    """Create a mock Evidence object with default values."""
+    """Create a mock Evidence object with realistic default values.
+
+    This fixture provides a baseline evidence object with typical values
+    that would be returned from the annotation pipeline. Tests can override
+    specific fields as needed.
+    """
     evidence = MagicMock()
 
-    # Identifiers
+    # Identifiers - realistic values for a test variant
     evidence.identifiers.gene = "TESTGENE"
     evidence.identifiers.variant = "V100E"
+    evidence.identifiers.variant_id = "TESTGENE:V100E"
+    evidence.identifiers.variant_normalized = "p.V100E"
+    evidence.identifiers.variant_type = "missense_variant"
+    evidence.identifiers.cosmic_id = "COSM12345"
+    evidence.identifiers.ncbi_gene_id = "1234"
+    evidence.identifiers.dbsnp_id = "rs123456789"
+    evidence.identifiers.clinvar_id = "98765"
+    evidence.identifiers.hgvs_genomic = "NC_000007.14:g.140453136A>T"
+    evidence.identifiers.hgvs_protein = "NP_004324.2:p.Val100Glu"
+    evidence.identifiers.hgvs_transcript = "NM_004333.6:c.299T>A"
+    evidence.identifiers.transcript_id = "NM_004333.6"
+    evidence.identifiers.transcript_consequence = "missense_variant"
 
-    # Context
+    # Context - realistic tumor type and gene context
     evidence.context.tumor_type = "NSCLC"
-    evidence.context.gene_role = None
-    evidence.context.pathway = None
+    evidence.context.tumor_type_resolved = "Non-Small Cell Lung Cancer"
+    evidence.context.gene_role = "oncogene"
+    evidence.context.gene_class = "kinase"
+    evidence.context.mutation_class = "activating"
+    evidence.context.pathway = "MAPK/ERK"
 
-    # Functional scores (all None by default)
-    evidence.functional.alphamissense_score = None
-    evidence.functional.alphamissense_prediction = None
-    evidence.functional.cadd_score = None
-    evidence.functional.polyphen2_prediction = None
-    evidence.functional.polyphen2_score = None
-    evidence.functional.sift_prediction = None
-    evidence.functional.sift_score = None
-    evidence.functional.gnomad_exome_af = None
-    evidence.functional.gnomad_genome_af = None
-    evidence.functional.snpeff_effect = None
+    # Functional scores - realistic values for a pathogenic missense variant
+    evidence.functional.alphamissense_score = 0.85
+    evidence.functional.alphamissense_prediction = "likely_pathogenic"
+    evidence.functional.cadd_score = 24.5
+    evidence.functional.cadd_raw = 4.2
+    evidence.functional.polyphen2_prediction = "probably_damaging"
+    evidence.functional.polyphen2_score = 0.95
+    evidence.functional.sift_prediction = "deleterious"
+    evidence.functional.sift_score = 0.01
+    evidence.functional.gnomad_exome_af = 0.00001
+    evidence.functional.gnomad_genome_af = 0.000008
+    evidence.functional.snpeff_effect = "missense_variant"
+    evidence.functional.snpeff_impact = "MODERATE"
+    evidence.functional.spliceai_score = 0.05
+    evidence.functional.spliceai_prediction = "benign"
 
-    # Evidence lists (empty by default)
+    # Evidence lists - empty by default, tests add specific evidence as needed
     evidence.civic_assertions = []
     evidence.civic_evidence = []
-    evidence.fda_biomarker_evidence = []  # FDA biomarker-drug indications
+    evidence.fda_biomarker_evidence = []
+    evidence.filtered_fda_biomarker_count = 0  # Pre-computed count from backend.py
     evidence.vicc_evidence = []
     evidence.cgi_biomarkers = []
     evidence.preclinical_biomarkers = []
@@ -72,18 +97,21 @@ def mock_evidence():
     evidence.pubmed_articles = []
     evidence.clinical_trials = []
     evidence.clinvar_entries = []
-    evidence.clinvar_significance = None
+    evidence.clinvar_significance = "Uncertain significance"
 
-    # DepMap evidence
+    # DepMap evidence - None by default, tests set up mock as needed
     evidence.depmap_evidence = None
 
-    # cBioPortal evidence
+    # cBioPortal evidence - None by default, tests set up mock as needed
     evidence.cbioportal_evidence = None
+
+    # Hotspots evidence - None by default
+    evidence.hotspots_evidence = None
 
     # Literature flag
     evidence.literature_searched = False
 
-    # LLM-extracted literature knowledge
+    # LLM-extracted literature knowledge - None by default
     evidence.literature_knowledge = None
 
     # Mock get_vicc_unique() to return vicc_evidence by default
@@ -91,6 +119,128 @@ def mock_evidence():
     evidence.get_vicc_unique = lambda: evidence.vicc_evidence
 
     return evidence
+
+
+def create_mock_depmap_evidence(
+    gene: str = "TESTGENE",
+    variant: str = "V100E",
+    is_essential: bool = True,
+    mean_dependency_score: float = -0.8,
+    dependency_pct: float = 75.0,
+    n_dependent_lines: int = 150,
+    n_total_lines: int = 200,
+    drug_sensitivities: list = None,
+    cell_line_models: list = None,
+) -> MagicMock:
+    """Create a realistic mock DepMapEvidence object.
+
+    Args:
+        gene: Gene symbol
+        variant: Variant notation
+        is_essential: Whether the gene is essential (dependency score < -0.5)
+        mean_dependency_score: CERES score (negative = essential)
+        dependency_pct: Percent of cell lines showing dependency
+        n_dependent_lines: Number of dependent cell lines
+        n_total_lines: Total cell lines tested
+        drug_sensitivities: List of drug sensitivity dicts
+        cell_line_models: List of cell line model dicts
+    """
+    depmap = MagicMock()
+    depmap.gene = gene
+    depmap.variant = variant
+
+    # Gene dependency
+    depmap.gene_dependency = MagicMock()
+    depmap.gene_dependency.gene = gene
+    depmap.gene_dependency.mean_dependency_score = mean_dependency_score
+    depmap.gene_dependency.dependency_pct = dependency_pct
+    depmap.gene_dependency.n_dependent_lines = n_dependent_lines
+    depmap.gene_dependency.n_total_lines = n_total_lines
+    depmap.gene_dependency.top_dependent_lines = ["A375", "SKMEL28", "COLO829"]
+
+    # Essential check
+    depmap.is_essential.return_value = is_essential
+
+    # Drug sensitivities
+    if drug_sensitivities:
+        depmap.drug_sensitivities = drug_sensitivities
+    else:
+        depmap.drug_sensitivities = []
+
+    # Cell line models
+    if cell_line_models:
+        depmap.cell_line_models = cell_line_models
+    else:
+        depmap.cell_line_models = []
+
+    return depmap
+
+
+def create_mock_cbioportal_evidence(
+    gene: str = "TESTGENE",
+    variant: str = "V100E",
+    tumor_type: str = "NSCLC",
+    study_id: str = "nsclc_tcga_pan_can_atlas_2018",
+    study_name: str = "TCGA PanCancer Atlas",
+    total_samples: int = 1000,
+    samples_with_gene_mutation: int = 50,
+    samples_with_exact_variant: int = 10,
+    has_data: bool = True,
+) -> MagicMock:
+    """Create a realistic mock CBioPortalEvidence object.
+
+    Args:
+        gene: Gene symbol
+        variant: Variant notation
+        tumor_type: Tumor type
+        study_id: cBioPortal study ID
+        study_name: Human-readable study name
+        total_samples: Total samples in study
+        samples_with_gene_mutation: Samples with any mutation in gene
+        samples_with_exact_variant: Samples with this exact variant
+        has_data: Whether data was found
+    """
+    cbioportal = MagicMock()
+    cbioportal.gene = gene
+    cbioportal.variant = variant
+    cbioportal.tumor_type = tumor_type
+    cbioportal.study_id = study_id
+    cbioportal.study_name = study_name
+    cbioportal.total_samples = total_samples
+    cbioportal.samples_with_gene_mutation = samples_with_gene_mutation
+    cbioportal.samples_with_exact_variant = samples_with_exact_variant
+
+    # Computed prevalence
+    cbioportal.gene_prevalence_pct = (samples_with_gene_mutation / total_samples) * 100 if total_samples > 0 else 0
+    cbioportal.variant_prevalence_pct = (samples_with_exact_variant / total_samples) * 100 if total_samples > 0 else 0
+
+    # Co-occurring and mutually exclusive mutations
+    cbioportal.co_occurring = []
+    cbioportal.mutually_exclusive = []
+
+    # has_data check
+    cbioportal.has_data.return_value = has_data
+
+    return cbioportal
+
+
+def create_mock_cell_line(
+    name: str = "A375",
+    depmap_id: str = "ACH-000219",
+    primary_disease: str = "Melanoma",
+    subtype: str = "Cutaneous Melanoma",
+    has_mutation: bool = True,
+    mutation_details: str = "V600E",
+) -> MagicMock:
+    """Create a realistic mock CellLineModel object."""
+    cell_line = MagicMock()
+    cell_line.name = name
+    cell_line.depmap_id = depmap_id
+    cell_line.primary_disease = primary_disease
+    cell_line.subtype = subtype
+    cell_line.has_mutation = has_mutation
+    cell_line.mutation_details = mutation_details
+    return cell_line
 
 
 @pytest.fixture
@@ -250,6 +400,15 @@ class TestCheckFunctionalPredictions:
 
     def test_no_predictions_adds_gap(self, mock_evidence, base_context):
         """Missing all predictions should add a SIGNIFICANT gap."""
+        # Clear all functional predictions to test the "no data" scenario
+        mock_evidence.functional.alphamissense_score = None
+        mock_evidence.functional.alphamissense_prediction = None
+        mock_evidence.functional.cadd_score = None
+        mock_evidence.functional.polyphen2_prediction = None
+        mock_evidence.functional.polyphen2_score = None
+        mock_evidence.functional.sift_prediction = None
+        mock_evidence.functional.sift_score = None
+
         _check_functional_predictions(mock_evidence, base_context)
 
         assert "pathogenicity predictions" in base_context.poorly_characterized
@@ -276,11 +435,15 @@ class TestCheckGeneMechanism:
 
     def test_with_depmap_essentiality(self, mock_evidence, base_context):
         """DepMap essentiality data should be well-characterized."""
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.gene_dependency = MagicMock()
-        mock_evidence.depmap_evidence.gene_dependency.mean_dependency_score = -0.8
-        mock_evidence.depmap_evidence.gene_dependency.dependency_pct = 75.0
-        mock_evidence.depmap_evidence.is_essential.return_value = True
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="TESTGENE",
+            variant="V100E",
+            is_essential=True,
+            mean_dependency_score=-0.8,
+            dependency_pct=75.0,
+            n_dependent_lines=150,
+            n_total_lines=200,
+        )
 
         _check_gene_mechanism(mock_evidence, base_context)
 
@@ -288,6 +451,11 @@ class TestCheckGeneMechanism:
 
     def test_no_mechanism_data_adds_gap(self, mock_evidence, base_context):
         """Missing mechanism data should add a gap."""
+        # Clear gene context to test the "no data" scenario
+        mock_evidence.context.gene_role = None
+        mock_evidence.context.pathway = None
+        mock_evidence.depmap_evidence = None
+
         _check_gene_mechanism(mock_evidence, base_context)
 
         assert "functional mechanism" in base_context.poorly_characterized
@@ -313,7 +481,11 @@ class TestCheckClinicalEvidence:
         fda_ev.specificity = SpecificityLevel.VARIANT
         fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
         fda_ev.tumor_types = ["NSCLC"]
+        fda_ev.variant_match_result = "exact"  # Required for filtering
+        fda_ev.locus_match = "variant"  # Used by count_with_levels
+        fda_ev.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda_ev]
+        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -324,6 +496,7 @@ class TestCheckClinicalEvidence:
     def test_with_civic_assertions_sets_has_clinical(self, mock_evidence, base_context):
         """CIViC assertions should set has_clinical=True."""
         mock_evidence.civic_assertions = [MagicMock(), MagicMock()]
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -342,7 +515,11 @@ class TestCheckClinicalEvidence:
         fda_ev.specificity = SpecificityLevel.GENE
         fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
         fda_ev.tumor_types = ["NSCLC"]
+        fda_ev.variant_match_result = "gene"  # Required for filtering
+        fda_ev.locus_match = "gene"  # Used by count_with_levels
+        fda_ev.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda_ev]
+        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -355,6 +532,7 @@ class TestCheckClinicalEvidence:
         """Missing clinical evidence should add a CRITICAL gap."""
         # fda_biomarker_evidence is already empty from fixture
         # civic_assertions is already empty from fixture
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
 
         _check_clinical_evidence(mock_evidence, base_context)
 
@@ -544,17 +722,20 @@ class TestCheckDrugResponse:
     """Tests for _check_drug_response function."""
 
     def test_with_cgi_biomarkers(self, mock_evidence, base_context):
-        """CGI biomarkers should mark as well-characterized."""
+        """CGI biomarkers should set has_drug_data flag (shown in Therapies tab, not Gap Analysis)."""
         mock_evidence.cgi_biomarkers = [MagicMock()]
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
 
         _check_drug_response(mock_evidence, base_context)
 
-        assert any("drug response data" in w.lower() for w in base_context.well_characterized)
+        # CGI/VICC drug response data is shown in the Therapies tab, not Gap Analysis
+        # Gap Analysis focuses only on FDA-approved therapies
         assert base_context.has_drug_data is True
 
     def test_with_vicc_evidence(self, mock_evidence, base_context):
         """VICC evidence should mark as well-characterized."""
         mock_evidence.vicc_evidence = [MagicMock()]
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -562,14 +743,31 @@ class TestCheckDrugResponse:
 
     def test_with_depmap_drug_sensitivities(self, mock_evidence, base_context):
         """DepMap drug sensitivities should mark as well-characterized only with tumor-matched cell lines."""
-        # Create mock cell line matching the tumor type
-        mock_cell_line = MagicMock()
-        mock_cell_line.has_mutation = True
-        mock_cell_line.primary_disease = "Lung"  # Matches NSCLC
+        # Create mock cell line matching the tumor type (NSCLC -> Lung)
+        lung_cell_line = create_mock_cell_line(
+            name="A549",
+            depmap_id="ACH-000681",
+            primary_disease="Lung",
+            subtype="Non-Small Cell Lung Cancer",
+            has_mutation=True,
+            mutation_details="V100E",
+        )
 
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.drug_sensitivities = [MagicMock()]
-        mock_evidence.depmap_evidence.cell_line_models = [mock_cell_line]
+        # Create drug sensitivity mock
+        drug_sensitivity = MagicMock()
+        drug_sensitivity.drug_name = "Trametinib"
+        drug_sensitivity.mean_log2fc = -2.1
+        drug_sensitivity.n_cell_lines = 5
+        drug_sensitivity.sensitive_lines = ["A549", "H1299"]
+
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="TESTGENE",
+            variant="V100E",
+            is_essential=False,
+            drug_sensitivities=[drug_sensitivity],
+            cell_line_models=[lung_cell_line],
+        )
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -577,18 +775,21 @@ class TestCheckDrugResponse:
 
     def test_no_drug_data_adds_gap(self, mock_evidence, base_context):
         """Missing drug data should add a SIGNIFICANT gap."""
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+
         _check_drug_response(mock_evidence, base_context)
 
-        assert "drug response data" in base_context.poorly_characterized
+        # Gap is added for missing FDA-approved therapy (VICC/CGI don't count for gap analysis)
         drug_gaps = [g for g in base_context.gaps if g.category == GapCategory.DRUG_RESPONSE]
         assert len(drug_gaps) >= 1
         assert drug_gaps[0].severity == GapSeverity.SIGNIFICANT
+        assert "FDA-approved therapy" in drug_gaps[0].description
 
-    def test_drug_response_counts_sources_correctly(self, mock_evidence, base_context):
-        """Drug response should count CGI and VICC sources correctly (FDA is separate)."""
-        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+    def test_drug_response_counts_fda_only(self, mock_evidence, base_context):
+        """Drug response in Gap Analysis only shows FDA-approved therapy (VICC/CGI in Therapies tab)."""
+        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement, SpecificityLevel
 
-        # Create 2 CGI biomarkers
+        # Create 2 CGI biomarkers (should NOT appear in Gap Analysis well_characterized)
         cgi1 = MagicMock()
         cgi1.locus_variant_match = None
         cgi1.tumor_type = "Lung Cancer"
@@ -597,134 +798,119 @@ class TestCheckDrugResponse:
         cgi2.tumor_type = "Melanoma"
         mock_evidence.cgi_biomarkers = [cgi1, cgi2]
 
-        # Create 3 VICC evidence items
+        # Create 3 VICC evidence items (should NOT appear in Gap Analysis well_characterized)
         mock_evidence.vicc_evidence = [MagicMock(), MagicMock(), MagicMock()]
         for v in mock_evidence.vicc_evidence:
             v.locus_variant_match = None
             v.disease = "Other Cancer"
 
-        # Create 1 FDA biomarker evidence (tracked separately)
+        # Create 1 FDA biomarker evidence - tumor matches NSCLC
         fda = MagicMock()
         fda.locus_variant_match = None
-        fda.tumor_types = ["Melanoma"]
+        fda.tumor_types = ["Lung Cancer"]  # Matches NSCLC in base_context
         fda.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
+        fda.drug_name = "TestDrug"
+        fda.brand_name = None
+        fda.specificity = SpecificityLevel.VARIANT
+        fda.variant_match_result = "exact"  # Required for filtering
+        fda.locus_match = "variant"  # Used by count_with_levels
+        fda.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda]
+        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Check "drug response data" only has CGI and VICC (not FDA)
+        # CGI/VICC should NOT appear in well_characterized (shown in Therapies tab, not Gap Analysis)
         drug_resp = [w for w in base_context.well_characterized_detailed if w.aspect.lower() == "drug response data"]
-        assert len(drug_resp) == 1
-        basis = drug_resp[0].basis
-        assert "2 CGI" in basis
-        assert "3 VICC" in basis
-        # FDA is tracked separately as "FDA-approved therapy"
-        assert "FDA" not in basis
+        assert len(drug_resp) == 0, "CGI/VICC should not be in Gap Analysis well_characterized"
 
-        # Check "FDA-approved therapy" is tracked separately
+        # FDA-approved therapy SHOULD appear
         fda_resp = [w for w in base_context.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
         assert len(fda_resp) == 1
         assert "1 FDA" in fda_resp[0].basis
 
-    def test_drug_response_tumor_match_counting(self, mock_evidence):
-        """Drug response should track tumor matches vs others."""
-        # Create CGI biomarkers - 1 matching lung, 1 not
-        # Note: tumor_match property is the single source of truth for tumor matching
+        # has_drug_data flag should be set (used by other gap checks)
+        assert base_context.has_drug_data is True
+
+    def test_drug_response_with_fda_count(self, mock_evidence):
+        """Drug response uses pre-computed filtered_fda_biomarker_count from backend."""
+        # CGI/VICC data (used for has_drug_data flag, not displayed in gap analysis)
         cgi_match = MagicMock()
         cgi_match.locus_variant_match = None
-        cgi_match.tumor_type = "Lung Cancer"  # Contains "lung"
-        cgi_match.tumor_match = True  # Explicitly set tumor_match
-        cgi_no_match = MagicMock()
-        cgi_no_match.locus_variant_match = None
-        cgi_no_match.tumor_type = "Melanoma"  # Does NOT contain "lung"
-        cgi_no_match.tumor_match = False  # Explicitly set tumor_match
-        mock_evidence.cgi_biomarkers = [cgi_match, cgi_no_match]
+        cgi_match.tumor_type = "Lung Cancer"
+        mock_evidence.cgi_biomarkers = [cgi_match]
 
-        # Create VICC evidence - 2 matching
         vicc1 = MagicMock()
         vicc1.locus_variant_match = None
-        vicc1.disease = "Lung adenocarcinoma"  # Contains "lung"
-        vicc1.tumor_match = True  # Explicitly set tumor_match
-        vicc2 = MagicMock()
-        vicc2.locus_variant_match = None
-        vicc2.disease = "Lung squamous"  # Contains "lung"
-        vicc2.tumor_match = True  # Explicitly set tumor_match
-        mock_evidence.vicc_evidence = [vicc1, vicc2]
+        vicc1.disease = "Lung adenocarcinoma"
+        mock_evidence.vicc_evidence = [vicc1]
+
+        # Pre-computed FDA count from backend.py
+        mock_evidence.filtered_fda_biomarker_count = 3
 
         ctx = GapDetectionContext(
             gene="EGFR",
             variant="L858R",
-            tumor_type="Lung",  # Use "Lung" so it matches via substring
+            tumor_type="Lung",
             is_cancer_gene=True,
             has_pathogenic_signal=True,
         )
 
         _check_drug_response(mock_evidence, ctx)
 
-        # Check tumor_match field
-        drug_resp = [w for w in ctx.well_characterized_detailed if "drug response data" in w.aspect.lower()]
-        assert len(drug_resp) == 1
-        tumor_match = drug_resp[0].tumor_match
-        assert tumor_match is not None
-        # Should have 3 tumor matches (1 CGI + 2 VICC) and 1 other
-        assert "3 tumor" in tumor_match
-        assert "1 other" in tumor_match
+        # FDA-approved therapy should show the pre-computed count
+        fda_resp = [w for w in ctx.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
+        assert len(fda_resp) == 1
+        assert "3 FDA" in fda_resp[0].basis
 
-    def test_drug_response_locus_variant_match_levels(self, mock_evidence, base_context):
-        """Drug response should track match levels (variant, codon, gene) - FDA tracked separately."""
+        # has_drug_data flag should be set
+        assert ctx.has_drug_data is True
+
+    def test_drug_response_zero_fda_count_adds_gap(self, mock_evidence, base_context):
+        """Zero FDA count should add a gap even if CGI/VICC evidence exists."""
         from oncomind.models.evidence.base import EvidenceLevel
-        from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
 
-        # Create CGI biomarker with variant-level match
+        # Create CGI biomarker (doesn't count for FDA gap)
         cgi_variant = MagicMock()
         cgi_variant.locus_variant_match = EvidenceLevel(level="variant", scope="specific")
-        cgi_variant.locus_match = "variant"  # Computed property value for MagicMock
+        cgi_variant.locus_match = "variant"
         cgi_variant.tumor_type = None
         mock_evidence.cgi_biomarkers = [cgi_variant]
 
-        # Create VICC evidence with gene-level match
+        # Create VICC evidence (doesn't count for FDA gap)
         vicc_gene = MagicMock()
         vicc_gene.locus_variant_match = EvidenceLevel(level="gene", scope="unspecified")
-        vicc_gene.locus_match = "gene"  # Computed property value for MagicMock
+        vicc_gene.locus_match = "gene"
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
-        # Create FDA biomarker evidence with codon-level match (tracked separately)
-        fda_codon = MagicMock()
-        fda_codon.locus_variant_match = EvidenceLevel(level="codon", scope="specific")
-        fda_codon.locus_match = "codon"  # Computed property value for MagicMock
-        fda_codon.tumor_types = None
-        fda_codon.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
-        mock_evidence.fda_biomarker_evidence = [fda_codon]
+        # Pre-computed FDA count is 0 (no matching FDA approvals)
+        mock_evidence.filtered_fda_biomarker_count = 0
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Check "drug response data" matches_on field (CGI + VICC only, not FDA)
-        drug_resp = [w for w in base_context.well_characterized_detailed if w.aspect.lower() == "drug response data"]
-        assert len(drug_resp) == 1
-        matches_on = drug_resp[0].matches_on
-        assert matches_on is not None
-        assert "1 variant" in matches_on  # CGI
-        assert "1 gene" in matches_on     # VICC
-        # FDA codon-level is tracked separately
-        assert "codon" not in matches_on
+        # Should add gap for missing FDA-approved therapy
+        drug_gaps = [g for g in base_context.gaps if g.category == GapCategory.DRUG_RESPONSE]
+        assert len(drug_gaps) >= 1
+        assert "FDA-approved therapy" in drug_gaps[0].description
 
-        # Check "FDA-approved therapy" has the codon-level match
-        fda_resp = [w for w in base_context.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
-        assert len(fda_resp) == 1
-        fda_matches_on = fda_resp[0].matches_on
-        assert "1 codon" in fda_matches_on
+        # has_drug_data should still be True (CGI/VICC exist)
+        assert base_context.has_drug_data is True
 
     def test_drug_response_excludes_preclinical_biomarkers(self, mock_evidence, base_context):
         """Drug response should NOT include preclinical or early phase biomarkers."""
         # Set up preclinical biomarkers (should be excluded from Drug Response)
         mock_evidence.preclinical_biomarkers = [MagicMock(), MagicMock()]
         mock_evidence.early_phase_biomarkers = [MagicMock()]
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
 
         _check_drug_response(mock_evidence, base_context)
 
-        # Drug response data should NOT be well-characterized (no FDA-tier evidence)
-        assert "drug response data" in base_context.poorly_characterized
+        # Should add gap for missing FDA-approved therapy
+        drug_gaps = [g for g in base_context.gaps if g.category == GapCategory.DRUG_RESPONSE]
+        assert len(drug_gaps) >= 1
+        assert "FDA-approved therapy" in drug_gaps[0].description
+
         # But preclinical row should exist
         preclin = [w for w in base_context.well_characterized_detailed
                    if "preclinical" in w.aspect.lower()]
@@ -1109,11 +1295,16 @@ class TestCheckPrevalence:
 
     def test_with_cbioportal_data(self, mock_evidence, base_context):
         """cBioPortal data should mark as well-characterized."""
-        mock_evidence.cbioportal_evidence = MagicMock()
-        mock_evidence.cbioportal_evidence.has_data.return_value = True
-        mock_evidence.cbioportal_evidence.study_name = "TCGA"
-        mock_evidence.cbioportal_evidence.variant_prevalence_pct = 5.2
-        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 10
+        mock_evidence.cbioportal_evidence = create_mock_cbioportal_evidence(
+            gene="TESTGENE",
+            variant="V100E",
+            tumor_type="NSCLC",
+            study_name="TCGA PanCancer Atlas",
+            total_samples=1000,
+            samples_with_gene_mutation=50,
+            samples_with_exact_variant=10,
+            has_data=True,
+        )
 
         _check_prevalence(mock_evidence, base_context)
 
@@ -1126,11 +1317,15 @@ class TestCheckPrevalence:
         Must have gene in cBioPortal but variant not seen.
         """
         # Set up cBioPortal evidence with gene data but no variant data
-        mock_evidence.cbioportal_evidence = MagicMock()
-        mock_evidence.cbioportal_evidence.has_data.return_value = True
-        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
-        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 50  # Gene is in dataset
-        mock_evidence.cbioportal_evidence.total_samples = 1000
+        mock_evidence.cbioportal_evidence = create_mock_cbioportal_evidence(
+            gene="TESTGENE",
+            variant="V100E",
+            tumor_type="NSCLC",
+            total_samples=1000,
+            samples_with_gene_mutation=50,
+            samples_with_exact_variant=0,  # Variant not seen
+            has_data=True,
+        )
 
         _check_prevalence(mock_evidence, base_context)
 
@@ -1153,11 +1348,15 @@ class TestCheckPrevalence:
         )
 
         # Set up cBioPortal evidence with gene data but no variant data
-        mock_evidence.cbioportal_evidence = MagicMock()
-        mock_evidence.cbioportal_evidence.has_data.return_value = True
-        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
-        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 100  # Gene is in dataset
-        mock_evidence.cbioportal_evidence.total_samples = 1000
+        mock_evidence.cbioportal_evidence = create_mock_cbioportal_evidence(
+            gene="BRAF",
+            variant="V600X",
+            tumor_type="Melanoma",
+            total_samples=1000,
+            samples_with_gene_mutation=100,
+            samples_with_exact_variant=0,  # Variant not seen
+            has_data=True,
+        )
 
         _check_prevalence(mock_evidence, ctx)
 
@@ -1181,11 +1380,15 @@ class TestCheckPrevalence:
         )
 
         # Set up cBioPortal evidence with gene data but no variant data
-        mock_evidence.cbioportal_evidence = MagicMock()
-        mock_evidence.cbioportal_evidence.has_data.return_value = True
-        mock_evidence.cbioportal_evidence.samples_with_exact_variant = 0  # Variant not seen
-        mock_evidence.cbioportal_evidence.samples_with_gene_mutation = 100  # Gene is in dataset
-        mock_evidence.cbioportal_evidence.total_samples = 1000
+        mock_evidence.cbioportal_evidence = create_mock_cbioportal_evidence(
+            gene="BRAF",
+            variant="V600E",
+            tumor_type="Melanoma",
+            total_samples=1000,
+            samples_with_gene_mutation=100,
+            samples_with_exact_variant=0,  # Variant not seen
+            has_data=True,
+        )
 
         _check_prevalence(mock_evidence, ctx)
 
@@ -1250,11 +1453,19 @@ class TestCheckPreclinicalModels:
 
     def test_with_cell_line_models(self, mock_evidence, base_context):
         """Cell line models should mark as well-characterized."""
-        model = MagicMock()
-        model.has_mutation = True
-        model.primary_disease = "Lung Cancer"
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.cell_line_models = [model]
+        lung_cell_line = create_mock_cell_line(
+            name="A549",
+            depmap_id="ACH-000681",
+            primary_disease="Lung Cancer",
+            subtype="Non-Small Cell Lung Cancer",
+            has_mutation=True,
+            mutation_details="V100E",
+        )
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="TESTGENE",
+            variant="V100E",
+            cell_line_models=[lung_cell_line],
+        )
 
         _check_preclinical_models(mock_evidence, base_context)
 
@@ -1262,11 +1473,19 @@ class TestCheckPreclinicalModels:
 
     def test_models_exist_but_wrong_tumor_type(self, mock_evidence):
         """Models with mutation but wrong tumor type should flag gap."""
-        model = MagicMock()
-        model.has_mutation = True
-        model.primary_disease = "Colon Cancer"
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.cell_line_models = [model]
+        colon_cell_line = create_mock_cell_line(
+            name="HCT116",
+            depmap_id="ACH-000971",
+            primary_disease="Colon Cancer",
+            subtype="Colorectal Adenocarcinoma",
+            has_mutation=True,
+            mutation_details="G12D",
+        )
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="KRAS",
+            variant="G12D",
+            cell_line_models=[colon_cell_line],
+        )
 
         ctx = GapDetectionContext(
             gene="KRAS",
@@ -1305,11 +1524,19 @@ class TestCheckPreclinicalModels:
 
     def test_tumor_type_matching_with_alias(self, mock_evidence):
         """Test that tumor type matching uses aliases (e.g., Melanoma matches SKIN)."""
-        model = MagicMock()
-        model.has_mutation = True
-        model.primary_disease = "SKIN"  # cBioPortal returns tissue as "SKIN"
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.cell_line_models = [model]
+        skin_cell_line = create_mock_cell_line(
+            name="A375",
+            depmap_id="ACH-000219",
+            primary_disease="SKIN",  # DepMap returns tissue as "SKIN"
+            subtype="Cutaneous Melanoma",
+            has_mutation=True,
+            mutation_details="V600E",
+        )
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="BRAF",
+            variant="V600E",
+            cell_line_models=[skin_cell_line],
+        )
 
         ctx = GapDetectionContext(
             gene="BRAF",
@@ -1331,11 +1558,19 @@ class TestCheckPreclinicalModels:
 
     def test_tumor_type_matching_nsclc_lung(self, mock_evidence):
         """Test that NSCLC matches LUNG tissue."""
-        model = MagicMock()
-        model.has_mutation = True
-        model.primary_disease = "LUNG"
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.cell_line_models = [model]
+        lung_cell_line = create_mock_cell_line(
+            name="H1975",
+            depmap_id="ACH-000414",
+            primary_disease="LUNG",
+            subtype="Non-Small Cell Lung Cancer",
+            has_mutation=True,
+            mutation_details="L858R",
+        )
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="EGFR",
+            variant="L858R",
+            cell_line_models=[lung_cell_line],
+        )
 
         ctx = GapDetectionContext(
             gene="EGFR",
@@ -1429,8 +1664,13 @@ class TestCheckValidationGap:
 
     def test_strong_signal_no_validation_critical(self, mock_evidence):
         """Strong oncogenic signal without validation should be CRITICAL for cancer gene."""
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.is_essential.return_value = True
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="BRAF",
+            variant="V600E",
+            is_essential=True,
+            mean_dependency_score=-0.9,
+            dependency_pct=85.0,
+        )
 
         ctx = GapDetectionContext(
             gene="BRAF",
@@ -1448,8 +1688,13 @@ class TestCheckValidationGap:
 
     def test_strong_signal_with_validation_no_gap(self, mock_evidence):
         """Strong signal with therapeutic validation should NOT add gap."""
-        mock_evidence.depmap_evidence = MagicMock()
-        mock_evidence.depmap_evidence.is_essential.return_value = True
+        mock_evidence.depmap_evidence = create_mock_depmap_evidence(
+            gene="BRAF",
+            variant="V600E",
+            is_essential=True,
+            mean_dependency_score=-0.9,
+            dependency_pct=85.0,
+        )
         mock_evidence.civic_assertions = [MagicMock()]
 
         ctx = GapDetectionContext(
@@ -1494,7 +1739,16 @@ class TestHasPathogenicSignal:
 
     def test_cadd_low_score(self, mock_evidence):
         """Low CADD score should return False."""
+        # Clear all other pathogenic signals, leave only low CADD score
+        mock_evidence.functional.alphamissense_prediction = None
+        mock_evidence.functional.polyphen2_prediction = None
+        mock_evidence.functional.sift_prediction = None
+        mock_evidence.functional.snpeff_effect = None
         mock_evidence.functional.cadd_score = 15.0
+        mock_evidence.civic_assertions = []
+        mock_evidence.fda_biomarker_evidence = []
+        mock_evidence.clinvar_entries = []
+        mock_evidence.clinvar_significance = None
 
         assert _has_pathogenic_signal(mock_evidence) is False
 
@@ -1538,6 +1792,18 @@ class TestHasPathogenicSignal:
 
     def test_no_signal(self, mock_evidence):
         """No pathogenic signals should return False."""
+        # Clear all pathogenic signals to test the "no signal" scenario
+        mock_evidence.functional.alphamissense_prediction = None
+        mock_evidence.functional.alphamissense_score = None
+        mock_evidence.functional.cadd_score = None
+        mock_evidence.functional.polyphen2_prediction = None
+        mock_evidence.functional.sift_prediction = None
+        mock_evidence.functional.snpeff_effect = None
+        mock_evidence.civic_assertions = []
+        mock_evidence.fda_biomarker_evidence = []
+        mock_evidence.clinvar_entries = []
+        mock_evidence.clinvar_significance = None
+
         assert _has_pathogenic_signal(mock_evidence) is False
 
 
@@ -1572,6 +1838,7 @@ class TestDetectEvidenceGapsIntegration:
         fda_ev.locus_variant_match = None
         fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
         mock_evidence.fda_biomarker_evidence = [fda_ev]
+        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
 
         cgi_biomarker = MagicMock()
         cgi_biomarker.tumor_type = "Melanoma"
@@ -1592,6 +1859,17 @@ class TestDetectEvidenceGapsIntegration:
         mock_evidence.identifiers.gene = "UNKNOWNGENE"
         mock_evidence.identifiers.variant = "X999Y"
         mock_evidence.literature_searched = True
+        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+
+        # Clear all functional predictions and context to simulate unknown variant
+        mock_evidence.functional.alphamissense_score = None
+        mock_evidence.functional.alphamissense_prediction = None
+        mock_evidence.functional.cadd_score = None
+        mock_evidence.functional.polyphen2_prediction = None
+        mock_evidence.functional.sift_prediction = None
+        mock_evidence.context.gene_role = None
+        mock_evidence.context.pathway = None
+        mock_evidence.clinvar_significance = None
 
         gaps = detect_evidence_gaps(mock_evidence)
 
@@ -1601,6 +1879,7 @@ class TestDetectEvidenceGapsIntegration:
 
     def test_returns_evidence_gaps_object(self, mock_evidence):
         """Should return EvidenceGaps object with all fields."""
+        mock_evidence.filtered_fda_biomarker_count = 0  # Set for test consistency
         gaps = detect_evidence_gaps(mock_evidence)
 
         assert hasattr(gaps, 'gaps')
