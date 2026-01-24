@@ -40,7 +40,7 @@ from oncomind.api.hotspots import HotspotsClient
 from oncomind.api.clinicaltrials import ClinicalTrialsClient, ClinicalTrialsRateLimitError
 from oncomind.api.pubmed import PubMedClient, PubMedRateLimitError
 from oncomind.api.semantic_scholar import SemanticScholarClient, SemanticScholarRateLimitError
-from oncomind.api.fda_drugs import search_fda_by_biomarker, FDALabelInfo, get_fda_labels_for_biomarker
+from oncomind.api.fda_drugs import get_fda_labels_for_biomarker
 from oncomind.api.fda_label_parser import FDALabelParser
 
 from oncomind.models.evidence import (
@@ -198,8 +198,6 @@ class FetchResults:
     sources_queried: list[str] = field(default_factory=list)
     sources_with_data: list[str] = field(default_factory=list)
     sources_failed: list[str] = field(default_factory=list)
-    # FDA biomarker search results - stored here to merge with curated drug list
-    fda_biomarker_labels: list = field(default_factory=list)
 
     def handle_result(self, result: Any, source_name: str) -> Any:
         """Handle an API result with error tracking.
@@ -758,18 +756,6 @@ class EvidenceAggregator:
                 )
             return None
 
-        async def fetch_fda_biomarker():
-            """Search FDA labels directly by biomarker.
-
-            This catches FDA approvals not in curated databases (CGI, VICC, etc.)
-            by searching OpenFDA for drugs mentioning this gene in indications.
-            """
-            try:
-                return await search_fda_by_biomarker(gene, variant)
-            except Exception as e:
-                logger.warning(f"FDA biomarker search failed for {gene}: {e}")
-                return []
-
         async def fetch_fda_biomarker_parsed():
             """Fetch and parse FDA labels using FDALabelParser.
 
@@ -826,8 +812,9 @@ class EvidenceAggregator:
                     # Only include:
                     # 1. True matches (exact, codon, gene level approvals)
                     # 2. Exclusions (drugs contraindicated for this variant - important safety info)
-                    # Skip: different_variant, different_codon, same_codon_different_variant
-                    if match_result["matches"] or match_result["match_type"] == "excluded":
+                    # 3. Same codon different variant (e.g., G12C drug when querying G12D)
+                    # Skip: different_variant, different_codon
+                    if match_result["matches"] or match_result["match_type"] in ("excluded", "same_codon_different_variant"):
                         matched_indications.append(evidence)
 
                 # Sort: matches first, then exclusions
@@ -853,7 +840,6 @@ class EvidenceAggregator:
             timed_fetch("cBioPortal", fetch_cbioportal()),
             timed_fetch("CellLines", fetch_cell_lines()),
             timed_fetch("DepMap", fetch_depmap()),
-            timed_fetch("FDA_biomarker", fetch_fda_biomarker()),
             timed_fetch("FDA_biomarker_parsed", fetch_fda_biomarker_parsed()),
             return_exceptions=True,
         )
@@ -873,7 +859,7 @@ class EvidenceAggregator:
         (
             myvariant_result, cgi_result, vicc_result, civic_assertions_result,
             civic_evidence_result, trials_result, literature_result, cbioportal_result,
-            cell_lines_result, depmap_result, fda_biomarker_result, fda_biomarker_parsed_result,
+            cell_lines_result, depmap_result, fda_biomarker_parsed_result,
         ) = results
 
         gene = variant.gene
@@ -887,14 +873,7 @@ class EvidenceAggregator:
         clinical_trials: list[ClinicalTrialEvidence] = tracker.handle_result(trials_result, "ClinicalTrials.gov") or []
         pubmed_articles: list[PubMedEvidence] = tracker.handle_result(literature_result, "Literature") or []
 
-        # FDA biomarker search - drugs found directly from OpenFDA by gene search
-        # Store on tracker so build_evidence can merge with curated drug list
-        fda_biomarker_labels: list[FDALabelInfo] = tracker.handle_result(fda_biomarker_result, "FDA Biomarker") or []
-        tracker.fda_biomarker_labels = fda_biomarker_labels
-        if fda_biomarker_labels:
-            logger.info(f"FDA biomarker search found {len(fda_biomarker_labels)} drugs for {gene}")
-
-        # FDA biomarker parsed - structured indications from new parser
+        # FDA biomarker evidence - structured indications from FDALabelParser
         fda_biomarker_evidence_raw: list[FDABiomarkerEvidence] = tracker.handle_result(
             fda_biomarker_parsed_result, "FDA Biomarker Parsed"
         ) or []

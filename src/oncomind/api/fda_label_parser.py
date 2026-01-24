@@ -17,7 +17,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement, SpecificityLevel
+from oncomind.models.evidence.fda_biomarker import (
+    BiomarkerRequirement,
+    SpecificityLevel,
+    match_variant_to_indication,
+)
 
 
 @dataclass
@@ -52,78 +56,23 @@ class BiomarkerIndication:
         """
         Check if a user's variant query matches this indication.
 
+        Delegates to match_variant_to_indication() without variant normalization.
+
         Returns dict with:
         - matches: bool
         - match_type: "exact", "codon", "gene", "excluded"
         - reason: explanation
         """
-        query_gene = query_gene.upper()
-        query_variant = query_variant.upper()
-
-        if self.gene.upper() != query_gene:
-            return {"matches": False, "match_type": None, "reason": "Different gene"}
-
-        # If this indication EXCLUDES the biomarker, it's a negative match
-        if self.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
-            return {
-                "matches": False,
-                "match_type": "excluded",
-                "reason": f"This indication is for patients WITHOUT {self.gene} mutations"
-            }
-
-        # Check specificity levels
-        if self.specificity == SpecificityLevel.GENE:
-            return {
-                "matches": True,
-                "match_type": "gene",
-                "reason": f"Gene-level approval: any {self.gene} mutation"
-            }
-
-        if self.specificity == SpecificityLevel.VARIANT:
-            # Check for exact variant match
-            if query_variant in [v.upper() for v in self.specified_variants]:
-                return {
-                    "matches": True,
-                    "match_type": "exact",
-                    "reason": f"Exact variant match: {query_variant}"
-                }
-
-            # Check for same codon
-            query_codon = self._extract_codon(query_variant)
-            if self.codon and query_codon == self.codon:
-                return {
-                    "matches": False,
-                    "match_type": "same_codon_different_variant",
-                    "reason": f"Same codon ({self.codon}) but different variant. Approved: {self.specified_variants}, Query: {query_variant}"
-                }
-
-            return {
-                "matches": False,
-                "match_type": "different_variant",
-                "reason": f"Different variant. Approved: {self.specified_variants}, Query: {query_variant}"
-            }
-
-        if self.specificity == SpecificityLevel.CODON:
-            query_codon = self._extract_codon(query_variant)
-            if self.codon and query_codon == self.codon:
-                return {
-                    "matches": True,
-                    "match_type": "codon",
-                    "reason": f"Codon-level match: codon {self.codon}"
-                }
-            return {
-                "matches": False,
-                "match_type": "different_codon",
-                "reason": f"Different codon. Approved: {self.codon}, Query: {query_codon}"
-            }
-
-        return {"matches": False, "match_type": None, "reason": "Unknown specificity"}
-
-    @staticmethod
-    def _extract_codon(variant: str) -> Optional[str]:
-        """Extract codon number from variant notation. E.g., V600E -> 600"""
-        match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
-        return match.group(1) if match else None
+        return match_variant_to_indication(
+            query_gene=query_gene,
+            query_variant=query_variant,
+            indication_gene=self.gene,
+            indication_requirement=self.requirement,
+            indication_specificity=self.specificity,
+            indication_specified_variants=self.specified_variants,
+            indication_codon=self.codon,
+            normalize_variant=False,  # Dataclass doesn't normalize
+        )
 
 
 class FDALabelParser:

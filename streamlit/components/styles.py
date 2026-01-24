@@ -187,7 +187,8 @@ def apply_styles() -> None:
     .scrollable-table .col-tumor { width: 70px; }
     .scrollable-table .col-drugs { width: 500px; min-width: 300px; max-width: 500px; }
     .scrollable-table .col-response { width: 110px; }
-    .scrollable-table .col-specificity { width: 100px; }
+    .scrollable-table .col-match { width: 60px; text-align: center; }
+    .scrollable-table .col-specificity { width: 90px; }
     .scrollable-table .col-status { width: 150px; }
     .scrollable-table .col-indication { width: 250px; }
     .scrollable-table .col-links { width: 80px; }

@@ -228,10 +228,12 @@ def _build_response(result) -> Dict[str, Any]:
 
     # Filter FDA biomarker evidence for display (already deduplicated in evidence_aggregator)
     # This also sets evidence.filtered_fda_biomarker_count for gap_detector
+    # Use include_level="same_codon" to show related drugs at same codon (even if not matching)
     filtered_fda_evidence = evidence.get_filtered_fda_evidence(
         queried_gene,
         queried_variant,
         queried_tumor,
+        include_level="same_codon",
     )
 
     return {
@@ -289,7 +291,8 @@ def _build_response(result) -> Dict[str, Any]:
         },
         # Per-source evidence (flat lists - frontend decides how to display)
         # FDA biomarker evidence (pre-computed above for consistency with gap analysis)
-        "fda_biomarker_evidence": [e.model_dump() for e in filtered_fda_evidence],
+        # Include fda_label_url property since model_dump() doesn't include @property fields
+        "fda_biomarker_evidence": [{**e.model_dump(), "fda_label_url": e.fda_label_url} for e in filtered_fda_evidence],
         "civic_assertions": [
             {
                 "id": a.assertion_id,

@@ -37,6 +37,7 @@ def scrollable_table(markdown_content: str) -> None:
         'response': 'col-response',
         'association': 'col-response',
         'significance': 'col-response',
+        'match': 'col-match',
         'specificity': 'col-specificity',
         'drug specificity': 'col-specificity',
         'regulatory status': 'col-status',

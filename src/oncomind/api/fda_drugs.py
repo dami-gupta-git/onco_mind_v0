@@ -1449,12 +1449,7 @@ async def get_fda_labels_for_biomarker(
             data = response.json()
             labels = data.get("results", [])
 
-    for label in labels:
-        print(f"***************** {label['spl_product_data_elements']}")
-        x=label['spl_product_data_elements']
-        x_join="_".join(x)
-        if "AMIV" in x_join.upper():
-            pass
+
     return labels
 
 

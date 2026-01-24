@@ -148,6 +148,7 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "ptc": ["papillary thyroid carcinoma", "ptc", "papillary thyroid"],
     "ftc": ["follicular thyroid carcinoma", "ftc"],
     "atc": ["anaplastic thyroid carcinoma", "atc", "anaplastic thyroid cancer"],
+    "mtc": ["medullary thyroid carcinoma", "mtc", "medullary thyroid cancer", "medullary thyroid", "thyroid cancer"],
 
     # Gastrointestinal
     "gist": ["gastrointestinal stromal tumor", "gist", "gastrointestinal stromal"],

@@ -76,6 +76,20 @@ class TestFDABiomarkerPipeline:
 
     @pytest.mark.integration
     @pytest.mark.asyncio
+    async def test_random(self):
+        """Harness for ad-hoc testing of any variant."""
+        result = await get_variant_insight(
+            gene="IDH1",
+            variant="R132H",
+            tumor_type="Glioma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
     async def test_idh1_r132h_gene_level_match(self):
         """IDH1 R132H should return gene-level FDA biomarker evidence.
 

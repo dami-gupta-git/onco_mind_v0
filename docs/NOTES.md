@@ -406,6 +406,75 @@ That's curated knowledge from literature, not pathway databases.
 
 ## Technical Notes
 
+### FDA Drug Data Flow
+
+**Query:** EGFR L858R in NSCLC
+
+---
+
+**Step 1 - Fetch FDA Labels**
+`get_fda_labels_for_biomarker()` → `src/oncomind/api/fda_drugs.py:1386`
+Queries OpenFDA API for drug labels mentioning the gene. Returns raw label JSON with indications_and_usage text.
+
+---
+
+**Step 2 - Parse Indications Text**
+`FDALabelParser.parse_label()` → `src/oncomind/api/fda_label_parser.py:341`
+Extracts structured biomarker indications from free-text FDA label. Identifies gene, variants, tumor types, and requirement (required vs recommended).
+
+---
+
+**Step 3 - Match Variant**
+`match_variant_to_indication()` → `src/oncomind/models/evidence/fda_biomarker.py:48`
+Canonical matching logic used by both `BiomarkerIndication` (dataclass) and `FDABiomarkerEvidence` (Pydantic).
+
+Returns match_type:
+| Type | Description |
+|------|-------------|
+| `exact` | Query variant matches approved variant (L858R = L858R) |
+| `codon` | Query matches codon-level approval (V600E matches "V600 mutations") |
+| `gene` | Query matches gene-level approval (any EGFR mutation) |
+| `same_codon_different_variant` | Same codon, different variant (G12D when G12C approved) - shown with ❌ in UI |
+| `excluded` | Drug is contraindicated for this variant |
+
+---
+
+**Step 4 - Create Evidence**
+`FDABiomarkerEvidence.from_biomarker_indication()` → `src/oncomind/models/evidence/fda_biomarker.py:295`
+Converts parsed indication + match result into Pydantic evidence model with drug_name, tumor_types, variant_match_result, combination_partners.
+
+---
+
+**Step 5 - Filter in Aggregator**
+`fetch_fda_biomarker_parsed()` → `src/oncomind/insight_builder/evidence_aggregator.py:759`
+Nested async function that orchestrates the full pipeline. Includes matches + `same_codon_different_variant` + `excluded`.
+
+---
+
+**Step 6 - Deduplicate**
+`_dedupe_fda_biomarker_evidence()` → `src/oncomind/insight_builder/evidence_aggregator.py:85`
+Uses `normalize_drug_name()` to remove salt suffixes (HYDROCHLORIDE, SODIUM). Creates composite key of (drug, gene, tumor_types, combination_partners). Keeps the most specific variant match when duplicates exist (exact > codon > gene).
+
+---
+
+**Step 7 - Filter for Display**
+`Evidence.get_filtered_fda_evidence()` → `src/oncomind/models/evidence/evidence.py:278`
+Final filtering before UI display. Parameter `include_level="same_codon"` shows related drugs at same codon even if not matching.
+
+---
+
+### FDA UI Display
+
+The FDA tab shows two key columns:
+- **Match**: ✅ Yes (exact/codon/gene match) or ❌ No (same_codon_different_variant)
+- **Label Level**: What the FDA label specifies (🎯 Variant, 📍 Codon, 🧬 Gene, 🔀 Pathway)
+
+This allows users to see:
+1. Drugs approved for their exact variant (✅)
+2. Related drugs at the same codon that might be relevant (❌) - e.g., G12C drugs when querying G12D
+
+---
+
 ### Streamlit Literature Tab
 
 Already have the components:

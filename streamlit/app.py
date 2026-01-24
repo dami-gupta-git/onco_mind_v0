@@ -977,12 +977,14 @@ with tab1:
                 # FDA tab - biomarker-drug indications with negation detection
                 if fda_biomarker_evidence:
                     with tabs[tab_idx]:
-                        st.caption("FDA biomarker-drug indications parsed from drug labels")
+                        st.caption("FDA biomarker-drug indications parsed from drug labels including near hits")
                         st.warning("Auto-parsed from FDA labels - verify before clinical use")
 
                         # Simple table with drug info
-                        rows = ["| Drug | Gene | Match | Variants | Tumors |",
-                                "|------|------|-------|----------|--------|"]
+                        # Match = did the query variant match this indication?
+                        # Label Level = what the FDA label specifies (variant/codon/gene)
+                        rows = ["| Drug | Gene | Match | Label Level | Variants | Tumors |",
+                                "|------|------|-------|-------------|----------|--------|"]
                         for ev in fda_biomarker_evidence:
                             drug = ev.get('drug_name', 'Unknown')
                             brand = ev.get('brand_name', '')
@@ -998,28 +1000,25 @@ with tab1:
                             # Make drug name clickable if URL available
                             drug_display = f"[{drug_text}]({fda_url})" if fda_url else drug_text
                             gene = ev.get('gene', '')
-                            # Use variant_match_result from FDABiomarkerEvidence
-                            # All evidence returned by get_filtered_fda_evidence is a match
+                            # Match: did the query variant match this indication?
+                            # exact/codon/gene = matched, same_codon_different_variant = not matched
                             match_type = ev.get('variant_match_result', '')
-                            if match_type == 'exact':
-                                match_display = '✅ Variant'
-                            elif match_type == 'codon':
-                                match_display = '✅ Codon'
-                            elif match_type == 'gene':
-                                match_display = '✅ Gene'
-                            elif match_type:
+                            if match_type in ('exact', 'codon', 'gene'):
                                 match_display = '✅ Yes'
                             else:
-                                match_display = '✅ Yes'
-                            # Show specified variants or specificity level
-                            variants = ev.get('specified_variants', [])
+                                match_display = '❌ No'
+                            # Label Level: what the FDA label specifies (variant/codon/gene)
                             specificity = ev.get('specificity', '')
+                            spec_icons = {'variant': '🎯 Variant', 'codon': '📍 Codon', 'gene': '🧬 Gene', 'pathway': '🔀 Pathway'}
+                            specificity_display = spec_icons.get(specificity, specificity or '—')
+                            # Show specified variants
+                            variants = ev.get('specified_variants', [])
                             if variants:
                                 variants_display = ', '.join(variants)[:40]
                             elif specificity == 'gene':
                                 variants_display = 'Any mutation'
                             else:
-                                variants_display = specificity or '—'
+                                variants_display = '—'
                             tumors_list = ev.get('tumor_types', [])
                             tumor_stage = ev.get('tumor_stage', '')
                             # Combine tumor types with stage/grade restriction if present
@@ -1030,7 +1029,7 @@ with tab1:
                             else:
                                 tumors = '—'
                             tumors = tumors[:40]  # Truncate for display
-                            rows.append(f"| {drug_display} | {gene} | {match_display} | {variants_display} | {tumors} |")
+                            rows.append(f"| {drug_display} | {gene} | {match_display} | {specificity_display} | {variants_display} | {tumors} |")
 
                         scrollable_table("\n".join(rows))
                     tab_idx += 1

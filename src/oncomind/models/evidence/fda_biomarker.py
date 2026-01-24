@@ -44,6 +44,121 @@ MatchType = Literal[
 ]
 
 
+def _extract_codon(variant: str) -> str | None:
+    """Extract codon number from variant notation. E.g., V600E -> 600"""
+    import re
+    match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
+    return match.group(1) if match else None
+
+
+def match_variant_to_indication(
+    query_gene: str,
+    query_variant: str,
+    indication_gene: str,
+    indication_requirement: BiomarkerRequirement,
+    indication_specificity: SpecificityLevel,
+    indication_specified_variants: list[str],
+    indication_codon: str | None,
+    normalize_variant: bool = False,
+) -> dict:
+    """Match a query variant against an FDA indication.
+
+    This is the canonical matching logic used by both BiomarkerIndication (dataclass)
+    and FDABiomarkerEvidence (Pydantic model).
+
+    Args:
+        query_gene: Gene symbol to match (e.g., "EGFR")
+        query_variant: Variant notation to match (e.g., "L858R", "p.Leu858Arg")
+        indication_gene: Gene from FDA indication
+        indication_requirement: Whether biomarker must be present or absent
+        indication_specificity: Specificity level (gene, codon, variant)
+        indication_specified_variants: List of approved variants
+        indication_codon: Codon number if specified
+        normalize_variant: If True, normalize query_variant using to_short_form
+
+    Returns:
+        Dict with keys:
+        - matches: bool - whether the variant is approved
+        - match_type: MatchType - type of match
+        - reason: str - explanation
+    """
+    query_gene = query_gene.upper()
+
+    # Optionally normalize query variant to short form (e.g., "p.Leu858Arg" -> "L858R")
+    if normalize_variant:
+        from oncomind.utils.variant_normalization import to_short_form
+        normalized = to_short_form(query_variant)
+        query_variant = normalized.upper() if normalized else query_variant.upper()
+    else:
+        query_variant = query_variant.upper()
+
+    if indication_gene.upper() != query_gene:
+        return {"matches": False, "match_type": None, "reason": "Different gene"}
+
+    # If this indication EXCLUDES the biomarker, it's a negative match
+    if indication_requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
+        return {
+            "matches": False,
+            "match_type": "excluded",
+            "reason": f"This indication is for patients WITHOUT {indication_gene} mutations"
+        }
+
+    # Check specificity levels
+    if indication_specificity == SpecificityLevel.GENE:
+        return {
+            "matches": True,
+            "match_type": "gene",
+            "reason": f"Gene-level approval: any {indication_gene} mutation"
+        }
+
+    if indication_specificity == SpecificityLevel.VARIANT:
+        # Check for exact variant match
+        if query_variant in [v.upper() for v in indication_specified_variants]:
+            return {
+                "matches": True,
+                "match_type": "exact",
+                "reason": f"Exact variant match: {query_variant}"
+            }
+
+        # Check for same codon
+        query_codon = _extract_codon(query_variant)
+        # Use indication_codon if set, otherwise extract from specified_variants
+        codon = indication_codon
+        if not codon and indication_specified_variants:
+            for v in indication_specified_variants:
+                codon = _extract_codon(v)
+                if codon:
+                    break
+        if codon and query_codon == codon:
+            return {
+                "matches": False,
+                "match_type": "same_codon_different_variant",
+                "reason": f"Same codon ({codon}) but different variant. Approved: {indication_specified_variants}, Query: {query_variant}"
+            }
+
+        return {
+            "matches": False,
+            "match_type": "different_variant",
+            "reason": f"Different variant. Approved: {indication_specified_variants}, Query: {query_variant}"
+        }
+
+    if indication_specificity == SpecificityLevel.CODON:
+        query_codon = _extract_codon(query_variant)
+        if indication_codon and query_codon == indication_codon:
+            return {
+                "matches": True,
+                "match_type": "codon",
+                "reason": f"Codon-level match: codon {indication_codon}"
+            }
+        return {
+            "matches": False,
+            "match_type": "different_codon",
+            "reason": f"Different codon. Approved: {indication_codon}, Query: {query_codon}"
+        }
+
+    return {"matches": False, "match_type": None, "reason": "Unknown specificity"}
+
+
 class FDABiomarkerEvidence(EvidenceItemBase):
     """FDA biomarker-drug indication parsed from drug label.
 
@@ -136,8 +251,7 @@ class FDABiomarkerEvidence(EvidenceItemBase):
     def matches_variant(self, query_gene: str, query_variant: str) -> dict:
         """Check if a user's variant query matches this indication.
 
-        This mirrors the matches_variant method from BiomarkerIndication
-        but operates on the Pydantic model.
+        Delegates to match_variant_to_indication() with variant normalization enabled.
 
         Args:
             query_gene: Gene symbol to match (e.g., "EGFR")
@@ -149,76 +263,16 @@ class FDABiomarkerEvidence(EvidenceItemBase):
             - match_type: MatchType - type of match
             - reason: str - explanation
         """
-        import re
-        from oncomind.utils.variant_normalization import to_short_form
-
-        query_gene = query_gene.upper()
-
-        # Normalize query variant to short form (e.g., "p.Leu858Arg" -> "L858R")
-        normalized_variant = to_short_form(query_variant)
-        if normalized_variant:
-            query_variant = normalized_variant.upper()
-        else:
-            query_variant = query_variant.upper()
-
-        if self.gene.upper() != query_gene:
-            return {"matches": False, "match_type": None, "reason": "Different gene"}
-
-        # If this indication EXCLUDES the biomarker, it's a negative match
-        if self.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
-            return {
-                "matches": False,
-                "match_type": "excluded",
-                "reason": f"This indication is for patients WITHOUT {self.gene} mutations"
-            }
-
-        # Check specificity levels
-        if self.specificity == SpecificityLevel.GENE:
-            return {
-                "matches": True,
-                "match_type": "gene",
-                "reason": f"Gene-level approval: any {self.gene} mutation"
-            }
-
-        if self.specificity == SpecificityLevel.VARIANT:
-            # Check for exact variant match
-            if query_variant in [v.upper() for v in self.specified_variants]:
-                return {
-                    "matches": True,
-                    "match_type": "exact",
-                    "reason": f"Exact variant match: {query_variant}"
-                }
-
-            # Check for same codon
-            query_codon = self._extract_codon(query_variant)
-            if self.codon and query_codon == self.codon:
-                return {
-                    "matches": False,
-                    "match_type": "same_codon_different_variant",
-                    "reason": f"Same codon ({self.codon}) but different variant. Approved: {self.specified_variants}, Query: {query_variant}"
-                }
-
-            return {
-                "matches": False,
-                "match_type": "different_variant",
-                "reason": f"Different variant. Approved: {self.specified_variants}, Query: {query_variant}"
-            }
-
-        if self.specificity == SpecificityLevel.CODON:
-            query_codon = self._extract_codon(query_variant)
-            if self.codon and query_codon == self.codon:
-                return {
-                    "matches": True,
-                    "match_type": "codon",
-                    "reason": f"Codon-level match: codon {self.codon}"
-                }
-            return {
-                "matches": False,
-                "match_type": "different_codon",
-                "reason": f"Different codon. Approved: {self.codon}, Query: {query_codon}"
-            }
-
-        return {"matches": False, "match_type": None, "reason": "Unknown specificity"}
+        return match_variant_to_indication(
+            query_gene=query_gene,
+            query_variant=query_variant,
+            indication_gene=self.gene,
+            indication_requirement=self.requirement,
+            indication_specificity=self.specificity,
+            indication_specified_variants=self.specified_variants,
+            indication_codon=self.codon,
+            normalize_variant=True,  # Pydantic model normalizes variants
+        )
 
     @staticmethod
     def _extract_codon(variant: str) -> str | None:

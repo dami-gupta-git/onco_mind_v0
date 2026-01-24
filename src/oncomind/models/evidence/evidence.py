@@ -280,6 +280,7 @@ class Evidence(BaseModel):
         queried_gene: str,
         queried_variant: str,
         queried_tumor: str | None = None,
+        include_level: str = "match_only",
     ) -> list[FDABiomarkerEvidence]:
         """Filter FDA biomarker evidence for display and set filtered count.
 
@@ -297,6 +298,9 @@ class Evidence(BaseModel):
             queried_gene: Gene symbol being queried (e.g., "BRAF")
             queried_variant: Variant being queried (e.g., "V600E")
             queried_tumor: Optional tumor type filter (e.g., "Melanoma")
+            include_level: What level of matches to include:
+                - "match_only": Only exact, codon, gene matches (default)
+                - "same_codon": Also include same_codon_different_variant (non-matches at same codon)
 
         Returns:
             List of filtered FDABiomarkerEvidence objects with match info populated
@@ -332,7 +336,11 @@ class Evidence(BaseModel):
             # Variant must match via matches_variant()
             match_result = e.matches_variant(queried_gene, queried_variant)
             if not match_result["matches"]:
-                continue
+                # Include same_codon_different_variant if include_level allows
+                if include_level == "same_codon" and match_result["match_type"] == "same_codon_different_variant":
+                    pass  # Allow through
+                else:
+                    continue
 
             # Deduplicate by normalized drug name (sorted combination)
             # e.g., "TRAMETINIB + dabrafenib" and "DABRAFENIB + trametinib" -> same key
@@ -351,8 +359,11 @@ class Evidence(BaseModel):
 
             filtered.append(e)
 
-        # Set the filtered count for gap_detector
-        self.filtered_fda_biomarker_count = len(filtered)
+        # Set the filtered count for gap_detector (only count actual matches)
+        self.filtered_fda_biomarker_count = len([
+            e for e in filtered
+            if e.variant_match_result in ("exact", "codon", "gene")
+        ])
 
         return filtered
 
