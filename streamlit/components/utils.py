@@ -290,7 +290,7 @@ def result_to_markdown(result: dict) -> str:
 
     has_llm_content = any([functional_summary, biological_context, therapeutic_summary, llm_narrative])
     if has_llm_content:
-        lines.append("## AI Synthesis\n")
+        lines.append("## Experimental - LLM Research Synthesis\n")
         if functional_summary:
             lines.append(f"### Functional Summary\n{functional_summary}\n")
         if biological_context:

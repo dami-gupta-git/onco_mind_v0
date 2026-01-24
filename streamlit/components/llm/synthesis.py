@@ -27,10 +27,7 @@ def render_llm_synthesis(result: dict[str, Any]) -> None:
         return
 
     with st.container(border=True):
-        st.markdown("### 🤖 LLM Research Synthesis")
-        st.markdown("""<div style='font-size: 0.9rem; color: #d97706; background-color: #fffbeb; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem;'>
-⚠️ <b>AI-generated</b> — may contain inaccuracies or extrapolations. Verify claims against primary sources.
-</div>""", unsafe_allow_html=True)
+        st.markdown("""### Experimental - LLM Research Synthesis <span style='font-size: 0.7rem; font-weight: normal; color: #666;'>AI-generated — may contain inaccuracies. Verify against primary sources.</span>""", unsafe_allow_html=True)
         st.markdown("""<div style='font-size: 0.95rem; color: #1976d2;'>
 <b>Locus Match:</b> variant-level = evidence match at exact locus &nbsp;·&nbsp; codon-level = evidence match at other variants in this codon &nbsp;·&nbsp; gene-level = evidence match at other variants in this gene
 </div>""", unsafe_allow_html=True)

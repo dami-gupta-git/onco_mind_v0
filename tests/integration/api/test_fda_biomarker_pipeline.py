@@ -49,9 +49,9 @@ class TestFDABiomarkerPipeline:
     async def test_random(self):
 
         result = await get_variant_insight(
-            gene="BRAF",
-            variant="V600K",
-            tumor_type="Melanoma",
+            gene="IDH1",
+            variant="R132H",
+            tumor_type="Glioma",
             enable_llm=False,
             enable_literature=False,
         )

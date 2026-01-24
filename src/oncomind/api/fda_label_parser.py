@@ -281,6 +281,7 @@ class FDALabelParser:
         (r'1L', 'first-line'),
         (r'second[- ]?line', 'second-line'),
         (r'2L', 'second-line'),
+        (r'after\s+prior\s+therapy(?!\s+with)', 'subsequent'),  # "after prior therapy" (not followed by "with")
         (r'after\s+(?:prior\s+)?(?:treatment|therapy)\s+with', 'subsequent'),
         (r'(?:whose\s+disease\s+)?(?:has\s+)?progress(?:ed|ion)\s+(?:on|after|following)', 'post-progression'),
         (r'previously\s+treated', 'previously treated'),
@@ -377,7 +378,8 @@ class FDALabelParser:
                 )
                 indications.extend(block_indications)
 
-        # Deduplicate indications (same gene + requirement + tumor combo)
+        # Deduplicate indications (same gene + requirement + tumor + combination partners + line of therapy)
+        # Different combination partners or lines of therapy represent distinct FDA approvals
         seen = set()
         unique_indications = []
         for ind in indications:
@@ -387,6 +389,8 @@ class FDALabelParser:
                 ind.specificity,
                 tuple(sorted(ind.specified_variants)),
                 tuple(sorted(ind.tumor_types)),
+                tuple(sorted(ind.combination_partners)),
+                ind.line_of_therapy,
             )
             if key not in seen:
                 seen.add(key)

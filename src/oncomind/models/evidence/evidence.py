@@ -256,6 +256,12 @@ class Evidence(BaseModel):
         None, description="Detected evidence gaps for research prioritization"
     )
 
+    # Pre-computed FDA biomarker count (set by backend after filtering for display)
+    # This ensures gap analysis uses the same count as the FDA Biomarker Evidence table
+    filtered_fda_biomarker_count: int | None = Field(
+        None, description="Count of FDA biomarker evidence after tumor/variant filtering for display"
+    )
+
     # Configuration flags (track what was searched)
     literature_searched: bool = Field(
         False, description="Whether literature search was enabled/performed"

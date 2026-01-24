@@ -358,21 +358,25 @@ def _normalize_drug_name(drug_name: str) -> str:
 
 
 def _dedupe_fda_biomarker_evidence(evidence_list: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deduplicate FDA biomarker evidence by normalized drug name + gene + match type.
+    """Deduplicate FDA biomarker evidence by drug + gene + tumor + combination partners.
 
     Multiple entries for the same drug (e.g., different formulations like
     ERLOTINIB vs ERLOTINIB HYDROCHLORIDE) are deduplicated, keeping the one
     with the most specific match (exact > codon > gene).
 
+    Different combination regimens (e.g., encorafenib + cetuximab vs
+    encorafenib + cetuximab + mFOLFOX6) are considered separate indications
+    and are NOT deduplicated.
+
     Args:
         evidence_list: List of FDA biomarker evidence dicts
 
     Returns:
-        Deduplicated list with one entry per unique drug+gene+match_type
+        Deduplicated list preserving distinct indications
     """
-    # Group by (normalized_drug_name, gene)
-    # Keep the best match for each drug+gene combination
-    best_by_drug_gene: Dict[tuple, Dict[str, Any]] = {}
+    # Group by (drug_name, gene, tumor_types, combination_partners)
+    # Keep the best match for each unique indication
+    best_by_indication: Dict[tuple, Dict[str, Any]] = {}
 
     # Priority: exact > codon > gene (lower is better)
     match_priority = {
@@ -386,20 +390,28 @@ def _dedupe_fda_biomarker_evidence(evidence_list: List[Dict[str, Any]]) -> List[
         gene_key = (ev.get("gene") or "").upper()
         match_type = ev.get("match_type", "gene")
 
-        key = (drug_key, gene_key)
+        # Include tumor types and combination partners in the key
+        # to preserve distinct FDA indications
+        tumor_types = ev.get("tumor_types", [])
+        tumor_key = tuple(sorted(t.lower() for t in tumor_types)) if tumor_types else ()
+
+        combination_partners = ev.get("combination_partners", [])
+        partners_key = tuple(sorted(p.lower() for p in combination_partners)) if combination_partners else ()
+
+        key = (drug_key, gene_key, tumor_key, partners_key)
         current_priority = match_priority.get(match_type, 3)
 
-        if key not in best_by_drug_gene:
-            best_by_drug_gene[key] = ev
+        if key not in best_by_indication:
+            best_by_indication[key] = ev
         else:
-            existing = best_by_drug_gene[key]
+            existing = best_by_indication[key]
             existing_priority = match_priority.get(existing.get("match_type", "gene"), 3)
 
             # Keep the more specific match
             if current_priority < existing_priority:
-                best_by_drug_gene[key] = ev
+                best_by_indication[key] = ev
 
-    return list(best_by_drug_gene.values())
+    return list(best_by_indication.values())
 
 
 def _build_response(result) -> Dict[str, Any]:
@@ -417,6 +429,44 @@ def _build_response(result) -> Dict[str, Any]:
     # Get therapeutic evidence - always use evidence.get_therapeutic_evidence() as primary source
     # LLM therapeutic_evidence is typically empty since the LLM doesn't populate it
     therapeutic_list = evidence.get_therapeutic_evidence()
+
+    # Pre-compute filtered FDA biomarker evidence (used for both table display and gap analysis)
+    # This ensures gap analysis uses the exact same count as the FDA Biomarker Evidence table
+    filtered_fda_evidence = _dedupe_fda_biomarker_evidence([
+        {
+            "drug_name": e.drug_name,
+            "brand_name": e.brand_name,
+            "set_id": e.set_id,
+            "gene": e.gene,
+            "requirement": e.requirement.value if e.requirement else None,
+            "specificity": e.specificity.value if e.specificity else None,
+            "specified_variants": e.specified_variants,
+            "codon": e.codon,
+            "tumor_types": e.tumor_types,
+            "tumor_stage": e.tumor_stage,
+            "combination_partners": e.combination_partners,
+            "is_monotherapy": e.is_monotherapy,
+            "line_of_therapy": e.line_of_therapy,
+            "indication_text": e.indication_text[:200] if e.indication_text else None,
+            "fda_label_url": e.fda_label_url,
+            # Match result from matches_variant()
+            "matches": match_result["matches"],
+            "match_type": match_result["match_type"],
+            "match_reason": match_result["reason"],
+        }
+        for e in evidence.fda_biomarker_evidence
+        # Compute match result for each evidence item
+        for match_result in [e.matches_variant(queried_gene, queried_variant)]
+        # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
+        # Also filter out drugs with unknown names (case-insensitive)
+        if (e.gene and e.gene.upper() == queried_gene
+            and e.drug_name and e.drug_name.upper() != "UNKNOWN"
+            and (not queried_tumor or any(tumor_types_match(t, queried_tumor) for t in e.tumor_types))
+            and match_result["matches"])
+    ])
+
+    # Set the filtered count on the evidence object so gap_detector can use it
+    evidence.filtered_fda_biomarker_count = len(filtered_fda_evidence)
 
     return {
         "variant": {
@@ -472,39 +522,8 @@ def _build_response(result) -> Dict[str, Any]:
             "consequence": result.identifiers.transcript_consequence,
         },
         # Per-source evidence (flat lists - frontend decides how to display)
-        # FDA biomarker evidence with negation detection from FDALabelParser
-        "fda_biomarker_evidence": _dedupe_fda_biomarker_evidence([
-            {
-                "drug_name": e.drug_name,
-                "brand_name": e.brand_name,
-                "set_id": e.set_id,
-                "gene": e.gene,
-                "requirement": e.requirement.value if e.requirement else None,
-                "specificity": e.specificity.value if e.specificity else None,
-                "specified_variants": e.specified_variants,
-                "codon": e.codon,
-                "tumor_types": e.tumor_types,
-                "tumor_stage": e.tumor_stage,
-                "combination_partners": e.combination_partners,
-                "is_monotherapy": e.is_monotherapy,
-                "line_of_therapy": e.line_of_therapy,
-                "indication_text": e.indication_text[:200] if e.indication_text else None,
-                "fda_label_url": e.fda_label_url,
-                # Match result from matches_variant()
-                "matches": match_result["matches"],
-                "match_type": match_result["match_type"],
-                "match_reason": match_result["reason"],
-            }
-            for e in evidence.fda_biomarker_evidence
-            # Compute match result for each evidence item
-            for match_result in [e.matches_variant(queried_gene, queried_variant)]
-            # Filter: gene must match AND tumor must match AND variant must match (only positive matches)
-            # Also filter out drugs with unknown names (case-insensitive)
-            if (e.gene and e.gene.upper() == queried_gene
-                and e.drug_name and e.drug_name.upper() != "UNKNOWN"
-                and (not queried_tumor or any(tumor_types_match(t, queried_tumor) for t in e.tumor_types))
-                and match_result["matches"])
-        ]),
+        # FDA biomarker evidence (pre-computed above for consistency with gap analysis)
+        "fda_biomarker_evidence": filtered_fda_evidence,
         "civic_assertions": [
             {
                 "id": a.assertion_id,

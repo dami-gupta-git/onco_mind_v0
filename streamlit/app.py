@@ -90,6 +90,7 @@ EXAMPLE_VARIANTS = {
     "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
     "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+    "BRAF V600K - Colorectal": ("BRAF", "V600E", "Colorectal"),
 }
 
 # Initialize session state for persisting results

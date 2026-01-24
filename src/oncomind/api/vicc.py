@@ -162,7 +162,9 @@ class VICCClient:
 
     BASE_URL = "https://search.cancervariants.org/api/v1"
     DEFAULT_TIMEOUT = 30.0
-    DEFAULT_SIZE = 50  # Number of results per query
+    # CIViC dominates VICC results (~70%) but we filter it out (fetched directly).
+    # Need 200+ to ensure enough JAX/PMKB results after filtering.
+    DEFAULT_SIZE = 200
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT):
         """Initialize the VICC client.
