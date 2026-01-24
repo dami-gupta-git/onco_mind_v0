@@ -85,25 +85,26 @@ logger = get_logger(__name__)
 def _dedupe_fda_biomarker_evidence(
     evidence_list: list[FDABiomarkerEvidence],
 ) -> list[FDABiomarkerEvidence]:
-    """Deduplicate FDA biomarker evidence by drug + gene + tumor + combination partners.
+    """Deduplicate FDA biomarker evidence by drug + tumor type + combination partners.
 
-    Multiple entries for the same drug (e.g., different formulations like
-    ERLOTINIB vs ERLOTINIB HYDROCHLORIDE) are deduplicated, keeping the one
-    with the most specific match (exact > codon > gene).
+    Multiple entries for the same drug with the same tumor types (e.g., different
+    salt formulations like ERLOTINIB vs ERLOTINIB HYDROCHLORIDE) are deduplicated,
+    keeping the one with the most specific match (exact > codon > gene).
+
+    Entries for the same drug but DIFFERENT tumor types are kept separate because
+    each has its own tumor_match flag that tracks whether it matches the queried tumor.
 
     Different combination regimens (e.g., encorafenib + cetuximab vs
-    encorafenib + cetuximab + mFOLFOX6) are considered separate indications
-    and are NOT deduplicated.
+    encorafenib + binimetinib) are considered separate and are NOT deduplicated.
 
     Args:
         evidence_list: List of FDABiomarkerEvidence objects
 
     Returns:
-        Deduplicated list preserving distinct indications
+        Deduplicated list with one entry per unique (drug, tumor_types, combination)
     """
-    # Group by (drug_name, gene, tumor_types, combination_partners)
-    # Keep the best match for each unique indication
-    best_by_indication: dict[tuple, FDABiomarkerEvidence] = {}
+    # Group by (normalized_drug_name + tumor_types + sorted combination partners)
+    best_by_key: dict[tuple, FDABiomarkerEvidence] = {}
 
     # Priority: exact > codon > gene (lower is better)
     match_priority = {
@@ -113,34 +114,32 @@ def _dedupe_fda_biomarker_evidence(
     }
 
     for ev in evidence_list:
-        drug_key = normalize_drug_name(ev.drug_name or "")
-        gene_key = (ev.gene or "").upper()
-        match_type = getattr(ev, "variant_match_result", None) or "gene"
+        # Build drug key: normalized drug name + sorted combination partners
+        all_drugs = [normalize_drug_name(ev.drug_name or "")]
+        if ev.combination_partners:
+            all_drugs.extend([normalize_drug_name(p) for p in ev.combination_partners])
+        drug_key = " + ".join(sorted(all_drugs))
 
-        # Include tumor types and combination partners in the key
-        # to preserve distinct FDA indications
+        # Include tumor types in the key to keep separate entries per tumor
         tumor_key = tuple(sorted(t.lower() for t in ev.tumor_types)) if ev.tumor_types else ()
-        partners_key = (
-            tuple(sorted(p.lower() for p in ev.combination_partners))
-            if ev.combination_partners
-            else ()
-        )
 
-        key = (drug_key, gene_key, tumor_key, partners_key)
+        dedup_key = (drug_key, tumor_key)
+
+        match_type = getattr(ev, "variant_match_result", None) or "gene"
         current_priority = match_priority.get(match_type, 3)
 
-        if key not in best_by_indication:
-            best_by_indication[key] = ev
+        if dedup_key not in best_by_key:
+            best_by_key[dedup_key] = ev
         else:
-            existing = best_by_indication[key]
+            existing = best_by_key[dedup_key]
             existing_match = getattr(existing, "variant_match_result", None) or "gene"
             existing_priority = match_priority.get(existing_match, 3)
 
             # Keep the more specific match
             if current_priority < existing_priority:
-                best_by_indication[key] = ev
+                best_by_key[dedup_key] = ev
 
-    return list(best_by_indication.values())
+    return list(best_by_key.values())
 
 
 # =============================================================================
