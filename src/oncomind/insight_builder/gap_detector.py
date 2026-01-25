@@ -459,6 +459,14 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
     """Check for FDA-approved therapies using fda_biomarker_evidence.
 
     Calls get_filtered_fda_evidence() to filter FDA drugs by gene/variant/tumor match.
+    Also checks for CIViC Level A assertions (FDA-approved/guideline-included) and
+    CGI biomarkers with fda_approved=True.
+
+    Note: VICC MetaKB is intentionally NOT used for clinical actionability.
+    VICC aggregates data from CIViC, CGI, OncoKB, and other sources. Using VICC
+    would double-count approvals already counted via civic_assertions and cgi_biomarkers.
+    The three sources used here (FDA labels, CIViC Level A, CGI FDA-approved) are
+    independent and non-overlapping.
     """
     # Filter FDA evidence by gene/variant/tumor to get matching drugs
     filtered_fda = evidence.get_filtered_fda_evidence(
@@ -468,39 +476,62 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
     )
     fda_count = len(filtered_fda)
 
+    # Count CIViC Level A assertions (FDA-approved companion diagnostic or guideline-included)
+    # Only count Assertions (AIDs) with amp_level_letter == "A", not Evidence Items (EIDs)
+    civic_assertions_level_a = [
+        a for a in evidence.civic_assertions
+        if a.amp_level_letter and a.amp_level_letter.upper() == "A"
+    ]
+    civic_level_a_count = len(civic_assertions_level_a)
+
+    # Count CGI biomarkers with fda_approved=True
+    cgi_fda_approved = [
+        b for b in evidence.cgi_biomarkers
+        if b.fda_approved
+    ]
+    cgi_approved_count = len(cgi_fda_approved)
+
     ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or fda_count > 0
 
+    # Build clinical actionability basis from FDA, CIViC Level A, and CGI FDA-approved
+    # No locus/tumor match icons for clinical actionability - it's about approvals, not match specificity
+    actionability_parts = []
     if fda_count > 0:
-        # FDA approval covers this variant - compute match breakdown
-        fda_match_counts = _count_fda_match_levels(filtered_fda, ctx.tumor_type)
+        actionability_parts.append(f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}")
+    if civic_level_a_count > 0:
+        actionability_parts.append(f"{civic_level_a_count} approval{'s' if civic_level_a_count > 1 else ''} from CIViC assertions")
+    if cgi_approved_count > 0:
+        actionability_parts.append(f"{cgi_approved_count} approval{'s' if cgi_approved_count > 1 else ''} from CGI")
 
-        basis = f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}"
+    if actionability_parts:
+        basis = ", ".join(actionability_parts)
         ctx.add_well_characterized(
             "clinical actionability",
             basis,
             category=GapCategory.CLINICAL,
-            matches_on=fda_match_counts.matches_on_str,
-            tumor_match=fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None,
+            # No matches_on or tumor_match - clinical actionability doesn't show these icons
         )
-    elif evidence.fda_biomarker_evidence:
-        # FDA drugs exist but don't match this variant/tumor (filtered count is 0 but raw list has items)
-        ctx.add_gap(
-            category=GapCategory.CLINICAL,
-            severity=GapSeverity.SIGNIFICANT,
-            description=f"FDA-approved therapies for {ctx.gene} exist but don't match {ctx.variant}",
-            suggested_studies=["Basket trial", "Off-label use case series"],
-            addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
-        )
-    elif not ctx.has_clinical:
-        # No clinical evidence at all (no FDA, CIViC assertions, or CIViC evidence)
-        ctx.add_gap(
-            category=GapCategory.CLINICAL,
-            severity=GapSeverity.CRITICAL,
-            description=f"No curated clinical evidence for {ctx.gene} {ctx.variant}",
-            suggested_studies=["Case series", "Retrospective cohort", "Basket trial inclusion"],
-            addressable_with=["CIViC submission", "Literature curation"]
-        )
-        ctx.add_poorly_characterized("clinical evidence")
+
+    if fda_count == 0 and civic_level_a_count == 0:
+        if evidence.fda_biomarker_evidence:
+            # FDA drugs exist but don't match this variant/tumor (filtered count is 0 but raw list has items)
+            ctx.add_gap(
+                category=GapCategory.CLINICAL,
+                severity=GapSeverity.SIGNIFICANT,
+                description=f"FDA-approved therapies for {ctx.gene} exist but don't match {ctx.variant}",
+                suggested_studies=["Basket trial", "Off-label use case series"],
+                addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
+            )
+        elif not ctx.has_clinical:
+            # No clinical evidence at all (no FDA, CIViC assertions, or CIViC evidence)
+            ctx.add_gap(
+                category=GapCategory.CLINICAL,
+                severity=GapSeverity.CRITICAL,
+                description=f"No curated clinical evidence for {ctx.gene} {ctx.variant}",
+                suggested_studies=["Case series", "Retrospective cohort", "Basket trial inclusion"],
+                addressable_with=["CIViC submission", "Literature curation"]
+            )
+            ctx.add_poorly_characterized("clinical evidence")
 
 
 
@@ -598,7 +629,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
 
         ctx.add_well_characterized(
             "FDA-approved therapy",
-            f"{fda_count} FDA",
+            f"{fda_count} FDA approval{'s' if fda_count > 1 else ''}",
             category=GapCategory.DRUG_RESPONSE,
             matches_on=fda_match_counts.matches_on_str,
             tumor_match=fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None,
@@ -976,7 +1007,7 @@ def _check_preclinical_models(evidence: "Evidence", ctx: GapDetectionContext) ->
                     ctx.add_gap(
                         category=GapCategory.PRECLINICAL,
                         severity=GapSeverity.SIGNIFICANT,
-                        description=f"Models with {ctx.variant} exist but none in {ctx.tumor_type} — cross-histology testing possible",
+                        description=f"Cell line models with {ctx.variant} exist in DepMap but none in {ctx.tumor_type} — cross-histology testing possible",
                         suggested_studies=[
                             f"Test in {ctx.tumor_type}-derived organoids",
                             "Compare drug response vs other histologies",
