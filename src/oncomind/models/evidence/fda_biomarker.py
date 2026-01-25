@@ -63,8 +63,7 @@ def match_variant_to_indication(
 ) -> dict:
     """Match a query variant against an FDA indication.
 
-    This is the canonical matching logic used by both BiomarkerIndication (dataclass)
-    and FDABiomarkerEvidence (Pydantic model).
+    This is the canonical matching logic used by FDABiomarkerEvidence.
 
     Args:
         query_gene: Gene symbol to match (e.g., "EGFR")
@@ -280,66 +279,6 @@ class FDABiomarkerEvidence(EvidenceItemBase):
         import re
         match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
         return match.group(1) if match else None
-
-    @classmethod
-    def from_biomarker_indication(
-        cls,
-        indication: "BiomarkerIndication",
-        set_id: str | None = None,
-        spl_version: str | None = None,
-    ) -> "FDABiomarkerEvidence":
-        """Create FDABiomarkerEvidence from a parsed BiomarkerIndication.
-
-        This is the factory method to convert from the dataclass used by
-        FDALabelParser to this Pydantic model.
-
-        Args:
-            indication: BiomarkerIndication from fda_label_parser.py
-            set_id: FDA label set_id for linking
-            spl_version: FDA label version
-
-        Returns:
-            FDABiomarkerEvidence instance
-        """
-        # Import here to avoid circular imports
-        from oncomind.api.fda_label_parser import (
-            BiomarkerIndication as ParserIndication,
-            BiomarkerRequirement as ParserRequirement,
-            SpecificityLevel as ParserSpecificity,
-        )
-
-        # Map parser enums to model enums
-        requirement_map = {
-            ParserRequirement.REQUIRED_POSITIVE: BiomarkerRequirement.REQUIRED_POSITIVE,
-            ParserRequirement.REQUIRED_NEGATIVE: BiomarkerRequirement.REQUIRED_NEGATIVE,
-            ParserRequirement.NOT_SPECIFIED: BiomarkerRequirement.NOT_SPECIFIED,
-        }
-
-        specificity_map = {
-            ParserSpecificity.VARIANT: SpecificityLevel.VARIANT,
-            ParserSpecificity.CODON: SpecificityLevel.CODON,
-            ParserSpecificity.GENE: SpecificityLevel.GENE,
-            ParserSpecificity.PATHWAY: SpecificityLevel.PATHWAY,
-        }
-
-        return cls(
-            drug_name=indication.drug_name,
-            brand_name=indication.brand_name,
-            set_id=set_id,
-            spl_version=spl_version,
-            gene=indication.gene,
-            requirement=requirement_map[indication.requirement],
-            specificity=specificity_map[indication.specificity],
-            specified_variants=indication.specified_variants,
-            codon=indication.codon,
-            tumor_types=indication.tumor_types,
-            tumor_stage=indication.tumor_stage,
-            combination_partners=indication.combination_partners,
-            is_monotherapy=indication.is_monotherapy,
-            line_of_therapy=indication.line_of_therapy,
-            indication_text=indication.indication_text,
-            section=indication.section,
-        )
 
     @property
     def is_exclusion(self) -> bool:

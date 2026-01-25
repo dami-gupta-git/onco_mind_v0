@@ -426,7 +426,7 @@ Extracts structured biomarker indications from free-text FDA label. Identifies g
 
 **Step 3 - Match Variant**
 `match_variant_to_indication()` → `src/oncomind/models/evidence/fda_biomarker.py:48`
-Canonical matching logic used by both `BiomarkerIndication` (dataclass) and `FDABiomarkerEvidence` (Pydantic).
+Canonical matching logic used by `FDABiomarkerEvidence`.
 
 Returns match_type:
 | Type | Description |

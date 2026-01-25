@@ -773,7 +773,7 @@ class EvidenceAggregator:
                 if not raw_labels:
                     return []
 
-                # Parse labels into BiomarkerIndication objects
+                # Parse labels into FDABiomarkerEvidence objects
                 parser = FDALabelParser()
                 all_indications: list[FDABiomarkerEvidence] = []
                 for label_data in raw_labels:
@@ -783,13 +783,10 @@ class EvidenceAggregator:
                         set_id = label_data.get("openfda", {}).get("spl_set_id", [None])[0]
                         spl_version = label_data.get("spl_version")
 
-                        # Convert to FDABiomarkerEvidence models
-                        for ind in indications:
-                            evidence = FDABiomarkerEvidence.from_biomarker_indication(
-                                indication=ind,
-                                set_id=set_id,
-                                spl_version=spl_version,
-                            )
+                        # Set FDA label identifiers on each evidence object
+                        for evidence in indications:
+                            evidence.set_id = set_id
+                            evidence.spl_version = spl_version
                             all_indications.append(evidence)
                     except Exception as parse_err:
                         logger.warning(f"Failed to parse FDA label: {parse_err}")

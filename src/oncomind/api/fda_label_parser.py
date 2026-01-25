@@ -14,65 +14,14 @@ Author: Dami (OncoMind)
 """
 
 import re
-from dataclasses import dataclass, field
 from typing import Optional
 
 from oncomind.models.evidence.fda_biomarker import (
     BiomarkerRequirement,
     SpecificityLevel,
+    FDABiomarkerEvidence,
     match_variant_to_indication,
 )
-
-
-@dataclass
-class BiomarkerIndication:
-    """Structured representation of a biomarker-drug-tumor association."""
-    drug_name: str
-    brand_name: Optional[str]
-    gene: str
-    requirement: BiomarkerRequirement
-    specificity: SpecificityLevel
-
-    # Variant details (if specificity is VARIANT or CODON)
-    specified_variants: list[str] = field(default_factory=list)  # ["L858R", "exon 19 del"]
-    codon: Optional[str] = None  # "600" for V600E
-
-    # Tumor context
-    tumor_types: list[str] = field(default_factory=list)
-    tumor_stage: Optional[str] = None  # "metastatic", "locally advanced"
-
-    # Combination therapy
-    combination_partners: list[str] = field(default_factory=list)
-    is_monotherapy: bool = True
-
-    # Line of therapy
-    line_of_therapy: Optional[str] = None  # "first-line", "after progression on TKI"
-
-    # Source
-    indication_text: str = ""
-    section: str = "indications_and_usage"  # Which label section this came from
-
-    def matches_variant(self, query_gene: str, query_variant: str) -> dict:
-        """
-        Check if a user's variant query matches this indication.
-
-        Delegates to match_variant_to_indication() without variant normalization.
-
-        Returns dict with:
-        - matches: bool
-        - match_type: "exact", "codon", "gene", "excluded"
-        - reason: explanation
-        """
-        return match_variant_to_indication(
-            query_gene=query_gene,
-            query_variant=query_variant,
-            indication_gene=self.gene,
-            indication_requirement=self.requirement,
-            indication_specificity=self.specificity,
-            indication_specified_variants=self.specified_variants,
-            indication_codon=self.codon,
-            normalize_variant=False,  # Dataclass doesn't normalize
-        )
 
 
 class FDALabelParser:
@@ -287,7 +236,7 @@ class FDALabelParser:
             text = text.replace(ligature, replacement)
         return text
 
-    def parse_label(self, label_data: dict) -> list[BiomarkerIndication]:
+    def parse_label(self, label_data: dict) -> list[FDABiomarkerEvidence]:
         """
         Parse a complete FDA label from OpenFDA API response.
 
@@ -295,7 +244,7 @@ class FDALabelParser:
             label_data: Single result from OpenFDA /drug/label.json
 
         Returns:
-            List of BiomarkerIndication objects
+            List of FDABiomarkerEvidence objects
         """
         indications = []
 
@@ -423,7 +372,7 @@ class FDALabelParser:
         drug_name: str,
         brand_name: Optional[str],
         section: str
-    ) -> list[BiomarkerIndication]:
+    ) -> list[FDABiomarkerEvidence]:
         """Parse a single indication block for biomarker associations."""
         indications = []
 
@@ -464,7 +413,7 @@ class FDALabelParser:
                 # Find line of therapy
                 line = self._extract_line_of_therapy(text)
 
-                indication = BiomarkerIndication(
+                indication = FDABiomarkerEvidence(
                     drug_name=drug_name,
                     brand_name=brand_name,
                     gene=gene,
@@ -675,7 +624,7 @@ class FDALabelParser:
 
 
 def match_variant_to_indications(
-    indications: list[BiomarkerIndication],
+    indications: list[FDABiomarkerEvidence],
     query_gene: str,
     query_variant: str,
     query_tumor: Optional[str] = None
@@ -684,7 +633,7 @@ def match_variant_to_indications(
     Match a user's variant query against parsed FDA indications.
 
     Args:
-        indications: List of parsed BiomarkerIndication objects
+        indications: List of parsed FDABiomarkerEvidence objects
         query_gene: Gene symbol (e.g., "EGFR")
         query_variant: Variant notation (e.g., "L858R", "T790M")
         query_tumor: Optional tumor type filter
