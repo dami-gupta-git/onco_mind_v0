@@ -59,6 +59,10 @@ class TestFDABiomarkerPipeline:
         fda_biomarker = result.get("fda_biomarker_evidence", [])
         assert isinstance(fda_biomarker, list)
 
+        assert len(fda_biomarker) == 10, (
+            f"Expected 2 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
+        )
+
         # Should find osimertinib (TAGRISSO) for EGFR L858R
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
         assert any("osimertinib" in d for d in drug_names), (
@@ -223,8 +227,11 @@ class TestFDABiomarkerPipeline:
         fda_biomarker = result.get("fda_biomarker_evidence", [])
         assert isinstance(fda_biomarker, list)
 
-        # Should find sotorasib (LUMAKRAS) or adagrasib (KRAZATI)
+        # Should find exactly 2 drugs: sotorasib (LUMAKRAS) and adagrasib (KRAZATI)
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
+        assert len(fda_biomarker) == 2, (
+            f"Expected 2 FDA drugs for KRAS G12C NSCLC, got {len(fda_biomarker)}: {drug_names}"
+        )
         expected_drugs = ["sotorasib", "adagrasib"]
         found = any(
             any(exp in d for exp in expected_drugs)
@@ -236,6 +243,34 @@ class TestFDABiomarkerPipeline:
             assert "gene" in ev
             assert "variant_match_result" in ev
             assert ev["variant_match_result"] in ("exact", "codon", "gene")
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_kras_g12d_nsclc_no_fda_drugs(self):
+        """KRAS G12D in NSCLC should return 0 FDA-approved drugs.
+
+        Unlike G12C (which has sotorasib, adagrasib), G12D has no FDA-approved
+        targeted therapies.
+        """
+        result = await get_variant_insight(
+            gene="KRAS",
+            variant="G12D",
+            tumor_type="NSCLC",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        assert result["variant"]["gene"] == "KRAS"
+
+        fda_biomarker = result.get("fda_biomarker_evidence", [])
+        assert isinstance(fda_biomarker, list)
+
+        # KRAS G12D has no FDA-approved drugs
+        assert len(fda_biomarker) == 0, (
+            f"Expected 0 FDA drugs for KRAS G12D NSCLC, got {len(fda_biomarker)}: "
+            f"{[e.get('drug_name') for e in fda_biomarker]}"
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
