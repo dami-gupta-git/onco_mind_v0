@@ -141,6 +141,67 @@ def count_with_levels(
     return counts
 
 
+def _count_fda_match_levels(
+    filtered_fda: list,
+    tumor_type: str | None = None,
+) -> MatchCounts:
+    """Count FDA evidence by variant match level and tumor match.
+
+    Uses FDABiomarkerEvidence.variant_match_result for locus level and
+    checks tumor_types for tumor matching.
+
+    Args:
+        filtered_fda: List of FDABiomarkerEvidence items (already filtered)
+        tumor_type: The tumor type to match against (optional)
+
+    Returns:
+        MatchCounts with locus and tumor breakdown
+    """
+    counts = MatchCounts()
+
+    for fda_ev in filtered_fda:
+        counts.total += 1
+
+        # Get locus match from variant_match_result (set by get_filtered_fda_evidence)
+        # Values: "exact" -> variant, "codon" -> codon, "gene" -> gene
+        match_result = fda_ev.variant_match_result
+        if match_result == "exact":
+            counts.variant += 1
+        elif match_result == "codon":
+            counts.codon += 1
+        elif match_result == "gene":
+            counts.gene += 1
+        else:
+            # Fallback based on specificity level
+            from oncomind.models.evidence.fda_biomarker import SpecificityLevel
+            if fda_ev.specificity == SpecificityLevel.VARIANT:
+                counts.variant += 1
+            elif fda_ev.specificity == SpecificityLevel.CODON:
+                counts.codon += 1
+            else:
+                counts.gene += 1
+
+        # Tumor matching - check if this FDA indication covers the queried tumor
+        if tumor_type and fda_ev.tumor_types:
+            # Check if any tumor type in the indication matches
+            tumor_matched = any(
+                tumor_types_match(t, tumor_type) or is_pan_cancer_term(t)
+                for t in fda_ev.tumor_types
+            )
+            if tumor_matched:
+                counts.tumor += 1
+            else:
+                # Track which cancers this drug IS approved for
+                for t in fda_ev.tumor_types:
+                    if not is_pan_cancer_term(t):
+                        counts.other_cancers.add(t)
+        elif not tumor_type:
+            # No tumor specified - count all as tumor-matched
+            counts.tumor += 1
+
+    return counts
+
+
 # =============================================================================
 # GAP DETECTION CONTEXT
 # =============================================================================
@@ -410,12 +471,16 @@ def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> 
     ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or fda_count > 0
 
     if fda_count > 0:
-        # FDA approval covers this variant
+        # FDA approval covers this variant - compute match breakdown
+        fda_match_counts = _count_fda_match_levels(filtered_fda, ctx.tumor_type)
+
         basis = f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}"
         ctx.add_well_characterized(
             "clinical actionability",
             basis,
             category=GapCategory.CLINICAL,
+            matches_on=fda_match_counts.matches_on_str,
+            tumor_match=fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None,
         )
     elif evidence.fda_biomarker_evidence:
         # FDA drugs exist but don't match this variant/tumor (filtered count is 0 but raw list has items)
@@ -528,10 +593,15 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
     fda_count = len(filtered_fda)
 
     if fda_count > 0:
+        # Compute match breakdown for FDA evidence
+        fda_match_counts = _count_fda_match_levels(filtered_fda, ctx.tumor_type)
+
         ctx.add_well_characterized(
             "FDA-approved therapy",
             f"{fda_count} FDA",
             category=GapCategory.DRUG_RESPONSE,
+            matches_on=fda_match_counts.matches_on_str,
+            tumor_match=fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None,
         )
     elif not evidence.fda_biomarker_evidence:
         # No FDA-approved therapy at all - this is a significant gap

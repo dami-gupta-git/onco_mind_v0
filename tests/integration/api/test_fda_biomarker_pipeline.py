@@ -186,6 +186,11 @@ class TestFDABiomarkerPipeline:
         # Verify no duplicate drugs after deduplication
         self._check_no_duplicate_drugs(fda_biomarker)
 
+        # BRAF V600E in Melanoma should have 8 FDA-approved drugs
+        assert len(fda_biomarker) == 8, (
+            f"Expected 8 FDA drugs for BRAF V600E Melanoma, got {len(fda_biomarker)}: {drug_names}"
+        )
+
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_any_variant(self):
