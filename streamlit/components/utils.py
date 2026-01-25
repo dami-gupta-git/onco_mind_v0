@@ -257,8 +257,8 @@ def result_to_markdown(result: dict) -> str:
             sig = format_civic_significance(sig_raw)
             locus = item.get('locus_match', '')
             tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
-            # Deduplicate by drug+disease+significance
-            entry_key = (drug.lower(), disease.lower(), sig_raw.lower() if sig_raw else '')
+            # Deduplicate by drug+disease+significance+level (include level to show different evidence strengths)
+            entry_key = (drug.lower(), disease.lower(), sig_raw.lower() if sig_raw else '', level.lower() if level else '')
             if entry_key in seen_entries:
                 continue
             seen_entries.add(entry_key)
@@ -303,21 +303,25 @@ def result_to_markdown(result: dict) -> str:
     trials = result.get('clinical_trials', [])
     if trials:
         lines.append("## Clinical Trials\n")
-        for trial in trials[:5]:
+        lines.append("| NCT ID | Phase | Title | Locus Match | Tumor Match |")
+        lines.append("|--------|-------|-------|-------------|-------------|")
+        for trial in trials[:10]:
             nct = trial.get('nct_id', '')
             title = trial.get('title', '')
             phase = trial.get('phase', '')
-            status = trial.get('status', '')
-            lines.append(f"### [{nct}](https://clinicaltrials.gov/study/{nct})")
-            lines.append(f"**{title}**\n")
-            lines.append(f"- Phase: {phase}")
-            lines.append(f"- Status: {status}\n")
+            locus = trial.get('locus_match', '')
+            tumor = "Yes" if trial.get('tumor_match') else ("No" if trial.get('tumor_match') is False else "")
+            # Truncate long titles for table display
+            title_display = title[:60] + "..." if len(title) > 60 else title
+            nct_link = f"[{nct}](https://clinicaltrials.gov/study/{nct})"
+            lines.append(f"| {nct_link} | {phase} | {title_display} | {locus} | {tumor} |")
+        lines.append("")
 
     # Literature
     articles = result.get('pubmed_articles', [])
     if articles:
         lines.append("## Literature\n")
-        for article in articles[:5]:
+        for article in articles[:10]:
             pmid = article.get('pmid', '')
             title = article.get('title', '')
             year = article.get('year', '')

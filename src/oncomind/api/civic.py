@@ -463,6 +463,7 @@ class CIViCClient:
         variant: str | None = None,
         tumor_type: str | None = None,
         max_results: int = 50,
+        include_gene_level: bool = False,
     ) -> list["CIViCEvidence"]:
         """Fetch CIViC evidence items (EIDs) directly from GraphQL API.
 
@@ -474,6 +475,8 @@ class CIViCClient:
             variant: Optional variant notation (e.g., "L858R")
             tumor_type: Optional tumor type to filter results
             max_results: Maximum number of results to return
+            include_gene_level: If True, also search for "{gene} Mutation" profiles.
+                This is useful for known hotspots where gene-level evidence applies.
 
         Returns:
             List of CIViCEvidence objects
@@ -483,10 +486,6 @@ class CIViCClient:
         client = self._get_client()
 
         # Build search terms - query specific variant and codon-level
-        # Note: We intentionally do NOT search for "{gene} MUTATION" because:
-        # 1. Gene-level evidence adds noise to the UI
-        # 2. The LLM only uses civic_assertions (not civic_evidence)
-        # 3. Gap detector can rely on assertions + VICC for gene-level signals
         search_terms = []
         gene_upper = gene.upper()
 
@@ -501,6 +500,11 @@ class CIViCClient:
                 codon_variant = f"{codon_match.group(1)}{codon_match.group(2)}"
                 if codon_variant != clean_variant:
                     search_terms.append(f"{gene_upper} {codon_variant}")
+
+            # For known hotspots, also query gene-level "{gene} Mutation" profiles
+            # This catches entries like "IDH2 Mutation" for Enasidenib when querying IDH2 R172K
+            if include_gene_level:
+                search_terms.append(f"{gene_upper} Mutation")
         else:
             # Gene-only query (no variant specified)
             search_terms.append(gene_upper)

@@ -15,6 +15,7 @@ from oncomind.config.constants import (
     COOCCURRENCE_STRONG_THRESHOLD_PCT,
     HOTSPOT_ADJACENCY_WINDOW,
     MAX_LITERATURE_RESULTS,
+    CADD_DELETERIOUS_THRESHOLD,
 )
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
@@ -409,6 +410,11 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
         )
         ctx.add_poorly_characterized("pathogenicity predictions")
 
+    # Check for conflicting functional predictions
+    # PolyPhen2 has known limitations for somatic cancer driver mutations, especially RAS/RAF hotspots
+    # Flag when PolyPhen2 says Benign but other predictors indicate pathogenicity
+    _check_conflicting_predictions(evidence, ctx)
+
     # Check for gnomAD population frequency data (informational, not a penalty)
     # If gnomAD AF > 0.01% (0.0001), note that the variant is observed in the general population
     gnomad_af = evidence.functional.gnomad_exome_af or evidence.functional.gnomad_genome_af
@@ -418,6 +424,81 @@ def _check_functional_predictions(evidence: "Evidence", ctx: GapDetectionContext
             "population frequency",
             f"Observed in general population (gnomAD AF: {af_pct:.3f}%)",
             category=GapCategory.PREVALENCE
+        )
+
+
+def _check_conflicting_predictions(evidence: "Evidence", ctx: GapDetectionContext) -> None:
+    """Check for conflicting functional predictions, especially PolyPhen2 vs others.
+
+    PolyPhen2 was trained primarily on germline disease variants and has known
+    limitations for somatic cancer driver mutations, particularly RAS/RAF hotspots.
+    When PolyPhen2 predicts Benign but other tools (AlphaMissense, CADD, SIFT)
+    predict deleterious/pathogenic, flag this discordance.
+
+    This is particularly important for known cancer hotspots where PolyPhen2's
+    benign call could mislead clinical interpretation.
+    """
+    func = evidence.functional
+    polyphen2_pred = func.polyphen2_prediction
+
+    # Only check if PolyPhen2 predicts Benign (B)
+    if not polyphen2_pred or polyphen2_pred.upper() != 'B':
+        return
+
+    # Check if other predictors indicate pathogenicity
+    alphamissense_pathogenic = (
+        func.alphamissense_prediction is not None and
+        func.alphamissense_prediction.upper() in ('P', 'PATHOGENIC')
+    )
+    cadd_deleterious = (
+        func.cadd_score is not None and
+        func.cadd_score > CADD_DELETERIOUS_THRESHOLD
+    )
+    sift_deleterious = (
+        func.sift_prediction is not None and
+        func.sift_prediction.upper() in ('D', 'DELETERIOUS')
+    )
+
+    # Count how many other predictors disagree with PolyPhen2
+    disagreeing_predictors = []
+    if alphamissense_pathogenic:
+        score = func.alphamissense_score
+        disagreeing_predictors.append(f"AlphaMissense={score:.2f}" if score else "AlphaMissense=P")
+    if cadd_deleterious:
+        disagreeing_predictors.append(f"CADD={func.cadd_score:.1f}")
+    if sift_deleterious:
+        disagreeing_predictors.append("SIFT=D")
+
+    # Only flag if at least 2 other predictors disagree, or if it's a known hotspot
+    is_hotspot = evidence.hotspots_evidence and evidence.hotspots_evidence.is_hotspot
+    min_disagreements = 1 if is_hotspot else 2
+
+    if len(disagreeing_predictors) >= min_disagreements:
+        pp2_score = func.polyphen2_score
+        pp2_str = f"PolyPhen2={pp2_score:.2f}" if pp2_score else "PolyPhen2=B"
+
+        # Build description based on whether it's a hotspot
+        if is_hotspot:
+            description = (
+                f"PolyPhen2 predicts Benign ({pp2_str}) but {', '.join(disagreeing_predictors)} "
+                f"indicate pathogenicity — PolyPhen2 has known limitations for cancer hotspot mutations"
+            )
+        else:
+            description = (
+                f"Conflicting predictions: {pp2_str} vs {', '.join(disagreeing_predictors)} — "
+                f"consider functional validation"
+            )
+
+        ctx.add_gap(
+            category=GapCategory.FUNCTIONAL,
+            severity=GapSeverity.MODERATE,  # Conflicting data in specific context
+            description=description,
+            suggested_studies=[
+                "Prioritize AlphaMissense/CADD over PolyPhen2 for cancer variants",
+                "Check ClinVar/COSMIC for clinical evidence",
+                "Consider functional assay if interpretation is critical"
+            ],
+            addressable_with=["Literature review", "ClinVar", "Functional assay"]
         )
 
 

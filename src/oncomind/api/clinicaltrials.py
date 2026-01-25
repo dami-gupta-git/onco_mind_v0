@@ -97,9 +97,26 @@ class ClinicalTrial:
         from oncomind.config.constants import BROAD_VARIANTS
         from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
 
+        import re
         gene_upper = gene.upper() if gene else None
 
-        # Combine all text to search
+        # Build gene pattern for word boundary matching
+        gene_pattern = rf'\b{re.escape(gene_upper)}\b' if gene_upper else None
+
+        # Priority check: gene must appear in title OR eligibility criteria
+        # If gene only appears in summary (background info), it's not a real match
+        # e.g., a trial for "IDH1-Mutated AML" may mention "IDH1 or IDH2" in background
+        # but is only actually studying IDH1
+        title_upper = self.title.upper() if self.title else ""
+        eligibility_upper = self.eligibility_criteria.upper() if self.eligibility_criteria else ""
+        primary_text = f"{title_upper} {eligibility_upper}"
+
+        gene_in_primary = bool(gene_pattern and re.search(gene_pattern, primary_text))
+
+        if not gene_in_primary:
+            return ('none', None)
+
+        # Combine all text for deeper analysis (variant matching, etc.)
         search_texts = [self.title]
         if self.eligibility_criteria:
             search_texts.append(self.eligibility_criteria)
@@ -107,12 +124,6 @@ class ClinicalTrial:
             search_texts.append(self.brief_summary)
 
         full_text = " ".join(search_texts)
-        full_text_upper = full_text.upper()
-
-        gene_found = gene_upper and gene_upper in full_text_upper
-
-        if not gene_found:
-            return ('none', None)
 
         # Use parse_biomarker_specificity to extract what the trial describes
         biomarker_spec = parse_biomarker_specificity(full_text, gene)
@@ -144,9 +155,10 @@ class ClinicalTrial:
                 return ('gene', gene)
 
         # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
+        # Use primary_text (title + eligibility) for consistency
         ambig_variants = [
             (g, v) for (g, v) in BROAD_VARIANTS
-            if g.upper() in full_text_upper and v.upper() in full_text_upper
+            if g.upper() in primary_text and v.upper() in primary_text
         ]
         matched_ambig = next(
             ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
@@ -156,11 +168,8 @@ class ClinicalTrial:
             g, v = matched_ambig
             return ('ambiguous', f"{g} {v}")
 
-        # Gene-level only
-        if gene_found:
-            return ('gene', gene)
-
-        return ('none', None)
+        # Gene-level only (we already verified gene_in_primary above)
+        return ('gene', gene)
 
        
 

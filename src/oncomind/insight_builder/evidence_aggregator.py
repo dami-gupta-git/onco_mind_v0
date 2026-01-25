@@ -628,16 +628,27 @@ class EvidenceAggregator:
         resolved_tumor = await self._resolve_tumor_type(tumor)
         source_timings["OncoTree"] = time.time() - t0
 
+        # Fetch hotspots data early (synchronous - reads from local file)
+        # This is needed before _fetch_all_sources to determine if gene-level CIViC queries
+        # should be included (for known hotspots, gene-level evidence like "IDH2 Mutation" applies)
+        t0 = time.time()
+        hotspots_evidence = self.hotspots_client.fetch_hotspot_evidence(gene, normalized_variant)
+        is_hotspot = hotspots_evidence.is_hotspot if hotspots_evidence else False
+        source_timings["Hotspots"] = time.time() - t0
+
         # Parallel fetch from all sources
         t0 = time.time()
-        results, fetch_timings = await self._fetch_all_sources(gene, normalized_variant, resolved_tumor, tracker)
+        results, fetch_timings = await self._fetch_all_sources(
+            gene, normalized_variant, resolved_tumor, tracker, is_hotspot=is_hotspot
+        )
         source_timings.update(fetch_timings)
         parallel_fetch_time = time.time() - t0
 
         # Process results
         t0 = time.time()
         evidence = self._assemble_evidence(
-            results, variant, normalized_variant, tumor, resolved_tumor, tracker
+            results, variant, normalized_variant, tumor, resolved_tumor, tracker,
+            hotspots_evidence=hotspots_evidence,
         )
         source_timings["assemble"] = time.time() - t0
 
@@ -665,8 +676,17 @@ class EvidenceAggregator:
         variant: str,
         tumor_type: str | None,
         tracker: FetchResults,
+        is_hotspot: bool = False,
     ) -> tuple[tuple, dict[str, float]]:
         """Fetch data from all sources in parallel.
+
+        Args:
+            gene: Gene symbol
+            variant: Normalized variant string
+            tumor_type: Resolved tumor type (or None)
+            tracker: FetchResults tracker
+            is_hotspot: If True, the variant is a known cancer hotspot.
+                Gene-level CIViC evidence will be included for hotspots.
 
         Returns:
             Tuple of (results, timings) where timings maps source name to seconds
@@ -707,6 +727,7 @@ class EvidenceAggregator:
                 return await self.civic_client.fetch_evidence_items(
                     gene=gene, variant=variant, tumor_type=tumor_type,
                     max_results=self.config.max_civic_assertions,
+                    include_gene_level=is_hotspot,
                 )
             return []
 
@@ -850,8 +871,20 @@ class EvidenceAggregator:
         tumor: str | None,
         resolved_tumor: str | None,
         tracker: FetchResults,
+        hotspots_evidence: "HotspotsEvidence | None" = None,
     ) -> Evidence:
-        """Assemble Evidence from fetch results."""
+        """Assemble Evidence from fetch results.
+
+        Args:
+            results: Tuple of results from _fetch_all_sources
+            variant: ParsedVariant object
+            normalized_variant: Normalized variant string
+            tumor: Original tumor type
+            resolved_tumor: Resolved tumor type from OncoTree
+            tracker: FetchResults tracker
+            hotspots_evidence: Pre-fetched hotspot evidence (optional, fetched earlier
+                to determine if gene-level CIViC queries were needed)
+        """
         (
             myvariant_result, cgi_result, vicc_result, civic_assertions_result,
             civic_evidence_result, trials_result, literature_result, cbioportal_result,
@@ -893,8 +926,8 @@ class EvidenceAggregator:
             depmap_result, cell_line_models, gene, normalized_variant, tracker
         )
 
-        # Fetch hotspots data (synchronous - reads from local file)
-        hotspots_evidence = self.hotspots_client.fetch_hotspot_evidence(gene, normalized_variant)
+        # Hotspots evidence was already fetched in build_evidence (before _fetch_all_sources)
+        # to determine if gene-level CIViC queries were needed for hotspot variants
         if hotspots_evidence and hotspots_evidence.has_data():
             tracker.sources_with_data.append("CancerHotspots")
 
