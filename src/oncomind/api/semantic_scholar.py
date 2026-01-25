@@ -798,19 +798,21 @@ class SemanticScholarClient:
         from oncomind.models.evidence.pubmed import PubMedEvidence
 
         # Search both therapeutic (resistance + sensitivity) and general literature in parallel
+        # Fetch extra results when tumor_type is specified since we'll post-filter
+        fetch_multiplier = 3 if tumor_type else 1
         variant_papers, therapeutic_papers = await asyncio.gather(
             self.search_variant_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
-                max_results=max_results,  # Get full count for general search
+                max_results=max_results * fetch_multiplier,
                 year_range=year_range,
             ),
             self.search_therapeutic_literature(
                 gene=gene,
                 variant=variant,
                 tumor_type=tumor_type,
-                max_results=max_results // 2,  # Supplement with therapeutic papers
+                max_results=(max_results // 2) * fetch_multiplier,
                 year_range=year_range,
             ),
         )
@@ -822,6 +824,18 @@ class SemanticScholarClient:
             if paper.paper_id not in seen_ids:
                 seen_ids.add(paper.paper_id)
                 merged_papers.append(paper)
+
+        # Post-filter by tumor type if provided
+        # Semantic Scholar's search is loose, so we filter to papers that actually
+        # mention the tumor type in title or abstract
+        if tumor_type:
+            from oncomind.models.evidence.base import tumor_types_match
+            filtered_papers = []
+            for paper in merged_papers:
+                full_text = f"{paper.title or ''} {paper.abstract or ''}"
+                if tumor_types_match(full_text, tumor_type):
+                    filtered_papers.append(paper)
+            merged_papers = filtered_papers
 
         # Sort by impact score (citations) to surface highest-quality papers
         merged_papers.sort(key=lambda p: p.get_impact_score(), reverse=True)

@@ -4,7 +4,11 @@ import re
 import html as html_module
 import streamlit as st
 
-from oncomind.config.constants import format_civic_significance
+from oncomind.config.constants import (
+    format_civic_significance,
+    CADD_DELETERIOUS_THRESHOLD,
+    GNOMAD_RARE_THRESHOLD,
+)
 
 
 def scrollable_table(markdown_content: str) -> None:
@@ -166,33 +170,75 @@ def result_to_markdown(result: dict) -> str:
             lines.append(f"- **HGVS Protein:** {hgvs['protein']}")
         lines.append("")
 
+    # Functional Scores (from annotations)
+    annotations = result.get('annotations', {})
+    func_rows = []
+    if annotations.get('alphamissense_score') is not None:
+        pred = annotations.get('alphamissense_prediction') or '-'
+        func_rows.append(f"| AlphaMissense | {annotations['alphamissense_score']:.3f} | {pred} |")
+    if annotations.get('cadd_score') is not None:
+        cadd = annotations['cadd_score']
+        pred = 'Deleterious' if cadd > CADD_DELETERIOUS_THRESHOLD else 'Benign'
+        func_rows.append(f"| CADD | {cadd:.1f} | {pred} |")
+    if annotations.get('polyphen2_prediction'):
+        func_rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
+    if annotations.get('gnomad_exome_af') is not None:
+        af = annotations['gnomad_exome_af']
+        freq = f"{af:.2e}" if af < GNOMAD_RARE_THRESHOLD else f"{af:.4f}"
+        pred = 'Rare' if af < GNOMAD_RARE_THRESHOLD else 'Common'
+        func_rows.append(f"| gnomAD AF | {freq} | {pred} |")
+    if annotations.get('snpeff_effect'):
+        func_rows.append(f"| SnpEff | - | {annotations['snpeff_effect']} |")
+    if func_rows:
+        lines.append("## Functional Scores\n")
+        lines.append("| Score | Value | Prediction |")
+        lines.append("|-------|-------|------------|")
+        lines.extend(func_rows)
+        lines.append("")
+
     # FDA Biomarker Evidence (from fda_biomarker_evidence)
+    # Always show this section - it's important to know if there are no FDA approvals
+    # Matches UI: Drug | Gene | Match | Label Level | Variants | Tumors
     fda = result.get('fda_biomarker_evidence', [])
+    lines.append("## FDA Biomarker Evidence\n")
     if fda:
-        lines.append("## FDA Biomarker Evidence\n")
-        lines.append("| Drug | Tumor Types | Match Type |")
-        lines.append("|------|-------------|------------|")
+        lines.append("| Drug | Gene | Match | Label Level | Variants | Tumors |")
+        lines.append("|------|------|-------|-------------|----------|--------|")
         for item in fda:
             drug = item.get('drug_name', '')
+            brand = item.get('brand_name', '')
+            if brand:
+                drug = f"{drug} ({brand})"
             # Include combination partners if present
             combination_partners = item.get('combination_partners', [])
             if combination_partners:
                 partners_str = " + ".join(combination_partners)
                 drug = f"{drug} + {partners_str}"
-            tumor_types = item.get('tumor_types', [])
-            tumor_stage = item.get('tumor_stage', '')
-            # Combine tumor stage with tumor types
-            if tumor_stage and tumor_types:
-                tumors = f"{tumor_stage} {', '.join(tumor_types[:2])}"
-            elif tumor_types:
-                tumors = ", ".join(tumor_types[:2])
+            gene = item.get('gene', '')
+            # Match type from variant_match_result
+            match_type = item.get('variant_match_result', '')
+            if match_type == 'exact':
+                match = '✅ exact'
+            elif match_type == 'codon':
+                match = '🔸 codon'
+            elif match_type == 'gene':
+                match = '🧬 gene'
             else:
-                tumors = ''
-            match_type = item.get('match_type', '')
-            lines.append(f"| {drug} | {tumors} | {match_type} |")
-        lines.append("")
+                match = match_type or ''
+            # Label level from specificity
+            specificity = item.get('specificity', '')
+            # Variants specified in the label
+            specified_variants = item.get('specified_variants', [])
+            variants = ", ".join(specified_variants[:3]) if specified_variants else '-'
+            # Tumor types
+            tumor_types = item.get('tumor_types', [])
+            tumors = ", ".join(tumor_types[:2]) if tumor_types else ''
+            lines.append(f"| {drug} | {gene} | {match} | {specificity} | {variants} | {tumors} |")
+    else:
+        lines.append("None")
+    lines.append("")
 
-    # CIViC Evidence
+    # CIViC Evidence - show all entries including those without drugs (oncogenic, functional, etc.)
     civic = result.get('civic_evidence', [])
     if civic:
         lines.append("## CIViC Evidence\n")
@@ -204,10 +250,7 @@ def result_to_markdown(result: dict) -> str:
             if count >= 10:
                 break
             drugs_list = item.get('drugs', [])
-            # Skip entries without drugs (prognostic/diagnostic evidence)
-            if not drugs_list:
-                continue
-            drug = ", ".join(drugs_list)
+            drug = ", ".join(drugs_list) if drugs_list else "N/A"
             disease = item.get('disease', '')
             level = item.get('evidence_level', '')
             sig_raw = item.get('clinical_significance', '')

@@ -458,7 +458,7 @@ Uses `normalize_drug_name()` to remove salt suffixes (HYDROCHLORIDE, SODIUM). Cr
 ---
 
 **Step 7 - Filter for Display**
-`Evidence.get_filtered_fda_evidence()` → `src/oncomind/models/evidence/evidence.py:278`
+`Evidence.ERBB2 S310F (p.Ser310Phe) in Bladder CancerERBB2 S310F (p.Ser310Phe) in Bladder CancerERBB2 S310F (p.Ser310Phe) in Bladder CancerRBB2 S310F (p.Ser310Phe) in Bladder CancerRBB2 S310F (p.Ser310Phe) in Bladder Cancer()` → `src/oncomind/models/evidence/evidence.py:278`
 Final filtering before UI display. Parameter `include_level="same_codon"` shows related drugs at same codon even if not matching.
 
 ---
