@@ -405,3 +405,114 @@ class TestFDABiomarkerPipeline:
         assert "Val600" in hgvs_protein or "600" in hgvs_protein, (
             f"HGVS protein for V600K should contain Val600, got: {hgvs_protein}"
         )
+
+
+class TestIDH1R132HPipeline:
+    """Full pipeline integration test for IDH1 R132H (p.Arg132His) in Glioma.
+
+    IDH1 R132H is the most common IDH1 mutation in gliomas (~90% of IDH-mutant cases).
+    FDA-approved drugs: Ivosidenib (Tibsovo), Vorasidenib (Voranigo), Olutasidenib.
+    These are approved at the GENE level (any IDH1 mutation), not variant-specific.
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_idh1_r132h_full_pipeline(self):
+        """IDH1 R132H in Glioma - comprehensive pipeline test."""
+        result = await get_variant_insight(
+            gene="IDH1",
+            variant="R132H",
+            tumor_type="Glioma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+        assert result["variant"]["gene"] == "IDH1"
+        assert result["variant"]["variant"] == "R132H"
+
+        # Check FDA biomarker evidence
+        fda_evidence = result.get("fda_biomarker_evidence", [])
+        assert isinstance(fda_evidence, list)
+
+        # IDH1 inhibitors should be found (gene-level approvals)
+        assert len(fda_evidence) >= 1, (
+            f"Expected at least 1 FDA drug for IDH1 R132H, got {len(fda_evidence)}"
+        )
+
+        drug_names = [ev.get("drug_name", "").lower() for ev in fda_evidence]
+        expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
+
+        # At least one IDH1 inhibitor should be found
+        found_idh1_drug = any(
+            any(exp in d for exp in expected_drugs)
+            for d in drug_names
+        )
+        assert found_idh1_drug, (
+            f"Expected at least one IDH1 inhibitor (ivosidenib, vorasidenib, olutasidenib), "
+            f"got: {drug_names}"
+        )
+
+        # All matches should be gene-level (IDH1 drugs are not variant-specific)
+        for ev in fda_evidence:
+            assert ev.get("variant_match_result") == "gene", (
+                f"IDH1 approvals are gene-level, got: {ev.get('variant_match_result')} "
+                f"for {ev.get('drug_name')}"
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_idh1_r132h_hgvs_notation(self):
+        """IDH1 R132H should have correct HGVS protein notation (p.Arg132His)."""
+        result = await get_variant_insight(
+            gene="IDH1",
+            variant="R132H",
+            tumor_type="Glioma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+
+        # Check HGVS notation
+        hgvs = result.get("hgvs", {})
+        assert isinstance(hgvs, dict)
+
+        # HGVS protein should be p.Arg132His
+        hgvs_protein = hgvs.get("protein")
+        assert hgvs_protein is not None, "HGVS protein notation should be present"
+        assert hgvs_protein.startswith("p."), f"Expected p. prefix, got: {hgvs_protein}"
+
+        # Should contain Arg132 (the reference amino acid at position 132)
+        assert "Arg132" in hgvs_protein or "132" in hgvs_protein, (
+            f"HGVS protein for R132H should contain Arg132, got: {hgvs_protein}"
+        )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_idh1_r132h_fda_drug_count(self):
+        """IDH1 R132H should have at least 1 FDA-approved drug."""
+        result = await get_variant_insight(
+            gene="IDH1",
+            variant="R132H",
+            tumor_type="Glioma",
+            enable_llm=False,
+            enable_literature=False,
+        )
+
+        assert "error" not in result
+
+        fda_evidence = result.get("fda_biomarker_evidence", [])
+
+        # Should have at least 1 FDA-approved drug
+        assert len(fda_evidence) >= 1, (
+            f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
+        )
+
+        # Check structure of each entry
+        for ev in fda_evidence:
+            assert "drug_name" in ev
+            assert "gene" in ev
+            assert ev.get("gene") == "IDH1"
+            assert "variant_match_result" in ev
+            assert "variant_match_reason" in ev

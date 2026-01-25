@@ -923,7 +923,7 @@ class EvidenceAggregator:
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
 
         # Build Evidence
-        return Evidence(
+        evidence = Evidence(
             identifiers=VariantIdentifiers(**identifiers_data),
             functional=functional_scores,
             context=VariantContext(
@@ -952,6 +952,8 @@ class EvidenceAggregator:
             hotspots_evidence=hotspots_evidence,
             literature_searched=self.config.enable_literature,
         )
+
+        return evidence
 
     async def build_evidences(
         self,

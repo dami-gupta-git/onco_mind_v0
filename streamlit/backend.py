@@ -227,7 +227,6 @@ def _build_response(result) -> Dict[str, Any]:
     therapeutic_list = evidence.get_therapeutic_evidence()
 
     # Filter FDA biomarker evidence for display (already deduplicated in evidence_aggregator)
-    # This also sets evidence.filtered_fda_biomarker_count for gap_detector
     # Use include_level="same_codon" to show related drugs at same codon (even if not matching)
     filtered_fda_evidence = evidence.get_filtered_fda_evidence(
         queried_gene,

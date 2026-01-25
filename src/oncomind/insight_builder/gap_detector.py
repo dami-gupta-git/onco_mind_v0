@@ -397,16 +397,19 @@ def _check_gene_mechanism(evidence: "Evidence", ctx: GapDetectionContext) -> Non
 def _check_clinical_evidence(evidence: "Evidence", ctx: GapDetectionContext) -> None:
     """Check for FDA-approved therapies using fda_biomarker_evidence.
 
-    Uses evidence.filtered_fda_biomarker_count (pre-computed by backend.py) to ensure
-    gap analysis shows the same count as the FDA Biomarker Evidence table.
+    Calls get_filtered_fda_evidence() to filter FDA drugs by gene/variant/tumor match.
     """
-    # Use pre-computed count from backend.py if available
-    # This ensures gap analysis matches the FDA Biomarker Evidence table exactly
-    fda_count = evidence.filtered_fda_biomarker_count
+    # Filter FDA evidence by gene/variant/tumor to get matching drugs
+    filtered_fda = evidence.get_filtered_fda_evidence(
+        queried_gene=ctx.gene,
+        queried_variant=ctx.variant,
+        queried_tumor=ctx.tumor_type,
+    )
+    fda_count = len(filtered_fda)
 
-    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or (fda_count is not None and fda_count > 0)
+    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or fda_count > 0
 
-    if fda_count is not None and fda_count > 0:
+    if fda_count > 0:
         # FDA approval covers this variant
         basis = f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}"
         ctx.add_well_characterized(
@@ -508,18 +511,23 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
     """Check for FDA-approved therapies and drug response data.
 
     This function checks two separate things:
-    1. FDA-approved therapies - uses pre-computed filtered_fda_biomarker_count from backend.py
+    1. FDA-approved therapies - filtered by gene/variant/tumor match
     2. Drug response data - from VICC, CGI (for general "well characterized" tracking)
 
     A gap is added if there's no FDA-approved therapy for this variant.
     """
     # =========================================================================
-    # 1. Check for FDA-approved therapies (uses pre-computed count from backend.py)
+    # 1. Check for FDA-approved therapies
     # =========================================================================
-    # Use pre-computed count to ensure gap analysis matches the FDA Biomarker Evidence table exactly
-    fda_count = evidence.filtered_fda_biomarker_count
+    # Filter FDA evidence by gene/variant/tumor to get matching drugs
+    filtered_fda = evidence.get_filtered_fda_evidence(
+        queried_gene=ctx.gene,
+        queried_variant=ctx.variant,
+        queried_tumor=ctx.tumor_type,
+    )
+    fda_count = len(filtered_fda)
 
-    if fda_count is not None and fda_count > 0:
+    if fda_count > 0:
         ctx.add_well_characterized(
             "FDA-approved therapy",
             f"{fda_count} FDA",
@@ -546,7 +554,7 @@ def _check_drug_response(evidence: "Evidence", ctx: GapDetectionContext) -> None
     drug_response_counts = MatchCounts().add(cgi_counts).add(vicc_counts)
 
     # Set context flag for any drug data (used by other gap checks)
-    ctx.has_drug_data = drug_response_counts.total > 0 or (fda_count is not None and fda_count > 0)
+    ctx.has_drug_data = drug_response_counts.total > 0 or fda_count > 0
 
     # Handle preclinical/early phase biomarkers separately
     _check_preclinical_biomarkers(evidence, ctx)

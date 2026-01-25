@@ -702,3 +702,63 @@ class TestFDAApprovalGap:
         )
 
         # This confirms the gap is correctly based on FDA data, not VICC
+
+    @pytest.mark.asyncio
+    async def test_idh1_r132h_glioma_gap_detection(self):
+        """IDH1 R132H in Glioma should have FDA-approved therapy and good evidence quality.
+
+        IDH1 R132H is the most common IDH1 mutation in gliomas (~90% of cases).
+        FDA-approved drugs include Ivosidenib, Vorasidenib, Olutasidenib.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("IDH1 R132H", tumor_type="Glioma")
+
+        # Basic validation
+        assert result.evidence.identifiers.gene == "IDH1"
+        assert result.evidence.identifiers.variant == "R132H"
+
+        # Check FDA biomarker evidence exists
+        fda_evidence = result.evidence.fda_biomarker_evidence
+        assert len(fda_evidence) >= 1, (
+            f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
+        )
+
+        # Verify at least one IDH1 inhibitor is found
+        drug_names = [ev.drug_name.lower() for ev in fda_evidence if ev.drug_name]
+        expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
+        found_idh1_drug = any(
+            any(exp in d for exp in expected_drugs)
+            for d in drug_names
+        )
+        assert found_idh1_drug, (
+            f"Expected at least one IDH1 inhibitor, got: {drug_names}"
+        )
+
+        # Check gap detection
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # IDH1 R132H is well-studied - should have comprehensive or moderate evidence
+        assert gaps.overall_evidence_quality in ("comprehensive", "moderate"), (
+            f"IDH1 R132H should have comprehensive/moderate evidence, "
+            f"got: {gaps.overall_evidence_quality}"
+        )
+
+        # Should have "FDA-approved therapy" in well_characterized
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "fda-approved therapy" in well_char_lower, (
+            f"IDH1 R132H should have 'FDA-approved therapy' well-characterized. "
+            f"Got: {gaps.well_characterized}"
+        )
+
+        # Should NOT have "No FDA-approved therapy" gap
+        drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
+        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+        assert len(fda_gap) == 0, (
+            f"IDH1 R132H should NOT have 'No FDA-approved therapy' gap. "
+            f"Got: {[g.description for g in fda_gap]}"
+        )
+
+

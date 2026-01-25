@@ -256,12 +256,6 @@ class Evidence(BaseModel):
         None, description="Detected evidence gaps for research prioritization"
     )
 
-    # Pre-computed FDA biomarker count (set by backend after filtering for display)
-    # This ensures gap analysis uses the same count as the FDA Biomarker Evidence table
-    filtered_fda_biomarker_count: int | None = Field(
-        None, description="Count of FDA biomarker evidence after tumor/variant filtering for display"
-    )
-
     # Configuration flags (track what was searched)
     literature_searched: bool = Field(
         False, description="Whether literature search was enabled/performed"
@@ -291,8 +285,6 @@ class Evidence(BaseModel):
         - Not REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
         - Tumor matches the query (if tumor is specified)
         - Variant matches via matches_variant() (exact, codon, or gene level)
-
-        Also sets self.filtered_fda_biomarker_count for use by gap_detector.
 
         Args:
             queried_gene: Gene symbol being queried (e.g., "BRAF")
@@ -358,12 +350,6 @@ class Evidence(BaseModel):
             e.variant_match_reason = match_result["reason"]
 
             filtered.append(e)
-
-        # Set the filtered count for gap_detector (only count actual matches)
-        self.filtered_fda_biomarker_count = len([
-            e for e in filtered
-            if e.variant_match_result in ("exact", "codon", "gene")
-        ])
 
         return filtered
 

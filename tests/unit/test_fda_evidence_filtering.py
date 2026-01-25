@@ -266,8 +266,8 @@ class TestGetFilteredFDAEvidence:
         # Should only get one entry since the combination is the same
         assert len(filtered) == 1
 
-    def test_sets_filtered_count(self):
-        """filtered_fda_biomarker_count is set after filtering."""
+    def test_returns_correct_count(self):
+        """get_filtered_fda_evidence returns list with correct count."""
         evidence = create_evidence()
         evidence.fda_biomarker_evidence = [
             self._create_fda_evidence(
@@ -282,9 +282,9 @@ class TestGetFilteredFDAEvidence:
             ),
         ]
 
-        evidence.get_filtered_fda_evidence("BRAF", "V600E")
+        filtered = evidence.get_filtered_fda_evidence("BRAF", "V600E")
 
-        assert evidence.filtered_fda_biomarker_count == 2
+        assert len(filtered) == 2
 
     def test_normalizes_three_letter_variant(self):
         """Three-letter variant notation (p.Leu858Arg) matches single-letter (L858R)."""
@@ -342,7 +342,6 @@ class TestGetFilteredFDAEvidence:
         filtered = evidence.get_filtered_fda_evidence("BRAF", "V600E")
 
         assert filtered == []
-        assert evidence.filtered_fda_biomarker_count == 0
 
 
 class TestToShortForm:

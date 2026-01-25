@@ -89,7 +89,7 @@ def mock_evidence():
     evidence.civic_assertions = []
     evidence.civic_evidence = []
     evidence.fda_biomarker_evidence = []
-    evidence.filtered_fda_biomarker_count = 0  # Pre-computed count from backend.py
+    evidence.get_filtered_fda_evidence = MagicMock(return_value=[])  # Returns empty list by default
     evidence.vicc_evidence = []
     evidence.cgi_biomarkers = []
     evidence.preclinical_biomarkers = []
@@ -485,7 +485,7 @@ class TestCheckClinicalEvidence:
         fda_ev.locus_match = "variant"  # Used by count_with_levels
         fda_ev.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda_ev]
-        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[fda_ev])
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -496,7 +496,7 @@ class TestCheckClinicalEvidence:
     def test_with_civic_assertions_sets_has_clinical(self, mock_evidence, base_context):
         """CIViC assertions should set has_clinical=True."""
         mock_evidence.civic_assertions = [MagicMock(), MagicMock()]
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -519,7 +519,7 @@ class TestCheckClinicalEvidence:
         fda_ev.locus_match = "gene"  # Used by count_with_levels
         fda_ev.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda_ev]
-        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[fda_ev])
         mock_evidence.context.tumor_type = "NSCLC"
 
         _check_clinical_evidence(mock_evidence, base_context)
@@ -532,7 +532,7 @@ class TestCheckClinicalEvidence:
         """Missing clinical evidence should add a CRITICAL gap."""
         # fda_biomarker_evidence is already empty from fixture
         # civic_assertions is already empty from fixture
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_clinical_evidence(mock_evidence, base_context)
 
@@ -724,7 +724,7 @@ class TestCheckDrugResponse:
     def test_with_cgi_biomarkers(self, mock_evidence, base_context):
         """CGI biomarkers should set has_drug_data flag (shown in Therapies tab, not Gap Analysis)."""
         mock_evidence.cgi_biomarkers = [MagicMock()]
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -735,7 +735,7 @@ class TestCheckDrugResponse:
     def test_with_vicc_evidence(self, mock_evidence, base_context):
         """VICC evidence should mark as well-characterized."""
         mock_evidence.vicc_evidence = [MagicMock()]
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -767,7 +767,7 @@ class TestCheckDrugResponse:
             drug_sensitivities=[drug_sensitivity],
             cell_line_models=[lung_cell_line],
         )
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -775,7 +775,7 @@ class TestCheckDrugResponse:
 
     def test_no_drug_data_adds_gap(self, mock_evidence, base_context):
         """Missing drug data should add a SIGNIFICANT gap."""
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -816,7 +816,7 @@ class TestCheckDrugResponse:
         fda.locus_match = "variant"  # Used by count_with_levels
         fda.tumor_match = True  # Used by count_with_levels
         mock_evidence.fda_biomarker_evidence = [fda]
-        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[fda])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -833,7 +833,7 @@ class TestCheckDrugResponse:
         assert base_context.has_drug_data is True
 
     def test_drug_response_with_fda_count(self, mock_evidence):
-        """Drug response uses pre-computed filtered_fda_biomarker_count from backend."""
+        """Drug response uses get_filtered_fda_evidence() to count FDA drugs."""
         # CGI/VICC data (used for has_drug_data flag, not displayed in gap analysis)
         cgi_match = MagicMock()
         cgi_match.locus_variant_match = None
@@ -845,8 +845,8 @@ class TestCheckDrugResponse:
         vicc1.disease = "Lung adenocarcinoma"
         mock_evidence.vicc_evidence = [vicc1]
 
-        # Pre-computed FDA count from backend.py
-        mock_evidence.filtered_fda_biomarker_count = 3
+        # Mock get_filtered_fda_evidence to return 3 FDA drugs
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[MagicMock(), MagicMock(), MagicMock()])
 
         ctx = GapDetectionContext(
             gene="EGFR",
@@ -858,7 +858,7 @@ class TestCheckDrugResponse:
 
         _check_drug_response(mock_evidence, ctx)
 
-        # FDA-approved therapy should show the pre-computed count
+        # FDA-approved therapy should show the count
         fda_resp = [w for w in ctx.well_characterized_detailed if "fda-approved" in w.aspect.lower()]
         assert len(fda_resp) == 1
         assert "3 FDA" in fda_resp[0].basis
@@ -884,8 +884,8 @@ class TestCheckDrugResponse:
         vicc_gene.disease = None
         mock_evidence.vicc_evidence = [vicc_gene]
 
-        # Pre-computed FDA count is 0 (no matching FDA approvals)
-        mock_evidence.filtered_fda_biomarker_count = 0
+        # Mock get_filtered_fda_evidence to return empty (no matching FDA approvals)
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -902,7 +902,7 @@ class TestCheckDrugResponse:
         # Set up preclinical biomarkers (should be excluded from Drug Response)
         mock_evidence.preclinical_biomarkers = [MagicMock(), MagicMock()]
         mock_evidence.early_phase_biomarkers = [MagicMock()]
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         _check_drug_response(mock_evidence, base_context)
 
@@ -1838,7 +1838,7 @@ class TestDetectEvidenceGapsIntegration:
         fda_ev.locus_variant_match = None
         fda_ev.requirement = BiomarkerRequirement.REQUIRED_POSITIVE
         mock_evidence.fda_biomarker_evidence = [fda_ev]
-        mock_evidence.filtered_fda_biomarker_count = 1  # Pre-computed by backend.py
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[fda_ev])
 
         cgi_biomarker = MagicMock()
         cgi_biomarker.tumor_type = "Melanoma"
@@ -1859,7 +1859,7 @@ class TestDetectEvidenceGapsIntegration:
         mock_evidence.identifiers.gene = "UNKNOWNGENE"
         mock_evidence.identifiers.variant = "X999Y"
         mock_evidence.literature_searched = True
-        mock_evidence.filtered_fda_biomarker_count = 0  # No FDA matches
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
 
         # Clear all functional predictions and context to simulate unknown variant
         mock_evidence.functional.alphamissense_score = None
@@ -1879,7 +1879,7 @@ class TestDetectEvidenceGapsIntegration:
 
     def test_returns_evidence_gaps_object(self, mock_evidence):
         """Should return EvidenceGaps object with all fields."""
-        mock_evidence.filtered_fda_biomarker_count = 0  # Set for test consistency
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
         gaps = detect_evidence_gaps(mock_evidence)
 
         assert hasattr(gaps, 'gaps')
