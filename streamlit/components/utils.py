@@ -196,48 +196,6 @@ def result_to_markdown(result: dict) -> str:
         lines.extend(func_rows)
         lines.append("")
 
-    # FDA Biomarker Evidence (from fda_biomarker_evidence)
-    # Always show this section - it's important to know if there are no FDA approvals
-    # Matches UI: Drug | Gene | Match | Label Level | Variants | Tumors
-    fda = result.get('fda_biomarker_evidence', [])
-    lines.append("## FDA Biomarker Evidence\n")
-    if fda:
-        lines.append("| Drug | Gene | Match | Label Level | Variants | Tumors |")
-        lines.append("|------|------|-------|-------------|----------|--------|")
-        for item in fda:
-            drug = item.get('drug_name', '')
-            brand = item.get('brand_name', '')
-            if brand:
-                drug = f"{drug} ({brand})"
-            # Include combination partners if present
-            combination_partners = item.get('combination_partners', [])
-            if combination_partners:
-                partners_str = " + ".join(combination_partners)
-                drug = f"{drug} + {partners_str}"
-            gene = item.get('gene', '')
-            # Match type from variant_match_result
-            match_type = item.get('variant_match_result', '')
-            if match_type == 'exact':
-                match = '✅ exact'
-            elif match_type == 'codon':
-                match = '🔸 codon'
-            elif match_type == 'gene':
-                match = '🧬 gene'
-            else:
-                match = match_type or ''
-            # Label level from specificity
-            specificity = item.get('specificity', '')
-            # Variants specified in the label
-            specified_variants = item.get('specified_variants', [])
-            variants = ", ".join(specified_variants[:3]) if specified_variants else '-'
-            # Tumor types
-            tumor_types = item.get('tumor_types', [])
-            tumors = ", ".join(tumor_types[:2]) if tumor_types else ''
-            lines.append(f"| {drug} | {gene} | {match} | {specificity} | {variants} | {tumors} |")
-    else:
-        lines.append("None")
-    lines.append("")
-
     # CIViC Evidence - show all entries including those without drugs (oncogenic, functional, etc.)
     civic = result.get('civic_evidence', [])
     if civic:
@@ -304,6 +262,68 @@ def result_to_markdown(result: dict) -> str:
             lines.append(f"| {drug} | {assoc} | {level} | {locus} | {tumor} |")
         lines.append("")
 
+    # FDA Approvals (from fda_biomarker_evidence)
+    # Always show this section - it's important to know if there are no FDA approvals
+    # Matches UI: Drug | Gene | Match | Label Level | Variants | Tumors
+    fda = result.get('fda_biomarker_evidence', [])
+    lines.append("## FDA Approvals\n")
+    if fda:
+        lines.append("| Drug | Gene | Match | Label Level | Variants | Tumors |")
+        lines.append("|------|------|-------|-------------|----------|--------|")
+        for item in fda:
+            drug = item.get('drug_name', '')
+            brand = item.get('brand_name', '')
+            if brand:
+                drug = f"{drug} ({brand})"
+            # Include combination partners if present
+            combination_partners = item.get('combination_partners', [])
+            if combination_partners:
+                partners_str = " + ".join(combination_partners)
+                drug = f"{drug} + {partners_str}"
+            gene = item.get('gene', '')
+            # Match type from variant_match_result
+            match_type = item.get('variant_match_result', '')
+            if match_type == 'exact':
+                match = '✅ exact'
+            elif match_type == 'codon':
+                match = '🔸 codon'
+            elif match_type == 'gene':
+                match = '🧬 gene'
+            else:
+                match = match_type or ''
+            # Label level from specificity
+            specificity = item.get('specificity', '')
+            # Variants specified in the label
+            specified_variants = item.get('specified_variants', [])
+            variants = ", ".join(specified_variants[:3]) if specified_variants else '-'
+            # Tumor types
+            tumor_types = item.get('tumor_types', [])
+            tumors = ", ".join(tumor_types[:2]) if tumor_types else ''
+            lines.append(f"| {drug} | {gene} | {match} | {specificity} | {variants} | {tumors} |")
+    else:
+        lines.append("None")
+    lines.append("")
+
+    # ClinVar Evidence
+    clinvar_entries = result.get('clinvar_entries', [])
+    clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
+    if clinvar_entries or clinvar_sig:
+        lines.append("## ClinVar\n")
+        if clinvar_sig:
+            lines.append(f"**Clinical Significance:** {clinvar_sig}\n")
+        if clinvar_entries:
+            lines.append("| Variation ID | Clinical Significance | Conditions | Review Status |")
+            lines.append("|--------------|----------------------|------------|---------------|")
+            for entry in clinvar_entries[:10]:
+                var_id = entry.get('variation_id', '')
+                sig = entry.get('clinical_significance', '')
+                conditions = entry.get('conditions', [])
+                conditions_str = ", ".join(conditions[:2]) if conditions else '-'
+                review = entry.get('review_status', '')
+                var_link = f"[{var_id}](https://www.ncbi.nlm.nih.gov/clinvar/variation/{var_id}/)" if var_id else '-'
+                lines.append(f"| {var_link} | {sig} | {conditions_str} | {review} |")
+            lines.append("")
+
     # Clinical Trials
     trials = result.get('clinical_trials', [])
     if trials:
@@ -321,6 +341,95 @@ def result_to_markdown(result: dict) -> str:
             nct_link = f"[{nct}](https://clinicaltrials.gov/study/{nct})"
             lines.append(f"| {nct_link} | {phase} | {title_display} | {locus} | {tumor} |")
         lines.append("")
+
+    # cBioPortal Prevalence
+    cbio = result.get('cbioportal_evidence')
+    if cbio:
+        lines.append("## cBioPortal Prevalence\n")
+        study_name = cbio.get('study_name', '')
+        tumor_type = cbio.get('tumor_type', '')
+        total = cbio.get('total_samples', 0)
+        gene_prev = cbio.get('gene_prevalence_pct')
+        var_prev = cbio.get('variant_prevalence_pct')
+        gene_samples = cbio.get('samples_with_gene_mutation', 0)
+        var_samples = cbio.get('samples_with_exact_variant', 0)
+
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        if study_name:
+            lines.append(f"| Study | {study_name} |")
+        if tumor_type:
+            lines.append(f"| Tumor Type | {tumor_type} |")
+        if total:
+            lines.append(f"| Total Samples | {total:,} |")
+        if gene_prev is not None:
+            lines.append(f"| Gene Mutation Prevalence | {gene_prev:.1f}% ({gene_samples:,} samples) |")
+        if var_prev is not None:
+            lines.append(f"| Exact Variant Prevalence | {var_prev:.1f}% ({var_samples:,} samples) |")
+
+        # Co-occurring mutations (first 3)
+        co_occurring = cbio.get('co_occurring', [])
+        if co_occurring:
+            co_str = ", ".join([f"{c.get('gene', '')} ({c.get('percentage', 0):.0f}%)" for c in co_occurring[:3]])
+            lines.append(f"| Co-occurring Mutations | {co_str} |")
+
+        # Mutually exclusive (first 3)
+        mutually_exclusive = cbio.get('mutually_exclusive', [])
+        if mutually_exclusive:
+            me_str = ", ".join([f"{m.get('gene', '')}" for m in mutually_exclusive[:3]])
+            lines.append(f"| Mutually Exclusive | {me_str} |")
+
+        lines.append("")
+
+    # DepMap Evidence
+    depmap = result.get('depmap_evidence')
+    if depmap:
+        lines.append("## DepMap\n")
+        lines.append("| Metric | Value |")
+        lines.append("|--------|-------|")
+        gene_dep = depmap.get('gene_dependency')
+        if gene_dep:
+            mean_score = gene_dep.get('mean_dependency_score')
+            if mean_score is not None:
+                lines.append(f"| Mean Dependency Score | {mean_score:.3f} |")
+            dep_pct = gene_dep.get('dependency_pct')
+            if dep_pct is not None:
+                lines.append(f"| Dependency % | {dep_pct:.1f}% |")
+            n_dep = gene_dep.get('n_dependent_lines', 0)
+            n_total = gene_dep.get('n_total_lines', 0)
+            if n_total > 0:
+                lines.append(f"| Dependent Cell Lines | {n_dep} / {n_total} |")
+        is_essential = depmap.get('is_essential')
+        if is_essential is not None:
+            lines.append(f"| Essential Gene | {'Yes' if is_essential else 'No'} |")
+        n_screened = depmap.get('n_cell_lines_screened', 0)
+        if n_screened > 0:
+            lines.append(f"| Cell Lines Screened | {n_screened} |")
+        lines.append("")
+
+    # Hotspots Evidence
+    hotspots = result.get('hotspots_evidence')
+    if hotspots:
+        is_hotspot = hotspots.get('is_hotspot', False)
+        is_adjacent = hotspots.get('is_adjacent_to_hotspot', False)
+        if is_hotspot or is_adjacent:
+            lines.append("## Cancer Hotspots\n")
+            lines.append("| Metric | Value |")
+            lines.append("|--------|-------|")
+            if is_hotspot:
+                lines.append("| Hotspot Status | **Yes** |")
+                hotspot_data = hotspots.get('hotspot', {})
+                if hotspot_data:
+                    residue = hotspot_data.get('residue', '')
+                    total_count = hotspot_data.get('total_count', 0)
+                    if residue:
+                        lines.append(f"| Residue | {residue} |")
+                    if total_count > 0:
+                        lines.append(f"| Total Samples | {total_count:,} |")
+            elif is_adjacent:
+                adj_dist = hotspots.get('adjacent_distance')
+                lines.append(f"| Hotspot Status | Adjacent ({adj_dist} codons away) |")
+            lines.append("")
 
     # Literature
     articles = result.get('pubmed_articles', [])
@@ -360,14 +469,6 @@ def result_to_markdown(result: dict) -> str:
                     match_info.append(tumor)
                 match_str = f" ({', '.join(match_info)})" if match_info else ""
                 lines.append(f"- **{aspect}**: {basis}{match_str}")
-            lines.append("")
-
-        # Poorly characterized aspects
-        poorly_characterized = evidence_gaps.get('poorly_characterized', [])
-        if poorly_characterized:
-            lines.append("### Needs More Research\n")
-            for pc in poorly_characterized:
-                lines.append(f"- {pc}")
             lines.append("")
 
         # Gaps by severity
