@@ -68,7 +68,7 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 ![Title](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/title.png)
 
 ### Gap Analysis
-![Gap Analysis](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/gap_large.png)
+![Gap Analysis](https://huggingface.co/spaces/damigupta/onco_mind/resolve/main/images/gap_large2.png)
 
 <details>
 
