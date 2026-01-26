@@ -10,22 +10,28 @@ from unittest.mock import MagicMock, PropertyMock
 from oncomind.insight_builder.gap_detector import (
     GapDetectionContext,
     detect_evidence_gaps,
-    _check_hotspot_context,
-    _check_functional_predictions,
-    _check_gene_mechanism,
-    _check_clinical_evidence,
-    _check_tumor_type_evidence,
-    _check_drug_response,
-    _check_resistance_mechanisms,
-    _check_discordant_evidence,
-    _check_prevalence,
-    _check_clinical_trials,
-    _check_preclinical_models,
-    _check_literature_depth,
-    _check_validation_gap,
-    _has_pathogenic_signal,
-    _check_tumor_specific_evidence,
-    _compute_overall_quality,
+)
+from oncomind.insight_builder.gap_detection.checks import (
+    check_hotspot_context as _check_hotspot_context,
+    check_functional_predictions as _check_functional_predictions,
+    check_gene_mechanism as _check_gene_mechanism,
+    check_clinical_evidence as _check_clinical_evidence,
+    check_tumor_type_evidence as _check_tumor_type_evidence,
+    check_tumor_specific_evidence as _check_tumor_specific_evidence,
+    check_drug_response as _check_drug_response,
+    check_resistance_mechanisms as _check_resistance_mechanisms,
+    check_prevalence as _check_prevalence,
+    check_clinical_trials as _check_clinical_trials,
+    check_preclinical_models as _check_preclinical_models,
+    check_literature_depth as _check_literature_depth,
+    check_validation_gap as _check_validation_gap,
+)
+from oncomind.insight_builder.gap_detection.discordance import (
+    check_discordant_evidence as _check_discordant_evidence,
+)
+from oncomind.insight_builder.gap_detection.helpers import (
+    has_pathogenic_signal as _has_pathogenic_signal,
+    compute_overall_quality as _compute_overall_quality,
 )
 from oncomind.models.extracted.evidence_gaps import GapCategory, GapSeverity, EvidenceGap
 from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge, LitDrugResistance

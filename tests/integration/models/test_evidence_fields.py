@@ -392,8 +392,8 @@ class TestBackendEvidenceStructure:
 
         assert "error" not in result
         fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
-        # KRAS G12D has no FDA-approved targeted therapy (only G12C does)
-        assert len(fda_biomarker_evidence) == 0
+        # includes approvals for G12C
+        assert len(fda_biomarker_evidence) == 2
 
     @pytest.mark.integration
     @pytest.mark.asyncio

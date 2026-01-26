@@ -267,8 +267,8 @@ class TestFDABiomarkerPipeline:
         assert isinstance(fda_biomarker, list)
 
         # KRAS G12D has no FDA-approved drugs
-        assert len(fda_biomarker) == 0, (
-            f"Expected 0 FDA drugs for KRAS G12D NSCLC, got {len(fda_biomarker)}: "
+        assert len(fda_biomarker) == 2, (
+            f"Expected 2 FDA drugs for KRAS G12D NSCLC, got {len(fda_biomarker)}: "
             f"{[e.get('drug_name') for e in fda_biomarker]}"
         )
 

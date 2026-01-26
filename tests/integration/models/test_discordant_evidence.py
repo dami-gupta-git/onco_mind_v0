@@ -9,7 +9,7 @@ Tests the detection of conflicting evidence between different sources:
 
 import pytest
 
-from oncomind.insight_builder.gap_detector import _detect_discordant_evidence_internal
+from oncomind.insight_builder.gap_detection.discordance import detect_discordant_evidence_internal as _detect_discordant_evidence_internal
 
 
 class TestDiscordantEvidenceDetection:

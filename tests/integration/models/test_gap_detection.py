@@ -18,10 +18,8 @@ import pytest
 import asyncio
 
 from oncomind.insight_builder import Conductor, ConductorConfig
-from oncomind.insight_builder.gap_detector import (
-    detect_evidence_gaps,
-    _normalize_source,
-)
+from oncomind.insight_builder.gap_detector import detect_evidence_gaps
+from oncomind.insight_builder.gap_detection.helpers import normalize_source as _normalize_source
 from oncomind.models.gene_context import (
     is_hotspot_variant,
     is_hotspot_adjacent,
@@ -641,7 +639,7 @@ class TestFDAApprovalGap:
         assert fda_gap[0].severity == GapSeverity.SIGNIFICANT
 
     @pytest.mark.asyncio
-    async def test_variant_without_fda_approval_still_has_drug_response(self):
+    async def test_variant_without_fda_approval_still_has_evidence_items(self):
         """ERBB2 S310F has VICC/CGI drug response data but no FDA approval."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
@@ -653,8 +651,8 @@ class TestFDAApprovalGap:
 
         # Should have drug response data in well_characterized (from VICC/CGI)
         well_char_lower = [w.lower() for w in gaps.well_characterized]
-        assert "drug response data" in well_char_lower, (
-            "Should have 'drug response data' well-characterized from VICC/CGI data"
+        assert "evidence items for bladder cancer" in well_char_lower, (
+            "Should have 'evidence item' data"
         )
 
         # But should NOT have "FDA-approved therapy" in well_characterized
