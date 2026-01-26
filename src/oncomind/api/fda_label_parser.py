@@ -612,7 +612,13 @@ class FDALabelParser:
                 partner = re.sub(r'^(?:and|or|with)\s+', '', partner)
                 partner = re.sub(r'\s+(?:for|in|after|until).*$', '', partner)
                 if partner and len(partner) > 2:
-                    partners.append(partner)
+                    # Split compound partners like "palbociclib and fulvestrant" into separate drugs
+                    # Handle both "and" and "," separators
+                    sub_partners = re.split(r'\s+and\s+|,\s*', partner)
+                    for sub in sub_partners:
+                        sub = sub.strip()
+                        if sub and len(sub) > 2:
+                            partners.append(sub)
         return list(set(partners))  # Deduplicate
 
     def _extract_line_of_therapy(self, text: str) -> Optional[str]:

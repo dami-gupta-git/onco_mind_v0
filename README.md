@@ -106,7 +106,7 @@ OncoMind is a research intelligence platform that identifies evidence gaps in ca
 
 This is a proof-of-concept, not production-ready software. Known issues include:
 
-- **Validatin**: Needs systematic validation, at the technical level, as well as will as by a SME expert.
+- **Validation**: Needs systematic validation, at the technical level, as well as will as by a SME expert.
 - **SNPs and small indels only**: Fusions, amplifications, and copy-number variants are not yet supported.
 - **Negation detection:** FDA label parsing may miss negative indicators ("not demonstrated", "not approved")
 - **Edge cases:** Rare variant-disease pairings may have inconsistent evidence grading
@@ -356,6 +356,34 @@ mypy src/oncomind
 ruff check src/oncomind
 ruff format src/oncomind
 ```
+
+---
+
+## Validation
+
+| Variant       | Tumor Type | Source | Expected Data | OncoMind Match | Error Description |
+|---------------|------------|--------|---------------|----------------|-------------------|
+| BRAF V600E    | Melanoma   | FDA Labels | Trametinib Mekinist, Trametinib + Dabrafenib Mekinist + Tafinlar, Encorafenib + Binimetinib Braftovi + Mektovi, Vemurafenib Zelboraf, Cobimetinib + Vemurafenib Cotellic + Zelboraf, Dabrafenib Tafinlar, Atezolizumab + Cobimetinib + Vemurafenib Tecentriq + Cotellic + Zelboraf, Atezolizumab and Hyaluronidase-tqjs + Cobimetinib + Vemurafenib Tecentriq Hybreza + Cotellic + Zelboraf | ✓              |                   |
+| BRAF V600E    | Melanoma   | CIViC | Level A, 5 evidence items | ✓              |                   |
+| BRAF V600E    | Melanoma   | ClinVar | Pathogenic | ✓              |                   |
+| BRAF V600E    | Melanoma   | cBioPortal | Melanoma (MSK, Clin Cancer Res 2021) | ✓              |                   |
+| EGFR L858R    | NSCLC      | FDA Labels | Gefitinib Iressa, Erlotinib Tarceva, Afatinib Gilotrif, Dacomitinib Vizimpro, Osimertinib Tagrisso, Osimertinib + pemetrexed and platinum-based chemotherapy Tagrisso, Amivantamab Rybrevant + lazertinib Lazcluze, Amivantamab Rybrevant + carboplatin + pemetrexed, Amivantamab and hyaluronidase-lpuj Rybrevant Faspro | ✓              |                   |
+| EGFR L858R    | NSCLC      | CIViC | Level A, 14 evidence items | ✓              |                   |
+| EGFR L858R    | NSCLC      | DepMap | Gene essentiality - EGFR is not essential | ✓              |                   |
+| KRAS G12C     | NSCLC      | FDA Labels | Sotorasib, adagrasib | ✓              |                   |
+| KRAS G12C     | NSCLC      | ClinVar | Pathogenic | ✓              |                   |
+| PIK3CA H1047R | Breast     | FDA Labels | Inavolisib + palbociclib + fulvestrant, Alpelisib + fulvestrant, Capivasertib + fulvestrant | ✓              |                   |
+| PIK3CA H1047R | Breast     | CIViC | 3 Level A variant specific items | ✓              |                   |
+| IDH1 R132H    | Glioma     | FDA Labels | Vorasidenib (Voranigo) | ✓              |                   |
+| IDH1 R132H    | Glioma     | ClinVar | Pathogenic | ✓              |                   |
+| IDH1 R132H    | Glioma     | Hotspots | This variant is at known cancer hotspot | ✓              |                   |
+| ERBB2 S310F   | Breast     | CIViC | Level B, 3 evidence items | ✓              |                   |
+
+
+**Summary:**
+
+- Total checks: 15
+- Matches: 15 (100%)
 
 ---
 
