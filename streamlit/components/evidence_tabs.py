@@ -385,12 +385,31 @@ def render_vicc_tab(vicc: list, tumor_display: str | None = None):
                 pub_url = v.get('publication_url')
                 if isinstance(pub_url, list) and pub_url:
                     pub_url = pub_url[0]
-                source_link = f"[{source}]({pub_url})" if pub_url else source
+                # Handle gated/missing URLs - NCCN requires login, some sources have no URL
+                # Provide DailyMed fallback for the first drug if available
+                drugs_list = v.get('drugs', [])
+                if pub_url and 'nccn.org' in pub_url:
+                    # NCCN URLs require professional membership - use DailyMed instead
+                    first_drug = drugs_list[0] if drugs_list else None
+                    if first_drug:
+                        dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={first_drug}"
+                        source_link = f"[{source}]({dailymed_url})"
+                    else:
+                        source_link = f"{source} (NCCN)"
+                elif pub_url:
+                    source_link = f"[{source}]({pub_url})"
+                else:
+                    # No URL - try DailyMed fallback
+                    first_drug = drugs_list[0] if drugs_list else None
+                    if first_drug:
+                        dailymed_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={first_drug}"
+                        source_link = f"[{source}]({dailymed_url})"
+                    else:
+                        source_link = source
                 locus_match = v.get('locus_match', '')
                 match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "")
                 tumor_match = v.get('tumor_match')
                 tumor_match_cell = "✅ Yes" if tumor_match else "🔸 Other"
-                drugs_list = v.get('drugs', [])
                 drugs = ", ".join(drugs_list) or "N/A"
                 drugs = drugs[:30] if len(drugs) > 30 else drugs
                 # Handle response_type

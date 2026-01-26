@@ -227,10 +227,16 @@ class VICCClient:
     ) -> str:
         """Build a Lucene query string for the VICC API.
 
+        NOTE: tumor_type is intentionally NOT included in the Lucene query.
+        VICC's Lucene index requires exact phrase matches (e.g., "non-small cell
+        lung carcinoma (disease)"), which makes query-time tumor filtering unreliable.
+        Instead, we fetch all results for gene+variant and filter by tumor type
+        post-fetch using tumor_types_match() in _fetch_with_query().
+
         Args:
             gene: Gene symbol (e.g., "BRAF")
             variant: Optional variant notation (e.g., "V600E")
-            tumor_type: Optional tumor type (e.g., "breast cancer")
+            tumor_type: Ignored - tumor filtering is done post-fetch
 
         Returns:
             Lucene query string
@@ -243,12 +249,9 @@ class VICCClient:
             clean_variant = variant.replace("p.", "").upper()
             query_parts.append(clean_variant)
 
-        if tumor_type:
-            # Normalize tumor type for query
-            # Use quotes for multi-word tumor types to ensure phrase matching
-            tumor_normalized = tumor_type.strip().lower()
-            # VICC uses disease field - add tumor type as quoted phrase
-            query_parts.append(f'"{tumor_normalized}"')
+        # NOTE: Do NOT add tumor_type to query - VICC Lucene requires exact matches
+        # which breaks for variations like "NSCLC" vs "non-small cell lung carcinoma (disease)"
+        # Post-fetch filtering via tumor_types_match() handles this properly
 
         return " AND ".join(query_parts)
 
@@ -257,19 +260,18 @@ class VICCClient:
     ) -> str:
         """Build a Lucene query for exon-level search.
 
+        NOTE: tumor_type is intentionally NOT included - see _build_query() docstring.
+
         Args:
             gene: Gene symbol (e.g., "KIT")
             exon: Exon number (e.g., 11)
-            tumor_type: Optional tumor type (e.g., "GIST")
+            tumor_type: Ignored - tumor filtering is done post-fetch
 
         Returns:
             Lucene query string for exon-level search
         """
-        query = f'{gene.upper()} AND "exon {exon}"'
-        if tumor_type:
-            tumor_normalized = tumor_type.strip().lower()
-            query += f' AND "{tumor_normalized}"'
-        return query
+        # NOTE: Do NOT add tumor_type to query - post-fetch filtering handles it
+        return f'{gene.upper()} AND "exon {exon}"'
 
     def _determine_locus_match(
         self,
@@ -443,14 +445,17 @@ class VICCClient:
             query: Lucene query string
             variant: Optional variant for filtering compound mutations
             tumor_type: Optional tumor type filter
-            max_results: Maximum results
+            max_results: Maximum results after filtering
 
         Returns:
-            List of VICCAssociation objects
+            List of VICCAssociation objects (up to max_results)
         """
         client = self._get_client()
         url = f"{self.BASE_URL}/associations"
-        params = {"q": query, "size": max_results}
+        # Always request DEFAULT_SIZE from API because many results will be filtered out
+        # (CIViC and MolecularMatch are excluded; we get CIViC directly)
+        # Then limit to max_results after filtering
+        params = {"q": query, "size": self.DEFAULT_SIZE}
 
         try:
             response = await client.get(url, params=params)
@@ -488,6 +493,10 @@ class VICCClient:
                 continue
 
             associations.append(assoc)
+
+            # Stop once we have enough results
+            if len(associations) >= max_results:
+                break
 
         return associations
 

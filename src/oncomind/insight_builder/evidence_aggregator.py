@@ -726,7 +726,7 @@ class EvidenceAggregator:
             if self.civic_client:
                 return await self.civic_client.fetch_evidence_items(
                     gene=gene, variant=variant, tumor_type=tumor_type,
-                    max_results=self.config.max_civic_assertions,
+                    max_per_level=self.config.max_civic_assertions,
                     include_gene_level=is_hotspot,
                 )
             return []

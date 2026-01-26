@@ -1,11 +1,14 @@
 """Batch upload component for OncoMind."""
 
 import asyncio
+import io
 import json
+import zipfile
 import pandas as pd
 import streamlit as st
 
 from oncomind.config.constants import LLM_DEFAULT_TEMPERATURE
+from .utils import result_to_markdown
 
 
 def render_batch_tab(batch_get_variant_insights, models: dict[str, str]) -> None:
@@ -40,7 +43,7 @@ def render_batch_tab(batch_get_variant_insights, models: dict[str, str]) -> None
         else:
             model_name_batch = list(models.keys())[0]
 
-    uploaded_file = st.file_uploader("Upload CSV", type=['csv'])
+    uploaded_file = st.file_uploader("Upload CSV", type=['csv'], help="CSV files only. Must contain 'gene' and 'variant' columns.")
     if uploaded_file:
         df = pd.read_csv(uploaded_file)
         st.dataframe(df.head(), width="stretch")
@@ -134,12 +137,24 @@ def _render_batch_results() -> None:
 
     batch_footer_cols = st.columns(3)
     with batch_footer_cols[0]:
+        # Create ZIP file with markdown reports
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for r in st.session_state.batch_results:
+                if 'error' not in r:
+                    gene = r['variant']['gene']
+                    variant = r['variant']['variant']
+                    filename = f"{gene}_{variant}_report.md"
+                    markdown_content = result_to_markdown(r)
+                    zf.writestr(filename, markdown_content)
+        zip_buffer.seek(0)
+
         st.download_button(
-            "📥 Download Results CSV",
-            st.session_state.batch_df.to_csv(index=False),
-            "batch_results.csv",
-            "text/csv",
-            key="download_batch_csv"
+            "📥 Download Reports (ZIP)",
+            zip_buffer.getvalue(),
+            "batch_reports.zip",
+            "application/zip",
+            key="download_batch_zip"
         )
     with batch_footer_cols[1]:
         st.download_button(

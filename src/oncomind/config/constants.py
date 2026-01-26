@@ -1146,7 +1146,7 @@ MAX_VICC_RESULTS = 500
 # These should be filtered out when displaying VICC to avoid double-counting
 # VICC aggregates from: CIViC, CGI, JAX-CKB, OncoKB, PMKB, MolecularMatch
 VICC_DUPLICATE_SOURCES: set[str] = {"civic", "cgi"}
-MAX_CIVIC_ASSERTIONS = 500
+MAX_CIVIC_ASSERTIONS = 50  # Per evidence level (A, B, C, D, E)
 MAX_CLINICAL_TRIALS = 30
 MAX_LITERATURE_RESULTS = 30
 

@@ -462,7 +462,7 @@ class CIViCClient:
         gene: str,
         variant: str | None = None,
         tumor_type: str | None = None,
-        max_results: int = 50,
+        max_per_level: int = 20,
         include_gene_level: bool = False,
     ) -> list["CIViCEvidence"]:
         """Fetch CIViC evidence items (EIDs) directly from GraphQL API.
@@ -470,16 +470,20 @@ class CIViCClient:
         Evidence items are the individual pieces of evidence (linked to publications)
         that support clinical interpretations. Each has a unique EID.
 
+        Results are grouped by evidence level (A, B, C, D, E) and limited to
+        max_per_level items per level to ensure higher-quality evidence is not
+        truncated by lower-quality items.
+
         Args:
             gene: Gene symbol (e.g., "EGFR")
             variant: Optional variant notation (e.g., "L858R")
             tumor_type: Optional tumor type to filter results
-            max_results: Maximum number of results to return
+            max_per_level: Maximum number of results per evidence level (default 20)
             include_gene_level: If True, also search for "{gene} Mutation" profiles.
                 This is useful for known hotspots where gene-level evidence applies.
 
         Returns:
-            List of CIViCEvidence objects
+            List of CIViCEvidence objects, sorted by evidence level (A first)
         """
         from oncomind.models.evidence.civic import CIViCEvidence
 
@@ -515,7 +519,7 @@ class CIViCClient:
         for search_term in search_terms:
             variables = {
                 "molecularProfileName": search_term,
-                "first": max_results * 2,
+                "first": 500,  # Fetch all available, will limit per-level later
             }
 
             try:
@@ -617,10 +621,23 @@ class CIViCClient:
                         cancer_type_match=cancer_type_match,
                     ))
 
-                    if len(evidence_list) >= max_results:
-                        return evidence_list
+        # Apply per-level limiting: take up to max_per_level items per evidence level
+        # Evidence levels in CIViC: A (highest), B, C, D, E (lowest)
+        level_order = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
+        level_counts: dict[str | None, int] = {}
+        filtered_evidence = []
 
-        return evidence_list
+        # Sort by evidence level (A first) to ensure consistent ordering
+        evidence_list.sort(key=lambda e: level_order.get(e.evidence_level, 5))
+
+        for evidence in evidence_list:
+            level = evidence.evidence_level
+            current_count = level_counts.get(level, 0)
+            if current_count < max_per_level:
+                filtered_evidence.append(evidence)
+                level_counts[level] = current_count + 1
+
+        return filtered_evidence
 
     async def fetch_assertion_evidence(
         self,

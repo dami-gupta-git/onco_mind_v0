@@ -273,3 +273,343 @@ class TestCLIModes:
             assert result.exit_code == 0
             # Annotation mode should complete quickly
             assert elapsed < 60, f"Annotation mode took {elapsed:.1f}s"
+
+
+# =============================================================================
+# README EXAMPLE TESTS - Validate actual output values
+# =============================================================================
+
+class TestReadmeExamples:
+    """Tests for README CLI examples with value validation.
+
+    These tests validate that the CLI examples in the README produce
+    expected outputs with specific values, not just 'is not None'.
+
+    README examples:
+        mind insight BRAF V600E --tumor Melanoma
+        mind insight EGFR L858R -t NSCLC --lit
+        mind insight MAP2K1 P124L -t Melanoma --llm
+        mind insight KRAS G12D -t CRC --full
+    """
+
+    @pytest.mark.integration
+    def test_braf_v600e_melanoma_has_fda_drugs(self):
+        """BRAF V600E in Melanoma should return FDA-approved drugs."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--tumor", "Melanoma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+            assert output_path.exists()
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check FDA biomarker evidence exists
+            fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
+            assert len(fda_evidence) > 0, "BRAF V600E should have FDA approvals"
+
+            # Check specific drugs are present (vemurafenib, dabrafenib are key ones)
+            drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
+            assert any("vemurafenib" in d or "zelboraf" in d for d in drug_names), \
+                f"Should have vemurafenib, got: {drug_names}"
+            assert any("dabrafenib" in d or "tafinlar" in d for d in drug_names), \
+                f"Should have dabrafenib, got: {drug_names}"
+
+    @pytest.mark.integration
+    def test_braf_v600e_melanoma_is_hotspot(self):
+        """BRAF V600E should be recognized as a cancer hotspot."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--tumor", "Melanoma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check hotspot status
+            hotspots = data["evidence"].get("hotspots_evidence")
+            assert hotspots is not None, "Should have hotspots_evidence data"
+            assert hotspots.get("is_hotspot") is True, "BRAF V600E should be a hotspot"
+
+    @pytest.mark.integration
+    def test_braf_v600e_melanoma_evidence_quality(self):
+        """BRAF V600E in Melanoma should have comprehensive/moderate evidence quality."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--tumor", "Melanoma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check evidence quality
+            gaps = data["evidence"].get("evidence_gaps", {})
+            quality = gaps.get("overall_evidence_quality")
+            assert quality in ("comprehensive", "moderate"), \
+                f"BRAF V600E should have high evidence quality, got: {quality}"
+
+    @pytest.mark.integration
+    def test_egfr_l858r_nsclc_has_fda_drugs(self):
+        """EGFR L858R in NSCLC should return FDA-approved EGFR inhibitors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "EGFR", "L858R",
+                "-t", "NSCLC",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check FDA biomarker evidence
+            fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
+            assert len(fda_evidence) > 0, "EGFR L858R should have FDA approvals"
+
+            # Check for key EGFR inhibitors
+            drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
+            # Should have osimertinib (Tagrisso) - the most important one
+            assert any("osimertinib" in d or "tagrisso" in d for d in drug_names), \
+                f"Should have osimertinib, got: {drug_names}"
+
+    @pytest.mark.integration
+    def test_egfr_l858r_nsclc_has_civic_evidence(self):
+        """EGFR L858R in NSCLC should have CIViC evidence."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "EGFR", "L858R",
+                "-t", "NSCLC",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check CIViC evidence
+            civic_evidence = data["evidence"].get("civic_evidence", [])
+            assert len(civic_evidence) > 0, "EGFR L858R should have CIViC evidence"
+
+            # Should have sensitivity evidence for EGFR TKIs
+            sensitivity_evidence = [
+                e for e in civic_evidence
+                if e.get("is_sensitivity") is True
+            ]
+            assert len(sensitivity_evidence) > 0, \
+                "EGFR L858R should have sensitivity evidence in CIViC"
+
+    @pytest.mark.integration
+    def test_kras_g12c_nsclc_has_sotorasib(self):
+        """KRAS G12C in NSCLC should return sotorasib (Lumakras)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "KRAS", "G12C",
+                "-t", "NSCLC",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check FDA biomarker evidence for sotorasib
+            fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
+            drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
+
+            assert any("sotorasib" in d or "lumakras" in d for d in drug_names), \
+                f"KRAS G12C should have sotorasib, got: {drug_names}"
+
+    @pytest.mark.integration
+    def test_kras_g12c_is_hotspot(self):
+        """KRAS G12C should be recognized as a cancer hotspot."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "KRAS", "G12C",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            hotspots = data["evidence"].get("hotspots_evidence")
+            assert hotspots is not None, "Should have hotspots_evidence data"
+            assert hotspots.get("is_hotspot") is True, "KRAS G12C should be a hotspot"
+
+    @pytest.mark.integration
+    def test_kras_g12d_is_hotspot(self):
+        """KRAS G12D should be recognized as a cancer hotspot."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "KRAS", "G12D",
+                "-t", "Colorectal",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            hotspots = data["evidence"].get("hotspots_evidence")
+            assert hotspots is not None, "Should have hotspots_evidence data"
+            assert hotspots.get("is_hotspot") is True, "KRAS G12D should be a hotspot"
+
+    @pytest.mark.integration
+    def test_pik3ca_h1047r_has_alpelisib(self):
+        """PIK3CA H1047R should return alpelisib (Piqray)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "PIK3CA", "H1047R",
+                "-t", "Breast",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check FDA biomarker evidence for alpelisib
+            fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
+            drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
+
+            assert any("alpelisib" in d or "piqray" in d for d in drug_names), \
+                f"PIK3CA H1047R should have alpelisib, got: {drug_names}"
+
+    @pytest.mark.integration
+    def test_idh1_r132h_has_ivosidenib(self):
+        """IDH1 R132H should return ivosidenib (Tibsovo)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "IDH1", "R132H",
+                "-t", "Glioma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            # Check FDA biomarker evidence for ivosidenib
+            fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
+            drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
+
+            assert any("ivosidenib" in d or "tibsovo" in d for d in drug_names), \
+                f"IDH1 R132H should have ivosidenib, got: {drug_names}"
+
+    @pytest.mark.integration
+    def test_output_has_gap_analysis(self):
+        """Output should include gap analysis with specific fields."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--tumor", "Melanoma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            gaps = data["evidence"].get("evidence_gaps", {})
+
+            # Should have key gap analysis fields
+            assert "overall_evidence_quality" in gaps
+            assert "research_priority" in gaps
+            assert "well_characterized" in gaps
+            assert "well_characterized_detailed" in gaps
+            assert "gaps" in gaps
+
+            # well_characterized should have specific items for BRAF V600E
+            wc = gaps.get("well_characterized", [])
+            assert len(wc) > 0, "BRAF V600E should have well-characterized aspects"
+
+            # Should include hotspot
+            wc_lower = [w.lower() for w in wc]
+            assert any("hotspot" in w for w in wc_lower), \
+                f"Should have hotspot in well_characterized: {wc}"
+
+    @pytest.mark.integration
+    def test_output_has_depmap_data(self):
+        """Output should include DepMap data for cancer genes."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            depmap = data["evidence"].get("depmap_evidence")
+            # DepMap data may or may not be available depending on API
+            if depmap:
+                # If present, should have gene dependency info
+                assert "gene_dependency" in depmap or "cell_line_models" in depmap
+
+    @pytest.mark.integration
+    def test_output_has_cbioportal_prevalence(self):
+        """Output should include cBioPortal prevalence data."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "result.json"
+
+            result = runner.invoke(app, [
+                "insight", "BRAF", "V600E",
+                "--tumor", "Melanoma",
+                "--output", str(output_path)
+            ])
+
+            assert result.exit_code == 0
+
+            with open(output_path) as f:
+                data = json.load(f)
+
+            cbioportal = data["evidence"].get("cbioportal_prevalence")
+            # cBioPortal data may or may not be available
+            if cbioportal:
+                assert "study_id" in cbioportal or "total_samples" in cbioportal

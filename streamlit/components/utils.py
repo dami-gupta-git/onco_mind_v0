@@ -196,17 +196,42 @@ def result_to_markdown(result: dict) -> str:
         lines.extend(func_rows)
         lines.append("")
 
-    # CIViC Evidence - show all entries including those without drugs (oncogenic, functional, etc.)
+    # CIViC Evidence - show all Level A entries, limit others to 15
     civic = result.get('civic_evidence', [])
     if civic:
         lines.append("## CIViC Evidence\n")
-        lines.append("| Drug | Disease | Evidence Level | Significance | Locus Match | Tumor Match |")
-        lines.append("|------|---------|----------------|--------------|-------------|-------------|")
+        lines.append("| EID | Drug | Disease | Evidence Level | Significance | Locus Match | Tumor Match |")
+        lines.append("|-----|------|---------|----------------|--------------|-------------|-------------|")
         seen_entries = set()
-        count = 0
-        for item in civic:
-            if count >= 10:
+        # Separate Level A from others
+        level_a_items = [item for item in civic if (item.get('evidence_level') or '').upper() == 'A']
+        other_items = [item for item in civic if (item.get('evidence_level') or '').upper() != 'A']
+
+        # Process all Level A items (no limit, deduplicate by EID)
+        seen_eids = set()
+        for item in level_a_items:
+            evidence_id = item.get('evidence_id')
+            if evidence_id in seen_eids:
+                continue
+            seen_eids.add(evidence_id)
+            eid = f"EID{evidence_id}" if evidence_id else ""
+            drugs_list = item.get('drugs', [])
+            drug = ", ".join(drugs_list) if drugs_list else "N/A"
+            disease = item.get('disease', '')
+            level = "A"
+            sig_raw = item.get('clinical_significance', '')
+            sig = format_civic_significance(sig_raw)
+            locus = item.get('locus_match', '')
+            tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
+            lines.append(f"| {eid} | {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
+
+        # Process other items (limit to 15)
+        other_count = 0
+        for item in other_items:
+            if other_count >= 15:
                 break
+            evidence_id = item.get('evidence_id')
+            eid = f"EID{evidence_id}" if evidence_id else ""
             drugs_list = item.get('drugs', [])
             drug = ", ".join(drugs_list) if drugs_list else "N/A"
             disease = item.get('disease', '')
@@ -215,7 +240,7 @@ def result_to_markdown(result: dict) -> str:
             sig = format_civic_significance(sig_raw)
             locus = item.get('locus_match', '')
             tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
-            # Deduplicate by drug+disease+significance+level (include level to show different evidence strengths)
+            # Deduplicate by drug+disease+significance+level
             entry_key = (
                 drug.lower() if drug else '',
                 disease.lower() if disease else '',
@@ -225,8 +250,8 @@ def result_to_markdown(result: dict) -> str:
             if entry_key in seen_entries:
                 continue
             seen_entries.add(entry_key)
-            lines.append(f"| {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
-            count += 1
+            lines.append(f"| {eid} | {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
+            other_count += 1
         lines.append("")
 
     # VICC Evidence
@@ -235,7 +260,7 @@ def result_to_markdown(result: dict) -> str:
         lines.append("## VICC MetaKB Evidence\n")
         lines.append("| Source | Drug | Disease | Response | Locus Match | Tumor Match |")
         lines.append("|--------|------|---------|----------|-------------|-------------|")
-        for item in vicc[:10]:
+        for item in vicc[:15]:
             source = item.get('source', '')
             # drugs is a list, join them
             drugs_list = item.get('drugs', [])
@@ -253,7 +278,7 @@ def result_to_markdown(result: dict) -> str:
         lines.append("## CGI Biomarkers\n")
         lines.append("| Drug | Association | Evidence Level | Locus Match | Tumor Match |")
         lines.append("|------|-------------|----------------|-------------|-------------|")
-        for item in cgi[:10]:
+        for item in cgi[:15]:
             drug = item.get('drug', '')
             assoc = item.get('association', '')
             level = item.get('evidence_level', '')
@@ -314,7 +339,7 @@ def result_to_markdown(result: dict) -> str:
         if clinvar_entries:
             lines.append("| Variation ID | Clinical Significance | Conditions | Review Status |")
             lines.append("|--------------|----------------------|------------|---------------|")
-            for entry in clinvar_entries[:10]:
+            for entry in clinvar_entries[:15]:
                 var_id = entry.get('variation_id', '')
                 sig = entry.get('clinical_significance', '')
                 conditions = entry.get('conditions', [])
@@ -330,7 +355,7 @@ def result_to_markdown(result: dict) -> str:
         lines.append("## Clinical Trials\n")
         lines.append("| NCT ID | Phase | Title | Locus Match | Tumor Match |")
         lines.append("|--------|-------|-------|-------------|-------------|")
-        for trial in trials[:10]:
+        for trial in trials[:15]:
             nct = trial.get('nct_id', '')
             title = trial.get('title', '')
             phase = trial.get('phase', '')

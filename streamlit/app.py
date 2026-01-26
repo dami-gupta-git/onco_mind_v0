@@ -104,6 +104,8 @@ EXAMPLE_VARIANTS = {
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
     "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
     "BRAF V600K - Colorectal": ("BRAF", "V600E", "Colorectal"),
+    "EGFR L858R - NSCLC": ("EGFR", "L858R", "NSCLC"),
+    "KRAS G12C - NSCLC": ("KRAS", "G12C", "NSCLC"),
 }
 
 # Initialize session state for persisting results
