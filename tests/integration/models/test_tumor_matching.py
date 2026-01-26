@@ -170,7 +170,7 @@ class TestDrugResponseTumorMatch:
 
     @pytest.mark.asyncio
     async def test_egfr_l858r_drug_response_has_tumor_match(self):
-        """EGFR L858R in NSCLC should have drug response with tumor_match info."""
+        """EGFR L858R in NSCLC should have FDA-approved therapy with tumor_match info."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
@@ -179,27 +179,28 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response data in well_characterized_detailed
-        drug_resp = [
+        # Find FDA-approved therapy in well_characterized_detailed
+        # Note: CGI/VICC "drug response data" is shown in Therapies tab, not Gap Analysis
+        fda_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response data" in item.aspect.lower()
+            if "fda-approved therapy" in item.aspect.lower()
         ]
 
-        # Should have drug response data
-        assert len(drug_resp) > 0, "Should have drug response data in well_characterized"
+        # Should have FDA-approved therapy
+        assert len(fda_resp) > 0, "Should have FDA-approved therapy in well_characterized"
 
         # Should have tumor_match field
-        drug_resp_item = drug_resp[0]
-        assert drug_resp_item.tumor_match is not None, \
-            f"Drug response should have tumor_match, got: {drug_resp_item}"
+        fda_resp_item = fda_resp[0]
+        assert fda_resp_item.tumor_match is not None, \
+            f"FDA-approved therapy should have tumor_match, got: {fda_resp_item}"
 
-        # Should show "X tumor" count since EGFR L858R has NSCLC-specific data
-        assert "tumor" in drug_resp_item.tumor_match, \
-            f"tumor_match should contain 'tumor', got: {drug_resp_item.tumor_match}"
+        # Should show "X tumor" count since EGFR L858R has NSCLC-specific FDA approvals
+        assert "tumor" in fda_resp_item.tumor_match, \
+            f"tumor_match should contain 'tumor', got: {fda_resp_item.tumor_match}"
 
     @pytest.mark.asyncio
     async def test_egfr_l858r_drug_response_has_matches_on(self):
-        """EGFR L858R drug response should have matches_on locus levels."""
+        """EGFR L858R FDA-approved therapy should have matches_on locus levels."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
@@ -208,27 +209,27 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response data in well_characterized_detailed
-        drug_resp = [
+        # Find FDA-approved therapy in well_characterized_detailed
+        fda_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response data" in item.aspect.lower()
+            if "fda-approved therapy" in item.aspect.lower()
         ]
 
-        assert len(drug_resp) > 0, "Should have drug response data in well_characterized"
+        assert len(fda_resp) > 0, "Should have FDA-approved therapy in well_characterized"
 
-        drug_resp_item = drug_resp[0]
-        assert drug_resp_item.matches_on is not None, \
-            f"Drug response data should have matches_on, got: {drug_resp_item}"
+        fda_resp_item = fda_resp[0]
+        assert fda_resp_item.matches_on is not None, \
+            f"FDA-approved therapy should have matches_on, got: {fda_resp_item}"
 
         # matches_on should contain locus level info (variant, codon, or gene)
-        has_level = any(level in drug_resp_item.matches_on
+        has_level = any(level in fda_resp_item.matches_on
                        for level in ["variant", "codon", "gene"])
         assert has_level, \
-            f"matches_on should contain locus level, got: {drug_resp_item.matches_on}"
+            f"matches_on should contain locus level, got: {fda_resp_item.matches_on}"
 
     @pytest.mark.asyncio
     async def test_drug_response_other_tumor_shows_other_count(self):
-        """Drug response for variant in different tumor should show 'other' count."""
+        """FDA-approved therapy for variant in different tumor should show 'other' count."""
         config = ConductorConfig(enable_llm=False, enable_literature=False)
         async with Conductor(config) as conductor:
             # BRAF V600E is primarily Melanoma/Colorectal - query in Pancreatic
@@ -238,15 +239,15 @@ class TestDrugResponseTumorMatch:
         if gaps is None:
             gaps = result.evidence.compute_evidence_gaps()
 
-        # Find drug response data
-        drug_resp = [
+        # Find FDA-approved therapy
+        fda_resp = [
             item for item in gaps.well_characterized_detailed
-            if "drug response data" in item.aspect.lower()
+            if "fda-approved therapy" in item.aspect.lower()
         ]
 
-        if drug_resp:
-            # If there's drug response data but not for Pancreatic, should show "other"
-            tumor_match = drug_resp[0].tumor_match
+        if fda_resp:
+            # If there's FDA-approved therapy but not for Pancreatic, should show "other"
+            tumor_match = fda_resp[0].tumor_match
             if tumor_match:
                 # May have mostly "other" entries since BRAF V600E approvals are for Melanoma
                 assert "tumor" in tumor_match or "other" in tumor_match, \
