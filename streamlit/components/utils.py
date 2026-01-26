@@ -196,64 +196,6 @@ def result_to_markdown(result: dict) -> str:
         lines.extend(func_rows)
         lines.append("")
 
-    # Gap Analysis
-    evidence_gaps = result.get('evidence_gaps', {})
-    if evidence_gaps:
-        lines.append("## Evidence Gap Analysis\n")
-
-        overall_quality = evidence_gaps.get('overall_quality', 'unknown')
-        research_priority = evidence_gaps.get('research_priority', 'unknown')
-        lines.append(f"**Evidence Quality:** {overall_quality.upper()}")
-        lines.append(f"**Research Priority:** {research_priority.upper()}\n")
-
-        # Well-characterized aspects
-        well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
-        if well_characterized_detailed:
-            lines.append("### Well Characterized\n")
-            for wc in well_characterized_detailed:
-                aspect = wc.get('aspect', '')
-                basis = wc.get('basis', '')
-                matches = wc.get('matches_on', '')
-                tumor = wc.get('tumor_match', '')
-                match_info = []
-                if matches:
-                    match_info.append(matches)
-                if tumor:
-                    match_info.append(tumor)
-                match_str = f" ({', '.join(match_info)})" if match_info else ""
-                lines.append(f"- **{aspect}**: {basis}{match_str}")
-            lines.append("")
-
-        # Poorly characterized aspects
-        poorly_characterized = evidence_gaps.get('poorly_characterized', [])
-        if poorly_characterized:
-            lines.append("### Needs More Research\n")
-            for pc in poorly_characterized:
-                lines.append(f"- {pc}")
-            lines.append("")
-
-        # Gaps by severity
-        gaps = evidence_gaps.get('gaps', [])
-        if gaps:
-            # Group gaps by severity
-            severity_order = ['critical', 'high', 'significant', 'moderate', 'minor', 'informational']
-            gaps_by_severity = {}
-            for gap in gaps:
-                sev = gap.get('severity', 'unknown')
-                if sev not in gaps_by_severity:
-                    gaps_by_severity[sev] = []
-                gaps_by_severity[sev].append(gap)
-
-            lines.append("### Evidence Gaps\n")
-            for sev in severity_order:
-                if sev in gaps_by_severity:
-                    severity_label = sev.upper()
-                    for gap in gaps_by_severity[sev]:
-                        desc = gap.get('description', '')
-                        category = gap.get('category', '')
-                        lines.append(f"- **[{severity_label}]** ({category}) {desc}")
-            lines.append("")
-
     # FDA Biomarker Evidence (from fda_biomarker_evidence)
     # Always show this section - it's important to know if there are no FDA approvals
     # Matches UI: Drug | Gene | Match | Label Level | Variants | Tumors
@@ -391,6 +333,65 @@ def result_to_markdown(result: dict) -> str:
             lines.append(f"- [{title}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/) ({year})")
         lines.append("")
 
+    # Gap Analysis (just above LLM Synthesis)
+    evidence_gaps = result.get('evidence_gaps', {})
+    if evidence_gaps:
+        lines.append("## Evidence Gap Analysis\n")
+        lines.append("*What's known vs. unknown about this variant — identifying opportunities for further research.*\n")
+
+        overall_quality = evidence_gaps.get('overall_quality', 'unknown')
+        research_priority = evidence_gaps.get('research_priority', 'unknown')
+        lines.append(f"**Evidence Quality:** {overall_quality.upper()}")
+        lines.append(f"**Research Priority:** {research_priority.upper()}\n")
+
+        # Well-characterized aspects
+        well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
+        if well_characterized_detailed:
+            lines.append("### Well Characterized\n")
+            for wc in well_characterized_detailed:
+                aspect = wc.get('aspect', '')
+                basis = wc.get('basis', '')
+                matches = wc.get('matches_on', '')
+                tumor = wc.get('tumor_match', '')
+                match_info = []
+                if matches:
+                    match_info.append(matches)
+                if tumor:
+                    match_info.append(tumor)
+                match_str = f" ({', '.join(match_info)})" if match_info else ""
+                lines.append(f"- **{aspect}**: {basis}{match_str}")
+            lines.append("")
+
+        # Poorly characterized aspects
+        poorly_characterized = evidence_gaps.get('poorly_characterized', [])
+        if poorly_characterized:
+            lines.append("### Needs More Research\n")
+            for pc in poorly_characterized:
+                lines.append(f"- {pc}")
+            lines.append("")
+
+        # Gaps by severity
+        gaps = evidence_gaps.get('gaps', [])
+        if gaps:
+            # Group gaps by severity
+            severity_order = ['critical', 'high', 'significant', 'moderate', 'minor', 'informational']
+            gaps_by_severity = {}
+            for gap in gaps:
+                sev = gap.get('severity', 'unknown')
+                if sev not in gaps_by_severity:
+                    gaps_by_severity[sev] = []
+                gaps_by_severity[sev].append(gap)
+
+            lines.append("### Evidence Gaps\n")
+            for sev in severity_order:
+                if sev in gaps_by_severity:
+                    severity_label = sev.upper()
+                    for gap in gaps_by_severity[sev]:
+                        desc = gap.get('description', '')
+                        category = gap.get('category', '')
+                        lines.append(f"- **[{severity_label}]** ({category}) {desc}")
+            lines.append("")
+
     # LLM Synthesis (at the bottom, like in the UI)
     insight = result.get('insight', {})
     functional_summary = insight.get('functional_summary')
@@ -402,6 +403,8 @@ def result_to_markdown(result: dict) -> str:
     has_llm_content = any([functional_summary, biological_context, therapeutic_summary, llm_narrative])
     if has_llm_content:
         lines.append("## Experimental - LLM Research Synthesis\n")
+        lines.append("*AI-generated — may contain inaccuracies. Verify against primary sources.*\n")
+        lines.append("*Locus Match: variant-level = evidence match at exact locus · codon-level = evidence match at other variants in this codon · gene-level = evidence match at other variants in this gene*\n")
         if functional_summary:
             lines.append(f"### Functional Summary\n{functional_summary}\n")
         if biological_context:

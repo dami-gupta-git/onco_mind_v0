@@ -1466,6 +1466,7 @@ _NON_DRUG_PATTERNS = [
     r'^d-',             # D-glucose, D-mannose etc (stereoisomer prefix for sugars)
     r'^l-',             # L-glucose etc
     r'sulfone$',        # Industrial solvents: methyl phenyl sulfone, etc.
+    r'^ethephon$',      # Plant growth regulator (agricultural chemical, not a drug)
 ]
 _NON_DRUG_REGEX = re.compile('|'.join(_NON_DRUG_PATTERNS), re.IGNORECASE)
 
