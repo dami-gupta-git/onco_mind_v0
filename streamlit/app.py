@@ -102,7 +102,7 @@ EXAMPLE_VARIANTS = {
     "CHEK2 p.Ile157Thr - Colorectal": ("CHEK2", "p.Ile157Thr", "Colorectal Cancer"),
     "ALK F1174L - Neuroblastoma": ("ALK", "F1174L", "Neuroblastoma"),
     "BRAF V600E - Melanoma": ("BRAF", "V600E", "Melanoma"),
-    "ERBB2 S310F - Bladder Cancer": ("ERBB2", "S310F", "Bladder Cancer"),
+    "PIK3CA H1047R  - Thyroid Cancer": ("PIK3CA", "H1047R", "Thyroid Cancer"),
     "BRAF V600K - Colorectal": ("BRAF", "V600E", "Colorectal"),
 }
 
