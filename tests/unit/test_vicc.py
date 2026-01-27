@@ -277,29 +277,35 @@ class TestVICCClient:
         assert "p." not in query
 
     def test_build_query_with_tumor_type(self):
-        """Test building query with tumor type included."""
+        """Test building query ignores tumor type (post-fetch filtering used instead)."""
         client = VICCClient()
+        # tumor_type is intentionally NOT included in query - VICC Lucene requires
+        # exact matches, so we filter post-fetch via tumor_types_match()
         query = client._build_query("AKT1", "E17K", "breast cancer")
         assert "AKT1" in query
         assert "E17K" in query
-        assert '"breast cancer"' in query
         assert "AND" in query
+        # tumor_type should NOT be in query
+        assert "breast cancer" not in query
 
     def test_build_query_tumor_type_only(self):
-        """Test building query with gene and tumor type (no variant)."""
+        """Test building query with gene only (tumor type ignored)."""
         client = VICCClient()
+        # tumor_type is intentionally NOT included - post-fetch filtering is used
         query = client._build_query("BRAF", tumor_type="melanoma")
-        assert "BRAF" in query
-        assert '"melanoma"' in query
-        assert "AND" in query
+        assert query == "BRAF"
+        # tumor_type should NOT be in query
+        assert "melanoma" not in query
 
     def test_build_exon_query_with_tumor_type(self):
-        """Test building exon query with tumor type."""
+        """Test building exon query ignores tumor type (post-fetch filtering used)."""
         client = VICCClient()
+        # tumor_type is intentionally NOT included - post-fetch filtering is used
         query = client._build_exon_query("KIT", 11, "gist")
         assert "KIT" in query
         assert '"exon 11"' in query
-        assert '"gist"' in query
+        # tumor_type should NOT be in query
+        assert "gist" not in query
 
     @pytest.mark.asyncio
     async def test_fetch_associations_mocked(self):

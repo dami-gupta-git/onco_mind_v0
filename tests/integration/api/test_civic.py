@@ -419,7 +419,7 @@ class TestCIViCEvidenceItems:
         """AKT1 E17K in Breast Cancer should return unique evidence items (EIDs)."""
         async with CIViCClient() as client:
             evidence_list = await client.fetch_evidence_items(
-                "AKT1", "E17K", tumor_type="Breast Cancer", max_results=20
+                "AKT1", "E17K", tumor_type="Breast Cancer", max_per_level=20
             )
 
             # Should have evidence items
@@ -453,7 +453,7 @@ class TestCIViCEvidenceItems:
     async def test_fetch_evidence_items_braf_v600e(self):
         """BRAF V600E should return evidence items (EIDs)."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=10)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
 
             assert len(evidence_list) >= 1, "BRAF V600E should have evidence items"
 
@@ -475,7 +475,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_have_required_fields(self):
         """Evidence items should have all required fields populated."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=5)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=5)
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:
@@ -493,7 +493,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_with_drugs(self):
         """BRAF V600E evidence items should include drug information."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=20)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=20)
 
             # At least some evidence should have drugs
             evidence_with_drugs = [e for e in evidence_list if e.drugs]
@@ -508,7 +508,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_with_pmid(self):
         """Evidence items should have PMID references."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=10)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
 
             # At least some evidence should have PMIDs
             evidence_with_pmid = [e for e in evidence_list if e.pmid]
@@ -524,7 +524,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_egfr_l858r(self):
         """EGFR L858R should return evidence items."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("EGFR", "L858R", max_results=10)
+            evidence_list = await client.fetch_evidence_items("EGFR", "L858R", max_per_level=10)
 
             assert len(evidence_list) >= 1, "EGFR L858R should have evidence items"
 
@@ -537,7 +537,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_gene_only(self):
         """Querying by gene only should return gene-level evidence."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", max_results=10)
+            evidence_list = await client.fetch_evidence_items("BRAF", max_per_level=10)
 
             assert len(evidence_list) >= 1, "BRAF gene query should return evidence"
 
@@ -551,7 +551,7 @@ class TestCIViCEvidenceItems:
         """Tumor type filtering should work for evidence items."""
         async with CIViCClient() as client:
             evidence_list = await client.fetch_evidence_items(
-                "BRAF", "V600E", tumor_type="melanoma", max_results=10
+                "BRAF", "V600E", tumor_type="melanoma", max_per_level=10
             )
 
             # If we got results, tumor_match should be True
@@ -566,7 +566,7 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_serialization(self):
         """Evidence items should serialize correctly via model_dump."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=3)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=3)
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:

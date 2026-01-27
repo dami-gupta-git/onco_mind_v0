@@ -1111,7 +1111,7 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=10)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
 
         assert len(evidence_list) >= 1, "BRAF V600E should have CIViC evidence items"
 
@@ -1132,7 +1132,7 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=20)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=20)
 
         assert len(evidence_list) >= 1
 
@@ -1159,7 +1159,7 @@ class TestEvidenceCivicEvidenceField:
 
         # EGFR T790M is a known resistance mutation
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("EGFR", "T790M", max_results=20)
+            evidence_list = await client.fetch_evidence_items("EGFR", "T790M", max_per_level=20)
 
         assert len(evidence_list) >= 1, "EGFR T790M should have CIViC evidence"
 
@@ -1181,7 +1181,7 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=30)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=30)
 
         # Find evidence with both sensitivity significance and direction populated
         evidence_with_direction = [
@@ -1215,7 +1215,7 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_results=5)
+            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=5)
 
         assert len(evidence_list) >= 1
 
