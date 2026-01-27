@@ -266,6 +266,7 @@ with tab1:
         header_text += "**"
         if tumor_display:
             header_text += f" in {tumor_display}"
+        header_text += " | GRCh38"
 
         # Header row with download button next to it
         header_col1, header_col2 = st.columns([2, 1])

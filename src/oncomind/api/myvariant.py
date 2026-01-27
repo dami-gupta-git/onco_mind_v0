@@ -88,7 +88,7 @@ class MyVariantClient:
     to get the most up-to-date clinical interpretations.
     """
 
-    BASE_URL = "https://myvariant.info/v1"
+    BASE_URL = "https://myvariant.info/v1/hg38"
     DEFAULT_TIMEOUT = 30.0
 
     def __init__(
