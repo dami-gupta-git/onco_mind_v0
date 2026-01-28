@@ -13,7 +13,9 @@ properly handling:
 Author: Dami (OncoMind)
 """
 
+import logging
 import re
+from pathlib import Path
 from typing import Optional
 
 from oncomind.models.evidence.fda_biomarker import (
@@ -104,6 +106,8 @@ class FDALabelParser:
         'IDH2': r'(?:isocitrate\s+dehydrogenase[- ]?2|IDH2)',
         'FGFR': r'(?:fibroblast\s+growth\s+factor\s+receptor|FGFR[1234]?)',
         'BRCA': r'BRCA[12]?',
+        'KIT': r'(?:c[- ]?Kit|Kit\s*\(CD117\)|KIT|CD117)',
+        'PDGFRA': r'(?:PDGFRA|PDGFR\s*[αa]?|platelet[- ]derived\s+growth\s+factor\s+receptor(?:\s+alpha)?)',
         'MSI': r'(?:microsatellite\s+instability|MSI[- ]?(?:H|high)?)',
         'TMB': r'(?:tumor\s+mutational\s+burden|TMB[- ]?(?:H|high)?)',
         'PD-L1': r'(?:PD[- ]?L1|CD274)',
@@ -198,8 +202,24 @@ class FDALabelParser:
         (r'treatment[- ]?na[ïi]ve', 'first-line'),
     ]
 
+    GENE_LIST_PATH = Path(__file__).resolve().parents[3] / "data" / "genes" / "gene_list.txt"
+
     def __init__(self):
+        self.gene_patterns = dict(self.GENE_PATTERNS)
+        self._load_gene_list()
         self._compile_patterns()
+
+    def _load_gene_list(self):
+        """Load genes from gene_list.txt and add any not already in GENE_PATTERNS."""
+        logger = logging.getLogger(__name__)
+        try:
+            with open(self.GENE_LIST_PATH) as f:
+                for line in f:
+                    gene = line.strip()
+                    if gene and gene not in self.gene_patterns:
+                        self.gene_patterns[gene] = rf'\b{gene}\b'
+        except FileNotFoundError:
+            logger.warning(f"Gene list not found at {self.GENE_LIST_PATH}")
 
     def _compile_patterns(self):
         """Pre-compile regex patterns for performance."""
@@ -213,6 +233,17 @@ class FDALabelParser:
         )
         self._prior_therapy_re = re.compile(
             '|'.join(f'({p})' for p in self.PRIOR_THERAPY_PATTERNS),
+            re.IGNORECASE
+        )
+        # Pre-compile per-gene patterns and build a single combined regex for fast screening
+        self._compiled_gene_patterns = {
+            gene: re.compile(pattern, re.IGNORECASE)
+            for gene, pattern in self.gene_patterns.items()
+        }
+        # Combined pattern: match any gene symbol as a quick screen
+        gene_symbols = sorted(self.gene_patterns.keys(), key=len, reverse=True)
+        self._gene_screen_re = re.compile(
+            r'\b(?:' + '|'.join(re.escape(g) for g in gene_symbols) + r')\b',
             re.IGNORECASE
         )
 
@@ -380,9 +411,24 @@ class FDALabelParser:
         if self._is_negative_efficacy(text):
             return []  # Skip blocks that say the drug wasn't effective
 
+        # Quick screen: find which genes are mentioned in this block
+        screen_hits = {m.group().upper() for m in self._gene_screen_re.finditer(text)}
+        if not screen_hits:
+            return indications
+
+        # Only run detailed patterns for genes found in screen
+        candidate_genes = {
+            gene for gene in self.gene_patterns
+            if gene.upper() in screen_hits or any(s in gene.upper() for s in screen_hits)
+        }
+        # Also include genes whose custom patterns might match differently (e.g. EGFR matching "epidermal growth factor receptor")
+        # Always check genes with custom patterns (non-word-boundary patterns from GENE_PATTERNS class var)
+        candidate_genes.update(self.GENE_PATTERNS.keys())
+
         # Find all genes mentioned
-        for gene, gene_pattern in self.GENE_PATTERNS.items():
-            gene_matches = list(re.finditer(gene_pattern, text, re.IGNORECASE))
+        for gene in candidate_genes:
+            compiled = self._compiled_gene_patterns[gene]
+            gene_matches = list(compiled.finditer(text))
 
             for gene_match in gene_matches:
                 # Check if this gene mention is in a prior therapy requirement context
@@ -579,7 +625,7 @@ class FDALabelParser:
                 return SpecificityLevel.CODON, variants, codon
 
         # Check for generic mutation mentions
-        gene_pattern = self.GENE_PATTERNS.get(gene, gene)
+        gene_pattern = self.gene_patterns.get(gene, gene)
         if re.search(rf'{gene_pattern}[- ](?:positive|mutant|mutated|altered|mutation)', text, re.IGNORECASE):
             return SpecificityLevel.GENE, [], None
 

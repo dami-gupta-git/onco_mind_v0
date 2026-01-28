@@ -59,12 +59,12 @@ class TestFDABiomarkerPipeline:
         fda_biomarker = result.get("fda_biomarker_evidence", [])
         assert isinstance(fda_biomarker, list)
 
-        assert len(fda_biomarker) == 10, (
-            f"Expected 2 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
-        )
-
         # Should find osimertinib (TAGRISSO) for EGFR L858R
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
+
+        assert len(fda_biomarker) == 10, (
+            f"Expected 10 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
+        )
         assert any("osimertinib" in d for d in drug_names), (
             f"Expected osimertinib in FDA biomarker evidence, got: {drug_names}"
         )

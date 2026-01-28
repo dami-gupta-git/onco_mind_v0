@@ -77,7 +77,7 @@ GENE_FULL_NAMES: dict[str, list[str]] = {
     "FGFR2": ["fibroblast growth factor receptor 2", "fgfr2"],
     "FGFR3": ["fibroblast growth factor receptor 3", "fgfr3"],
     "KIT": ["kit proto-oncogene", "c-kit", "cd117", "stem cell factor receptor"],
-    "PDGFRA": ["platelet-derived growth factor receptor alpha", "pdgfra", "cd140a"],
+    "PDGFRA": ["platelet-derived growth factor receptor alpha", "pdgfra", "cd140a", "PDGFR"],
     "PDGFRB": ["platelet-derived growth factor receptor beta", "pdgfrb", "cd140b"],
     "PIK3CA": ["phosphatidylinositol-4,5-bisphosphate 3-kinase catalytic subunit alpha", "pi3k", "pik3ca"],
     "AKT1": ["akt serine/threonine kinase 1", "protein kinase b", "pkb", "akt1"],
