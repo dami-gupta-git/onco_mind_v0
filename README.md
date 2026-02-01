@@ -39,6 +39,21 @@ For BRAF V600E, databases already agree. For the next 10,000 variants, the key q
 
 OncoMind is a research intelligence platform that identifies evidence gaps in cancer variant knowledge—surfacing where research is thin, conflicting, or missing entirely. It's built for translational teams and small biotechs deciding *which variants are worth a project*, not for treating individual patients.
 
+### How the LLM fits in
+
+The LLM is **not** the annotation engine—it's the synthesis layer on top of structured data:
+
+1. **Deterministic backbone first**: Evidence is aggregated from 8+ databases (CIViC, ClinVar, CGI, VICC, FDA labels, COSMIC, cBioPortal, DepMap) with match specificity tracking (variant vs codon vs gene-level)
+
+2. **Gap detection is rule-based**: Missing evidence, source conflicts, and tumor-type extrapolation concerns are computed deterministically before the LLM sees anything
+
+3. **LLM synthesizes, doesn't invent**: The LLM receives pre-structured evidence blocks with explicit provenance. It generates:
+   - Functional/biological/therapeutic summaries grounded in the evidence provided
+   - Research hypotheses tied to specific identified gaps
+   - Cross-source drug analysis highlighting corroboration and conflicts
+
+4. **Calibrated to evidence quality**: When evidence is sparse, the LLM is instructed to stay generic and highlight unknowns—not fill gaps with training data
+
 > **Status: Proof-of-Concept / Architectural Demo**
 > 
 > This demonstrates an approach to systematic evidence gap detection. It is **research use only** — not for diagnosis, treatment selection, or any clinical decision-making.  
