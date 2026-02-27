@@ -4,15 +4,18 @@ Tests the full pipeline from OpenFDA fetch -> FDALabelParser -> FDABiomarkerEvid
 for various gene-variant-tumor combinations.
 """
 
+import importlib.util
 import pytest
 import sys
 from pathlib import Path
 
-# Add streamlit directory to path for imports
-streamlit_dir = Path(__file__).parent.parent.parent.parent / "streamlit"
-sys.path.insert(0, str(streamlit_dir))
-
-from backend import get_variant_insight
+# Import backend.py directly by path to avoid conflict with the installed
+# `streamlit` package — our local module lives at streamlit/backend.py.
+_backend_path = Path(__file__).parent.parent.parent.parent / "streamlit" / "backend.py"
+_spec = importlib.util.spec_from_file_location("local_backend", _backend_path)
+_backend = importlib.util.module_from_spec(_spec)  # type: ignore[arg-type]
+_spec.loader.exec_module(_backend)  # type: ignore[union-attr]
+get_variant_insight = _backend.get_variant_insight
 
 
 class TestFDABiomarkerPipeline:
