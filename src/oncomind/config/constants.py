@@ -360,7 +360,10 @@ STRUCTURAL_VARIANT_TYPES: set[str] = {
 #   - ROS1 resistance: Crizotinib resistance (PMID: 26698910)
 #   - ESR1: Aromatase inhibitor resistance in breast cancer (PMID: 26698910)
 
-ACQUIRED_RESISTANCE_MUTATIONS: dict[str, list[str]] = {
+# Each entry is either a plain variant string (unrestricted — applies to any tumor type)
+# or a dict {"variant": str, "tumor_types": list[str]} (restricted — only applies when
+# the tumor type matches one of the listed substrings, case-insensitive).
+ACQUIRED_RESISTANCE_MUTATIONS: dict[str, list] = {
     # EGFR - TKI resistance mutations
     "EGFR": [
         "T790M",   # 1st/2nd-gen TKI resistance (gefitinib, erlotinib, afatinib)
@@ -377,8 +380,10 @@ ACQUIRED_RESISTANCE_MUTATIONS: dict[str, list[str]] = {
         "L1196M",  # Crizotinib resistance (gatekeeper)
         "I1171T",  # Alectinib resistance
         "I1171N",  # Alectinib resistance
-        "F1174L",  # Crizotinib resistance
-        "F1174C",  # Crizotinib resistance
+        # F1174L/C are acquired resistance in lung cancers but primary oncogenic
+        # drivers in neuroblastoma — restrict to lung tumor types.
+        {"variant": "F1174L", "tumor_types": ["lung", "nsclc"]},
+        {"variant": "F1174C", "tumor_types": ["lung", "nsclc"]},
         "C1156Y",  # Crizotinib resistance
         "L1152R",  # Crizotinib resistance
         "G1269A",  # Crizotinib resistance
@@ -441,25 +446,51 @@ ACQUIRED_RESISTANCE_MUTATIONS: dict[str, list[str]] = {
     ],
 }
 
-# Flattened set for quick lookup: {(gene, variant), ...}
-ACQUIRED_RESISTANCE_MUTATIONS_SET: set[tuple[str, str]] = {
-    (gene.upper(), variant.upper())
-    for gene, variants in ACQUIRED_RESISTANCE_MUTATIONS.items()
-    for variant in variants
+# Unrestricted lookup: variants that apply regardless of tumor type.
+_ACQUIRED_RESISTANCE_UNRESTRICTED: set[tuple[str, str]] = {
+    (gene.upper(), entry.upper())
+    for gene, entries in ACQUIRED_RESISTANCE_MUTATIONS.items()
+    for entry in entries
+    if isinstance(entry, str)
+}
+
+# Restricted lookup: variants that only apply to specific tumor types.
+# Maps (GENE, VARIANT) -> list of allowed tumor-type substrings (lowercase).
+_ACQUIRED_RESISTANCE_RESTRICTED: dict[tuple[str, str], list[str]] = {
+    (gene.upper(), entry["variant"].upper()): [t.lower() for t in entry["tumor_types"]]
+    for gene, entries in ACQUIRED_RESISTANCE_MUTATIONS.items()
+    for entry in entries
+    if isinstance(entry, dict)
 }
 
 
-def is_acquired_resistance_mutation(gene: str, variant: str) -> bool:
+def is_acquired_resistance_mutation(
+    gene: str, variant: str, tumor_type: str | None = None
+) -> bool:
     """Check if a gene/variant is a known acquired resistance mutation.
 
     Args:
         gene: Gene symbol (e.g., "EGFR")
         variant: Variant notation (e.g., "T790M")
+        tumor_type: Optional tumor type string. Required for context-dependent
+            variants (e.g., ALK F1174L). When absent and the variant is
+            restricted, returns False (safe default).
 
     Returns:
-        True if this is a known acquired resistance mutation
+        True if this is a known acquired resistance mutation in the given context.
     """
-    return (gene.upper(), variant.upper()) in ACQUIRED_RESISTANCE_MUTATIONS_SET
+    key = (gene.upper(), variant.upper())
+
+    if key in _ACQUIRED_RESISTANCE_UNRESTRICTED:
+        return True
+
+    if key in _ACQUIRED_RESISTANCE_RESTRICTED:
+        if tumor_type is None:
+            return False
+        tumor_lower = tumor_type.lower()
+        return any(allowed in tumor_lower for allowed in _ACQUIRED_RESISTANCE_RESTRICTED[key])
+
+    return False
 
 
 # =============================================================================
