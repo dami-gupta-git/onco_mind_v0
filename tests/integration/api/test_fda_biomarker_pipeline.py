@@ -242,7 +242,8 @@ class TestFDABiomarkerPipeline:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_kras_g12d_nsclc_no_fda_drugs(self):
-        """KRAS G12D in NSCLC should return 0 FDA-approved drugs.
+        """
+        KRAS G12D in NSCLC should return 0 FDA-approved drugs.
 
         Unlike G12C (which has sotorasib, adagrasib), G12D has no FDA-approved
         targeted therapies.
