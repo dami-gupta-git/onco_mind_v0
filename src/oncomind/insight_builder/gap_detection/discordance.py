@@ -159,18 +159,17 @@ def detect_discordant_evidence_internal(
             )
             if "RESIST" in resp_upper:
                 resistant_drugs.setdefault(drug_lower, set()).add(source_name)
-                # Track if variant-level
+                # Track if variant-level — always use "VICC" as the tag regardless of
+                # normalized source name, so the cross-source conflict loop can distinguish
+                # VICC-origin entries from true CIViC/CGI entries and the FDA-vs-VICC
+                # skip condition remains reliable.
                 if vicc.locus_match == "variant":
                     vicc_resistant_variant_level[drug_lower] = True
-                    resistant_variant_level.setdefault(drug_lower, set()).add(
-                        source_name
-                    )
+                    resistant_variant_level.setdefault(drug_lower, set()).add("VICC")
             elif "SENS" in resp_upper or "RESPON" in resp_upper:
                 sensitive_drugs.setdefault(drug_lower, set()).add(source_name)
                 if vicc.locus_match == "variant":
-                    sensitive_variant_level.setdefault(drug_lower, set()).add(
-                        source_name
-                    )
+                    sensitive_variant_level.setdefault(drug_lower, set()).add("VICC")
 
     # Check CIViC assertions
     for assertion in evidence.civic_assertions:

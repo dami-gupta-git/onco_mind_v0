@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from oncomind.models.extracted.evidence_gaps import EvidenceGaps, GapCategory
 from oncomind.models.evidence.base import tumor_types_match
-from oncomind.config.constants import COOCCURRENCE_STRONG_THRESHOLD_PCT
 
 from .context import GapDetectionContext
 from .helpers import (
