@@ -23,13 +23,14 @@ class TestMyVariantBasic:
             assert evidence.gene == "BRAF"
             assert evidence.variant == "V600E"
 
-            has_identifiers = any([
-                evidence.dbsnp_id,
-                evidence.cosmic_id,
-                evidence.clinvar_id,
-            ])
+            has_identifiers = any(
+                [
+                    evidence.dbsnp_id,
+                    evidence.cosmic_id,
+                    evidence.clinvar_id,
+                ]
+            )
             assert has_identifiers, "BRAF V600E should have database identifiers"
-
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -39,9 +40,6 @@ class TestMyVariantBasic:
             evidence = await client.fetch_evidence("ALK", "F1174L")
 
             assert evidence is not None
-
-
-
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -64,22 +62,28 @@ class TestMyVariantBasic:
             evidence = await client.fetch_evidence("BRAF", "V600E")
 
             annotation_count = 0
-            if evidence.alphamissense_score is not None or evidence.alphamissense_prediction is not None:
+            if (
+                evidence.alphamissense_score is not None
+                or evidence.alphamissense_prediction is not None
+            ):
                 annotation_count += 1
             if evidence.cadd_score is not None:
                 annotation_count += 1
             if evidence.polyphen2_prediction is not None:
                 annotation_count += 1
-            if evidence.clinvar_clinical_significance is not None or len(evidence.clinvar) > 0:
+            if (
+                evidence.clinvar_clinical_significance is not None
+                or len(evidence.clinvar) > 0
+            ):
                 annotation_count += 1
             if len(evidence.civic) > 0:
                 annotation_count += 1
             if len(evidence.cosmic) > 0:
                 annotation_count += 1
 
-            assert annotation_count >= 2, (
-                f"BRAF V600E expected multiple annotation sources, only found {annotation_count}"
-            )
+            assert (
+                annotation_count >= 2
+            ), f"BRAF V600E expected multiple annotation sources, only found {annotation_count}"
 
 
 class TestAlphaMissense:
@@ -97,15 +101,23 @@ class TestAlphaMissense:
 
             if evidence.alphamissense_score is not None:
                 assert 0 <= evidence.alphamissense_score <= 1
-                assert evidence.alphamissense_score > 0.5, (
-                    f"TP53 R248W is pathogenic, expected high score, got {evidence.alphamissense_score}"
-                )
+                assert (
+                    evidence.alphamissense_score > 0.5
+                ), f"TP53 R248W is pathogenic, expected high score, got {evidence.alphamissense_score}"
 
             if evidence.alphamissense_prediction is not None:
-                assert evidence.alphamissense_prediction in ["P", "B", "A", "pathogenic", "benign", "ambiguous"]
-                assert evidence.alphamissense_prediction in ["P", "pathogenic"], (
-                    f"TP53 R248W should be pathogenic, got {evidence.alphamissense_prediction}"
-                )
+                assert evidence.alphamissense_prediction in [
+                    "P",
+                    "B",
+                    "A",
+                    "pathogenic",
+                    "benign",
+                    "ambiguous",
+                ]
+                assert evidence.alphamissense_prediction in [
+                    "P",
+                    "pathogenic",
+                ], f"TP53 R248W should be pathogenic, got {evidence.alphamissense_prediction}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -119,9 +131,9 @@ class TestAlphaMissense:
 
             if evidence.alphamissense_score is not None:
                 assert 0 <= evidence.alphamissense_score <= 1
-                assert evidence.alphamissense_score > 0.3, (
-                    f"EGFR L858R expected higher score, got {evidence.alphamissense_score}"
-                )
+                assert (
+                    evidence.alphamissense_score > 0.3
+                ), f"EGFR L858R expected higher score, got {evidence.alphamissense_score}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -135,9 +147,9 @@ class TestAlphaMissense:
 
             if evidence.alphamissense_score is not None:
                 assert 0 <= evidence.alphamissense_score <= 1
-                assert evidence.alphamissense_score > 0.5, (
-                    f"KRAS G12D is oncogenic, expected high score, got {evidence.alphamissense_score}"
-                )
+                assert (
+                    evidence.alphamissense_score > 0.5
+                ), f"KRAS G12D is oncogenic, expected high score, got {evidence.alphamissense_score}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -151,9 +163,9 @@ class TestAlphaMissense:
 
             if evidence.alphamissense_score is not None:
                 assert 0 <= evidence.alphamissense_score <= 1
-                assert evidence.alphamissense_score > 0.4, (
-                    f"PIK3CA H1047R expected higher score, got {evidence.alphamissense_score}"
-                )
+                assert (
+                    evidence.alphamissense_score > 0.4
+                ), f"PIK3CA H1047R expected higher score, got {evidence.alphamissense_score}"
 
 
 class TestCOSMIC:
@@ -171,9 +183,9 @@ class TestCOSMIC:
 
             if evidence.cosmic_id:
                 assert (
-                    evidence.cosmic_id.startswith("COSM") or
-                    evidence.cosmic_id.startswith("COSV") or
-                    evidence.cosmic_id.isdigit()
+                    evidence.cosmic_id.startswith("COSM")
+                    or evidence.cosmic_id.startswith("COSV")
+                    or evidence.cosmic_id.isdigit()
                 ), f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
 
     @pytest.mark.integration
@@ -226,9 +238,9 @@ class TestCOSMIC:
             if evidence.cosmic:
                 assert isinstance(evidence.cosmic, list)
                 for entry in evidence.cosmic:
-                    assert hasattr(entry, 'mutation_id')
-                    assert hasattr(entry, 'primary_site')
-                    assert hasattr(entry, 'primary_histology')
+                    assert hasattr(entry, "mutation_id")
+                    assert hasattr(entry, "primary_site")
+                    assert hasattr(entry, "primary_histology")
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -239,13 +251,13 @@ class TestCOSMIC:
 
             if evidence.cosmic:
                 for entry in evidence.cosmic:
-                    assert hasattr(entry, 'mutation_id')
-                    assert hasattr(entry, 'primary_site')
-                    assert hasattr(entry, 'site_subtype')
-                    assert hasattr(entry, 'primary_histology')
-                    assert hasattr(entry, 'histology_subtype')
-                    assert hasattr(entry, 'sample_count')
-                    assert hasattr(entry, 'mutation_somatic_status')
+                    assert hasattr(entry, "mutation_id")
+                    assert hasattr(entry, "primary_site")
+                    assert hasattr(entry, "site_subtype")
+                    assert hasattr(entry, "primary_histology")
+                    assert hasattr(entry, "histology_subtype")
+                    assert hasattr(entry, "sample_count")
+                    assert hasattr(entry, "mutation_somatic_status")
 
 
 class TestCADD:
@@ -260,9 +272,9 @@ class TestCADD:
 
             if evidence.cadd_score is not None:
                 assert evidence.cadd_score >= 0
-                assert evidence.cadd_score > 10, (
-                    f"BRAF V600E expected high CADD score, got {evidence.cadd_score}"
-                )
+                assert (
+                    evidence.cadd_score > 10
+                ), f"BRAF V600E expected high CADD score, got {evidence.cadd_score}"
 
 
 class TestClinVar:
@@ -275,18 +287,20 @@ class TestClinVar:
         async with MyVariantClient() as client:
             evidence = await client.fetch_evidence("TP53", "R248W")
 
-            has_clinvar = any([
-                evidence.clinvar_id,
-                evidence.clinvar_clinical_significance,
-                evidence.clinvar_accession,
-                len(evidence.clinvar) > 0,
-            ])
+            has_clinvar = any(
+                [
+                    evidence.clinvar_id,
+                    evidence.clinvar_clinical_significance,
+                    evidence.clinvar_accession,
+                    len(evidence.clinvar) > 0,
+                ]
+            )
 
             if has_clinvar and evidence.clinvar_clinical_significance:
                 sig_lower = evidence.clinvar_clinical_significance.lower()
-                assert "pathogenic" in sig_lower or "likely pathogenic" in sig_lower, (
-                    f"TP53 R248W should be pathogenic, got: {evidence.clinvar_clinical_significance}"
-                )
+                assert (
+                    "pathogenic" in sig_lower or "likely pathogenic" in sig_lower
+                ), f"TP53 R248W should be pathogenic, got: {evidence.clinvar_clinical_significance}"
 
 
 class TestClinVarConditionsList:
@@ -312,12 +326,14 @@ class TestClinVarConditionsList:
             assert evidence.variant == "R273H"
 
             # Should have functional predictions (this was failing before the fix)
-            has_functional = any([
-                evidence.alphamissense_score is not None,
-                evidence.alphamissense_prediction is not None,
-                evidence.polyphen2_prediction is not None,
-                evidence.cadd_score is not None,
-            ])
+            has_functional = any(
+                [
+                    evidence.alphamissense_score is not None,
+                    evidence.alphamissense_prediction is not None,
+                    evidence.polyphen2_prediction is not None,
+                    evidence.cadd_score is not None,
+                ]
+            )
             assert has_functional, (
                 "TP53 R273H should have functional predictions - "
                 "ClinVar parsing may have failed"
@@ -331,9 +347,10 @@ class TestClinVarConditionsList:
                 )
 
             if evidence.alphamissense_prediction is not None:
-                assert evidence.alphamissense_prediction in ["P", "pathogenic"], (
-                    f"TP53 R273H should be pathogenic, got {evidence.alphamissense_prediction}"
-                )
+                assert evidence.alphamissense_prediction in [
+                    "P",
+                    "pathogenic",
+                ], f"TP53 R273H should be pathogenic, got {evidence.alphamissense_prediction}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -345,17 +362,17 @@ class TestClinVarConditionsList:
             assert evidence is not None
 
             # Should have COSMIC ID (this is a major hotspot)
-            assert evidence.cosmic_id is not None, (
-                "TP53 R273H should have COSMIC ID"
-            )
-            assert evidence.cosmic_id.startswith("COSM") or evidence.cosmic_id.startswith("COSV"), (
-                f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
-            )
+            assert evidence.cosmic_id is not None, "TP53 R273H should have COSMIC ID"
+            assert evidence.cosmic_id.startswith(
+                "COSM"
+            ) or evidence.cosmic_id.startswith(
+                "COSV"
+            ), f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
 
             # Should have HGVS genomic notation
-            assert evidence.hgvs_genomic is not None, (
-                "TP53 R273H should have HGVS genomic notation"
-            )
+            assert (
+                evidence.hgvs_genomic is not None
+            ), "TP53 R273H should have HGVS genomic notation"
 
 
 class TestClinVarSingleRCV:
@@ -382,12 +399,14 @@ class TestClinVarSingleRCV:
             assert evidence.variant == "Q209L"
 
             # Should have ClinVar data
-            has_clinvar = any([
-                evidence.clinvar_id,
-                evidence.clinvar_clinical_significance,
-                evidence.clinvar_accession,
-                len(evidence.clinvar) > 0,
-            ])
+            has_clinvar = any(
+                [
+                    evidence.clinvar_id,
+                    evidence.clinvar_clinical_significance,
+                    evidence.clinvar_accession,
+                    len(evidence.clinvar) > 0,
+                ]
+            )
             assert has_clinvar, (
                 "GNAQ Q209L should have ClinVar data - "
                 "single RCV parsing may have failed"
@@ -396,9 +415,9 @@ class TestClinVarSingleRCV:
             # Should be pathogenic (known uveal melanoma driver)
             if evidence.clinvar_clinical_significance:
                 sig_lower = evidence.clinvar_clinical_significance.lower()
-                assert "pathogenic" in sig_lower, (
-                    f"GNAQ Q209L should be pathogenic, got: {evidence.clinvar_clinical_significance}"
-                )
+                assert (
+                    "pathogenic" in sig_lower
+                ), f"GNAQ Q209L should be pathogenic, got: {evidence.clinvar_clinical_significance}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -410,14 +429,14 @@ class TestClinVarSingleRCV:
             assert evidence is not None
 
             # Should have at least one identifier
-            has_identifiers = any([
-                evidence.dbsnp_id,
-                evidence.cosmic_id,
-                evidence.clinvar_id,
-            ])
-            assert has_identifiers, (
-                "GNAQ Q209L should have database identifiers"
+            has_identifiers = any(
+                [
+                    evidence.dbsnp_id,
+                    evidence.cosmic_id,
+                    evidence.clinvar_id,
+                ]
             )
+            assert has_identifiers, "GNAQ Q209L should have database identifiers"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -462,4 +481,6 @@ class TestCIViCFallback:
             assert evidence.gene == "ERBB2"
 
             if evidence.civic:
-                assert len(evidence.civic) > 0, "ERBB2 amplification should have CIViC evidence"
+                assert (
+                    len(evidence.civic) > 0
+                ), "ERBB2 amplification should have CIViC evidence"

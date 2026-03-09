@@ -6,7 +6,10 @@ Tests the FDALabelParser class and match_variant_to_indications function.
 import pytest
 
 from oncomind.api.fda_label_parser import FDALabelParser, match_variant_to_indications
-from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement, SpecificityLevel
+from oncomind.models.evidence.fda_biomarker import (
+    BiomarkerRequirement,
+    SpecificityLevel,
+)
 
 
 class TestFDALabelParserIMJUDO:
@@ -34,11 +37,11 @@ class TestFDALabelParserIMJUDO:
         or anaplastic lymphoma kinase (ALK) genomic tumor aberrations.
         """
         return {
-            'openfda': {
-                'generic_name': ['tremelimumab'],
-                'brand_name': ['IMJUDO'],
+            "openfda": {
+                "generic_name": ["tremelimumab"],
+                "brand_name": ["IMJUDO"],
             },
-            'indications_and_usage': [imjudo_indication],
+            "indications_and_usage": [imjudo_indication],
         }
 
     def test_parses_egfr_required_negative(self, parser, imjudo_label):
@@ -68,7 +71,9 @@ class TestFDALabelParserIMJUDO:
         results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
 
         # Should find IMJUDO but marked as excluded
-        imjudo_results = [r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()]
+        imjudo_results = [
+            r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()
+        ]
         assert len(imjudo_results) >= 1
 
         imjudo = imjudo_results[0]
@@ -81,7 +86,9 @@ class TestFDALabelParserIMJUDO:
 
         results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
 
-        imjudo_results = [r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()]
+        imjudo_results = [
+            r for r in results if r["drug"] and "tremelimumab" in r["drug"].lower()
+        ]
         assert len(imjudo_results) >= 1
 
         imjudo = imjudo_results[0]
@@ -107,11 +114,11 @@ class TestFDALabelParserOsimertinib:
         as detected by an FDA-approved test, whose disease has progressed on or after EGFR TKI therapy.
         """
         return {
-            'openfda': {
-                'generic_name': ['osimertinib'],
-                'brand_name': ['TAGRISSO'],
+            "openfda": {
+                "generic_name": ["osimertinib"],
+                "brand_name": ["TAGRISSO"],
             },
-            'indications_and_usage': [osimertinib_indication],
+            "indications_and_usage": [osimertinib_indication],
         }
 
     def test_parses_t790m_indication(self, parser, osimertinib_label):
@@ -123,7 +130,8 @@ class TestFDALabelParserOsimertinib:
 
         # Find the T790M indication
         t790m_indications = [
-            i for i in egfr_indications
+            i
+            for i in egfr_indications
             if i.specified_variants and "T790M" in i.specified_variants
         ]
         assert len(t790m_indications) >= 1
@@ -140,7 +148,8 @@ class TestFDALabelParserOsimertinib:
 
         # Find the L858R indication
         l858r_indications = [
-            i for i in egfr_indications
+            i
+            for i in egfr_indications
             if i.specified_variants and "L858R" in i.specified_variants
         ]
         assert len(l858r_indications) >= 1
@@ -155,7 +164,9 @@ class TestFDALabelParserOsimertinib:
         results = match_variant_to_indications(indications, "EGFR", "T790M", "NSCLC")
 
         # Should find osimertinib as a match
-        osi_results = [r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()]
+        osi_results = [
+            r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()
+        ]
         assert len(osi_results) >= 1
 
         osi = osi_results[0]
@@ -168,7 +179,9 @@ class TestFDALabelParserOsimertinib:
 
         results = match_variant_to_indications(indications, "EGFR", "L858R", "NSCLC")
 
-        osi_results = [r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()]
+        osi_results = [
+            r for r in results if r["drug"] and "osimertinib" in r["drug"].lower()
+        ]
         assert len(osi_results) >= 1
 
         osi = osi_results[0]
@@ -185,11 +198,11 @@ class TestMatchVariantToIndications:
     def test_returns_empty_for_different_gene(self, parser):
         """Should not return results for a different gene."""
         label = {
-            'openfda': {
-                'generic_name': ['braftarget'],
-                'brand_name': ['BRAFBRAND'],
+            "openfda": {
+                "generic_name": ["braftarget"],
+                "brand_name": ["BRAFBRAND"],
             },
-            'indications_and_usage': ["For BRAF V600E melanoma."],
+            "indications_and_usage": ["For BRAF V600E melanoma."],
         }
 
         indications = parser.parse_label(label)

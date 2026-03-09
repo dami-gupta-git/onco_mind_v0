@@ -11,7 +11,6 @@ from typer.testing import CliRunner
 
 from oncomind.cli import app
 
-
 LLM_INSIGHT_HEADER = "LLM Insight"
 runner = CliRunner()
 
@@ -60,10 +59,9 @@ class TestInsightCommand:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["insight", "BRAF", "V600E", "--output", str(output_path)]
+            )
 
             assert result.exit_code == 0
             assert output_path.exists()
@@ -72,9 +70,9 @@ class TestInsightCommand:
                 data = json.load(f)
 
             # Output has Result model structure with evidence nested
-            assert 'evidence' in data
-            assert data['evidence']['identifiers']['gene'] == "BRAF"
-            assert data['evidence']['identifiers']['variant'] == "V600E"
+            assert "evidence" in data
+            assert data["evidence"]["identifiers"]["gene"] == "BRAF"
+            assert data["evidence"]["identifiers"]["variant"] == "V600E"
 
     @pytest.mark.integration
     def test_insight_help(self):
@@ -106,10 +104,9 @@ class TestBatchCommand:
 
             output_path = Path(tmpdir) / "results.json"
 
-            result = runner.invoke(app, [
-                "batch", str(input_path),
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["batch", str(input_path), "--output", str(output_path)]
+            )
 
             assert result.exit_code == 0
             assert output_path.exists()
@@ -133,10 +130,9 @@ class TestBatchCommand:
 
             output_path = Path(tmpdir) / "results.json"
 
-            result = runner.invoke(app, [
-                "batch", str(input_path),
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["batch", str(input_path), "--output", str(output_path)]
+            )
 
             assert result.exit_code == 0
             assert output_path.exists()
@@ -196,7 +192,9 @@ class TestCLILogLevel:
     @pytest.mark.integration
     def test_insight_with_debug_log_level(self):
         """Insight with --log-level DEBUG should work."""
-        result = runner.invoke(app, ["insight", "BRAF", "V600E", "--log-level", "DEBUG"])
+        result = runner.invoke(
+            app, ["insight", "BRAF", "V600E", "--log-level", "DEBUG"]
+        )
 
         assert result.exit_code == 0
         assert "BRAF" in result.stdout
@@ -204,7 +202,9 @@ class TestCLILogLevel:
     @pytest.mark.integration
     def test_insight_with_error_log_level(self):
         """Insight with --log-level ERROR should work."""
-        result = runner.invoke(app, ["insight", "BRAF", "V600E", "--log-level", "ERROR"])
+        result = runner.invoke(
+            app, ["insight", "BRAF", "V600E", "--log-level", "ERROR"]
+        )
 
         assert result.exit_code == 0
         assert "BRAF" in result.stdout
@@ -261,12 +261,12 @@ class TestCLIModes:
             output_path = Path(tmpdir) / "results.json"
 
             import time
+
             start = time.time()
 
-            result = runner.invoke(app, [
-                "batch", str(input_path),
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["batch", str(input_path), "--output", str(output_path)]
+            )
 
             elapsed = time.time() - start
 
@@ -278,6 +278,7 @@ class TestCLIModes:
 # =============================================================================
 # README EXAMPLE TESTS - Validate actual output values
 # =============================================================================
+
 
 class TestReadmeExamples:
     """Tests for README CLI examples with value validation.
@@ -298,11 +299,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--tumor", "Melanoma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "BRAF",
+                    "V600E",
+                    "--tumor",
+                    "Melanoma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
             assert output_path.exists()
@@ -316,10 +324,12 @@ class TestReadmeExamples:
 
             # Check specific drugs are present (vemurafenib, dabrafenib are key ones)
             drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
-            assert any("vemurafenib" in d or "zelboraf" in d for d in drug_names), \
-                f"Should have vemurafenib, got: {drug_names}"
-            assert any("dabrafenib" in d or "tafinlar" in d for d in drug_names), \
-                f"Should have dabrafenib, got: {drug_names}"
+            assert any(
+                "vemurafenib" in d or "zelboraf" in d for d in drug_names
+            ), f"Should have vemurafenib, got: {drug_names}"
+            assert any(
+                "dabrafenib" in d or "tafinlar" in d for d in drug_names
+            ), f"Should have dabrafenib, got: {drug_names}"
 
     @pytest.mark.integration
     def test_braf_v600e_melanoma_is_hotspot(self):
@@ -327,11 +337,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--tumor", "Melanoma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "BRAF",
+                    "V600E",
+                    "--tumor",
+                    "Melanoma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -349,11 +366,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--tumor", "Melanoma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "BRAF",
+                    "V600E",
+                    "--tumor",
+                    "Melanoma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -363,8 +387,10 @@ class TestReadmeExamples:
             # Check evidence quality
             gaps = data["evidence"].get("evidence_gaps", {})
             quality = gaps.get("overall_evidence_quality")
-            assert quality in ("comprehensive", "moderate"), \
-                f"BRAF V600E should have high evidence quality, got: {quality}"
+            assert quality in (
+                "comprehensive",
+                "moderate",
+            ), f"BRAF V600E should have high evidence quality, got: {quality}"
 
     @pytest.mark.integration
     def test_egfr_l858r_nsclc_has_fda_drugs(self):
@@ -372,11 +398,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "EGFR", "L858R",
-                "-t", "NSCLC",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "EGFR",
+                    "L858R",
+                    "-t",
+                    "NSCLC",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -390,8 +423,9 @@ class TestReadmeExamples:
             # Check for key EGFR inhibitors
             drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
             # Should have osimertinib (Tagrisso) - the most important one
-            assert any("osimertinib" in d or "tagrisso" in d for d in drug_names), \
-                f"Should have osimertinib, got: {drug_names}"
+            assert any(
+                "osimertinib" in d or "tagrisso" in d for d in drug_names
+            ), f"Should have osimertinib, got: {drug_names}"
 
     @pytest.mark.integration
     def test_egfr_l858r_nsclc_has_civic_evidence(self):
@@ -399,11 +433,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "EGFR", "L858R",
-                "-t", "NSCLC",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "EGFR",
+                    "L858R",
+                    "-t",
+                    "NSCLC",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -416,11 +457,11 @@ class TestReadmeExamples:
 
             # Should have sensitivity evidence for EGFR TKIs
             sensitivity_evidence = [
-                e for e in civic_evidence
-                if e.get("is_sensitivity") is True
+                e for e in civic_evidence if e.get("is_sensitivity") is True
             ]
-            assert len(sensitivity_evidence) > 0, \
-                "EGFR L858R should have sensitivity evidence in CIViC"
+            assert (
+                len(sensitivity_evidence) > 0
+            ), "EGFR L858R should have sensitivity evidence in CIViC"
 
     @pytest.mark.integration
     def test_kras_g12c_nsclc_has_sotorasib(self):
@@ -428,11 +469,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "KRAS", "G12C",
-                "-t", "NSCLC",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "KRAS",
+                    "G12C",
+                    "-t",
+                    "NSCLC",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -443,8 +491,9 @@ class TestReadmeExamples:
             fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
             drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
 
-            assert any("sotorasib" in d or "lumakras" in d for d in drug_names), \
-                f"KRAS G12C should have sotorasib, got: {drug_names}"
+            assert any(
+                "sotorasib" in d or "lumakras" in d for d in drug_names
+            ), f"KRAS G12C should have sotorasib, got: {drug_names}"
 
     @pytest.mark.integration
     def test_kras_g12c_is_hotspot(self):
@@ -452,10 +501,9 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "KRAS", "G12C",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["insight", "KRAS", "G12C", "--output", str(output_path)]
+            )
 
             assert result.exit_code == 0
 
@@ -472,11 +520,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "KRAS", "G12D",
-                "-t", "Colorectal",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "KRAS",
+                    "G12D",
+                    "-t",
+                    "Colorectal",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -493,11 +548,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "PIK3CA", "H1047R",
-                "-t", "Breast",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "PIK3CA",
+                    "H1047R",
+                    "-t",
+                    "Breast",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -508,8 +570,9 @@ class TestReadmeExamples:
             fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
             drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
 
-            assert any("alpelisib" in d or "piqray" in d for d in drug_names), \
-                f"PIK3CA H1047R should have alpelisib, got: {drug_names}"
+            assert any(
+                "alpelisib" in d or "piqray" in d for d in drug_names
+            ), f"PIK3CA H1047R should have alpelisib, got: {drug_names}"
 
     @pytest.mark.integration
     def test_idh1_r132h_has_ivosidenib(self):
@@ -517,11 +580,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "IDH1", "R132H",
-                "-t", "Glioma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "IDH1",
+                    "R132H",
+                    "-t",
+                    "Glioma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -532,8 +602,9 @@ class TestReadmeExamples:
             fda_evidence = data["evidence"].get("fda_biomarker_evidence", [])
             drug_names = [e.get("drug_name", "").lower() for e in fda_evidence]
 
-            assert any("ivosidenib" in d or "tibsovo" in d for d in drug_names), \
-                f"IDH1 R132H should have ivosidenib, got: {drug_names}"
+            assert any(
+                "ivosidenib" in d or "tibsovo" in d for d in drug_names
+            ), f"IDH1 R132H should have ivosidenib, got: {drug_names}"
 
     @pytest.mark.integration
     def test_output_has_gap_analysis(self):
@@ -541,11 +612,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--tumor", "Melanoma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "BRAF",
+                    "V600E",
+                    "--tumor",
+                    "Melanoma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 
@@ -567,8 +645,9 @@ class TestReadmeExamples:
 
             # Should include hotspot
             wc_lower = [w.lower() for w in wc]
-            assert any("hotspot" in w for w in wc_lower), \
-                f"Should have hotspot in well_characterized: {wc}"
+            assert any(
+                "hotspot" in w for w in wc_lower
+            ), f"Should have hotspot in well_characterized: {wc}"
 
     @pytest.mark.integration
     def test_output_has_depmap_data(self):
@@ -576,10 +655,9 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app, ["insight", "BRAF", "V600E", "--output", str(output_path)]
+            )
 
             assert result.exit_code == 0
 
@@ -598,11 +676,18 @@ class TestReadmeExamples:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "result.json"
 
-            result = runner.invoke(app, [
-                "insight", "BRAF", "V600E",
-                "--tumor", "Melanoma",
-                "--output", str(output_path)
-            ])
+            result = runner.invoke(
+                app,
+                [
+                    "insight",
+                    "BRAF",
+                    "V600E",
+                    "--tumor",
+                    "Melanoma",
+                    "--output",
+                    str(output_path),
+                ],
+            )
 
             assert result.exit_code == 0
 

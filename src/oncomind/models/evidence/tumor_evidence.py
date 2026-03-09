@@ -7,18 +7,25 @@ Used by gap_detector to populate the "Evidence Items For [Tumor]" well-character
 from pydantic import BaseModel, Field
 from typing import Literal
 
-
 MatchLevel = Literal["variant", "codon", "gene"]
 
 
 class SourceMatch(BaseModel):
     """Match info from a single evidence source."""
 
-    source: str = Field(..., description="Source name (e.g., 'CIViC', 'FDA', 'VICC', 'CGI')")
-    count: int = Field(default=0, description="Number of matching items from this source")
-    variant_matches: int = Field(default=0, description="Items matching at variant level")
+    source: str = Field(
+        ..., description="Source name (e.g., 'CIViC', 'FDA', 'VICC', 'CGI')"
+    )
+    count: int = Field(
+        default=0, description="Number of matching items from this source"
+    )
+    variant_matches: int = Field(
+        default=0, description="Items matching at variant level"
+    )
     codon_matches: int = Field(default=0, description="Items matching at codon level")
-    gene_matches: int = Field(default=0, description="Items matching at gene level only")
+    gene_matches: int = Field(
+        default=0, description="Items matching at gene level only"
+    )
 
 
 class TumorEvidenceMatch(BaseModel):
@@ -35,7 +42,9 @@ class TumorEvidenceMatch(BaseModel):
     """
 
     tumor_type: str = Field(..., description="The queried tumor type")
-    has_tumor_evidence: bool = Field(default=False, description="Whether any tumor-specific evidence exists")
+    has_tumor_evidence: bool = Field(
+        default=False, description="Whether any tumor-specific evidence exists"
+    )
 
     # Per-source match info
     civic_assertions: SourceMatch | None = Field(default=None)
@@ -46,9 +55,13 @@ class TumorEvidenceMatch(BaseModel):
 
     # Aggregate counts
     total_matches: int = Field(default=0, description="Total items matching tumor type")
-    total_variant_level: int = Field(default=0, description="Items at variant match level")
+    total_variant_level: int = Field(
+        default=0, description="Items at variant match level"
+    )
     total_codon_level: int = Field(default=0, description="Items at codon match level")
-    total_gene_level: int = Field(default=0, description="Items at gene match level only")
+    total_gene_level: int = Field(
+        default=0, description="Items at gene match level only"
+    )
 
     @property
     def matches_on_str(self) -> str | None:
@@ -95,7 +108,7 @@ class TumorEvidenceMatch(BaseModel):
         count: int,
         variant_matches: int,
         codon_matches: int,
-        gene_matches: int
+        gene_matches: int,
     ) -> None:
         """Add match info for a source and update totals."""
         source_match = SourceMatch(

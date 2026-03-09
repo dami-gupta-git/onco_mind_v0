@@ -1,5 +1,3 @@
-
-
 from civicpy import civic
 
 # Search for the variant (returns a list; usually 0 or 1 match for precise names)
@@ -7,7 +5,9 @@ variant = civic.get_variant_by_id(931)
 
 if variant:
     # variant = variants[0]  # Take the first (best) match
-    print(f"Found variant: gene={variant.gene.name} variant={variant.name} ID={variant.id}")
+    print(
+        f"Found variant: gene={variant.gene.name} variant={variant.name} ID={variant.id}"
+    )
 
     simple_mp = variant.single_variant_molecular_profile
 
@@ -24,10 +24,14 @@ if variant:
         print(f"\nAssociated Evidence Items: {len(evidence_items)}")
         for ev in evidence_items[:5]:  # show first few
             print(f"  - EID {ev.id=}: {ev.evidence_type=} | Level {ev.evidence_level=}")
-            print(f"  - {ev.evidence_direction=}, {ev.evidence_type=}, {ev.significance=}")
+            print(
+                f"  - {ev.evidence_direction=}, {ev.evidence_type=}, {ev.significance=}"
+            )
             print(f"    {ev.description[:100]}...")
             # print(f"    Significance: {ev.clinical_significance}")
-            print(f"    Therapies: {', '.join(t.name for t in ev.therapies) if ev.therapies else 'None'}")
+            print(
+                f"    Therapies: {', '.join(t.name for t in ev.therapies) if ev.therapies else 'None'}"
+            )
             print("-" * 60)
     else:
         print("No simple molecular profile found for this variant (unusual).")

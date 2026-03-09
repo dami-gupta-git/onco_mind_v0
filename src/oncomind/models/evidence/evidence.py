@@ -37,7 +37,10 @@ from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
-from oncomind.models.evidence.fda_biomarker import FDABiomarkerEvidence, BiomarkerRequirement
+from oncomind.models.evidence.fda_biomarker import (
+    FDABiomarkerEvidence,
+    BiomarkerRequirement,
+)
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.hotspots import HotspotsEvidence
 from oncomind.models.evidence.vicc import VICCEvidence
@@ -47,10 +50,14 @@ from oncomind.models.extracted.literature_knowledge import LiteratureKnowledge
 from oncomind.models.extracted.evidence_gaps import EvidenceGaps
 from oncomind.models.extracted.therapeutic_data import TherapeuticData
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
-from oncomind.config.constants import is_biomarker_selection_drug, is_acquired_resistance_mutation
+from oncomind.config.constants import (
+    is_biomarker_selection_drug,
+    is_acquired_resistance_mutation,
+)
 
 # Import FDALabelInfo with TYPE_CHECKING to avoid circular import
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from oncomind.api.fda_drugs import FDALabelInfo
 
@@ -61,8 +68,12 @@ class VariantIdentifiers(BaseModel):
     variant_id: str = Field(..., description="Unique identifier (gene:variant)")
     gene: str = Field(..., description="Gene symbol (e.g., BRAF)")
     variant: str = Field(..., description="Variant notation (e.g., V600E)")
-    variant_normalized: str | None = Field(None, description="Normalized variant notation")
-    variant_type: str | None = Field(None, description="Variant classification (missense, nonsense, etc.)")
+    variant_normalized: str | None = Field(
+        None, description="Normalized variant notation"
+    )
+    variant_type: str | None = Field(
+        None, description="Variant classification (missense, nonsense, etc.)"
+    )
 
     # Database identifiers
     cosmic_id: str | None = Field(None, description="COSMIC mutation ID")
@@ -77,15 +88,21 @@ class VariantIdentifiers(BaseModel):
 
     # Transcript info
     transcript_id: str | None = Field(None, description="Transcript ID")
-    transcript_consequence: str | None = Field(None, description="Transcript consequence")
+    transcript_consequence: str | None = Field(
+        None, description="Transcript consequence"
+    )
 
 
 class FunctionalScores(BaseModel):
     """Functional prediction scores and computational annotations."""
 
     # AlphaMissense
-    alphamissense_score: float | None = Field(None, description="AlphaMissense pathogenicity score (0-1)")
-    alphamissense_prediction: str | None = Field(None, description="AlphaMissense prediction (P/B/A)")
+    alphamissense_score: float | None = Field(
+        None, description="AlphaMissense pathogenicity score (0-1)"
+    )
+    alphamissense_prediction: str | None = Field(
+        None, description="AlphaMissense prediction (P/B/A)"
+    )
 
     # CADD
     cadd_score: float | None = Field(None, description="CADD PHRED score")
@@ -101,15 +118,21 @@ class FunctionalScores(BaseModel):
 
     # SnpEff
     snpeff_effect: str | None = Field(None, description="SnpEff effect annotation")
-    snpeff_impact: str | None = Field(None, description="SnpEff impact (HIGH/MODERATE/LOW/MODIFIER)")
+    snpeff_impact: str | None = Field(
+        None, description="SnpEff impact (HIGH/MODERATE/LOW/MODIFIER)"
+    )
 
     # SpliceAI (future)
     spliceai_score: float | None = Field(None, description="SpliceAI delta score")
     spliceai_prediction: str | None = Field(None, description="SpliceAI prediction")
 
     # Population frequencies
-    gnomad_exome_af: float | None = Field(None, description="gnomAD exome allele frequency")
-    gnomad_genome_af: float | None = Field(None, description="gnomAD genome allele frequency")
+    gnomad_exome_af: float | None = Field(
+        None, description="gnomAD exome allele frequency"
+    )
+    gnomad_genome_af: float | None = Field(
+        None, description="gnomAD genome allele frequency"
+    )
 
     def get_pathogenicity_summary(self) -> str:
         """Generate a concise pathogenicity summary from available scores."""
@@ -117,8 +140,12 @@ class FunctionalScores(BaseModel):
 
         if self.alphamissense_prediction:
             pred_map = {"P": "Pathogenic", "B": "Benign", "A": "Ambiguous"}
-            pred = pred_map.get(self.alphamissense_prediction, self.alphamissense_prediction)
-            score_str = f" ({self.alphamissense_score:.2f})" if self.alphamissense_score else ""
+            pred = pred_map.get(
+                self.alphamissense_prediction, self.alphamissense_prediction
+            )
+            score_str = (
+                f" ({self.alphamissense_score:.2f})" if self.alphamissense_score else ""
+            )
             parts.append(f"AlphaMissense: {pred}{score_str}")
 
         if self.cadd_score is not None:
@@ -137,12 +164,20 @@ class VariantContext(BaseModel):
     """Context for variant interpretation (tumor type, gene role, mutation class)."""
 
     tumor_type: str | None = Field(None, description="Tumor type for context")
-    tumor_type_resolved: str | None = Field(None, description="OncoTree-resolved tumor type")
+    tumor_type_resolved: str | None = Field(
+        None, description="OncoTree-resolved tumor type"
+    )
 
     # Gene context
-    gene_role: str | None = Field(None, description="Gene role (oncogene, TSG, DDR, MMR, etc.)")
-    gene_class: str | None = Field(None, description="Gene functional class from context")
-    mutation_class: str | None = Field(None, description="Mutation class (e.g., BRAF Class I/II/III)")
+    gene_role: str | None = Field(
+        None, description="Gene role (oncogene, TSG, DDR, MMR, etc.)"
+    )
+    gene_class: str | None = Field(
+        None, description="Gene functional class from context"
+    )
+    mutation_class: str | None = Field(
+        None, description="Mutation class (e.g., BRAF Class I/II/III)"
+    )
     pathway: str | None = Field(None, description="Associated pathway if relevant")
 
 
@@ -179,12 +214,15 @@ class Evidence(BaseModel):
     """
 
     # Core info
-    identifiers: VariantIdentifiers = Field(..., description="Variant identifiers and notation")
+    identifiers: VariantIdentifiers = Field(
+        ..., description="Variant identifiers and notation"
+    )
     functional: FunctionalScores = Field(
         default_factory=FunctionalScores, description="Functional predictions"
     )
     context: VariantContext = Field(
-        default_factory=VariantContext, description="Variant context (tumor type, gene role)"
+        default_factory=VariantContext,
+        description="Variant context (tumor type, gene role)",
     )
 
     # === Evidence lists (one per source) ===
@@ -192,7 +230,7 @@ class Evidence(BaseModel):
     # FDA - uses FDABiomarkerEvidence from FDALabelParser (with negation detection)
     fda_biomarker_evidence: list[FDABiomarkerEvidence] = Field(
         default_factory=list,
-        description="FDA biomarker-drug indications parsed directly from FDA labels"
+        description="FDA biomarker-drug indications parsed directly from FDA labels",
     )
     # CIViC
     civic_assertions: list[CIViCAssertionEvidence] = Field(
@@ -203,7 +241,9 @@ class Evidence(BaseModel):
     )
 
     # VICC
-    vicc_evidence: list[VICCEvidence] = Field(default_factory=list, description="VICC MetaKB evidence")
+    vicc_evidence: list[VICCEvidence] = Field(
+        default_factory=list, description="VICC MetaKB evidence"
+    )
 
     # CGI (FDA-approved biomarkers)
     cgi_biomarkers: list[CGIBiomarkerEvidence] = Field(
@@ -211,11 +251,17 @@ class Evidence(BaseModel):
     )
 
     # ClinVar
-    clinvar_entries: list[ClinVarEvidence] = Field(default_factory=list, description="ClinVar entries")
-    clinvar_significance: str | None = Field(None, description="Primary ClinVar clinical significance")
+    clinvar_entries: list[ClinVarEvidence] = Field(
+        default_factory=list, description="ClinVar entries"
+    )
+    clinvar_significance: str | None = Field(
+        None, description="Primary ClinVar clinical significance"
+    )
 
     # COSMIC
-    cosmic_entries: list[COSMICEvidence] = Field(default_factory=list, description="COSMIC entries")
+    cosmic_entries: list[COSMICEvidence] = Field(
+        default_factory=list, description="COSMIC entries"
+    )
 
     # Clinical Trials
     clinical_trials: list[ClinicalTrialEvidence] = Field(
@@ -223,7 +269,9 @@ class Evidence(BaseModel):
     )
 
     # Literature
-    pubmed_articles: list[PubMedEvidence] = Field(default_factory=list, description="PubMed articles")
+    pubmed_articles: list[PubMedEvidence] = Field(
+        default_factory=list, description="PubMed articles"
+    )
     literature_knowledge: LiteratureKnowledge | None = Field(
         None, description="LLM-extracted structured knowledge from literature"
     )
@@ -266,6 +314,7 @@ class Evidence(BaseModel):
     def compute_evidence_gaps(self) -> EvidenceGaps:
         """Compute and cache evidence gaps."""
         from oncomind.insight_builder.gap_detector import detect_evidence_gaps
+
         self.evidence_gaps = detect_evidence_gaps(self)
         return self.evidence_gaps
 
@@ -322,14 +371,19 @@ class Evidence(BaseModel):
                 continue
 
             # Tumor must match (if specified)
-            if queried_tumor and not any(tumor_types_match(t, queried_tumor) for t in e.tumor_types):
+            if queried_tumor and not any(
+                tumor_types_match(t, queried_tumor) for t in e.tumor_types
+            ):
                 continue
 
             # Variant must match via matches_variant()
             match_result = e.matches_variant(queried_gene, queried_variant)
             if not match_result["matches"]:
                 # Include same_codon_different_variant if include_level allows
-                if include_level == "same_codon" and match_result["match_type"] == "same_codon_different_variant":
+                if (
+                    include_level == "same_codon"
+                    and match_result["match_type"] == "same_codon_different_variant"
+                ):
                     pass  # Allow through
                 else:
                     continue
@@ -356,20 +410,20 @@ class Evidence(BaseModel):
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""
         return bool(
-            self.fda_biomarker_evidence or
-            self.civic_assertions or
-            self.civic_evidence or
-            self.vicc_evidence or
-            self.cgi_biomarkers or
-            self.clinvar_entries or
-            self.clinvar_significance or
-            self.cosmic_entries or
-            self.clinical_trials or
-            self.pubmed_articles or
-            self.preclinical_biomarkers or
-            self.early_phase_biomarkers or
-            (self.cbioportal_evidence and self.cbioportal_evidence.has_data()) or
-            (self.depmap_evidence and self.depmap_evidence.has_data())
+            self.fda_biomarker_evidence
+            or self.civic_assertions
+            or self.civic_evidence
+            or self.vicc_evidence
+            or self.cgi_biomarkers
+            or self.clinvar_entries
+            or self.clinvar_significance
+            or self.cosmic_entries
+            or self.clinical_trials
+            or self.pubmed_articles
+            or self.preclinical_biomarkers
+            or self.early_phase_biomarkers
+            or (self.cbioportal_evidence and self.cbioportal_evidence.has_data())
+            or (self.depmap_evidence and self.depmap_evidence.has_data())
         )
 
     def get_evidence_sources(self) -> list[str]:
@@ -405,7 +459,11 @@ class Evidence(BaseModel):
         Only includes drugs with REQUIRED_POSITIVE (matched) status.
         """
         drugs = []
-        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        gene = (
+            self.identifiers.gene.upper()
+            if self.identifiers and self.identifiers.gene
+            else ""
+        )
         variant = self.identifiers.variant if self.identifiers else ""
 
         for ev in self.fda_biomarker_evidence:
@@ -478,7 +536,9 @@ class Evidence(BaseModel):
         drugs = self.get_approved_drugs()
         if drugs:
             ellipsis = "..." if len(drugs) > 3 else ""
-            parts.append(f"It is associated with FDA-approved therapies: {', '.join(drugs[:3])}{ellipsis}.")
+            parts.append(
+                f"It is associated with FDA-approved therapies: {', '.join(drugs[:3])}{ellipsis}."
+            )
 
         return " ".join(parts)
 
@@ -538,22 +598,44 @@ class Evidence(BaseModel):
                             evidence_level = "Case report"
 
                         # Determine cancer specificity
-                        cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            assertion.disease
+                        )
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=therapy,
-                            evidence_level=evidence_level,
-                            approval_status=self._get_approval_status_from_tier(assertion.amp_tier),
-                            clinical_context=assertion.disease,
-                            response_type="Sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "Resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None,
-                            mechanism=None,
-                            tumor_types_tested=[assertion.disease] if assertion.disease else [],
-                            source="CIViC",
-                            source_url=assertion.civic_url,
-                            confidence="high" if assertion.amp_tier == "Tier I" else "moderate",
-                            locus_match=assertion.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=therapy,
+                                evidence_level=evidence_level,
+                                approval_status=self._get_approval_status_from_tier(
+                                    assertion.amp_tier
+                                ),
+                                clinical_context=assertion.disease,
+                                response_type=(
+                                    "Sensitivity"
+                                    if assertion.significance
+                                    and "SENSITIV" in assertion.significance.upper()
+                                    else (
+                                        "Resistance"
+                                        if assertion.significance
+                                        and "RESIST" in assertion.significance.upper()
+                                        else None
+                                    )
+                                ),
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [assertion.disease] if assertion.disease else []
+                                ),
+                                source="CIViC",
+                                source_url=assertion.civic_url,
+                                confidence=(
+                                    "high"
+                                    if assertion.amp_tier == "Tier I"
+                                    else "moderate"
+                                ),
+                                locus_match=assertion.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
         # From CIViC evidence items (individual evidence, not curated assertions)
         for civic in self.civic_evidence:
@@ -564,10 +646,14 @@ class Evidence(BaseModel):
                         seen_drugs.add(drug_key)
 
                         # Determine cancer specificity
-                        cancer_specificity = self._get_cancer_specificity_from_disease(civic.disease)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            civic.disease
+                        )
 
                         # Map CIViC evidence level (A-E) to standard format
-                        evidence_level = self._civic_level_to_evidence_level(civic.evidence_level)
+                        evidence_level = self._civic_level_to_evidence_level(
+                            civic.evidence_level
+                        )
 
                         # Determine response type using computed properties
                         # (these check both clinical_significance AND evidence_direction)
@@ -577,20 +663,30 @@ class Evidence(BaseModel):
                         elif civic.is_resistance:
                             response_type = "Resistance"
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=drug,
-                            evidence_level=evidence_level,
-                            approval_status=self._get_approval_from_civic_level(civic.evidence_level),
-                            clinical_context=civic.disease,
-                            response_type=response_type,
-                            mechanism=None,
-                            tumor_types_tested=[civic.disease] if civic.disease else [],
-                            source="CIViC",
-                            source_url=civic.civic_url,
-                            confidence="moderate" if civic.evidence_level in ("A", "B") else "low",
-                            locus_match=civic.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=drug,
+                                evidence_level=evidence_level,
+                                approval_status=self._get_approval_from_civic_level(
+                                    civic.evidence_level
+                                ),
+                                clinical_context=civic.disease,
+                                response_type=response_type,
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [civic.disease] if civic.disease else []
+                                ),
+                                source="CIViC",
+                                source_url=civic.civic_url,
+                                confidence=(
+                                    "moderate"
+                                    if civic.evidence_level in ("A", "B")
+                                    else "low"
+                                ),
+                                locus_match=civic.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
         # From VICC evidence
         for vicc in self.vicc_evidence:
@@ -601,25 +697,48 @@ class Evidence(BaseModel):
                         seen_drugs.add(drug_key)
 
                         # Build source URL for VICC
-                        vicc_url = vicc.publication_url[0] if isinstance(vicc.publication_url, list) and vicc.publication_url else vicc.publication_url
+                        vicc_url = (
+                            vicc.publication_url[0]
+                            if isinstance(vicc.publication_url, list)
+                            and vicc.publication_url
+                            else vicc.publication_url
+                        )
 
                         # Determine cancer specificity
-                        cancer_specificity = self._get_cancer_specificity_from_disease(vicc.disease)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            vicc.disease
+                        )
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=drug,
-                            evidence_level=self._vicc_level_to_evidence_level(vicc.evidence_level),
-                            approval_status=self._get_approval_from_vicc(vicc),
-                            clinical_context=vicc.disease,
-                            response_type="Sensitivity" if vicc.is_sensitivity else "Resistance" if vicc.is_resistance else None,
-                            mechanism=None,
-                            tumor_types_tested=[vicc.disease] if vicc.disease else [],
-                            source=f"VICC ({vicc.source})" if vicc.source else "VICC",
-                            source_url=vicc_url,
-                            confidence="moderate" if vicc.evidence_level in ("A", "B") else "low",
-                            locus_match=vicc.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=drug,
+                                evidence_level=self._vicc_level_to_evidence_level(
+                                    vicc.evidence_level
+                                ),
+                                approval_status=self._get_approval_from_vicc(vicc),
+                                clinical_context=vicc.disease,
+                                response_type=(
+                                    "Sensitivity"
+                                    if vicc.is_sensitivity
+                                    else "Resistance" if vicc.is_resistance else None
+                                ),
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [vicc.disease] if vicc.disease else []
+                                ),
+                                source=(
+                                    f"VICC ({vicc.source})" if vicc.source else "VICC"
+                                ),
+                                source_url=vicc_url,
+                                confidence=(
+                                    "moderate"
+                                    if vicc.evidence_level in ("A", "B")
+                                    else "low"
+                                ),
+                                locus_match=vicc.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
         # From preclinical biomarkers (if requested)
         if include_preclinical:
@@ -643,21 +762,29 @@ class Evidence(BaseModel):
                                 response_type = "Sensitivity"
 
                         # Determine cancer specificity
-                        cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            biomarker.tumor_type
+                        )
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=biomarker.drug,
-                            evidence_level="Preclinical",
-                            approval_status="Investigational",
-                            clinical_context=biomarker.tumor_type,
-                            response_type=response_type,
-                            mechanism=None,
-                            tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
-                            source="CGI (preclinical)",
-                            confidence="low",
-                            locus_match=biomarker.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=biomarker.drug,
+                                evidence_level="Preclinical",
+                                approval_status="Investigational",
+                                clinical_context=biomarker.tumor_type,
+                                response_type=response_type,
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [biomarker.tumor_type]
+                                    if biomarker.tumor_type
+                                    else []
+                                ),
+                                source="CGI (preclinical)",
+                                confidence="low",
+                                locus_match=biomarker.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
             # Also include early-phase biomarkers (clinical trials, case reports)
             for biomarker in self.early_phase_biomarkers:
@@ -678,21 +805,30 @@ class Evidence(BaseModel):
                                 # Only explicit "Responsive" (not "No Responsive" or toxicity)
                                 response_type = "Sensitivity"
 
-                        cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            biomarker.tumor_type
+                        )
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=biomarker.drug,
-                            evidence_level=biomarker.evidence_level or "Unspecified",
-                            approval_status="Investigational",
-                            clinical_context=biomarker.tumor_type,
-                            response_type=response_type,
-                            mechanism=None,
-                            tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
-                            source="CGI (early phase)",
-                            confidence="low",
-                            locus_match=biomarker.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=biomarker.drug,
+                                evidence_level=biomarker.evidence_level
+                                or "Unspecified",
+                                approval_status="Investigational",
+                                clinical_context=biomarker.tumor_type,
+                                response_type=response_type,
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [biomarker.tumor_type]
+                                    if biomarker.tumor_type
+                                    else []
+                                ),
+                                source="CGI (early phase)",
+                                confidence="low",
+                                locus_match=biomarker.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
             # Include drugs from active clinical trials
             for trial in self.clinical_trials:
@@ -705,7 +841,9 @@ class Evidence(BaseModel):
                         seen_drugs.add(drug_key)
 
                         # Determine evidence level from trial phase
-                        if trial.phase and "PHASE3" in trial.phase.upper().replace(" ", ""):
+                        if trial.phase and "PHASE3" in trial.phase.upper().replace(
+                            " ", ""
+                        ):
                             evidence_level = "Phase 3"
                         else:
                             evidence_level = "Phase 2"
@@ -714,20 +852,26 @@ class Evidence(BaseModel):
                         # (returns "cancer_specific", specific disease name, or None)
                         cancer_specificity = trial.cancer_specificity
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=drug,
-                            evidence_level=evidence_level,
-                            approval_status="Clinical Trial",
-                            clinical_context=", ".join(trial.conditions[:2]) if trial.conditions else None,
-                            response_type=None,  # Trials don't specify response type
-                            mechanism=None,
-                            tumor_types_tested=trial.conditions,
-                            source=f"ClinicalTrials.gov ({trial.nct_id})",
-                            source_url=trial.url,
-                            confidence="low",  # Trial data, not yet published results
-                            locus_match=getattr(trial, 'match_scope', None),
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=drug,
+                                evidence_level=evidence_level,
+                                approval_status="Clinical Trial",
+                                clinical_context=(
+                                    ", ".join(trial.conditions[:2])
+                                    if trial.conditions
+                                    else None
+                                ),
+                                response_type=None,  # Trials don't specify response type
+                                mechanism=None,
+                                tumor_types_tested=trial.conditions,
+                                source=f"ClinicalTrials.gov ({trial.nct_id})",
+                                source_url=trial.url,
+                                confidence="low",  # Trial data, not yet published results
+                                locus_match=getattr(trial, "match_scope", None),
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
         # Sort by evidence tier
         evidence_list.sort(key=lambda x: x.get_evidence_tier())
@@ -744,7 +888,11 @@ class Evidence(BaseModel):
 
         return {
             "fda_approved": [e for e in all_evidence if e.is_fda_approved()],
-            "clinical": [e for e in all_evidence if e.is_clinical_evidence() and not e.is_fda_approved()],
+            "clinical": [
+                e
+                for e in all_evidence
+                if e.is_clinical_evidence() and not e.is_fda_approved()
+            ],
             "preclinical": [e for e in all_evidence if e.is_preclinical_evidence()],
         }
 
@@ -798,11 +946,15 @@ class Evidence(BaseModel):
             locus_match = "variant" if match_type == "exact" else match_type
 
             # For combinations, use the full combination name
-            is_combination = ev.combination_partners and len(ev.combination_partners) > 0
+            is_combination = (
+                ev.combination_partners and len(ev.combination_partners) > 0
+            )
             if is_combination:
                 drug_name = ev.get_display_drug_name()
             else:
-                drug_name = ev.brand_name or ev.drug_name if ev.brand_name else ev.drug_name
+                drug_name = (
+                    ev.brand_name or ev.drug_name if ev.brand_name else ev.drug_name
+                )
 
             drug_key = drug_name.lower() if drug_name else ""
             assoc_key = ""  # FDA biomarker evidence doesn't have association info
@@ -814,67 +966,111 @@ class Evidence(BaseModel):
                 cancer_specificity = None
                 if ev.tumor_types:
                     if queried_tumor:
-                        if any(tumor_types_match(t, queried_tumor) for t in ev.tumor_types):
+                        if any(
+                            tumor_types_match(t, queried_tumor) for t in ev.tumor_types
+                        ):
                             cancer_specificity = "cancer_specific"
                         elif any(is_pan_cancer_term(t) for t in ev.tumor_types):
                             cancer_specificity = "pan_cancer"
                         else:
-                            cancer_specificity = ev.tumor_types[0] if ev.tumor_types else None
+                            cancer_specificity = (
+                                ev.tumor_types[0] if ev.tumor_types else None
+                            )
                     else:
-                        cancer_specificity = ev.tumor_types[0] if ev.tumor_types else None
+                        cancer_specificity = (
+                            ev.tumor_types[0] if ev.tumor_types else None
+                        )
 
                 # Generate FDA label URL using set_id for direct link
                 fda_url = ev.fda_label_url
 
-                evidence_list.append(TherapeuticData(
-                    drug_name=drug_name,
-                    evidence_level="FDA-approved",
-                    approval_status="Approved in indication" if match_type == "exact" else "Approved",
-                    clinical_context=ev.line_of_therapy,
-                    response_type=None,  # FDA biomarker evidence doesn't have response type
-                    mechanism=None,
-                    tumor_types_tested=ev.tumor_types,
-                    source="FDA",
-                    source_url=fda_url,
-                    confidence="high",
-                    locus_match=locus_match,
-                    cancer_specificity=cancer_specificity,
-                ))
+                evidence_list.append(
+                    TherapeuticData(
+                        drug_name=drug_name,
+                        evidence_level="FDA-approved",
+                        approval_status=(
+                            "Approved in indication"
+                            if match_type == "exact"
+                            else "Approved"
+                        ),
+                        clinical_context=ev.line_of_therapy,
+                        response_type=None,  # FDA biomarker evidence doesn't have response type
+                        mechanism=None,
+                        tumor_types_tested=ev.tumor_types,
+                        source="FDA",
+                        source_url=fda_url,
+                        confidence="high",
+                        locus_match=locus_match,
+                        cancer_specificity=cancer_specificity,
+                    )
+                )
 
         # From CIViC assertions - only Tier I with fda_companion_test
         for assertion in self.civic_assertions:
-            if assertion.amp_tier == "Tier I" and assertion.fda_companion_test and assertion.therapies:
+            if (
+                assertion.amp_tier == "Tier I"
+                and assertion.fda_companion_test
+                and assertion.therapies
+            ):
                 for therapy in assertion.therapies:
                     # Skip biomarker selection drugs
                     if gene and is_biomarker_selection_drug(therapy, gene):
                         continue
                     drug_key = therapy.lower()
                     # Determine response type for deduplication key
-                    civic_response = "sensitivity" if assertion.significance and "SENSITIV" in assertion.significance.upper() else "resistance" if assertion.significance and "RESIST" in assertion.significance.upper() else None
+                    civic_response = (
+                        "sensitivity"
+                        if assertion.significance
+                        and "SENSITIV" in assertion.significance.upper()
+                        else (
+                            "resistance"
+                            if assertion.significance
+                            and "RESIST" in assertion.significance.upper()
+                            else None
+                        )
+                    )
                     entry_key = (drug_key, civic_response)
                     if entry_key not in seen_entries:
                         seen_entries.add(entry_key)
 
-                        cancer_specificity = self._get_cancer_specificity_from_disease(assertion.disease)
+                        cancer_specificity = self._get_cancer_specificity_from_disease(
+                            assertion.disease
+                        )
 
-                        evidence_list.append(TherapeuticData(
-                            drug_name=therapy,
-                            evidence_level="FDA-approved",
-                            approval_status="FDA Approved (CIViC)",
-                            clinical_context=assertion.disease,
-                            response_type="Sensitivity" if civic_response == "sensitivity" else "Resistance" if civic_response == "resistance" else None,
-                            mechanism=None,
-                            tumor_types_tested=[assertion.disease] if assertion.disease else [],
-                            source="CIViC",
-                            source_url=assertion.civic_url,
-                            confidence="high",
-                            locus_match=assertion.locus_match,
-                            cancer_specificity=cancer_specificity,
-                        ))
+                        evidence_list.append(
+                            TherapeuticData(
+                                drug_name=therapy,
+                                evidence_level="FDA-approved",
+                                approval_status="FDA Approved (CIViC)",
+                                clinical_context=assertion.disease,
+                                response_type=(
+                                    "Sensitivity"
+                                    if civic_response == "sensitivity"
+                                    else (
+                                        "Resistance"
+                                        if civic_response == "resistance"
+                                        else None
+                                    )
+                                ),
+                                mechanism=None,
+                                tumor_types_tested=(
+                                    [assertion.disease] if assertion.disease else []
+                                ),
+                                source="CIViC",
+                                source_url=assertion.civic_url,
+                                confidence="high",
+                                locus_match=assertion.locus_match,
+                                cancer_specificity=cancer_specificity,
+                            )
+                        )
 
         # From CGI biomarkers - fda_approved=True
         for biomarker in self.cgi_biomarkers:
-            if biomarker.fda_approved and biomarker.drug and isinstance(biomarker.drug, str):
+            if (
+                biomarker.fda_approved
+                and biomarker.drug
+                and isinstance(biomarker.drug, str)
+            ):
                 # Skip biomarker selection drugs
                 if gene and is_biomarker_selection_drug(biomarker.drug, gene):
                     continue
@@ -896,7 +1092,9 @@ class Evidence(BaseModel):
                             # Only explicit "Responsive" (not "No Responsive" or toxicity)
                             response_type = "Sensitivity"
 
-                    cancer_specificity = self._get_cancer_specificity_from_disease(biomarker.tumor_type)
+                    cancer_specificity = self._get_cancer_specificity_from_disease(
+                        biomarker.tumor_type
+                    )
 
                     # Use CGI's FDA URL if available, otherwise search DailyMed
                     # For combinations (e.g., "Erlotinib + gemcitabine"), use just the first drug
@@ -907,25 +1105,31 @@ class Evidence(BaseModel):
                             search_drug = search_drug.split("+")[0].strip()
                         source_url = f"https://dailymed.nlm.nih.gov/dailymed/search.cfm?labeltype=all&query={search_drug.replace(' ', '+')}"
 
-                    evidence_list.append(TherapeuticData(
-                        drug_name=biomarker.drug,
-                        evidence_level="FDA-approved",
-                        approval_status="FDA Approved (CGI)",
-                        clinical_context=biomarker.tumor_type,
-                        response_type=response_type,
-                        mechanism=None,
-                        tumor_types_tested=[biomarker.tumor_type] if biomarker.tumor_type else [],
-                        source="CGI",
-                        source_url=source_url,
-                        confidence="high",
-                        locus_match=biomarker.locus_match,
-                        cancer_specificity=cancer_specificity,
-                    ))
+                    evidence_list.append(
+                        TherapeuticData(
+                            drug_name=biomarker.drug,
+                            evidence_level="FDA-approved",
+                            approval_status="FDA Approved (CGI)",
+                            clinical_context=biomarker.tumor_type,
+                            response_type=response_type,
+                            mechanism=None,
+                            tumor_types_tested=(
+                                [biomarker.tumor_type] if biomarker.tumor_type else []
+                            ),
+                            source="CGI",
+                            source_url=source_url,
+                            confidence="high",
+                            locus_match=biomarker.locus_match,
+                            cancer_specificity=cancer_specificity,
+                        )
+                    )
 
         # Sort FDA drugs: variant-in-indication first, then sensitivity, then others, resistance last
         def sort_key(therapy: TherapeuticData) -> tuple[int, int, str]:
             # Priority 1: Variant in indication (most relevant)
-            in_indication = 0 if therapy.approval_status == "Approved in indication" else 1
+            in_indication = (
+                0 if therapy.approval_status == "Approved in indication" else 1
+            )
             # Priority 2: Response type (sensitivity > unknown > resistance)
             if therapy.response_type == "Sensitivity":
                 response_priority = 0
@@ -945,8 +1149,8 @@ class Evidence(BaseModel):
         """Extract line of therapy from FDA approval."""
         if self.context.tumor_type and approval.indication:
             parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
-            if parsed.get('tumor_match'):
-                return parsed.get('line_of_therapy')
+            if parsed.get("tumor_match"):
+                return parsed.get("line_of_therapy")
         return None
 
     def _get_response_type_from_evidence(self, drug_name: str) -> str | None:
@@ -1104,7 +1308,10 @@ class Evidence(BaseModel):
         for biomarker in self.cgi_biomarkers:
             if biomarker.association and biomarker.association.upper() == "RESPONSIVE":
                 if biomarker.drug:
-                    if drug_lower in biomarker.drug.lower() or biomarker.drug.lower() in drug_lower:
+                    if (
+                        drug_lower in biomarker.drug.lower()
+                        or biomarker.drug.lower() in drug_lower
+                    ):
                         return True
 
         return False
@@ -1129,13 +1336,16 @@ class Evidence(BaseModel):
         # Fallback for approvals without cancer_type_match set (legacy data)
         if self.context.tumor_type and approval.indication:
             parsed = approval.parse_indication_for_tumor(self.context.tumor_type)
-            if parsed.get('tumor_match'):
+            if parsed.get("tumor_match"):
                 return "cancer_specific"
 
         # No match - extract what cancer the drug IS approved for
         indication_cancer = approval.extract_indication_cancer_type()
         if indication_cancer:
-            if "pan-cancer" in indication_cancer.lower() or "solid tumor" in indication_cancer.lower():
+            if (
+                "pan-cancer" in indication_cancer.lower()
+                or "solid tumor" in indication_cancer.lower()
+            ):
                 return "pan_cancer"
             return indication_cancer
 
@@ -1252,22 +1462,20 @@ class Evidence(BaseModel):
             "dbsnp_id": self.identifiers.dbsnp_id,
             "clinvar_id": self.identifiers.clinvar_id,
             "hgvs_protein": self.identifiers.hgvs_protein,
-
             # Clinical
             "tumor_type": self.context.tumor_type,
             "gene_role": self.context.gene_role,
             "clinvar_significance": self.clinvar_significance,
             "fda_approved_drugs": ", ".join(self.get_approved_drugs()),
             "clinical_trials_count": len(self.clinical_trials),
-
             # Functional
             "alphamissense_score": self.functional.alphamissense_score,
             "alphamissense_prediction": self.functional.alphamissense_prediction,
             "cadd_score": self.functional.cadd_score,
             "gnomad_af": self.functional.gnomad_exome_af,
-
             # Counts
-            "civic_evidence_count": len(self.civic_assertions) + len(self.civic_evidence),
+            "civic_evidence_count": len(self.civic_assertions)
+            + len(self.civic_evidence),
             "vicc_evidence_count": len(self.vicc_evidence),
             "pubmed_articles_count": len(self.pubmed_articles),
         }
@@ -1307,7 +1515,11 @@ class Evidence(BaseModel):
 
         # Check CIViC evidence items
         for evidence in self.civic_evidence:
-            if evidence.locus_match == "variant" and evidence.drugs and evidence.clinical_significance:
+            if (
+                evidence.locus_match == "variant"
+                and evidence.drugs
+                and evidence.clinical_significance
+            ):
                 sig_upper = evidence.clinical_significance.upper()
                 for drug in evidence.drugs:
                     drug_lower = drug.lower()
@@ -1318,7 +1530,11 @@ class Evidence(BaseModel):
 
         # Check CGI biomarkers
         for biomarker in self.cgi_biomarkers:
-            if biomarker.locus_match == "variant" and biomarker.drug and biomarker.association:
+            if (
+                biomarker.locus_match == "variant"
+                and biomarker.drug
+                and biomarker.association
+            ):
                 drug_lower = biomarker.drug.lower()
                 assoc_upper = biomarker.association.upper()
                 if "SENS" in assoc_upper or "RESPON" in assoc_upper:
@@ -1328,7 +1544,11 @@ class Evidence(BaseModel):
 
         # Check CGI preclinical and early-phase biomarkers
         for biomarker in self.preclinical_biomarkers + self.early_phase_biomarkers:
-            if biomarker.locus_match == "variant" and biomarker.drug and biomarker.association:
+            if (
+                biomarker.locus_match == "variant"
+                and biomarker.drug
+                and biomarker.association
+            ):
                 drug_lower = biomarker.drug.lower()
                 assoc_upper = biomarker.association.upper()
                 if "SENS" in assoc_upper or "RESPON" in assoc_upper:
@@ -1385,7 +1605,10 @@ class Evidence(BaseModel):
             if drug_lower in resistance_drugs:
                 sources, existing_locus = resistance_drugs[drug_lower]
                 sources.add(source)
-                resistance_drugs[drug_lower] = (sources, get_best_locus(existing_locus, locus_str))
+                resistance_drugs[drug_lower] = (
+                    sources,
+                    get_best_locus(existing_locus, locus_str),
+                )
             else:
                 resistance_drugs[drug_lower] = ({source}, locus_str)
 
@@ -1405,7 +1628,10 @@ class Evidence(BaseModel):
 
         # CIViC resistance evidence items - with locus match
         for evidence in self.civic_evidence:
-            if evidence.clinical_significance and "RESIST" in evidence.clinical_significance.upper():
+            if (
+                evidence.clinical_significance
+                and "RESIST" in evidence.clinical_significance.upper()
+            ):
                 if evidence.drugs:
                     locus = evidence.locus_match or "gene"
                     for drug in evidence.drugs:
@@ -1449,7 +1675,8 @@ class Evidence(BaseModel):
         # for some variant in this gene. This removes drugs like lapatinib that were
         # tested as negative controls but have no clinical relevance for this gene/tumor.
         resistance_drugs = {
-            drug: (sources, locus) for drug, (sources, locus) in resistance_drugs.items()
+            drug: (sources, locus)
+            for drug, (sources, locus) in resistance_drugs.items()
             if self._drug_has_sensitivity_for_gene(drug)
         }
 
@@ -1460,13 +1687,20 @@ class Evidence(BaseModel):
         conflicting_drugs: dict[str, str] = {}  # drug -> conflict description
         if self.evidence_gaps:
             from oncomind.models.extracted.evidence_gaps import GapCategory
-            discordant_gaps = self.evidence_gaps.get_gaps_by_category(GapCategory.DISCORDANT)
+
+            discordant_gaps = self.evidence_gaps.get_gaps_by_category(
+                GapCategory.DISCORDANT
+            )
             for gap in discordant_gaps:
                 if "Conflicting drug response for" in gap.description:
                     # Extract drug name from "Conflicting drug response for X: ..."
                     parts = gap.description.split(":")
                     if parts:
-                        drug_part = parts[0].replace("Conflicting drug response for", "").strip()
+                        drug_part = (
+                            parts[0]
+                            .replace("Conflicting drug response for", "")
+                            .strip()
+                        )
                         conflicting_drugs[drug_part.lower()] = gap.description
 
         # Helper to format drug with locus level
@@ -1480,30 +1714,47 @@ class Evidence(BaseModel):
         gene = self.identifiers.gene.upper()
 
         # EGFR TKI grouping
-        egfr_1st_2nd_gen = {"erlotinib", "gefitinib", "afatinib", "lapatinib", "dacomitinib", "neratinib"}
+        egfr_1st_2nd_gen = {
+            "erlotinib",
+            "gefitinib",
+            "afatinib",
+            "lapatinib",
+            "dacomitinib",
+            "neratinib",
+        }
         egfr_3rd_gen = {"osimertinib"}
 
         # Build synthesized summary
         if gene == "EGFR":
             resistant_1st_2nd = [d for d in resistance_drugs if d in egfr_1st_2nd_gen]
             resistant_3rd = [d for d in resistance_drugs if d in egfr_3rd_gen]
-            other_drugs = [d for d in resistance_drugs if d not in egfr_1st_2nd_gen and d not in egfr_3rd_gen]
+            other_drugs = [
+                d
+                for d in resistance_drugs
+                if d not in egfr_1st_2nd_gen and d not in egfr_3rd_gen
+            ]
 
             if resistant_1st_2nd:
-                drug_list = ", ".join(format_drug_with_locus(d) for d in sorted(resistant_1st_2nd))
+                drug_list = ", ".join(
+                    format_drug_with_locus(d) for d in sorted(resistant_1st_2nd)
+                )
                 summaries.append(f"Resistance to 1st/2nd-gen EGFR TKIs: {drug_list}")
 
             for drug in resistant_3rd:
                 _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
+                    summaries.append(
+                        f"Variable response to {drug} ({locus}-level, conflicting evidence)"
+                    )
                 else:
                     summaries.append(f"Resistance to {drug} ({locus}-level)")
 
             for drug in other_drugs[:3]:
                 _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
+                    summaries.append(
+                        f"Variable response to {drug} ({locus}-level, conflicting evidence)"
+                    )
                 else:
                     summaries.append(f"{drug} resistance ({locus}-level)")
         else:
@@ -1511,7 +1762,9 @@ class Evidence(BaseModel):
             for drug in list(resistance_drugs.keys())[:8]:
                 _, locus = resistance_drugs[drug]
                 if drug in conflicting_drugs:
-                    summaries.append(f"Variable response to {drug} ({locus}-level, conflicting evidence)")
+                    summaries.append(
+                        f"Variable response to {drug} ({locus}-level, conflicting evidence)"
+                    )
                 else:
                     summaries.append(f"{drug} resistance ({locus}-level)")
 
@@ -1535,7 +1788,9 @@ class Evidence(BaseModel):
         # Collect drugs by evidence tier with locus match level
         # Using dict[str, str] where key=drug, value=locus_match (variant/codon/gene)
         fda_matching_drugs: dict[str, str] = {}  # FDA approved for THIS tumor
-        fda_other_drugs: dict[str, tuple[str, str]] = {}  # drug -> (cancer_type, locus_match)
+        fda_other_drugs: dict[str, tuple[str, str]] = (
+            {}
+        )  # drug -> (cancer_type, locus_match)
         clinical_drugs: dict[str, str] = {}  # VICC, CIViC, CGI -> drug: locus_match
         literature_drugs: set[str] = set()
 
@@ -1562,7 +1817,11 @@ class Evidence(BaseModel):
 
         # FDA biomarker evidence - with cancer specificity and match level
         # Only include drugs with REQUIRED_POSITIVE (not REQUIRED_NEGATIVE)
-        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        gene = (
+            self.identifiers.gene.upper()
+            if self.identifiers and self.identifiers.gene
+            else ""
+        )
         variant = self.identifiers.variant if self.identifiers else ""
         for ev in self.fda_biomarker_evidence:
             # Skip drugs with REQUIRED_NEGATIVE (approved for patients WITHOUT the biomarker)
@@ -1572,7 +1831,11 @@ class Evidence(BaseModel):
                 continue
 
             # Check if variant matches
-            match_result = ev.matches_variant(gene, variant) if gene and variant else {"matches": True, "match_type": "gene"}
+            match_result = (
+                ev.matches_variant(gene, variant)
+                if gene and variant
+                else {"matches": True, "match_type": "gene"}
+            )
             if not match_result.get("matches"):
                 continue
 
@@ -1591,14 +1854,19 @@ class Evidence(BaseModel):
 
             if cancer_spec == "cancer_specific" or cancer_spec == "pan_cancer":
                 if drug_lower in fda_matching_drugs:
-                    fda_matching_drugs[drug_lower] = get_best_locus(fda_matching_drugs[drug_lower], locus)
+                    fda_matching_drugs[drug_lower] = get_best_locus(
+                        fda_matching_drugs[drug_lower], locus
+                    )
                 else:
                     fda_matching_drugs[drug_lower] = locus
             else:
                 # FDA approved for a different cancer
                 if drug_lower in fda_other_drugs:
                     _, existing_locus = fda_other_drugs[drug_lower]
-                    fda_other_drugs[drug_lower] = (cancer_spec, get_best_locus(existing_locus, locus))
+                    fda_other_drugs[drug_lower] = (
+                        cancer_spec,
+                        get_best_locus(existing_locus, locus),
+                    )
                 else:
                     fda_other_drugs[drug_lower] = (cancer_spec, locus)
 
@@ -1612,19 +1880,31 @@ class Evidence(BaseModel):
         for vicc in self.vicc_evidence:
             if vicc.is_sensitivity and vicc.drugs:
                 locus = vicc.locus_match or "gene"
-                is_preclinical = vicc.evidence_level and vicc.evidence_level.upper() == "D"
+                is_preclinical = (
+                    vicc.evidence_level and vicc.evidence_level.upper() == "D"
+                )
                 # Join multiple drugs as combination therapy
-                drug_name = " + ".join(sorted(vicc.drugs)) if len(vicc.drugs) > 1 else vicc.drugs[0]
+                drug_name = (
+                    " + ".join(sorted(vicc.drugs))
+                    if len(vicc.drugs) > 1
+                    else vicc.drugs[0]
+                )
                 drug_lower = drug_name.lower()
-                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(
+                    drug_lower, locus
+                ):
                     if is_preclinical:
                         if drug_lower in vicc_preclinical_drugs:
-                            vicc_preclinical_drugs[drug_lower] = get_best_locus(vicc_preclinical_drugs[drug_lower], locus)
+                            vicc_preclinical_drugs[drug_lower] = get_best_locus(
+                                vicc_preclinical_drugs[drug_lower], locus
+                            )
                         else:
                             vicc_preclinical_drugs[drug_lower] = locus
                     else:
                         if drug_lower in clinical_drugs:
-                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                            clinical_drugs[drug_lower] = get_best_locus(
+                                clinical_drugs[drug_lower], locus
+                            )
                         else:
                             clinical_drugs[drug_lower] = locus
 
@@ -1634,11 +1914,19 @@ class Evidence(BaseModel):
             if assertion.is_sensitivity and assertion.therapies:
                 locus = assertion.locus_match or "gene"
                 # Join multiple therapies as combination
-                drug_name = " + ".join(sorted(assertion.therapies)) if len(assertion.therapies) > 1 else assertion.therapies[0]
+                drug_name = (
+                    " + ".join(sorted(assertion.therapies))
+                    if len(assertion.therapies) > 1
+                    else assertion.therapies[0]
+                )
                 drug_lower = drug_name.lower()
-                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(
+                    drug_lower, locus
+                ):
                     if drug_lower in clinical_drugs:
-                        clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                        clinical_drugs[drug_lower] = get_best_locus(
+                            clinical_drugs[drug_lower], locus
+                        )
                     else:
                         clinical_drugs[drug_lower] = locus
 
@@ -1652,17 +1940,27 @@ class Evidence(BaseModel):
                 level = (evidence.evidence_level or "").upper()
                 is_preclinical = level in ("D", "E")
                 # Join multiple drugs as combination therapy
-                drug_name = " + ".join(sorted(evidence.drugs)) if len(evidence.drugs) > 1 else evidence.drugs[0]
+                drug_name = (
+                    " + ".join(sorted(evidence.drugs))
+                    if len(evidence.drugs) > 1
+                    else evidence.drugs[0]
+                )
                 drug_lower = drug_name.lower()
-                if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                if drug_lower not in all_fda_drugs and should_include_sensitivity(
+                    drug_lower, locus
+                ):
                     if is_preclinical:
                         if drug_lower in civic_preclinical_drugs:
-                            civic_preclinical_drugs[drug_lower] = get_best_locus(civic_preclinical_drugs[drug_lower], locus)
+                            civic_preclinical_drugs[drug_lower] = get_best_locus(
+                                civic_preclinical_drugs[drug_lower], locus
+                            )
                         else:
                             civic_preclinical_drugs[drug_lower] = locus
                     else:
                         if drug_lower in clinical_drugs:
-                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                            clinical_drugs[drug_lower] = get_best_locus(
+                                clinical_drugs[drug_lower], locus
+                            )
                         else:
                             clinical_drugs[drug_lower] = locus
 
@@ -1673,9 +1971,13 @@ class Evidence(BaseModel):
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
-                    if drug_lower not in all_fda_drugs and should_include_sensitivity(drug_lower, locus):
+                    if drug_lower not in all_fda_drugs and should_include_sensitivity(
+                        drug_lower, locus
+                    ):
                         if drug_lower in clinical_drugs:
-                            clinical_drugs[drug_lower] = get_best_locus(clinical_drugs[drug_lower], locus)
+                            clinical_drugs[drug_lower] = get_best_locus(
+                                clinical_drugs[drug_lower], locus
+                            )
                         else:
                             clinical_drugs[drug_lower] = locus
 
@@ -1687,9 +1989,15 @@ class Evidence(BaseModel):
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs and should_include_sensitivity(drug_lower, locus):
+                    if (
+                        drug_lower not in all_fda_drugs
+                        and drug_lower not in clinical_drugs
+                        and should_include_sensitivity(drug_lower, locus)
+                    ):
                         if drug_lower in cgi_preclinical_drugs:
-                            cgi_preclinical_drugs[drug_lower] = get_best_locus(cgi_preclinical_drugs[drug_lower], locus)
+                            cgi_preclinical_drugs[drug_lower] = get_best_locus(
+                                cgi_preclinical_drugs[drug_lower], locus
+                            )
                         else:
                             cgi_preclinical_drugs[drug_lower] = locus
 
@@ -1701,9 +2009,15 @@ class Evidence(BaseModel):
                 if biomarker.drug:
                     drug_lower = biomarker.drug.lower()
                     locus = biomarker.locus_match or "gene"
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs and should_include_sensitivity(drug_lower, locus):
+                    if (
+                        drug_lower not in all_fda_drugs
+                        and drug_lower not in clinical_drugs
+                        and should_include_sensitivity(drug_lower, locus)
+                    ):
                         if drug_lower in early_phase_drugs:
-                            early_phase_drugs[drug_lower] = get_best_locus(early_phase_drugs[drug_lower], locus)
+                            early_phase_drugs[drug_lower] = get_best_locus(
+                                early_phase_drugs[drug_lower], locus
+                            )
                         else:
                             early_phase_drugs[drug_lower] = locus
 
@@ -1713,7 +2027,10 @@ class Evidence(BaseModel):
                 drug = entry.drug
                 if drug:
                     drug_lower = drug.lower()
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                    if (
+                        drug_lower not in all_fda_drugs
+                        and drug_lower not in clinical_drugs
+                    ):
                         literature_drugs.add(drug_lower)
 
         # PubMed articles with sensitivity evidence (no locus match available)
@@ -1721,7 +2038,10 @@ class Evidence(BaseModel):
             if article.is_sensitivity_evidence() and article.drugs_mentioned:
                 for drug in article.drugs_mentioned:
                     drug_lower = drug.lower()
-                    if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
+                    if (
+                        drug_lower not in all_fda_drugs
+                        and drug_lower not in clinical_drugs
+                    ):
                         literature_drugs.add(drug_lower)
 
         # DepMap/PRISM drug sensitivities (preclinical) - gene-level by nature
@@ -1730,10 +2050,17 @@ class Evidence(BaseModel):
             for ds in self.depmap_evidence.get_top_sensitive_drugs(5):
                 drug_lower = ds.drug_name.lower()
                 if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                    depmap_preclinical_drugs[drug_lower] = "gene"  # DepMap is gene-level
+                    depmap_preclinical_drugs[drug_lower] = (
+                        "gene"  # DepMap is gene-level
+                    )
 
         # Combine all preclinical drugs (VICC level D, CIViC level D/E, CGI preclinical, DepMap)
-        all_preclinical_drugs = {**vicc_preclinical_drugs, **civic_preclinical_drugs, **cgi_preclinical_drugs, **depmap_preclinical_drugs}
+        all_preclinical_drugs = {
+            **vicc_preclinical_drugs,
+            **civic_preclinical_drugs,
+            **cgi_preclinical_drugs,
+            **depmap_preclinical_drugs,
+        }
 
         # Build synthesized summary with locus match levels
         summaries = []
@@ -1755,7 +2082,9 @@ class Evidence(BaseModel):
             other_parts = []
             for drug, (cancer, locus) in sorted(fda_other_drugs.items())[:3]:
                 other_parts.append(f"{drug} ({locus}-level, {cancer})")
-            summaries.append(f"FDA-approved for OTHER cancers (NOT {tumor_type}): {', '.join(other_parts)}")
+            summaries.append(
+                f"FDA-approved for OTHER cancers (NOT {tumor_type}): {', '.join(other_parts)}"
+            )
 
         if clinical_drugs:
             drug_list = format_drugs_with_locus(clinical_drugs, 5)
@@ -1769,7 +2098,14 @@ class Evidence(BaseModel):
             drug_list = format_drugs_with_locus(all_preclinical_drugs, 3)
             summaries.append(f"Preclinical: {drug_list}")
 
-        if literature_drugs and not fda_matching_drugs and not fda_other_drugs and not clinical_drugs and not early_phase_drugs and not all_preclinical_drugs:
+        if (
+            literature_drugs
+            and not fda_matching_drugs
+            and not fda_other_drugs
+            and not clinical_drugs
+            and not early_phase_drugs
+            and not all_preclinical_drugs
+        ):
             # Only show literature if no higher-tier evidence (no locus match for literature)
             drug_list = ", ".join(sorted(literature_drugs)[:3])
             summaries.append(f"Literature signals: {drug_list}")
@@ -1791,18 +2127,25 @@ class Evidence(BaseModel):
         if not self.fda_biomarker_evidence:
             return excluded
 
-        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        gene = (
+            self.identifiers.gene.upper()
+            if self.identifiers and self.identifiers.gene
+            else ""
+        )
         if not gene:
             return excluded
 
         for ev in self.fda_biomarker_evidence:
             # Check if this evidence has REQUIRED_NEGATIVE for the queried gene
-            if (ev.gene and ev.gene.upper() == gene and
-                ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE):
+            if (
+                ev.gene
+                and ev.gene.upper() == gene
+                and ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE
+            ):
                 if ev.drug_name:
                     excluded.add(ev.drug_name.lower())
                 # Also add combination partners if present
-                for partner in (ev.combination_partners or []):
+                for partner in ev.combination_partners or []:
                     if partner:
                         excluded.add(partner.lower())
 
@@ -1830,7 +2173,8 @@ class Evidence(BaseModel):
             # Check if any component of a combination is excluded
             # Combinations use "+" or "," or "and" as separators
             import re
-            components = re.split(r'\s*[+,]\s*|\s+and\s+', drug_lower)
+
+            components = re.split(r"\s*[+,]\s*|\s+and\s+", drug_lower)
             return any(comp.strip() in excluded_drugs for comp in components)
 
         # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
@@ -1843,7 +2187,8 @@ class Evidence(BaseModel):
         # 3. Drugs with REQUIRED_NEGATIVE for the queried gene (e.g., IMJUDO for EGFR-negative)
         fda_therapies = self.get_fda_approved_therapies()
         fda_from_fda = [
-            t for t in fda_therapies
+            t
+            for t in fda_therapies
             if t.source == "FDA"
             and not is_biomarker_selection_drug(t.drug_name, gene)
             and t.cancer_specificity in ("cancer_specific", "pan_cancer")
@@ -1870,7 +2215,10 @@ class Evidence(BaseModel):
                 # Add tumor match info
                 if therapy.cancer_specificity == "cancer_specific":
                     parts.append(tumor_type)
-                elif therapy.cancer_specificity and therapy.cancer_specificity not in ("pan_cancer", "cancer_specific"):
+                elif therapy.cancer_specificity and therapy.cancer_specificity not in (
+                    "pan_cancer",
+                    "cancer_specific",
+                ):
                     parts.append(f"approved for {therapy.cancer_specificity}")
 
                 fda_drugs.append(f"{drug} ({', '.join(parts)})" if parts else drug)
@@ -1893,15 +2241,26 @@ class Evidence(BaseModel):
             # Check if this is a codon-level near-miss (same codon but different variant)
             if gene and variant:
                 match_result = ev.matches_variant(gene, variant)
-                if not match_result.get("matches") and match_result.get("match_type") == "same_codon_different_variant":
+                if (
+                    not match_result.get("matches")
+                    and match_result.get("match_type") == "same_codon_different_variant"
+                ):
                     # This is a near-miss at codon level
-                    approved_variants = ", ".join(ev.specified_variants) if ev.specified_variants else None
+                    approved_variants = (
+                        ", ".join(ev.specified_variants)
+                        if ev.specified_variants
+                        else None
+                    )
                     if approved_variants:
-                        codon_near_misses.append(f"{ev.drug_name} (approved for {approved_variants})")
+                        codon_near_misses.append(
+                            f"{ev.drug_name} (approved for {approved_variants})"
+                        )
                     else:
                         codon_near_misses.append(ev.drug_name)
         if codon_near_misses:
-            lines.append(f"FDA Codon-Level (not for queried variant): {', '.join(codon_near_misses[:4])}")
+            lines.append(
+                f"FDA Codon-Level (not for queried variant): {', '.join(codon_near_misses[:4])}"
+            )
 
         # FDA Biomarker Evidence (from FDALabelParser) - parsed FDA label indications
         # These have been filtered by matches_variant() and include match semantics
@@ -1944,15 +2303,20 @@ class Evidence(BaseModel):
                 if ev.line_of_therapy:
                     parts.append(ev.line_of_therapy)
 
-                drug_display = f"{ev.drug_name} ({', '.join(parts)})" if parts else ev.drug_name
+                drug_display = (
+                    f"{ev.drug_name} ({', '.join(parts)})" if parts else ev.drug_name
+                )
                 matched_biomarker_drugs.append(drug_display)
 
             if matched_biomarker_drugs:
-                lines.append(f"FDA Label Indications: {'; '.join(matched_biomarker_drugs[:5])}")
+                lines.append(
+                    f"FDA Label Indications: {'; '.join(matched_biomarker_drugs[:5])}"
+                )
 
         # CGI Biomarkers - compact (filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs)
         # For combinations like "Tremelimumab + Durvalumab", check if ANY component is excluded
         if self.cgi_biomarkers:
+
             def _drug_is_excluded(drug_name: str) -> bool:
                 """Check if any component of a drug name (including combinations) is excluded."""
                 if not drug_name:
@@ -1964,19 +2328,29 @@ class Evidence(BaseModel):
                 # Check if any component of a combination is excluded
                 # Combinations use "+" or "," or "and" as separators
                 import re
-                components = re.split(r'\s*[+,]\s*|\s+and\s+', drug_lower)
+
+                components = re.split(r"\s*[+,]\s*|\s+and\s+", drug_lower)
                 return any(comp.strip() in excluded_drugs for comp in components)
 
             approved = [
-                b for b in self.cgi_biomarkers
+                b
+                for b in self.cgi_biomarkers
                 if b.fda_approved
                 and not is_biomarker_selection_drug(b.drug or "", gene)
                 and not _drug_is_excluded(b.drug or "")
             ]
             if approved:
-                resistance = [b.drug for b in approved if b.association and 'RESIST' in b.association.upper()]
+                resistance = [
+                    b.drug
+                    for b in approved
+                    if b.association and "RESIST" in b.association.upper()
+                ]
                 # Only explicit "Responsive" (not "No Responsive", "Increased Toxicity", etc.)
-                sensitivity = [b.drug for b in approved if b.association and b.association.upper() == 'RESPONSIVE']
+                sensitivity = [
+                    b.drug
+                    for b in approved
+                    if b.association and b.association.upper() == "RESPONSIVE"
+                ]
                 if resistance:
                     lines.append(f"CGI Resistance: {', '.join(resistance[:3])}")
                 if sensitivity:
@@ -1985,7 +2359,9 @@ class Evidence(BaseModel):
         # CIViC Assertions - compact (filter out biomarker selection drugs and REQUIRED_NEGATIVE drugs)
         # If ANY therapy in a combination is excluded, skip the entire assertion
         if self.civic_assertions:
-            predictive = [a for a in self.civic_assertions if a.assertion_type == "PREDICTIVE"]
+            predictive = [
+                a for a in self.civic_assertions if a.assertion_type == "PREDICTIVE"
+            ]
             if predictive:
                 civic_drugs = []
                 for a in predictive[:3]:
@@ -1994,11 +2370,18 @@ class Evidence(BaseModel):
                         continue
                     # Filter therapies that are biomarker selection drugs
                     filtered_therapies = [
-                        t for t in (a.therapies or [])
+                        t
+                        for t in (a.therapies or [])
                         if not is_biomarker_selection_drug(t, gene)
                     ]
-                    therapies = ", ".join(filtered_therapies[:2]) if filtered_therapies else ""
-                    sig = "sens" if a.is_sensitivity else "res" if a.is_resistance else "unk"
+                    therapies = (
+                        ", ".join(filtered_therapies[:2]) if filtered_therapies else ""
+                    )
+                    sig = (
+                        "sens"
+                        if a.is_sensitivity
+                        else "res" if a.is_resistance else "unk"
+                    )
                     if therapies:
                         civic_drugs.append(f"{therapies} ({sig})")
                 if civic_drugs:
@@ -2015,8 +2398,7 @@ class Evidence(BaseModel):
                     if any(d.lower() in excluded_drugs for d in e.drugs):
                         continue
                     filtered_drugs = [
-                        d for d in e.drugs
-                        if not is_biomarker_selection_drug(d, gene)
+                        d for d in e.drugs if not is_biomarker_selection_drug(d, gene)
                     ]
                     if not filtered_drugs:
                         continue
@@ -2046,8 +2428,7 @@ class Evidence(BaseModel):
                     if any(d.lower() in excluded_drugs for d in v.drugs):
                         continue
                     filtered_drugs = [
-                        d for d in v.drugs
-                        if not is_biomarker_selection_drug(d, gene)
+                        d for d in v.drugs if not is_biomarker_selection_drug(d, gene)
                     ]
                     if not filtered_drugs:
                         continue
@@ -2111,11 +2492,15 @@ class Evidence(BaseModel):
                 else:
                     lines.append(f"Active Trials: {len(recruiting)} recruiting")
             else:
-                lines.append(f"Clinical Trials: {len(self.clinical_trials)} found (not recruiting)")
+                lines.append(
+                    f"Clinical Trials: {len(self.clinical_trials)} found (not recruiting)"
+                )
 
         # PubMed Literature - compact with links
         if self.pubmed_articles:
-            resistance_articles = [a for a in self.pubmed_articles if a.is_resistance_evidence()]
+            resistance_articles = [
+                a for a in self.pubmed_articles if a.is_resistance_evidence()
+            ]
             if resistance_articles:
                 pmid_links = [
                     f"[{a.pmid}](https://pubmed.ncbi.nlm.nih.gov/{a.pmid}/)"
@@ -2144,7 +2529,9 @@ class Evidence(BaseModel):
                 "tsg_pathway_actionable": "a pathway-actionable tumor suppressor (loss activates druggable pathway)",
                 "ddr": "a DNA damage repair gene (loss creates synthetic lethality with PARP inhibitors)",
             }
-            role_desc = role_descriptions.get(self.context.gene_role, self.context.gene_role)
+            role_desc = role_descriptions.get(
+                self.context.gene_role, self.context.gene_role
+            )
             lines.append(f"GENE ROLE: {self.identifiers.gene} is {role_desc}")
 
             if self.context.pathway:
@@ -2176,15 +2563,23 @@ class Evidence(BaseModel):
             # Add oncogene driver context qualifier for pan-cancer dependency
             # When gene is an oncogene with modest pan-cancer dependency but tumor-matched models exist,
             # note that dependency may be higher in the relevant tumor context
-            if (self.context.gene_role == "oncogene" and
-                self.depmap_evidence.gene_dependency and
-                not self.depmap_evidence.is_essential() and
-                self.context.tumor_type):
+            if (
+                self.context.gene_role == "oncogene"
+                and self.depmap_evidence.gene_dependency
+                and not self.depmap_evidence.is_essential()
+                and self.context.tumor_type
+            ):
                 # Check if we have tumor-matched cell line models
-                mutant_models = [cl for cl in self.depmap_evidence.cell_line_models if cl.has_mutation]
+                mutant_models = [
+                    cl
+                    for cl in self.depmap_evidence.cell_line_models
+                    if cl.has_mutation
+                ]
                 tumor_matched_models = [
-                    cl for cl in mutant_models
-                    if cl.primary_disease and tumor_types_match(cl.primary_disease, self.context.tumor_type)
+                    cl
+                    for cl in mutant_models
+                    if cl.primary_disease
+                    and tumor_types_match(cl.primary_disease, self.context.tumor_type)
                 ]
                 if tumor_matched_models:
                     score = self.depmap_evidence.gene_dependency.mean_dependency_score
@@ -2204,7 +2599,8 @@ class Evidence(BaseModel):
         # Include both direct hotspot matches AND adjacent hotspots
         # Pass tumor_type to filter hotspot data - only include if relevant to queried tumor
         if self.hotspots_evidence and (
-            self.hotspots_evidence.has_data() or self.hotspots_evidence.is_adjacent_to_hotspot()
+            self.hotspots_evidence.has_data()
+            or self.hotspots_evidence.is_adjacent_to_hotspot()
         ):
             hotspot_context = self.hotspots_evidence.to_prompt_context(
                 tumor_type=self.context.tumor_type
@@ -2231,29 +2627,50 @@ class Evidence(BaseModel):
         # PubMed articles
         if self.pubmed_articles:
             # Group by signal type
-            resistance_articles = [a for a in self.pubmed_articles if a.is_resistance_evidence()]
-            sensitivity_articles = [a for a in self.pubmed_articles if a.is_sensitivity_evidence()]
-            other_articles = [a for a in self.pubmed_articles
-                             if not a.is_resistance_evidence() and not a.is_sensitivity_evidence()]
+            resistance_articles = [
+                a for a in self.pubmed_articles if a.is_resistance_evidence()
+            ]
+            sensitivity_articles = [
+                a for a in self.pubmed_articles if a.is_sensitivity_evidence()
+            ]
+            other_articles = [
+                a
+                for a in self.pubmed_articles
+                if not a.is_resistance_evidence() and not a.is_sensitivity_evidence()
+            ]
 
             if resistance_articles:
-                lines.append(f"RESISTANCE LITERATURE ({len(resistance_articles)} articles):")
+                lines.append(
+                    f"RESISTANCE LITERATURE ({len(resistance_articles)} articles):"
+                )
                 for article in resistance_articles[:5]:
-                    drugs_str = f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]" if article.drugs_mentioned else ""
+                    drugs_str = (
+                        f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]"
+                        if article.drugs_mentioned
+                        else ""
+                    )
                     summary = article.get_best_summary(200)
                     impact = article.get_impact_indicator()
                     impact_str = f" [{impact}]" if impact else ""
                     pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
                     lines.append(f"  - {pmid_link}: {article.title[:80]}...")
-                    lines.append(f"    Signal: {article.signal_type}{drugs_str}{impact_str}")
+                    lines.append(
+                        f"    Signal: {article.signal_type}{drugs_str}{impact_str}"
+                    )
                     if summary:
                         lines.append(f"    Summary: {summary}")
                 lines.append("")
 
             if sensitivity_articles:
-                lines.append(f"SENSITIVITY LITERATURE ({len(sensitivity_articles)} articles):")
+                lines.append(
+                    f"SENSITIVITY LITERATURE ({len(sensitivity_articles)} articles):"
+                )
                 for article in sensitivity_articles[:5]:
-                    drugs_str = f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]" if article.drugs_mentioned else ""
+                    drugs_str = (
+                        f" [Drugs: {', '.join(article.drugs_mentioned[:3])}]"
+                        if article.drugs_mentioned
+                        else ""
+                    )
                     summary = article.get_best_summary(200)
                     pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
                     lines.append(f"  - {pmid_link}: {article.title[:80]}...")
@@ -2263,7 +2680,9 @@ class Evidence(BaseModel):
                 lines.append("")
 
             if other_articles:
-                lines.append(f"OTHER RELEVANT LITERATURE ({len(other_articles)} articles):")
+                lines.append(
+                    f"OTHER RELEVANT LITERATURE ({len(other_articles)} articles):"
+                )
                 for article in other_articles[:3]:
                     summary = article.get_best_summary(150)
                     pmid_link = f"[PMID {article.pmid}](https://pubmed.ncbi.nlm.nih.gov/{article.pmid}/)"
@@ -2281,11 +2700,15 @@ class Evidence(BaseModel):
                 lines.append(f"  Mutation Type: {lk.mutation_type}")
 
             if lk.resistant_to:
-                drugs = ", ".join(f"{r.drug} ({r.evidence})" for r in lk.resistant_to[:5])
+                drugs = ", ".join(
+                    f"{r.drug} ({r.evidence})" for r in lk.resistant_to[:5]
+                )
                 lines.append(f"  Resistant to: {drugs}")
 
             if lk.sensitive_to:
-                drugs = ", ".join(f"{s.drug} ({s.evidence})" for s in lk.sensitive_to[:5])
+                drugs = ", ".join(
+                    f"{s.drug} ({s.evidence})" for s in lk.sensitive_to[:5]
+                )
                 lines.append(f"  Potentially sensitive to: {drugs}")
 
             if lk.clinical_significance:
@@ -2316,7 +2739,9 @@ class Evidence(BaseModel):
                 "tsg_pathway_actionable": "a pathway-actionable tumor suppressor (loss activates druggable pathway)",
                 "ddr": "a DNA damage repair gene (loss creates synthetic lethality with PARP inhibitors)",
             }
-            role_desc = role_descriptions.get(self.context.gene_role, self.context.gene_role)
+            role_desc = role_descriptions.get(
+                self.context.gene_role, self.context.gene_role
+            )
             lines.append(f"GENE ROLE: {self.identifiers.gene} is {role_desc}")
 
             if self.context.pathway:
@@ -2340,14 +2765,16 @@ class Evidence(BaseModel):
         gene = self.identifiers.gene
 
         # Structure: drug_name -> {sources: [], signals: [], pmids: [], locus_levels: []}
-        drug_evidence: dict[str, dict] = defaultdict(lambda: {
-            "sources": [],
-            "signals": [],  # "sensitivity", "resistance", "unknown"
-            "pmids": [],
-            "locus_levels": [],  # "variant", "codon", "gene"
-            "tumor_types": [],
-            "evidence_levels": [],  # "FDA", "clinical", "preclinical"
-        })
+        drug_evidence: dict[str, dict] = defaultdict(
+            lambda: {
+                "sources": [],
+                "signals": [],  # "sensitivity", "resistance", "unknown"
+                "pmids": [],
+                "locus_levels": [],  # "variant", "codon", "gene"
+                "tumor_types": [],
+                "evidence_levels": [],  # "FDA", "clinical", "preclinical"
+            }
+        )
 
         # Normalize drug names for grouping
         def normalize_drug(name: str) -> str:
@@ -2360,41 +2787,57 @@ class Evidence(BaseModel):
                 n = n.split("(")[0].strip()
             return n
 
-        def get_signal(is_sens: bool | None, is_res: bool | None, assoc: str | None) -> str:
+        def get_signal(
+            is_sens: bool | None, is_res: bool | None, assoc: str | None
+        ) -> str:
             if is_res or (assoc and "resist" in assoc.lower()):
                 return "resistance"
-            if is_sens or (assoc and ("sens" in assoc.lower() or "respon" in assoc.lower())):
+            if is_sens or (
+                assoc and ("sens" in assoc.lower() or "respon" in assoc.lower())
+            ):
                 return "sensitivity"
             return "unknown"
 
         # 1. CGI Biomarkers (FDA-approved)
-        for b in (self.cgi_biomarkers or []):
+        for b in self.cgi_biomarkers or []:
             if b.drug and not is_biomarker_selection_drug(b.drug, gene):
                 key = normalize_drug(b.drug)
                 if key:
                     drug_evidence[key]["sources"].append("CGI")
-                    drug_evidence[key]["signals"].append(get_signal(None, None, b.association))
+                    drug_evidence[key]["signals"].append(
+                        get_signal(None, None, b.association)
+                    )
                     drug_evidence[key]["locus_levels"].append(b.locus_match or "gene")
                     if b.tumor_type:
                         drug_evidence[key]["tumor_types"].append(b.tumor_type)
-                    drug_evidence[key]["evidence_levels"].append("FDA" if b.fda_approved else "clinical")
+                    drug_evidence[key]["evidence_levels"].append(
+                        "FDA" if b.fda_approved else "clinical"
+                    )
 
         # 2. CGI Preclinical/Early Phase
-        for b in (self.preclinical_biomarkers or []) + (self.early_phase_biomarkers or []):
+        for b in (self.preclinical_biomarkers or []) + (
+            self.early_phase_biomarkers or []
+        ):
             if b.drug and not is_biomarker_selection_drug(b.drug, gene):
                 key = normalize_drug(b.drug)
                 if key:
                     drug_evidence[key]["sources"].append("CGI")
-                    drug_evidence[key]["signals"].append(get_signal(None, None, b.association))
+                    drug_evidence[key]["signals"].append(
+                        get_signal(None, None, b.association)
+                    )
                     drug_evidence[key]["locus_levels"].append(b.locus_match or "gene")
                     if b.tumor_type:
                         drug_evidence[key]["tumor_types"].append(b.tumor_type)
-                    level = "preclinical" if b in (self.preclinical_biomarkers or []) else "clinical"
+                    level = (
+                        "preclinical"
+                        if b in (self.preclinical_biomarkers or [])
+                        else "clinical"
+                    )
                     drug_evidence[key]["evidence_levels"].append(level)
 
         # 3. CIViC Evidence
-        for e in (self.civic_evidence or []):
-            for drug in (e.drugs or []):
+        for e in self.civic_evidence or []:
+            for drug in e.drugs or []:
                 if not is_biomarker_selection_drug(drug, gene):
                     key = normalize_drug(drug)
                     if key:
@@ -2402,46 +2845,63 @@ class Evidence(BaseModel):
                         sig = get_signal(
                             "sens" in (e.clinical_significance or "").lower(),
                             "resist" in (e.clinical_significance or "").lower(),
-                            e.clinical_significance
+                            e.clinical_significance,
                         )
                         drug_evidence[key]["signals"].append(sig)
                         drug_evidence[key]["locus_levels"].append(
-                            getattr(e, 'locus_variant_match', None) and
-                            e.locus_variant_match.level if hasattr(e, 'locus_variant_match') and e.locus_variant_match else "variant"
+                            getattr(e, "locus_variant_match", None)
+                            and e.locus_variant_match.level
+                            if hasattr(e, "locus_variant_match")
+                            and e.locus_variant_match
+                            else "variant"
                         )
                         if e.pmid:
                             drug_evidence[key]["pmids"].append(e.pmid)
                         drug_evidence[key]["evidence_levels"].append(
-                            "clinical" if e.evidence_level in ("A", "B") else "preclinical"
+                            "clinical"
+                            if e.evidence_level in ("A", "B")
+                            else "preclinical"
                         )
 
         # 4. VICC Evidence
-        for v in (self.vicc_evidence or []):
-            for drug in (v.drugs or []):
+        for v in self.vicc_evidence or []:
+            for drug in v.drugs or []:
                 if not is_biomarker_selection_drug(drug, gene):
                     key = normalize_drug(drug)
                     if key:
-                        drug_evidence[key]["sources"].append(f"VICC:{v.source}" if v.source else "VICC")
-                        drug_evidence[key]["signals"].append(get_signal(v.is_sensitivity, v.is_resistance, None))
+                        drug_evidence[key]["sources"].append(
+                            f"VICC:{v.source}" if v.source else "VICC"
+                        )
+                        drug_evidence[key]["signals"].append(
+                            get_signal(v.is_sensitivity, v.is_resistance, None)
+                        )
                         locus = "variant"
-                        if hasattr(v, 'locus_variant_match') and v.locus_variant_match:
+                        if hasattr(v, "locus_variant_match") and v.locus_variant_match:
                             locus = v.locus_variant_match.level
                         drug_evidence[key]["locus_levels"].append(locus)
                         drug_evidence[key]["evidence_levels"].append("clinical")
 
         # 5. Literature (PubMed)
-        for article in (self.pubmed_articles or []):
-            for drug in (article.drugs_mentioned or []):
+        for article in self.pubmed_articles or []:
+            for drug in article.drugs_mentioned or []:
                 if not is_biomarker_selection_drug(drug, gene):
                     key = normalize_drug(drug)
                     if key:
                         drug_evidence[key]["sources"].append("Literature")
-                        sig = "resistance" if article.is_resistance_evidence() else (
-                            "sensitivity" if article.is_sensitivity_evidence() else "unknown"
+                        sig = (
+                            "resistance"
+                            if article.is_resistance_evidence()
+                            else (
+                                "sensitivity"
+                                if article.is_sensitivity_evidence()
+                                else "unknown"
+                            )
                         )
                         drug_evidence[key]["signals"].append(sig)
                         drug_evidence[key]["pmids"].append(article.pmid)
-                        drug_evidence[key]["locus_levels"].append("variant")  # Literature is usually variant-specific
+                        drug_evidence[key]["locus_levels"].append(
+                            "variant"
+                        )  # Literature is usually variant-specific
                         drug_evidence[key]["evidence_levels"].append("literature")
 
         # Now analyze and format output
@@ -2450,14 +2910,16 @@ class Evidence(BaseModel):
 
         lines = []
         lines.append("CROSS-SOURCE DRUG EVIDENCE SYNTHESIS:")
-        lines.append("(Drugs mentioned across multiple sources with corroboration/conflict analysis)")
+        lines.append(
+            "(Drugs mentioned across multiple sources with corroboration/conflict analysis)"
+        )
         lines.append("")
 
         # Sort by number of sources (most corroborated first)
         sorted_drugs = sorted(
             drug_evidence.items(),
             key=lambda x: (len(set(x[1]["sources"])), len(x[1]["sources"])),
-            reverse=True
+            reverse=True,
         )
 
         corroborated = []
@@ -2484,14 +2946,18 @@ class Evidence(BaseModel):
             for drug, data in corroborated[:10]:  # Limit to top 10
                 sources = sorted(set(data["sources"]))
                 signal = next((s for s in data["signals"] if s != "unknown"), "unknown")
-                locus = "variant" if "variant" in data["locus_levels"] else (
-                    "codon" if "codon" in data["locus_levels"] else "gene"
+                locus = (
+                    "variant"
+                    if "variant" in data["locus_levels"]
+                    else ("codon" if "codon" in data["locus_levels"] else "gene")
                 )
                 pmids = list(set(data["pmids"]))[:3]
                 pmid_str = f" (PMIDs: {', '.join(pmids)})" if pmids else ""
 
                 lines.append(f"  • {drug.upper()}: {signal} signal")
-                lines.append(f"    Sources: {', '.join(sources)} | Locus: {locus}{pmid_str}")
+                lines.append(
+                    f"    Sources: {', '.join(sources)} | Locus: {locus}{pmid_str}"
+                )
             lines.append("")
 
         # Conflicting evidence (sources disagree)
@@ -2503,15 +2969,20 @@ class Evidence(BaseModel):
                 pmids = list(set(data["pmids"]))[:3]
                 pmid_str = f" (PMIDs: {', '.join(pmids)})" if pmids else ""
 
-                lines.append(f"  • {drug.upper()}: MIXED signals ({', '.join(signals)})")
+                lines.append(
+                    f"  • {drug.upper()}: MIXED signals ({', '.join(signals)})"
+                )
                 lines.append(f"    Sources: {', '.join(sources)}{pmid_str}")
-                lines.append(f"    ⚠️ Review evidence for context (resistance mutation? different tumor?)")
+                lines.append(
+                    f"    ⚠️ Review evidence for context (resistance mutation? different tumor?)"
+                )
             lines.append("")
 
         # Single source (unique insights, lower confidence)
         # Only show if notable (FDA or has PMID)
         notable_single = [
-            (d, data) for d, data in single_source
+            (d, data)
+            for d, data in single_source
             if "FDA" in data["evidence_levels"] or data["pmids"]
         ]
         if notable_single:
@@ -2519,21 +2990,29 @@ class Evidence(BaseModel):
             for drug, data in notable_single[:8]:
                 source = data["sources"][0] if data["sources"] else "Unknown"
                 signal = next((s for s in data["signals"] if s != "unknown"), "unknown")
-                level = data["evidence_levels"][0] if data["evidence_levels"] else "unknown"
+                level = (
+                    data["evidence_levels"][0] if data["evidence_levels"] else "unknown"
+                )
                 pmids = list(set(data["pmids"]))[:2]
                 pmid_str = f" (PMID: {', '.join(pmids)})" if pmids else ""
 
-                lines.append(f"  • {drug.upper()}: {signal} ({source}, {level}){pmid_str}")
+                lines.append(
+                    f"  • {drug.upper()}: {signal} ({source}, {level}){pmid_str}"
+                )
             lines.append("")
 
         # Summary statistics
-        lines.append(f"Summary: {len(corroborated)} drugs with corroborated evidence, "
-                    f"{len(conflicting)} with conflicting signals, "
-                    f"{len(single_source)} from single source only")
+        lines.append(
+            f"Summary: {len(corroborated)} drugs with corroborated evidence, "
+            f"{len(conflicting)} with conflicting signals, "
+            f"{len(single_source)} from single source only"
+        )
 
         return "\n".join(lines)
 
-    def _count_locus_matches(self, items: list, attr: str = 'locus_match') -> dict[str, int]:
+    def _count_locus_matches(
+        self, items: list, attr: str = "locus_match"
+    ) -> dict[str, int]:
         """Count items by locus match level.
 
         Args:
@@ -2543,13 +3022,13 @@ class Evidence(BaseModel):
         Returns:
             Dict with counts for variant, codon, and gene levels
         """
-        counts = {'variant': 0, 'codon': 0, 'gene': 0}
+        counts = {"variant": 0, "codon": 0, "gene": 0}
         for item in items:
-            level = getattr(item, attr, None) or 'gene'
+            level = getattr(item, attr, None) or "gene"
             if level in counts:
                 counts[level] += 1
             else:
-                counts['gene'] += 1
+                counts["gene"] += 1
         return counts
 
     def get_locus_match_summary(self) -> dict:
@@ -2564,40 +3043,40 @@ class Evidence(BaseModel):
 
         # FDA biomarker evidence
         fda_counts = self._count_locus_matches(self.fda_biomarker_evidence)
-        variant_count += fda_counts['variant']
-        codon_count += fda_counts['codon']
-        gene_count += fda_counts['gene']
+        variant_count += fda_counts["variant"]
+        codon_count += fda_counts["codon"]
+        gene_count += fda_counts["gene"]
 
         # VICC evidence
         vicc_counts = self._count_locus_matches(self.vicc_evidence)
-        variant_count += vicc_counts['variant']
-        codon_count += vicc_counts['codon']
-        gene_count += vicc_counts['gene']
+        variant_count += vicc_counts["variant"]
+        codon_count += vicc_counts["codon"]
+        gene_count += vicc_counts["gene"]
 
         # CIViC assertions
         civic_a_counts = self._count_locus_matches(self.civic_assertions)
-        variant_count += civic_a_counts['variant']
-        codon_count += civic_a_counts['codon']
-        gene_count += civic_a_counts['gene']
+        variant_count += civic_a_counts["variant"]
+        codon_count += civic_a_counts["codon"]
+        gene_count += civic_a_counts["gene"]
 
         # CIViC evidence items
         civic_e_counts = self._count_locus_matches(self.civic_evidence)
-        variant_count += civic_e_counts['variant']
-        codon_count += civic_e_counts['codon']
-        gene_count += civic_e_counts['gene']
+        variant_count += civic_e_counts["variant"]
+        codon_count += civic_e_counts["codon"]
+        gene_count += civic_e_counts["gene"]
 
         # CGI biomarkers
         cgi_counts = self._count_locus_matches(self.cgi_biomarkers)
-        variant_count += cgi_counts['variant']
-        codon_count += cgi_counts['codon']
-        gene_count += cgi_counts['gene']
+        variant_count += cgi_counts["variant"]
+        codon_count += cgi_counts["codon"]
+        gene_count += cgi_counts["gene"]
 
         # Clinical trials (use match_scope attribute)
         for trial in self.clinical_trials:
-            scope = getattr(trial, 'match_scope', None)
-            if scope == 'specific':
+            scope = getattr(trial, "match_scope", None)
+            if scope == "specific":
                 variant_count += 1
-            elif scope == 'ambiguous':
+            elif scope == "ambiguous":
                 codon_count += 1
             else:
                 gene_count += 1
@@ -2605,18 +3084,18 @@ class Evidence(BaseModel):
         # Literature knowledge - resistance and sensitivity signals
         if self.literature_knowledge:
             for entry in self.literature_knowledge.resistant_to:
-                level = getattr(entry, 'locus_match', None) or 'gene'
-                if level == 'variant':
+                level = getattr(entry, "locus_match", None) or "gene"
+                if level == "variant":
                     variant_count += 1
-                elif level == 'codon':
+                elif level == "codon":
                     codon_count += 1
                 else:
                     gene_count += 1
             for entry in self.literature_knowledge.sensitive_to:
-                level = getattr(entry, 'locus_match', None) or 'gene'
-                if level == 'variant':
+                level = getattr(entry, "locus_match", None) or "gene"
+                if level == "variant":
                     variant_count += 1
-                elif level == 'codon':
+                elif level == "codon":
                     codon_count += 1
                 else:
                     gene_count += 1
@@ -2633,7 +3112,9 @@ class Evidence(BaseModel):
         if total == 0:
             summary_text = "No therapeutic evidence available."
         elif variant_count == total:
-            summary_text = f"All {total} therapeutic evidence items are variant-specific."
+            summary_text = (
+                f"All {total} therapeutic evidence items are variant-specific."
+            )
         elif gene_count == total:
             summary_text = f"All {total} therapeutic evidence items are gene-level (no variant-specific data)."
         else:
@@ -2684,7 +3165,7 @@ class Evidence(BaseModel):
             """Count tumor match for an evidence item."""
             nonlocal cancer_specific_count, pan_cancer_count, other_count, unknown_count
             # Try tumor_match property first (bool: True = cancer_specific)
-            tumor_match = getattr(item, 'tumor_match', None)
+            tumor_match = getattr(item, "tumor_match", None)
             if tumor_match is True:
                 cancer_specific_count += 1
                 return
@@ -2693,7 +3174,7 @@ class Evidence(BaseModel):
                 pass
 
             # Check cancer_specificity for more detail
-            specificity = getattr(item, 'cancer_specificity', None)
+            specificity = getattr(item, "cancer_specificity", None)
             if specificity == "cancer_specific":
                 cancer_specific_count += 1
             elif specificity == "pan_cancer":
@@ -2708,7 +3189,11 @@ class Evidence(BaseModel):
 
         # FDA biomarker evidence - only count those where biomarker matches
         # e.g., pembrolizumab (MSI-H pan-cancer) shouldn't count for ALK F1174L
-        gene = self.identifiers.gene.upper() if self.identifiers and self.identifiers.gene else ""
+        gene = (
+            self.identifiers.gene.upper()
+            if self.identifiers and self.identifiers.gene
+            else ""
+        )
         variant = self.identifiers.variant if self.identifiers else ""
         for ev in self.fda_biomarker_evidence:
             # Skip REQUIRED_NEGATIVE drugs
@@ -2747,10 +3232,14 @@ class Evidence(BaseModel):
         if total == 0:
             summary_text = "No therapeutic evidence available."
         elif cancer_specific_count == total:
-            summary_text = f"All {total} evidence items are specific to {queried_tumor}."
+            summary_text = (
+                f"All {total} evidence items are specific to {queried_tumor}."
+            )
         elif other_count == total:
             others_str = ", ".join(sorted(other_tumor_types)[:3])
-            summary_text = f"All {total} evidence items are from other tumor types ({others_str})."
+            summary_text = (
+                f"All {total} evidence items are from other tumor types ({others_str})."
+            )
         elif pan_cancer_count == total:
             summary_text = f"All {total} evidence items are pan-cancer/tumor-agnostic."
         elif unknown_count == total:

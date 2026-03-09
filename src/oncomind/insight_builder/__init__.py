@@ -30,7 +30,6 @@ from oncomind.insight_builder.conductor import (
     conduct_batch,
 )
 
-
 __all__ = [
     # Aggregator (evidence only)
     "EvidenceAggregator",

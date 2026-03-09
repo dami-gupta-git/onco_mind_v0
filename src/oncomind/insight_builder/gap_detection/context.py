@@ -7,7 +7,10 @@ aspects, and flags during gap detection analysis.
 from dataclasses import dataclass, field
 
 from oncomind.models.extracted.evidence_gaps import (
-    EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
+    EvidenceGap,
+    GapCategory,
+    GapSeverity,
+    CharacterizedAspect,
 )
 
 
@@ -18,6 +21,7 @@ class GapDetectionContext:
     Tracks gaps found, well-characterized aspects, and flags for use
     across multiple detection functions.
     """
+
     gene: str
     variant: str
     tumor_type: str | None
@@ -65,13 +69,15 @@ class GapDetectionContext:
         addressable_with: list[str] | None = None,
     ) -> None:
         """Add an evidence gap."""
-        self.gaps.append(EvidenceGap(
-            category=category,
-            severity=severity,
-            description=description,
-            suggested_studies=suggested_studies or [],
-            addressable_with=addressable_with or [],
-        ))
+        self.gaps.append(
+            EvidenceGap(
+                category=category,
+                severity=severity,
+                description=description,
+                suggested_studies=suggested_studies or [],
+                addressable_with=addressable_with or [],
+            )
+        )
 
     def add_poorly_characterized(self, aspect: str) -> None:
         """Add a poorly-characterized aspect."""

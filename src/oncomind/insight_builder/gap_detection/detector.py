@@ -58,9 +58,8 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
         gene=evidence.identifiers.gene,
         variant=evidence.identifiers.variant,
         tumor_type=evidence.context.tumor_type,
-        is_cancer_gene=evidence.context.gene_role in (
-            "oncogene", "TSG", "tumor_suppressor", "ddr", "tsg_pathway_actionable"
-        ),
+        is_cancer_gene=evidence.context.gene_role
+        in ("oncogene", "TSG", "tumor_suppressor", "ddr", "tsg_pathway_actionable"),
         has_pathogenic_signal=has_pathogenic_signal(evidence),
     )
 
@@ -86,15 +85,19 @@ def detect_evidence_gaps(evidence: "Evidence") -> EvidenceGaps:
     _enrich_gaps_with_context(evidence, ctx)
 
     # Compute overall assessments
-    overall_quality = compute_overall_quality(
-        ctx.gaps, len(ctx.well_characterized)
-    )
+    overall_quality = compute_overall_quality(ctx.gaps, len(ctx.well_characterized))
     research_priority = compute_research_priority(
-        evidence, ctx.gaps, overall_quality, ctx.is_cancer_gene, ctx.has_pathogenic_signal
+        evidence,
+        ctx.gaps,
+        overall_quality,
+        ctx.is_cancer_gene,
+        ctx.has_pathogenic_signal,
     )
 
     # Sort well_characterized_detailed by category for grouped display
-    sorted_well_characterized = sort_characterized_by_category(ctx.well_characterized_detailed)
+    sorted_well_characterized = sort_characterized_by_category(
+        ctx.well_characterized_detailed
+    )
 
     return EvidenceGaps(
         gaps=ctx.gaps,
@@ -186,7 +189,11 @@ def _enrich_gaps_with_context(evidence: "Evidence", ctx: GapDetectionContext) ->
                 new_suggestions.append(
                     f"Kinase activity assay for {gene} {variant} vs wild-type"
                 )
-            elif evidence.context.gene_role in ("TSG", "tumor_suppressor", "tsg_pathway_actionable"):
+            elif evidence.context.gene_role in (
+                "TSG",
+                "tumor_suppressor",
+                "tsg_pathway_actionable",
+            ):
                 new_suggestions.append(
                     f"LOF assay: assess {gene} {variant} impact on tumor suppressor function"
                 )

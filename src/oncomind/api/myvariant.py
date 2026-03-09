@@ -12,6 +12,7 @@ Key Design:
 - Structured parsing to typed Evidence models
 - Context manager for session cleanup
 """
+
 import re
 from typing import Any
 
@@ -41,11 +42,27 @@ class MyVariantAPIError(Exception):
 
 # Amino acid single-letter to three-letter code mapping
 AA_1_TO_3 = {
-    'A': 'Ala', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe',
-    'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu',
-    'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg',
-    'S': 'Ser', 'T': 'Thr', 'V': 'Val', 'W': 'Trp', 'Y': 'Tyr',
-    '*': 'Ter',  # Stop codon
+    "A": "Ala",
+    "C": "Cys",
+    "D": "Asp",
+    "E": "Glu",
+    "F": "Phe",
+    "G": "Gly",
+    "H": "His",
+    "I": "Ile",
+    "K": "Lys",
+    "L": "Leu",
+    "M": "Met",
+    "N": "Asn",
+    "P": "Pro",
+    "Q": "Gln",
+    "R": "Arg",
+    "S": "Ser",
+    "T": "Thr",
+    "V": "Val",
+    "W": "Trp",
+    "Y": "Tyr",
+    "*": "Ter",  # Stop codon
 }
 
 
@@ -64,7 +81,7 @@ def _convert_to_hgvs_p_three_letter(variant: str) -> str | None:
         v = v[2:]
 
     # Match pattern: RefAA + Position + AltAA (e.g., G12D, V600E, R248*)
-    match = re.match(r'^([A-Z])(\d+)([A-Z*])$', v)
+    match = re.match(r"^([A-Z])(\d+)([A-Z*])$", v)
     if not match:
         return None
 
@@ -128,7 +145,9 @@ class MyVariantClient:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
     )
-    async def _query(self, query: str, fields: list[str] | None = None) -> dict[str, Any]:
+    async def _query(
+        self, query: str, fields: list[str] | None = None
+    ) -> dict[str, Any]:
         """Execute a query against MyVariant API.
 
         Args:
@@ -339,18 +358,26 @@ class MyVariantClient:
         clinvar_clinical_significance = None
         clinvar_accession = None
         if hit.clinvar:
-            clinvar_list = hit.clinvar if isinstance(hit.clinvar, list) else [hit.clinvar]
+            clinvar_list = (
+                hit.clinvar if isinstance(hit.clinvar, list) else [hit.clinvar]
+            )
             if clinvar_list:
                 first_clinvar = clinvar_list[0]
                 if first_clinvar.variant_id:
                     clinvar_id = str(first_clinvar.variant_id)
                 # Extract from rcv (can be single object or list)
                 if first_clinvar.rcv:
-                    rcv_list = first_clinvar.rcv if isinstance(first_clinvar.rcv, list) else [first_clinvar.rcv]
+                    rcv_list = (
+                        first_clinvar.rcv
+                        if isinstance(first_clinvar.rcv, list)
+                        else [first_clinvar.rcv]
+                    )
                     if rcv_list:
                         first_rcv = rcv_list[0]
                         if first_rcv.clinical_significance:
-                            clinvar_clinical_significance = first_rcv.clinical_significance
+                            clinvar_clinical_significance = (
+                                first_rcv.clinical_significance
+                            )
                         if first_rcv.accession:
                             clinvar_accession = first_rcv.accession
 
@@ -475,16 +502,22 @@ class MyVariantClient:
             # Convert back to dict for existing parser
             clinvar_data = hit.clinvar
             if isinstance(clinvar_data, list):
-                clinvar_evidence = self._parse_clinvar_evidence([c.model_dump() for c in clinvar_data])
+                clinvar_evidence = self._parse_clinvar_evidence(
+                    [c.model_dump() for c in clinvar_data]
+                )
             else:
-                clinvar_evidence = self._parse_clinvar_evidence(clinvar_data.model_dump())
+                clinvar_evidence = self._parse_clinvar_evidence(
+                    clinvar_data.model_dump()
+                )
 
         cosmic_evidence = []
         if hit.cosmic:
             # Convert back to dict for existing parser
             cosmic_data = hit.cosmic
             if isinstance(cosmic_data, list):
-                cosmic_evidence = self._parse_cosmic_evidence([c.model_dump() for c in cosmic_data])
+                cosmic_evidence = self._parse_cosmic_evidence(
+                    [c.model_dump() for c in cosmic_data]
+                )
             else:
                 cosmic_evidence = self._parse_cosmic_evidence(cosmic_data.model_dump())
 
@@ -518,7 +551,9 @@ class MyVariantClient:
             raw_data=hit.model_dump(by_alias=True),
         )
 
-    async def _fetch_clinvar_fallback(self, gene: str, variant: str) -> dict[str, Any] | None:
+    async def _fetch_clinvar_fallback(
+        self, gene: str, variant: str
+    ) -> dict[str, Any] | None:
         """
         Fallback to fetch ClinVar data directly from NCBI E-utilities when MyVariant doesn't have it.
 
@@ -540,17 +575,34 @@ class MyVariantClient:
             # Build search terms - try multiple formats for better matching
             # Convert X/Ter notation: K3326X -> Lys3326Ter, V600E -> Val600Glu
             aa_map = {
-                'A': 'Ala', 'R': 'Arg', 'N': 'Asn', 'D': 'Asp', 'C': 'Cys',
-                'E': 'Glu', 'Q': 'Gln', 'G': 'Gly', 'H': 'His', 'I': 'Ile',
-                'L': 'Leu', 'K': 'Lys', 'M': 'Met', 'F': 'Phe', 'P': 'Pro',
-                'S': 'Ser', 'T': 'Thr', 'W': 'Trp', 'Y': 'Tyr', 'V': 'Val',
-                'X': 'Ter', '*': 'Ter',
+                "A": "Ala",
+                "R": "Arg",
+                "N": "Asn",
+                "D": "Asp",
+                "C": "Cys",
+                "E": "Glu",
+                "Q": "Gln",
+                "G": "Gly",
+                "H": "His",
+                "I": "Ile",
+                "L": "Leu",
+                "K": "Lys",
+                "M": "Met",
+                "F": "Phe",
+                "P": "Pro",
+                "S": "Ser",
+                "T": "Thr",
+                "W": "Trp",
+                "Y": "Tyr",
+                "V": "Val",
+                "X": "Ter",
+                "*": "Ter",
             }
 
             search_terms = []
 
             # Parse variant like V600E, K3326X, etc.
-            match = re.match(r'^([A-Z])(\d+)([A-Z*])$', variant.upper())
+            match = re.match(r"^([A-Z])(\d+)([A-Z*])$", variant.upper())
             if match:
                 ref_aa, pos, alt_aa = match.groups()
                 ref_long = aa_map.get(ref_aa, ref_aa)
@@ -570,7 +622,7 @@ class MyVariantClient:
                     "db": "clinvar",
                     "term": search_term,
                     "retmode": "json",
-                    "retmax": 5  # Get multiple results to find best match
+                    "retmax": 5,  # Get multiple results to find best match
                 }
 
                 search_response = await client.get(search_url, params=search_params)
@@ -588,7 +640,7 @@ class MyVariantClient:
             summary_params = {
                 "db": "clinvar",
                 "id": ",".join(id_list),  # Fetch all at once
-                "retmode": "json"
+                "retmode": "json",
             }
 
             summary_response = await client.get(summary_url, params=summary_params)
@@ -627,11 +679,17 @@ class MyVariantClient:
 
             # Extract relevant fields - NCBI ClinVar API has multiple classification fields
             # Try clinical_significance first (legacy), then germline_classification, then somatic_classification
-            clinical_significance = best_result.get("clinical_significance", {}).get("description")
+            clinical_significance = best_result.get("clinical_significance", {}).get(
+                "description"
+            )
             if not clinical_significance:
-                clinical_significance = best_result.get("germline_classification", {}).get("description")
+                clinical_significance = best_result.get(
+                    "germline_classification", {}
+                ).get("description")
             if not clinical_significance:
-                clinical_significance = best_result.get("somatic_classification", {}).get("description")
+                clinical_significance = best_result.get(
+                    "somatic_classification", {}
+                ).get("description")
 
             # Also get review status
             review_status = None
@@ -697,7 +755,9 @@ class MyVariantClient:
             # Try multiple query strategies to find the variant
             # Strategy 1: Gene with protein notation (e.g., "BRAF p.V600E")
             # This works best with MyVariant API
-            protein_notation = f"p.{variant}" if not variant.startswith("p.") else variant
+            protein_notation = (
+                f"p.{variant}" if not variant.startswith("p.") else variant
+            )
             query = f"{gene} {protein_notation}"
             result = await self._query(query, fields=fields)
 
@@ -717,7 +777,9 @@ class MyVariantClient:
             if result.get("total", 0) == 0:
                 hgvs_p_three = _convert_to_hgvs_p_three_letter(variant)
                 if hgvs_p_three:
-                    query = f"dbnsfp.genename:{gene} AND snpeff.ann.hgvs_p:{hgvs_p_three}"
+                    query = (
+                        f"dbnsfp.genename:{gene} AND snpeff.ann.hgvs_p:{hgvs_p_three}"
+                    )
                     result = await self._query(query, fields=fields)
 
             # Strategy 5: Use VEP to get genomic coordinates, then re-query MyVariant
@@ -726,12 +788,15 @@ class MyVariantClient:
             if result.get("total", 0) == 0:
                 try:
                     from oncomind.api.vep import VEPClient
+
                     vep_client = VEPClient()
                     vep_annotation = await vep_client.annotate_variant(gene, variant)
 
                     if vep_annotation and vep_annotation.myvariant_query:
                         # Re-query MyVariant with genomic notation
-                        result = await self._query(vep_annotation.myvariant_query, fields=fields)
+                        result = await self._query(
+                            vep_annotation.myvariant_query, fields=fields
+                        )
                 except Exception:
                     # VEP failed - continue with existing result
                     pass
@@ -808,6 +873,7 @@ class MyVariantClient:
             if not evidence.hgvs_protein:
                 try:
                     from oncomind.api.vep import VEPClient
+
                     vep_client = VEPClient()
                     vep_annotation = await vep_client.annotate_variant(gene, variant)
                     if vep_annotation and vep_annotation.hgvs_protein:
@@ -823,7 +889,9 @@ class MyVariantClient:
                 if clinvar_fallback:
                     # Update evidence with ClinVar fallback data
                     evidence.clinvar_id = clinvar_fallback.get("variant_id")
-                    evidence.clinvar_clinical_significance = clinvar_fallback.get("clinical_significance")
+                    evidence.clinvar_clinical_significance = clinvar_fallback.get(
+                        "clinical_significance"
+                    )
                     evidence.clinvar_accession = clinvar_fallback.get("accession")
 
             return evidence

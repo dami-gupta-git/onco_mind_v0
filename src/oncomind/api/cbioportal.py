@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class CBioPortalError(Exception):
     """Exception raised for cBioPortal API errors."""
+
     pass
 
 
@@ -129,9 +130,9 @@ class CBioPortalClient:
         # Match if: tumor_lower equals abbrev, OR tumor_lower contains any alias, OR any alias contains tumor_lower
         for abbrev, full_names in TUMOR_TYPE_MAPPINGS.items():
             matches = (
-                tumor_lower == abbrev or
-                any(tumor_lower in name for name in full_names) or
-                any(name in tumor_lower for name in full_names)
+                tumor_lower == abbrev
+                or any(tumor_lower in name for name in full_names)
+                or any(name in tumor_lower for name in full_names)
             )
             if matches:
                 if abbrev in CBIOPORTAL_STUDY_MAPPINGS:
@@ -236,7 +237,9 @@ class CBioPortalClient:
             return None
 
         # Get Entrez IDs for cancer genes (excluding query gene)
-        cancer_genes = [g for g in CANCER_GENES_CO_OCCURRENCE if g.upper() != gene.upper()]
+        cancer_genes = [
+            g for g in CANCER_GENES_CO_OCCURRENCE if g.upper() != gene.upper()
+        ]
         cancer_entrez_ids = []
         for g in cancer_genes[:20]:  # Limit to 20 for performance
             eid = await self._get_entrez_id(g)
@@ -245,7 +248,9 @@ class CBioPortalClient:
 
         # Fetch mutations for query gene
         try:
-            query_mutations = await self._get_mutations([query_entrez], molecular_profile_id)
+            query_mutations = await self._get_mutations(
+                [query_entrez], molecular_profile_id
+            )
         except CBioPortalError:
             return None
 
@@ -274,7 +279,11 @@ class CBioPortalClient:
                     samples_with_variant.add(sample_id)
 
         # If variant specified, use variant samples; otherwise gene samples
-        target_samples = samples_with_variant if clean_variant and samples_with_variant else samples_with_gene
+        target_samples = (
+            samples_with_variant
+            if clean_variant and samples_with_variant
+            else samples_with_gene
+        )
 
         # Fetch mutations for cancer genes to find co-occurrence
         co_occurring = []
@@ -288,6 +297,7 @@ class CBioPortalClient:
 
                 # Build gene -> samples mapping
                 from collections import defaultdict
+
                 gene_samples: dict[str, set] = defaultdict(set)
                 entrez_to_gene: dict[int, str] = {}
 
@@ -313,7 +323,11 @@ class CBioPortalClient:
                     # Calculate odds ratio
                     # OR = (both * neither) / (only_query * only_other)
                     if only_query > 0 and only_other > 0:
-                        odds_ratio = (both * neither) / (only_query * only_other) if neither > 0 else 0
+                        odds_ratio = (
+                            (both * neither) / (only_query * only_other)
+                            if neither > 0
+                            else 0
+                        )
                     else:
                         odds_ratio = 0
 
@@ -348,7 +362,11 @@ class CBioPortalClient:
             samples_with_gene_mutation=len(samples_with_gene),
             samples_with_exact_variant=len(samples_with_variant) if variant else 0,
             gene_prevalence_pct=round(100 * len(samples_with_gene) / total_samples, 1),
-            variant_prevalence_pct=round(100 * len(samples_with_variant) / total_samples, 1) if variant else 0,
+            variant_prevalence_pct=(
+                round(100 * len(samples_with_variant) / total_samples, 1)
+                if variant
+                else 0
+            ),
             co_occurring=co_occurring[:10],  # Top 10
             mutually_exclusive=mutually_exclusive[:10],  # Top 10
             study_name=study_name,
@@ -436,13 +454,17 @@ class CBioPortalClient:
                 continue
 
             seen_samples.add(sample_id)
-            cell_lines.append({
-                "name": cell_name.replace("_", "-"),  # Convert back to standard naming
-                "tissue": tissue,
-                "protein_change": protein_change,
-                "mutation_type": mut.get("mutationType", ""),
-                "sample_id": sample_id,
-            })
+            cell_lines.append(
+                {
+                    "name": cell_name.replace(
+                        "_", "-"
+                    ),  # Convert back to standard naming
+                    "tissue": tissue,
+                    "protein_change": protein_change,
+                    "mutation_type": mut.get("mutationType", ""),
+                    "sample_id": sample_id,
+                }
+            )
 
         # Sort by tissue, then name
         cell_lines.sort(key=lambda x: (x["tissue"], x["name"]))

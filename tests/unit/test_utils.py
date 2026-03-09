@@ -123,7 +123,9 @@ class TestNormalizeDrugName:
         formulations are clinically distinct and should remain separate.
         """
         iv_form = normalize_drug_name("AMIVANTAMAB-VMJW")
-        sc_form = normalize_drug_name("AMIVANTAMAB AND HYALURONIDASE-LPUJ (HUMAN RECOMBINANT)")
+        sc_form = normalize_drug_name(
+            "AMIVANTAMAB AND HYALURONIDASE-LPUJ (HUMAN RECOMBINANT)"
+        )
 
         # These should NOT be equal - they are different formulations
         assert iv_form != sc_form
@@ -148,12 +150,16 @@ class TestIsKitFalsePositive:
 
     def test_preparation_kit_without_oncology_is_false_positive(self):
         """Test preparation kit without oncology context is flagged."""
-        indication = "This kit for the preparation of solutions is used for bowel preparation"
+        indication = (
+            "This kit for the preparation of solutions is used for bowel preparation"
+        )
         assert is_kit_false_positive(indication) is True
 
     def test_kit_with_cancer_context_is_not_false_positive(self):
         """Test kit mentioned with cancer context is not flagged."""
-        indication = "For treatment of KIT-positive gastrointestinal stromal tumor (cancer)"
+        indication = (
+            "For treatment of KIT-positive gastrointestinal stromal tumor (cancer)"
+        )
         assert is_kit_false_positive(indication) is False
 
     def test_kit_with_tumor_context_is_not_false_positive(self):
@@ -273,17 +279,27 @@ class TestDedupeCivicEvidence:
 
     def test_returns_correct_dict_structure(self):
         """Test that returned dict has expected keys."""
-        evidence_list = [
-            self._create_mock_evidence(evidence_id=123)
-        ]
+        evidence_list = [self._create_mock_evidence(evidence_id=123)]
 
         result = dedupe_civic_evidence(evidence_list)
 
         expected_keys = {
-            "evidence_id", "eid", "civic_url", "evidence_type", "evidence_level",
-            "clinical_significance", "disease", "drugs", "description", "pmid",
-            "source_url", "trust_rating", "evidence_direction", "locus_match",
-            "matched_profile", "tumor_match"
+            "evidence_id",
+            "eid",
+            "civic_url",
+            "evidence_type",
+            "evidence_level",
+            "clinical_significance",
+            "disease",
+            "drugs",
+            "description",
+            "pmid",
+            "source_url",
+            "trust_rating",
+            "evidence_direction",
+            "locus_match",
+            "matched_profile",
+            "tumor_match",
         }
         assert set(result[0].keys()) == expected_keys
 
@@ -360,9 +376,15 @@ class TestDedupeViccEvidence:
     def test_deduplicates_by_drugs_disease_response(self):
         """Test deduplication by (drugs, disease, response_type) key."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"),  # Duplicate
-            self._create_mock_vicc(drugs=["Drug B"], disease="Cancer X", response_type="Sensitivity"),  # Different drug
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"
+            ),  # Duplicate
+            self._create_mock_vicc(
+                drugs=["Drug B"], disease="Cancer X", response_type="Sensitivity"
+            ),  # Different drug
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -372,8 +394,12 @@ class TestDedupeViccEvidence:
     def test_different_disease_not_deduplicated(self):
         """Test that different diseases are not deduplicated."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer Y", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer Y", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -383,8 +409,12 @@ class TestDedupeViccEvidence:
     def test_different_response_type_not_deduplicated(self):
         """Test that different response types are not deduplicated."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer X", response_type="Resistance"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer X", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer X", response_type="Resistance"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -394,8 +424,16 @@ class TestDedupeViccEvidence:
     def test_drug_order_does_not_matter(self):
         """Test that drug order doesn't affect deduplication (sorted)."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A", "Drug B"], disease="Cancer X", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug B", "Drug A"], disease="Cancer X", response_type="Sensitivity"),  # Same drugs, different order
+            self._create_mock_vicc(
+                drugs=["Drug A", "Drug B"],
+                disease="Cancer X",
+                response_type="Sensitivity",
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug B", "Drug A"],
+                disease="Cancer X",
+                response_type="Sensitivity",
+            ),  # Same drugs, different order
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -405,8 +443,12 @@ class TestDedupeViccEvidence:
     def test_case_insensitive_disease(self):
         """Test that disease comparison is case insensitive."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="MELANOMA", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="melanoma", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="MELANOMA", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="melanoma", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -416,8 +458,12 @@ class TestDedupeViccEvidence:
     def test_case_insensitive_response_type(self):
         """Test that response_type comparison is case insensitive."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="SENSITIVITY"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="SENSITIVITY"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -427,8 +473,12 @@ class TestDedupeViccEvidence:
     def test_handles_none_drugs(self):
         """Test handling of None drugs."""
         evidence_list = [
-            self._create_mock_vicc(drugs=None, disease="Cancer", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=None, disease="Cancer", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=None, disease="Cancer", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=None, disease="Cancer", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -438,8 +488,12 @@ class TestDedupeViccEvidence:
     def test_handles_empty_drugs(self):
         """Test handling of empty drugs list."""
         evidence_list = [
-            self._create_mock_vicc(drugs=[], disease="Cancer", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=[], disease="Cancer", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=[], disease="Cancer", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=[], disease="Cancer", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -449,8 +503,12 @@ class TestDedupeViccEvidence:
     def test_handles_none_disease(self):
         """Test handling of None disease."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease=None, response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease=None, response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease=None, response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease=None, response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -460,8 +518,12 @@ class TestDedupeViccEvidence:
     def test_handles_none_response_type(self):
         """Test handling of None response_type."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type=None),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type=None),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type=None
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type=None
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -470,16 +532,22 @@ class TestDedupeViccEvidence:
 
     def test_returns_correct_dict_structure(self):
         """Test that returned dict has expected keys."""
-        evidence_list = [
-            self._create_mock_vicc()
-        ]
+        evidence_list = [self._create_mock_vicc()]
 
         result = dedupe_vicc_evidence(evidence_list)
 
         expected_keys = {
-            "source", "drugs", "disease", "response_type", "evidence_level",
-            "molecular_profile", "molecular_profile_score", "publication_url",
-            "locus_match", "matched_profile", "tumor_match"
+            "source",
+            "drugs",
+            "disease",
+            "response_type",
+            "evidence_level",
+            "molecular_profile",
+            "molecular_profile_score",
+            "publication_url",
+            "locus_match",
+            "matched_profile",
+            "tumor_match",
         }
         assert set(result[0].keys()) == expected_keys
 
@@ -517,9 +585,15 @@ class TestDedupeViccEvidence:
     def test_preserves_order(self):
         """Test that original order is preserved after deduplication."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug C"], disease="Cancer", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug B"], disease="Cancer", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug C"], disease="Cancer", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug B"], disease="Cancer", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -530,8 +604,12 @@ class TestDedupeViccEvidence:
     def test_whitespace_trimmed_in_disease(self):
         """Test that whitespace is trimmed in disease comparison."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="  Cancer  ", response_type="Sensitivity"),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="  Cancer  ", response_type="Sensitivity"
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)
@@ -541,8 +619,12 @@ class TestDedupeViccEvidence:
     def test_whitespace_trimmed_in_response_type(self):
         """Test that whitespace is trimmed in response_type comparison."""
         evidence_list = [
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="  Sensitivity  "),
-            self._create_mock_vicc(drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="  Sensitivity  "
+            ),
+            self._create_mock_vicc(
+                drugs=["Drug A"], disease="Cancer", response_type="Sensitivity"
+            ),
         ]
 
         result = dedupe_vicc_evidence(evidence_list)

@@ -61,7 +61,17 @@ class TestVICCAssociation:
     def test_is_sensitivity_oncokb_levels(self):
         """Test is_sensitivity returns True for OncoKB numeric levels."""
         # OncoKB levels 1-4 with various letter suffixes should be sensitivity
-        oncokb_sensitivity_levels = ["1A", "1B", "2A", "2B", "2C", "2D", "3A", "3B", "4"]
+        oncokb_sensitivity_levels = [
+            "1A",
+            "1B",
+            "2A",
+            "2B",
+            "2C",
+            "2D",
+            "3A",
+            "3B",
+            "4",
+        ]
         for level in oncokb_sensitivity_levels:
             assoc = VICCAssociation(
                 description=f"Level {level}",
@@ -73,8 +83,12 @@ class TestVICCAssociation:
                 response_type=level,
                 source="oncokb",
             )
-            assert assoc.is_sensitivity() is True, f"OncoKB level {level} should be sensitivity"
-            assert assoc.is_resistance() is False, f"OncoKB level {level} should NOT be resistance"
+            assert (
+                assoc.is_sensitivity() is True
+            ), f"OncoKB level {level} should be sensitivity"
+            assert (
+                assoc.is_resistance() is False
+            ), f"OncoKB level {level} should NOT be resistance"
 
     def test_is_sensitivity_better_outcome(self):
         """Test is_sensitivity returns True for 'Better Outcome' response type."""
@@ -103,8 +117,12 @@ class TestVICCAssociation:
                 response_type=level,
                 source="oncokb",
             )
-            assert assoc.is_resistance() is True, f"OncoKB level {level} should be resistance"
-            assert assoc.is_sensitivity() is False, f"OncoKB level {level} should NOT be sensitivity"
+            assert (
+                assoc.is_resistance() is True
+            ), f"OncoKB level {level} should be resistance"
+            assert (
+                assoc.is_sensitivity() is False
+            ), f"OncoKB level {level} should NOT be sensitivity"
 
     def test_is_sensitivity_false(self):
         """Test is_sensitivity returns False for resistance associations."""
@@ -237,7 +255,10 @@ class TestVICCAssociation:
             evidence_level="A",
             response_type="Sensitivity",
             source="civic",
-            publication_url=["https://pubmed.ncbi.nlm.nih.gov/12345", "https://pubmed.ncbi.nlm.nih.gov/67890"],
+            publication_url=[
+                "https://pubmed.ncbi.nlm.nih.gov/12345",
+                "https://pubmed.ncbi.nlm.nih.gov/67890",
+            ],
         )
         assert isinstance(assoc.publication_url, list)
         assert len(assoc.publication_url) == 2
@@ -322,13 +343,9 @@ class TestVICCClient:
                             "response_type": "Sensitivity",
                             "publication_url": "https://pubmed.ncbi.nlm.nih.gov/12345",
                             "oncogenic": "BRAF V600E",
-                            "evidence": [
-                                {"evidenceType": {"sourceName": "jax"}}
-                            ],
+                            "evidence": [{"evidenceType": {"sourceName": "jax"}}],
                         },
-                        "features": [
-                            {"geneSymbol": "BRAF", "name": "BRAF V600E"}
-                        ],
+                        "features": [{"geneSymbol": "BRAF", "name": "BRAF V600E"}],
                         "diseases": "melanoma",
                         "drugs": "vemurafenib",
                         "evidence_label": "A",
@@ -337,13 +354,9 @@ class TestVICCClient:
                         "association": {
                             "description": "BRAF V600E resistant to drug X",
                             "response_type": "resistant",
-                            "evidence": [
-                                {"evidenceType": {"sourceName": "oncokb"}}
-                            ],
+                            "evidence": [{"evidenceType": {"sourceName": "oncokb"}}],
                         },
-                        "features": [
-                            {"geneSymbol": "BRAF", "name": "BRAF V600E"}
-                        ],
+                        "features": [{"geneSymbol": "BRAF", "name": "BRAF V600E"}],
                         "diseases": "colorectal cancer",
                         "drugs": "drug_x",
                         "evidence_label": "B",
@@ -411,7 +424,9 @@ class TestVICCClient:
             mock_get_client.return_value = mock_http_client
 
             # Filter for melanoma only
-            associations = await client.fetch_associations("BRAF", "V600E", tumor_type="melanoma")
+            associations = await client.fetch_associations(
+                "BRAF", "V600E", tumor_type="melanoma"
+            )
 
             assert len(associations) == 1
             assert "melanoma" in associations[0].disease
@@ -458,7 +473,9 @@ class TestVICCClient:
             mock_http_client.get.return_value = mock_response_obj
             mock_get_client.return_value = mock_http_client
 
-            sensitivity_assocs = await client.fetch_sensitivity_associations("BRAF", "V600E")
+            sensitivity_assocs = await client.fetch_sensitivity_associations(
+                "BRAF", "V600E"
+            )
 
             assert len(sensitivity_assocs) == 2
             assert all(a.is_sensitivity() for a in sensitivity_assocs)
@@ -498,7 +515,9 @@ class TestVICCClient:
             mock_http_client.get.return_value = mock_response_obj
             mock_get_client.return_value = mock_http_client
 
-            resistance_assocs = await client.fetch_resistance_associations("KRAS", "G12D")
+            resistance_assocs = await client.fetch_resistance_associations(
+                "KRAS", "G12D"
+            )
 
             assert len(resistance_assocs) == 1
             assert resistance_assocs[0].is_resistance() is True

@@ -8,7 +8,9 @@ class TestVCFRecordToParsedVariant:
 
     def test_snv_conversion(self):
         """Test SNV is correctly converted to ParsedVariant."""
-        record = VCFRecord(chrom="7", pos=140753336, id="COSV54736915", ref="T", alt="A")
+        record = VCFRecord(
+            chrom="7", pos=140753336, id="COSV54736915", ref="T", alt="A"
+        )
 
         parsed = record.to_parsed_variant()
 
@@ -19,7 +21,9 @@ class TestVCFRecordToParsedVariant:
 
     def test_indel_conversion(self):
         """Test indel is correctly converted to ParsedVariant."""
-        record = VCFRecord(chrom="7", pos=55242465, id=None, ref="GAATTAAGAGAAGC", alt="G")
+        record = VCFRecord(
+            chrom="7", pos=55242465, id=None, ref="GAATTAAGAGAAGC", alt="G"
+        )
 
         parsed = record.to_parsed_variant()
 

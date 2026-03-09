@@ -23,13 +23,16 @@ from oncomind.insight_builder.gap_detection.helpers import (
     get_top_codependencies,
 )
 from oncomind.models.extracted.evidence_gaps import (
-    EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
+    EvidenceGap,
+    GapCategory,
+    GapSeverity,
+    CharacterizedAspect,
 )
-
 
 # =============================================================================
 # TEST MatchCounts
 # =============================================================================
+
 
 class TestMatchCounts:
     """Tests for the MatchCounts dataclass."""
@@ -95,6 +98,7 @@ class TestMatchCounts:
 # =============================================================================
 # TEST count_with_levels
 # =============================================================================
+
 
 class TestCountWithLevels:
     """Tests for count_with_levels function."""
@@ -164,6 +168,7 @@ class TestCountWithLevels:
 # TEST normalize_source
 # =============================================================================
 
+
 class TestNormalizeSource:
     """Tests for normalize_source function."""
 
@@ -198,15 +203,22 @@ class TestNormalizeSource:
 # TEST sort_characterized_by_category
 # =============================================================================
 
+
 class TestSortCharacterizedByCategory:
     """Tests for sort_characterized_by_category function."""
 
     def test_sorts_by_category_order(self):
         """Should sort by clinical importance (CLINICAL first)."""
         items = [
-            CharacterizedAspect(aspect="Functional", basis="test", category=GapCategory.FUNCTIONAL),
-            CharacterizedAspect(aspect="Clinical", basis="test", category=GapCategory.CLINICAL),
-            CharacterizedAspect(aspect="Drug", basis="test", category=GapCategory.DRUG_RESPONSE),
+            CharacterizedAspect(
+                aspect="Functional", basis="test", category=GapCategory.FUNCTIONAL
+            ),
+            CharacterizedAspect(
+                aspect="Clinical", basis="test", category=GapCategory.CLINICAL
+            ),
+            CharacterizedAspect(
+                aspect="Drug", basis="test", category=GapCategory.DRUG_RESPONSE
+            ),
         ]
 
         sorted_items = sort_characterized_by_category(items)
@@ -219,7 +231,9 @@ class TestSortCharacterizedByCategory:
         """Items with no category should sort last."""
         items = [
             CharacterizedAspect(aspect="No Cat", basis="test", category=None),
-            CharacterizedAspect(aspect="Clinical", basis="test", category=GapCategory.CLINICAL),
+            CharacterizedAspect(
+                aspect="Clinical", basis="test", category=GapCategory.CLINICAL
+            ),
         ]
 
         sorted_items = sort_characterized_by_category(items)
@@ -231,6 +245,7 @@ class TestSortCharacterizedByCategory:
 # =============================================================================
 # TEST compute_overall_quality
 # =============================================================================
+
 
 class TestComputeOverallQuality:
     """Tests for compute_overall_quality function."""
@@ -289,6 +304,7 @@ class TestComputeOverallQuality:
 # =============================================================================
 # TEST compute_research_priority
 # =============================================================================
+
 
 class TestComputeResearchPriority:
     """Tests for compute_research_priority function."""
@@ -357,6 +373,7 @@ class TestComputeResearchPriority:
 # =============================================================================
 # TEST has_pathogenic_signal
 # =============================================================================
+
 
 class TestHasPathogenicSignal:
     """Tests for has_pathogenic_signal function."""
@@ -442,6 +459,7 @@ class TestHasPathogenicSignal:
 # TEST get_primary_drug
 # =============================================================================
 
+
 class TestGetPrimaryDrug:
     """Tests for get_primary_drug function."""
 
@@ -489,6 +507,7 @@ class TestGetPrimaryDrug:
 # TEST get_top_sensitive_drugs
 # =============================================================================
 
+
 class TestGetTopSensitiveDrugs:
     """Tests for get_top_sensitive_drugs function."""
 
@@ -526,6 +545,7 @@ class TestGetTopSensitiveDrugs:
 # TEST get_top_cooccurring_gene
 # =============================================================================
 
+
 class TestGetTopCooccurringGene:
     """Tests for get_top_cooccurring_gene function."""
 
@@ -555,6 +575,7 @@ class TestGetTopCooccurringGene:
 # =============================================================================
 # TEST has_strong_cooccurrence
 # =============================================================================
+
 
 class TestHasStrongCooccurrence:
     """Tests for has_strong_cooccurrence function."""
@@ -591,6 +612,7 @@ class TestHasStrongCooccurrence:
 # =============================================================================
 # TEST get_top_codependencies
 # =============================================================================
+
 
 class TestGetTopCodependencies:
     """Tests for get_top_codependencies function."""

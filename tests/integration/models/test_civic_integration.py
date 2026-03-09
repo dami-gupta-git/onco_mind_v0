@@ -11,10 +11,10 @@ import pytest
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 
-
 # =============================================================================
 # CIViC EID/AID INTEGRATION TESTS
 # =============================================================================
+
 
 @pytest.mark.integration
 class TestCIViCIdentifiers:
@@ -32,17 +32,27 @@ class TestCIViCIdentifiers:
         if result.evidence.civic_assertions:
             for assertion in result.evidence.civic_assertions:
                 # assertion_id should be a positive integer
-                assert assertion.assertion_id is not None, "CIViC assertion should have assertion_id"
-                assert isinstance(assertion.assertion_id, int), "assertion_id should be an integer"
+                assert (
+                    assertion.assertion_id is not None
+                ), "CIViC assertion should have assertion_id"
+                assert isinstance(
+                    assertion.assertion_id, int
+                ), "assertion_id should be an integer"
                 assert assertion.assertion_id > 0, "assertion_id should be positive"
 
                 # AID should be formatted as "AID{number}"
-                assert assertion.aid is not None, "CIViC assertion should have aid property"
-                assert assertion.aid.startswith("AID"), f"AID should start with 'AID', got: {assertion.aid}"
+                assert (
+                    assertion.aid is not None
+                ), "CIViC assertion should have aid property"
+                assert assertion.aid.startswith(
+                    "AID"
+                ), f"AID should start with 'AID', got: {assertion.aid}"
                 assert assertion.aid == f"AID{assertion.assertion_id}"
 
                 # civic_url should be a valid URL
-                assert assertion.civic_url is not None, "CIViC assertion should have civic_url"
+                assert (
+                    assertion.civic_url is not None
+                ), "CIViC assertion should have civic_url"
                 assert "civicdb.org/assertions/" in assertion.civic_url
 
     @pytest.mark.asyncio
@@ -60,16 +70,24 @@ class TestCIViCIdentifiers:
                 if evidence.evidence_id is not None:
                     has_eid = True
                     # evidence_id should be a positive integer
-                    assert isinstance(evidence.evidence_id, int), "evidence_id should be an integer"
+                    assert isinstance(
+                        evidence.evidence_id, int
+                    ), "evidence_id should be an integer"
                     assert evidence.evidence_id > 0, "evidence_id should be positive"
 
                     # EID should be formatted as "EID{number}"
-                    assert evidence.eid is not None, "CIViC evidence should have eid property"
-                    assert evidence.eid.startswith("EID"), f"EID should start with 'EID', got: {evidence.eid}"
+                    assert (
+                        evidence.eid is not None
+                    ), "CIViC evidence should have eid property"
+                    assert evidence.eid.startswith(
+                        "EID"
+                    ), f"EID should start with 'EID', got: {evidence.eid}"
                     assert evidence.eid == f"EID{evidence.evidence_id}"
 
                     # civic_url should be a valid URL
-                    assert evidence.civic_url is not None, "CIViC evidence should have civic_url"
+                    assert (
+                        evidence.civic_url is not None
+                    ), "CIViC evidence should have civic_url"
                     assert "civicdb.org/evidence/" in evidence.civic_url
 
             # Note: Not all API sources may return IDs, so we don't require all to have IDs
@@ -97,6 +115,7 @@ class TestCIViCIdentifiers:
 # AKT1 E17K BREAST CANCER INTEGRATION TEST
 # =============================================================================
 
+
 @pytest.mark.integration
 class TestAKT1E17KBreastCancer:
     """Integration tests for AKT1 E17K in Breast Cancer - a well-characterized actionable variant."""
@@ -116,13 +135,16 @@ class TestAKT1E17KBreastCancer:
         assert result.evidence is not None, "Should have evidence"
 
         # Should have CIViC evidence items with Capivasertib
-        assert len(result.evidence.civic_evidence) > 0, "Should have CIViC evidence items"
+        assert (
+            len(result.evidence.civic_evidence) > 0
+        ), "Should have CIViC evidence items"
         drug_names = []
         for e in result.evidence.civic_evidence:
             drug_names.extend(e.drugs or [])
         drug_names_lower = [d.lower() for d in drug_names]
-        assert any("capiva" in d for d in drug_names_lower), \
-            f"Should have Capivasertib in CIViC evidence, found: {drug_names}"
+        assert any(
+            "capiva" in d for d in drug_names_lower
+        ), f"Should have Capivasertib in CIViC evidence, found: {drug_names}"
 
         # Should have VICC evidence
         assert len(result.evidence.vicc_evidence) > 0, "Should have VICC evidence"
@@ -133,8 +155,10 @@ class TestAKT1E17KBreastCancer:
             gaps = result.evidence.compute_evidence_gaps()
 
         # Should have good evidence quality (comprehensive or moderate)
-        assert gaps.overall_evidence_quality in ("comprehensive", "moderate"), \
-            f"AKT1 E17K should have good evidence quality, got: {gaps.overall_evidence_quality}"
+        assert gaps.overall_evidence_quality in (
+            "comprehensive",
+            "moderate",
+        ), f"AKT1 E17K should have good evidence quality, got: {gaps.overall_evidence_quality}"
 
     @pytest.mark.asyncio
     async def test_akt1_e17k_breast_cancer_civic_eids_unique(self):
@@ -144,10 +168,13 @@ class TestAKT1E17KBreastCancer:
             result = await conductor.run("AKT1 E17K", tumor_type="Breast Cancer")
 
         # Check for duplicate EIDs
-        evidence_ids = [e.evidence_id for e in result.evidence.civic_evidence if e.evidence_id]
+        evidence_ids = [
+            e.evidence_id for e in result.evidence.civic_evidence if e.evidence_id
+        ]
         unique_ids = set(evidence_ids)
-        assert len(evidence_ids) == len(unique_ids), \
-            f"Duplicate CIViC EIDs found: {evidence_ids}"
+        assert len(evidence_ids) == len(
+            unique_ids
+        ), f"Duplicate CIViC EIDs found: {evidence_ids}"
 
     @pytest.mark.asyncio
     async def test_akt1_e17k_has_depmap_data(self):
@@ -161,14 +188,19 @@ class TestAKT1E17KBreastCancer:
             result = await conductor.run("AKT1 E17K", tumor_type="Breast Cancer")
 
         # Should have DepMap evidence
-        assert result.evidence.depmap_evidence is not None, "Should have DepMap evidence"
-        assert len(result.evidence.depmap_evidence.cell_line_models) > 0, \
-            "Should have cell line models"
+        assert (
+            result.evidence.depmap_evidence is not None
+        ), "Should have DepMap evidence"
+        assert (
+            len(result.evidence.depmap_evidence.cell_line_models) > 0
+        ), "Should have cell line models"
 
         # Verify cell lines have mutation data
         cell_lines_with_mutation = [
-            cl for cl in result.evidence.depmap_evidence.cell_line_models
+            cl
+            for cl in result.evidence.depmap_evidence.cell_line_models
             if cl.has_mutation
         ]
-        assert len(cell_lines_with_mutation) > 0, \
-            "Should have cell lines with AKT1 E17K mutation"
+        assert (
+            len(cell_lines_with_mutation) > 0
+        ), "Should have cell lines with AKT1 E17K mutation"

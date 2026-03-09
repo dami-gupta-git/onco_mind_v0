@@ -24,7 +24,5 @@ class VICCEvidence(EvidenceItemBase):
     molecular_profile_score: float | None = None
     # Additional match tracking fields (not in base class)
     matched_profile: str | None = Field(
-        default=None,
-        description="The molecular profile that was actually matched"
+        default=None, description="The molecular profile that was actually matched"
     )
-

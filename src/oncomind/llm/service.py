@@ -27,7 +27,11 @@ from oncomind.config.constants import (
     LLM_TIMEOUT_DEFAULT,
 )
 from oncomind.config.debug import get_logger
-from oncomind.llm.prompts import create_cross_source_prompt, create_hypothesis_prompt, create_synthesis_prompt
+from oncomind.llm.prompts import (
+    create_cross_source_prompt,
+    create_hypothesis_prompt,
+    create_synthesis_prompt,
+)
 from oncomind.llm.llm_insight import LLMInsight
 
 logger = get_logger(__name__)
@@ -78,9 +82,13 @@ class LLMService:
     def __init__(self, model: str = LLM_DEFAULT_MODEL, temperature: float = 0.0):
         self.model = model
         self.temperature = temperature
-        logger.debug(f"LLMService initialized with model={model}, temperature={temperature}")
+        logger.debug(
+            f"LLMService initialized with model={model}, temperature={temperature}"
+        )
 
-    async def _call_llm(self, messages: list[dict], max_tokens: int = LLM_MAX_TOKENS_SYNTHESIS) -> dict | None:
+    async def _call_llm(
+        self, messages: list[dict], max_tokens: int = LLM_MAX_TOKENS_SYNTHESIS
+    ) -> dict | None:
         """Make LLM API call and parse JSON response.
 
         Args:
@@ -90,7 +98,11 @@ class LLMService:
         Returns:
             Parsed JSON dict or None on error
         """
-        timeout = LLM_TIMEOUT_CLAUDE if "claude" in self.model.lower() else LLM_TIMEOUT_DEFAULT
+        timeout = (
+            LLM_TIMEOUT_CLAUDE
+            if "claude" in self.model.lower()
+            else LLM_TIMEOUT_DEFAULT
+        )
 
         completion_kwargs = {
             "model": self.model,
@@ -119,7 +131,9 @@ class LLMService:
             if finish_reason == "length":
                 logger.warning("LLM response truncated (finish_reason=length)")
 
-            logger.debug(f"LLM raw response (finish_reason={finish_reason}):\n{raw_content[:500]}...")
+            logger.debug(
+                f"LLM raw response (finish_reason={finish_reason}):\n{raw_content[:500]}..."
+            )
 
             # Parse JSON response
             return self._parse_json_response(raw_content)
@@ -146,7 +160,7 @@ class LLMService:
             start_idx = content.find("{")
             end_idx = content.rfind("}")
             if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                content = content[start_idx:end_idx + 1]
+                content = content[start_idx : end_idx + 1]
 
         content = content.strip()
 
@@ -158,8 +172,10 @@ class LLMService:
             # Common fixes
             repaired = content
             repaired = repaired.replace("\\'", "'")
-            repaired = re.sub(r'(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)', '\\n', repaired)
-            repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+            repaired = re.sub(
+                r'(?<!\\)\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)', "\\n", repaired
+            )
+            repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
 
             try:
                 return json.loads(repaired)
@@ -254,7 +270,9 @@ class LLMService:
         #     print(msg["content"])
         # print("=" * 80 + "\n")
 
-        synthesis_data = await self._call_llm(synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS)
+        synthesis_data = await self._call_llm(
+            synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS
+        )
 
         if synthesis_data is None:
             logger.error("Stage 1 synthesis failed")
@@ -285,7 +303,9 @@ class LLMService:
             logger.info(f"Stage 2: Generating hypotheses for {gene} {variant}")
 
             # Build therapeutic signals summary for hypothesis context
-            therapeutic_signals = f"Sensitivity: {sensitivity_summary}\nResistance: {resistance_summary}"
+            therapeutic_signals = (
+                f"Sensitivity: {sensitivity_summary}\nResistance: {resistance_summary}"
+            )
 
             hypothesis_messages = create_hypothesis_prompt(
                 gene=gene,
@@ -304,7 +324,9 @@ class LLMService:
             #     print(msg["content"])
             # print("=" * 80 + "\n")
 
-            hypothesis_data = await self._call_llm(hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS)
+            hypothesis_data = await self._call_llm(
+                hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS
+            )
 
             if hypothesis_data:
                 research_hypotheses = hypothesis_data.get("research_hypotheses", [])
@@ -313,7 +335,9 @@ class LLMService:
             else:
                 logger.warning("Stage 2 hypothesis generation failed")
         else:
-            logger.debug("Skipping hypothesis generation (no knowledge gaps or disabled)")
+            logger.debug(
+                "Skipping hypothesis generation (no knowledge gaps or disabled)"
+            )
 
         # =====================================================================
         # BUILD FINAL INSIGHT
@@ -328,7 +352,9 @@ class LLMService:
         if research_implications:
             summary_parts.append(research_implications)
 
-        llm_summary = " ".join(summary_parts) if summary_parts else "No summary available"
+        llm_summary = (
+            " ".join(summary_parts) if summary_parts else "No summary available"
+        )
 
         return LLMInsight(
             llm_summary=llm_summary,
@@ -379,7 +405,10 @@ class LLMService:
             Dict with keys: strongest_evidence, conflicting_signals,
             emerging_targets, key_gaps, summary. Or None on error.
         """
-        if not cross_source_synthesis or cross_source_synthesis == "No cross-source synthesis available.":
+        if (
+            not cross_source_synthesis
+            or cross_source_synthesis == "No cross-source synthesis available."
+        ):
             logger.debug("Skipping cross-source analysis - no synthesis data")
             return None
 
@@ -401,9 +430,11 @@ class LLMService:
             logger.warning("Cross-source analysis LLM call failed")
             return None
 
-        logger.info(f"Cross-source analysis complete: {len(result.get('strongest_evidence', []))} strong, "
-                   f"{len(result.get('conflicting_signals', []))} conflicts, "
-                   f"{len(result.get('emerging_targets', []))} emerging")
+        logger.info(
+            f"Cross-source analysis complete: {len(result.get('strongest_evidence', []))} strong, "
+            f"{len(result.get('conflicting_signals', []))} conflicts, "
+            f"{len(result.get('emerging_targets', []))} emerging"
+        )
 
         return result
 
@@ -713,7 +744,9 @@ Return JSON with:
             # print("=" * 80 + "\n")
 
             data = self._parse_json_response(content)
-            return data if data else {"error": "Failed to parse response", "raw": content}
+            return (
+                data if data else {"error": "Failed to parse response", "raw": content}
+            )
 
         except Exception as e:
             logger.error(f"Baseline knowledge test error: {e}")

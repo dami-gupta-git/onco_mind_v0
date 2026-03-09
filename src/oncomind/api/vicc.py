@@ -18,11 +18,16 @@ Key Design:
 - Response types: Responsive/Sensitivity, Resistant, 1A/1B/2A/2B/etc (OncoKB-style)
 - Sources attributed to original KB for provenance tracking
 """
+
 import re
 from typing import Any
 
 import httpx
-from oncomind.models.evidence.base import is_pan_cancer_term, tumor_types_match, determine_locus_match
+from oncomind.models.evidence.base import (
+    is_pan_cancer_term,
+    tumor_types_match,
+    determine_locus_match,
+)
 from oncomind.config.constants import correct_vicc_drug_name, is_valid_drug_name
 
 
@@ -77,13 +82,17 @@ class VICCAssociation:
         rt_upper = self.response_type.upper()
 
         # Standard sensitivity terms
-        if any(term in rt_upper for term in ["SENSITIV", "RESPONSE", "RESPONSIVE", "BETTER OUTCOME"]):
+        if any(
+            term in rt_upper
+            for term in ["SENSITIV", "RESPONSE", "RESPONSIVE", "BETTER OUTCOME"]
+        ):
             return True
 
         # OncoKB numeric levels (1-4 with optional letter) indicate sensitivity
         # R1/R2 are resistance and should NOT match here
         import re
-        oncokb_sensitivity = re.match(r'^[1234][A-D]?$', rt_upper)
+
+        oncokb_sensitivity = re.match(r"^[1234][A-D]?$", rt_upper)
         if oncokb_sensitivity:
             return True
 
@@ -106,7 +115,8 @@ class VICCAssociation:
 
         # OncoKB R1/R2 levels indicate resistance
         import re
-        oncokb_resistance = re.match(r'^R[12]$', rt_upper)
+
+        oncokb_resistance = re.match(r"^R[12]$", rt_upper)
         if oncokb_resistance:
             return True
 
@@ -125,8 +135,9 @@ class VICCAssociation:
         if not self.response_type:
             return None
         import re
+
         # Match 1-4 with optional letter A-D, or R1/R2
-        match = re.match(r'^([1234][A-D]?|R[12])$', self.response_type.upper())
+        match = re.match(r"^([1234][A-D]?|R[12])$", self.response_type.upper())
         if match:
             return match.group(1)
         return None
@@ -208,8 +219,9 @@ class VICCClient:
             Exon number or None if not determinable
         """
         import re
+
         # Extract first position from variant (e.g., W557_K558del → 557, V560D → 560)
-        pos_match = re.search(r'[A-Z](\d+)', variant.upper())
+        pos_match = re.search(r"[A-Z](\d+)", variant.upper())
         if pos_match:
             position = int(pos_match.group(1))
             if 503 <= position <= 510:
@@ -351,7 +363,7 @@ class VICCClient:
                 # VICC concatenates drugs with commas
                 raw_drugs = [d.strip() for d in drug_str.split(",") if d.strip()]
                 # Format CAS numbers (pattern: digits-digits-digit) with "CAS #" prefix
-                cas_pattern = re.compile(r'^\d+-\d+-\d+$')
+                cas_pattern = re.compile(r"^\d+-\d+-\d+$")
                 for d in raw_drugs:
                     if cas_pattern.match(d):
                         drugs.append(f"CAS #{d}")
@@ -401,7 +413,9 @@ class VICCClient:
         except Exception:
             return None
 
-    def _is_compound_mutation_resistance(self, assoc: "VICCAssociation", variant: str | None) -> bool:
+    def _is_compound_mutation_resistance(
+        self, assoc: "VICCAssociation", variant: str | None
+    ) -> bool:
         """Check if resistance is due to a compound/secondary mutation, not the queried variant.
 
         Args:
@@ -486,7 +500,11 @@ class VICCClient:
             if assoc.source and assoc.source.lower() == "civic":
                 continue
 
-            if tumor_type and not is_pan_cancer_term(assoc.disease) and not tumor_types_match(assoc.disease, tumor_type):
+            if (
+                tumor_type
+                and not is_pan_cancer_term(assoc.disease)
+                and not tumor_types_match(assoc.disease, tumor_type)
+            ):
                 continue
 
             if self._is_compound_mutation_resistance(assoc, variant):
@@ -520,7 +538,9 @@ class VICCClient:
         """
         # Build primary query with exact variant and tumor type
         query = self._build_query(gene, variant, tumor_type)
-        associations = await self._fetch_with_query(query, variant, tumor_type, max_results)
+        associations = await self._fetch_with_query(
+            query, variant, tumor_type, max_results
+        )
 
         # For KIT variants, also try exon-level search if we didn't find much
         # This helps find evidence for deletions like W557_K558del which may be
@@ -559,7 +579,9 @@ class VICCClient:
         Returns:
             List of sensitivity associations
         """
-        all_assocs = await self.fetch_associations(gene, variant, tumor_type, max_results * 2)
+        all_assocs = await self.fetch_associations(
+            gene, variant, tumor_type, max_results * 2
+        )
         return [a for a in all_assocs if a.is_sensitivity()][:max_results]
 
     async def fetch_resistance_associations(
@@ -580,7 +602,9 @@ class VICCClient:
         Returns:
             List of resistance associations
         """
-        all_assocs = await self.fetch_associations(gene, variant, tumor_type, max_results * 2)
+        all_assocs = await self.fetch_associations(
+            gene, variant, tumor_type, max_results * 2
+        )
         return [a for a in all_assocs if a.is_resistance()][:max_results]
 
     async def fetch_vicc_evidence(
@@ -606,21 +630,32 @@ class VICCClient:
         """
         from oncomind.models.evidence.vicc import VICCEvidence
 
-        associations = await self.fetch_associations(gene, variant, tumor_type, max_results)
+        associations = await self.fetch_associations(
+            gene, variant, tumor_type, max_results
+        )
         evidence_list = []
 
         for assoc in associations:
             # Determine match specificity - also validates variant is mentioned in description
-            locus_match = self._determine_locus_match(assoc.variant, gene, variant, assoc.description)
+            locus_match = self._determine_locus_match(
+                assoc.variant, gene, variant, assoc.description
+            )
             # Build matched profile string
-            matched_profile = f"{assoc.gene} {assoc.variant}" if assoc.gene and assoc.variant else assoc.gene
+            matched_profile = (
+                f"{assoc.gene} {assoc.variant}"
+                if assoc.gene and assoc.variant
+                else assoc.gene
+            )
 
             # Determine tumor match using centralized function
             # Args: source_disease (from KB), queried_tumor (user's query)
-            tumor_matches = tumor_types_match(assoc.disease, tumor_type) if tumor_type else False
+            tumor_matches = (
+                tumor_types_match(assoc.disease, tumor_type) if tumor_type else False
+            )
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
+
             locus_variant_match = EvidenceLevel(
                 level=locus_match,
                 scope="specific" if locus_match == "variant" else "unspecified",
@@ -634,23 +669,25 @@ class VICCClient:
                     origin="kb",
                 )
 
-            evidence_list.append(VICCEvidence(
-                description=assoc.description,
-                gene=assoc.gene,
-                variant=assoc.variant,
-                disease=assoc.disease,
-                drugs=assoc.drugs,
-                evidence_level=assoc.evidence_level,
-                response_type=assoc.response_type,
-                source=assoc.source,
-                publication_url=assoc.publication_url,
-                oncogenic=assoc.oncogenic,
-                is_sensitivity=assoc.is_sensitivity(),
-                is_resistance=assoc.is_resistance(),
-                oncokb_level=assoc.get_oncokb_level(),
-                matched_profile=matched_profile,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-            ))
+            evidence_list.append(
+                VICCEvidence(
+                    description=assoc.description,
+                    gene=assoc.gene,
+                    variant=assoc.variant,
+                    disease=assoc.disease,
+                    drugs=assoc.drugs,
+                    evidence_level=assoc.evidence_level,
+                    response_type=assoc.response_type,
+                    source=assoc.source,
+                    publication_url=assoc.publication_url,
+                    oncogenic=assoc.oncogenic,
+                    is_sensitivity=assoc.is_sensitivity(),
+                    is_resistance=assoc.is_resistance(),
+                    oncokb_level=assoc.get_oncokb_level(),
+                    matched_profile=matched_profile,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                )
+            )
 
         return evidence_list

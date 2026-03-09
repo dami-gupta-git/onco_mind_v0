@@ -24,12 +24,16 @@ class VCFRecord:
         # Check INFO for gene annotation
         gene = "UNKNOWN"
         if self.info:
-            gene = self.info.get("GENE", self.info.get("Gene", self.info.get("gene", "UNKNOWN")))
+            gene = self.info.get(
+                "GENE", self.info.get("Gene", self.info.get("gene", "UNKNOWN"))
+            )
 
         # Check INFO for protein change (HGVSP or PROTEIN)
         protein = None
         if self.info:
-            protein = self.info.get("HGVSP", self.info.get("PROTEIN", self.info.get("protein")))
+            protein = self.info.get(
+                "HGVSP", self.info.get("PROTEIN", self.info.get("protein"))
+            )
 
         # Check INFO for tumor type
         tumor_type = None
@@ -41,7 +45,9 @@ class VCFRecord:
             variant=variant_id,
             protein=protein,
             variant_normalized=None,
-            variant_type="snv" if len(self.ref) == 1 and len(self.alt) == 1 else "indel",
+            variant_type=(
+                "snv" if len(self.ref) == 1 and len(self.alt) == 1 else "indel"
+            ),
             tumor_type=tumor_type,
             raw_input=variant_id,
             parse_confidence=0.5 if gene == "UNKNOWN" else 0.8,

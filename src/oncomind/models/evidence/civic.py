@@ -10,7 +10,9 @@ class CIViCEvidence(EvidenceItemBase):
     Example: EID5586
     """
 
-    evidence_id: int | None = Field(default=None, description="CIViC evidence item ID (numeric)")
+    evidence_id: int | None = Field(
+        default=None, description="CIViC evidence item ID (numeric)"
+    )
     evidence_type: str | None = None
     evidence_level: str | None = None
     evidence_direction: str | None = None
@@ -27,7 +29,7 @@ class CIViCEvidence(EvidenceItemBase):
     # Additional match tracking fields (not in base class)
     matched_profile: str | None = Field(
         default=None,
-        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
+        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')",
     )
 
     @computed_field
@@ -72,9 +74,6 @@ class CIViCEvidence(EvidenceItemBase):
                 return False
         return False
 
-
-
-
     @computed_field
     @property
     def is_resistance(self) -> bool:
@@ -101,9 +100,6 @@ class CIViCEvidence(EvidenceItemBase):
         return False
 
 
-
-
-
 class CIViCAssertionEvidence(EvidenceItemBase):
     """Evidence from CIViC Assertions (curated AMP/ASCO/CAP classifications).
 
@@ -111,7 +107,9 @@ class CIViCAssertionEvidence(EvidenceItemBase):
     Example: AID20
     """
 
-    assertion_id: int | None = Field(default=None, description="CIViC assertion ID (numeric)")
+    assertion_id: int | None = Field(
+        default=None, description="CIViC assertion ID (numeric)"
+    )
     name: str | None = None
     amp_level: str | None = None
     amp_tier: str | None = None
@@ -130,7 +128,7 @@ class CIViCAssertionEvidence(EvidenceItemBase):
     # Additional match tracking fields (not in base class)
     matched_profile: str | None = Field(
         default=None,
-        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')"
+        description="The molecular profile that was actually matched (e.g., 'EGFR L858R')",
     )
 
     @computed_field
@@ -148,4 +146,3 @@ class CIViCAssertionEvidence(EvidenceItemBase):
         if self.assertion_id is not None:
             return f"https://civicdb.org/assertions/{self.assertion_id}/summary"
         return None
-

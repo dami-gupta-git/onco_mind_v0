@@ -7,7 +7,6 @@ Two-stage LLM pipeline:
 
 import json
 
-
 # =============================================================================
 # STAGE 1: EVIDENCE SYNTHESIS
 # =============================================================================
@@ -240,6 +239,7 @@ Generate 2-3 hypotheses. Respond with valid JSON only:
 # PROMPT BUILDERS
 # =============================================================================
 
+
 def create_synthesis_prompt(
     gene: str,
     variant: str,
@@ -268,7 +268,9 @@ def create_synthesis_prompt(
 
     # Build locus match text for LLM context
     if locus_match_summary:
-        locus_match_text = locus_match_summary.get("summary_text", "No locus match data available.")
+        locus_match_text = locus_match_summary.get(
+            "summary_text", "No locus match data available."
+        )
         # Add detail about what's variant-specific vs gene-level
         if locus_match_summary.get("is_all_gene_level"):
             locus_match_text += " CAUTION: No variant-specific evidence found - use gene-level inferences carefully."
@@ -279,10 +281,14 @@ def create_synthesis_prompt(
 
     # Build tumor match text for LLM context
     if tumor_match_summary:
-        tumor_match_text = tumor_match_summary.get("summary_text", "No tumor match data available.")
+        tumor_match_text = tumor_match_summary.get(
+            "summary_text", "No tumor match data available."
+        )
         # Add warnings about evidence from other tumor types
         if tumor_match_summary.get("is_all_other"):
-            other_tumors = ", ".join(tumor_match_summary.get("other_tumor_types", [])[:3])
+            other_tumors = ", ".join(
+                tumor_match_summary.get("other_tumor_types", [])[:3]
+            )
             tumor_match_text += f" CAUTION: All evidence is from other tumor types ({other_tumors}) - extrapolation required."
         elif not tumor_match_summary.get("has_tumor_specific"):
             tumor_match_text += " WARNING: Limited tumor-specific evidence."
@@ -293,17 +299,26 @@ def create_synthesis_prompt(
         gene=gene,
         variant=variant,
         tumor_type=tumor_display,
-        has_tumor_specific_cbioportal=str(data_availability.get("has_tumor_specific_cbioportal", False)).upper(),
-        has_civic_assertions=str(data_availability.get("has_civic_assertions", False)).upper(),
-        has_fda_biomarker_evidence=str(data_availability.get("has_fda_biomarker_evidence", False)).upper(),
-        has_vicc_evidence=str(data_availability.get("has_vicc_evidence", False)).upper(),
+        has_tumor_specific_cbioportal=str(
+            data_availability.get("has_tumor_specific_cbioportal", False)
+        ).upper(),
+        has_civic_assertions=str(
+            data_availability.get("has_civic_assertions", False)
+        ).upper(),
+        has_fda_biomarker_evidence=str(
+            data_availability.get("has_fda_biomarker_evidence", False)
+        ).upper(),
+        has_vicc_evidence=str(
+            data_availability.get("has_vicc_evidence", False)
+        ).upper(),
         locus_match_text=locus_match_text,
         tumor_match_text=tumor_match_text,
         biological_context=biological_context or "No cBioPortal data available.",
         resistance_summary=resistance_summary or "No resistance signals.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
         evidence_summary=(evidence_summary or "No database evidence.").strip()[:4000],
-        cross_source_synthesis=cross_source_synthesis or "No cross-source synthesis available.",
+        cross_source_synthesis=cross_source_synthesis
+        or "No cross-source synthesis available.",
         literature_summary=literature_summary or "No literature search performed.",
         overall_quality=overall_quality,
         well_characterized_text="; ".join(well_char) or "None.",
@@ -354,7 +369,9 @@ def create_hypothesis_prompt(
         functional_summary=synthesis_result.get("functional_summary", "Not available"),
         biological_context=synthesis_result.get("biological_context", "Not available"),
         therapeutic_landscape=therapeutic_str,
-        overall_quality=synthesis_result.get("evidence_assessment", {}).get("overall_quality", "unknown"),
+        overall_quality=synthesis_result.get("evidence_assessment", {}).get(
+            "overall_quality", "unknown"
+        ),
         knowledge_gaps="\n".join(f"- {g}" for g in gaps) or "None identified.",
         well_characterized="; ".join(well_char) or "None.",
         therapeutic_signals=therapeutic_signals or "No therapeutic signals.",
@@ -497,7 +514,8 @@ def create_cross_source_prompt(
         variant=variant,
         tumor_type=tumor_display,
         gene_context=gene_context or "No gene context available.",
-        cross_source_synthesis=cross_source_synthesis or "No cross-source synthesis available.",
+        cross_source_synthesis=cross_source_synthesis
+        or "No cross-source synthesis available.",
         sensitivity_summary=sensitivity_summary or "No sensitivity signals.",
         resistance_summary=resistance_summary or "No resistance signals.",
     )
@@ -506,5 +524,3 @@ def create_cross_source_prompt(
         {"role": "system", "content": CROSS_SOURCE_SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
-
-

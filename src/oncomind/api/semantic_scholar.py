@@ -38,6 +38,7 @@ _logger = logging.getLogger(__name__)
 
 class SemanticScholarError(Exception):
     """Exception raised for Semantic Scholar API errors."""
+
     pass
 
 
@@ -118,7 +119,9 @@ class SemanticPaperInfo:
         """Check if paper has influential citations."""
         return self.influential_citation_count >= threshold
 
-    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+    def mentions_variant(
+        self, variant: str | None, gene: str | None = None
+    ) -> tuple[str, str | None]:
         """Check if paper mentions the gene and/or variant with codon-level matching.
 
         Uses parse_biomarker_specificity() to extract what variant the paper describes,
@@ -139,7 +142,10 @@ class SemanticPaperInfo:
             - ("none", None) - no match found
         """
         from oncomind.config.constants import BROAD_VARIANTS
-        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
+        from oncomind.insight_builder.fda_processor import (
+            parse_biomarker_specificity,
+            is_variant_covered,
+        )
 
         gene_upper = gene.upper() if gene else None
 
@@ -150,7 +156,7 @@ class SemanticPaperInfo:
         gene_found = gene_upper and gene_upper in full_text_upper
 
         if not gene_found:
-            return ('none', None)
+            return ("none", None)
 
         # Use parse_biomarker_specificity to extract what the paper describes
         biomarker_spec = parse_biomarker_specificity(full_text, gene)
@@ -163,47 +169,56 @@ class SemanticPaperInfo:
                 matched_var = biomarker_spec.get("specified_variant")
                 if not matched_var and biomarker_spec.get("specified_variants"):
                     matched_var = next(
-                        (v for v in biomarker_spec["specified_variants"]
-                         if v.upper() == variant.upper()),
-                        biomarker_spec["specified_variants"][0]
+                        (
+                            v
+                            for v in biomarker_spec["specified_variants"]
+                            if v.upper() == variant.upper()
+                        ),
+                        biomarker_spec["specified_variants"][0],
                     )
-                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
-                return ('variant', biomarker)
+                biomarker = (
+                    f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                )
+                return ("variant", biomarker)
 
             elif match_level == "codon":
                 codon = biomarker_spec.get("codon")
                 biomarker = f"{gene} {codon}" if codon else gene
-                return ('codon', biomarker)
+                return ("codon", biomarker)
 
             elif match_level == "gene":
-                return ('gene', gene)
+                return ("gene", gene)
 
         # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
         ambig_variants = [
-            (g, v) for (g, v) in BROAD_VARIANTS
+            (g, v)
+            for (g, v) in BROAD_VARIANTS
             if g.upper() in full_text_upper and v.upper() in full_text_upper
         ]
         matched_ambig = next(
-            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
-            None
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper), None
         )
         if matched_ambig:
             g, v = matched_ambig
-            return ('ambiguous', f"{g} {v}")
+            return ("ambiguous", f"{g} {v}")
 
         # Gene-level only
         if gene_found:
-            return ('gene', gene)
+            return ("gene", gene)
 
-        return ('none', None)
+        return ("none", None)
 
     def mentions_resistance(self) -> bool:
         """Check if paper mentions resistance."""
         text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
         resistance_terms = [
-            'resistance', 'resistant', 'refractory',
-            'acquired resistance', 'secondary resistance',
-            'treatment failure', 'progression on',
+            "resistance",
+            "resistant",
+            "refractory",
+            "acquired resistance",
+            "secondary resistance",
+            "treatment failure",
+            "progression on",
         ]
         return any(term in text for term in resistance_terms)
 
@@ -211,8 +226,12 @@ class SemanticPaperInfo:
         """Check if paper mentions sensitivity/response."""
         text = f"{self.title} {self.abstract or ''} {self.tldr or ''}".lower()
         sensitivity_terms = [
-            'sensitivity', 'sensitive', 'response',
-            'efficacy', 'effective', 'benefit',
+            "sensitivity",
+            "sensitive",
+            "response",
+            "efficacy",
+            "effective",
+            "benefit",
         ]
         return any(term in text for term in sensitivity_terms)
 
@@ -228,27 +247,33 @@ class SemanticPaperInfo:
 
         # Check for resistance-dominant patterns
         resistance_dominant_patterns = [
-            'resistance mutation', 'resistance-conferring',
-            'acquired resistance', 'causes resistance',
-            'resistant mutation', 'mediates resistance',
-            'confers resistance', 'osimertinib-resistant',
-            'osimertinib resistance', 'third-generation',
-            'overcome resistance', 'overcoming resistance',
+            "resistance mutation",
+            "resistance-conferring",
+            "acquired resistance",
+            "causes resistance",
+            "resistant mutation",
+            "mediates resistance",
+            "confers resistance",
+            "osimertinib-resistant",
+            "osimertinib resistance",
+            "third-generation",
+            "overcome resistance",
+            "overcoming resistance",
         ]
 
         is_resistance_focused = any(p in text for p in resistance_dominant_patterns)
 
         if has_resistance and is_resistance_focused:
-            return 'resistance'
+            return "resistance"
         elif has_resistance and not has_sensitivity:
-            return 'resistance'
+            return "resistance"
         elif has_sensitivity and not has_resistance:
-            return 'sensitivity'
+            return "sensitivity"
         elif has_resistance and has_sensitivity:
-            if 'resist' in self.title.lower():
-                return 'resistance'
-            return 'mixed'
-        return 'unknown'
+            if "resist" in self.title.lower():
+                return "resistance"
+            return "mixed"
+        return "unknown"
 
     def extract_drug_mentions(self, known_drugs: list[str] | None = None) -> list[str]:
         """Extract drug names mentioned in the paper."""
@@ -256,16 +281,45 @@ class SemanticPaperInfo:
 
         # Common targeted therapy drugs
         common_drugs = [
-            'osimertinib', 'tagrisso', 'erlotinib', 'tarceva',
-            'gefitinib', 'iressa', 'afatinib', 'gilotrif',
-            'dacomitinib', 'vizimpro', 'lazertinib',
-            'sotorasib', 'lumakras', 'adagrasib', 'krazati',
-            'vemurafenib', 'zelboraf', 'dabrafenib', 'tafinlar',
-            'trametinib', 'mekinist', 'encorafenib', 'braftovi',
-            'imatinib', 'gleevec', 'sunitinib', 'sutent',
-            'cetuximab', 'erbitux', 'panitumumab', 'vectibix',
-            'crizotinib', 'xalkori', 'alectinib', 'alecensa',
-            'brigatinib', 'alunbrig', 'lorlatinib', 'lorbrena',
+            "osimertinib",
+            "tagrisso",
+            "erlotinib",
+            "tarceva",
+            "gefitinib",
+            "iressa",
+            "afatinib",
+            "gilotrif",
+            "dacomitinib",
+            "vizimpro",
+            "lazertinib",
+            "sotorasib",
+            "lumakras",
+            "adagrasib",
+            "krazati",
+            "vemurafenib",
+            "zelboraf",
+            "dabrafenib",
+            "tafinlar",
+            "trametinib",
+            "mekinist",
+            "encorafenib",
+            "braftovi",
+            "imatinib",
+            "gleevec",
+            "sunitinib",
+            "sutent",
+            "cetuximab",
+            "erbitux",
+            "panitumumab",
+            "vectibix",
+            "crizotinib",
+            "xalkori",
+            "alectinib",
+            "alecensa",
+            "brigatinib",
+            "alunbrig",
+            "lorlatinib",
+            "lorbrena",
         ]
 
         drugs_to_check = known_drugs or common_drugs
@@ -278,19 +332,19 @@ class SemanticPaperInfo:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
-            'paper_id': self.paper_id,
-            'pmid': self.pmid,
-            'title': self.title,
-            'citation_count': self.citation_count,
-            'influential_citation_count': self.influential_citation_count,
-            'reference_count': self.reference_count,
-            'year': self.year,
-            'venue': self.venue,
-            'is_open_access': self.is_open_access,
-            'tldr': self.tldr,
-            'fields_of_study': self.fields_of_study,
-            'impact_score': self.get_impact_score(),
-            'signal_type': self.get_signal_type(),
+            "paper_id": self.paper_id,
+            "pmid": self.pmid,
+            "title": self.title,
+            "citation_count": self.citation_count,
+            "influential_citation_count": self.influential_citation_count,
+            "reference_count": self.reference_count,
+            "year": self.year,
+            "venue": self.venue,
+            "is_open_access": self.is_open_access,
+            "tldr": self.tldr,
+            "fields_of_study": self.fields_of_study,
+            "impact_score": self.get_impact_score(),
+            "signal_type": self.get_signal_type(),
         }
 
 
@@ -369,7 +423,12 @@ class SemanticScholarClient:
         otherwise falls back to 1 RPS for unauthenticated requests.
         """
         import time
-        delay = self.RATE_LIMIT_DELAY_WITH_KEY if self.api_key else self.RATE_LIMIT_DELAY_NO_KEY
+
+        delay = (
+            self.RATE_LIMIT_DELAY_WITH_KEY
+            if self.api_key
+            else self.RATE_LIMIT_DELAY_NO_KEY
+        )
         now = time.time()
         elapsed = now - self._last_request_time
         if elapsed < delay:
@@ -395,7 +454,9 @@ class SemanticScholarClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        retry=retry_if_exception_type(
+            (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
@@ -453,13 +514,17 @@ class SemanticScholarClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        retry=retry_if_exception_type(
+            (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
         reraise=True,
     )
-    async def get_papers_by_pmids(self, pmids: list[str]) -> dict[str, SemanticPaperInfo]:
+    async def get_papers_by_pmids(
+        self, pmids: list[str]
+    ) -> dict[str, SemanticPaperInfo]:
         """Get paper information for multiple PMIDs.
 
         Uses batch endpoint for efficiency when available, falls back to
@@ -526,7 +591,9 @@ class SemanticScholarClient:
             # Fall back to individual requests
             return await self._get_papers_individually(pmids)
 
-    async def _get_papers_individually(self, pmids: list[str]) -> dict[str, SemanticPaperInfo]:
+    async def _get_papers_individually(
+        self, pmids: list[str]
+    ) -> dict[str, SemanticPaperInfo]:
         """Fall back to individual paper lookups."""
         results = {}
         for pmid in pmids:
@@ -535,7 +602,9 @@ class SemanticScholarClient:
                 results[pmid] = paper_info
         return results
 
-    def _parse_paper(self, data: dict[str, Any], pmid: str | None = None, doi: str | None = None) -> SemanticPaperInfo | None:
+    def _parse_paper(
+        self, data: dict[str, Any], pmid: str | None = None, doi: str | None = None
+    ) -> SemanticPaperInfo | None:
         """Parse API response into SemanticPaperInfo."""
         try:
             # Extract TLDR if available
@@ -586,7 +655,9 @@ class SemanticScholarClient:
             return None
 
     @retry(
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)),
+        retry=retry_if_exception_type(
+            (httpx.ConnectError, httpx.ReadTimeout, SemanticScholarRateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential_jitter(initial=1, max=10, jitter=1),
         before_sleep=before_sleep_log(_logger, logging.WARNING),
@@ -705,7 +776,11 @@ class SemanticScholarClient:
             if "gastrointestinal stromal" in tumor_lower or tumor_lower == "gist":
                 query_parts.append("GIST")
             else:
-                tumor_simple = tumor_lower.replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+                tumor_simple = (
+                    tumor_lower.replace("adenocarcinoma", "")
+                    .replace("carcinoma", "")
+                    .strip()
+                )
                 if tumor_simple:
                     query_parts.append(tumor_simple)
                 else:
@@ -730,7 +805,9 @@ class SemanticScholarClient:
             return []
 
         # Filter to papers that mention either resistance or sensitivity
-        therapeutic_papers = [p for p in papers if p.mentions_resistance() or p.mentions_sensitivity()]
+        therapeutic_papers = [
+            p for p in papers if p.mentions_resistance() or p.mentions_sensitivity()
+        ]
 
         return therapeutic_papers[:max_results]
 
@@ -759,7 +836,12 @@ class SemanticScholarClient:
         query_parts = [gene, variant]
         if tumor_type:
             # Simplify tumor type for search
-            tumor_simple = tumor_type.lower().replace('adenocarcinoma', '').replace('carcinoma', '').strip()
+            tumor_simple = (
+                tumor_type.lower()
+                .replace("adenocarcinoma", "")
+                .replace("carcinoma", "")
+                .strip()
+            )
             if tumor_simple:
                 query_parts.append(tumor_simple)
 
@@ -830,6 +912,7 @@ class SemanticScholarClient:
         # mention the tumor type in title or abstract
         if tumor_type:
             from oncomind.models.evidence.base import tumor_types_match
+
             filtered_papers = []
             for paper in merged_papers:
                 full_text = f"{paper.title or ''} {paper.abstract or ''}"
@@ -886,6 +969,7 @@ class SemanticScholarClient:
             cancer_type_match = None
             if tumor_type:
                 from oncomind.models.evidence.base import tumor_types_match
+
                 full_text = f"{paper.title or ''} {paper.abstract or ''}"
                 tumor_matches = tumor_types_match(full_text, tumor_type)
                 cancer_type_match = EvidenceLevel(
@@ -894,26 +978,28 @@ class SemanticScholarClient:
                     origin="kb",
                 )
 
-            evidence_list.append(PubMedEvidence(
-                pmid=display_id,  # Using display_id for consistent UI display
-                title=paper.title,
-                abstract=paper.abstract or "",
-                authors=[],
-                journal=paper.venue or "",
-                year=str(paper.year) if paper.year else None,
-                doi=paper.doi,
-                url=url,
-                signal_type=paper.get_signal_type(),  # Analyze abstract for resistance/sensitivity signals
-                drugs_mentioned=paper.extract_drug_mentions(),
-                citation_count=paper.citation_count,
-                influential_citation_count=paper.influential_citation_count,
-                tldr=paper.tldr,
-                is_open_access=paper.is_open_access,
-                open_access_pdf_url=paper.open_access_pdf_url,
-                semantic_scholar_id=paper.paper_id,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-            ))
+            evidence_list.append(
+                PubMedEvidence(
+                    pmid=display_id,  # Using display_id for consistent UI display
+                    title=paper.title,
+                    abstract=paper.abstract or "",
+                    authors=[],
+                    journal=paper.venue or "",
+                    year=str(paper.year) if paper.year else None,
+                    doi=paper.doi,
+                    url=url,
+                    signal_type=paper.get_signal_type(),  # Analyze abstract for resistance/sensitivity signals
+                    drugs_mentioned=paper.extract_drug_mentions(),
+                    citation_count=paper.citation_count,
+                    influential_citation_count=paper.influential_citation_count,
+                    tldr=paper.tldr,
+                    is_open_access=paper.is_open_access,
+                    open_access_pdf_url=paper.open_access_pdf_url,
+                    semantic_scholar_id=paper.paper_id,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                )
+            )
 
         return evidence_list
 

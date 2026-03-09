@@ -23,6 +23,7 @@ class AnnParsedVariant:
         parse_confidence: Confidence in parsing (0-1)
         parse_warnings: Any warnings from parsing
     """
+
     gene: str
     variant: str
     protein: str | None = None

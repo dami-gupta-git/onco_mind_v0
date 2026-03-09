@@ -17,46 +17,60 @@ class TestPubMedEGFRC797S:
     async def test_returns_articles(self):
         """EGFR C797S should return resistance-related articles."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=5)
-            assert len(articles) >= 1, "EGFR C797S should have at least 1 resistance article"
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=5
+            )
+            assert (
+                len(articles) >= 1
+            ), "EGFR C797S should have at least 1 resistance article"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_articles_mention_resistance(self):
         """Articles should mention resistance."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=5)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=5
+            )
 
             resistance_articles = [a for a in articles if a.mentions_resistance()]
-            assert len(resistance_articles) > 0, "Should find articles mentioning resistance"
+            assert (
+                len(resistance_articles) > 0
+            ), "Should find articles mentioning resistance"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_osimertinib_mentioned(self):
         """C797S articles should mention osimertinib (the drug it causes resistance to)."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=5)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=5
+            )
 
             all_drugs = set()
             for article in articles:
                 drugs = article.extract_drug_mentions()
                 all_drugs.update(d.lower() for d in drugs)
 
-            assert "osimertinib" in all_drugs, (
-                f"EGFR C797S articles should mention osimertinib, got: {all_drugs}"
-            )
+            assert (
+                "osimertinib" in all_drugs
+            ), f"EGFR C797S articles should mention osimertinib, got: {all_drugs}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_signal_type_is_resistance(self):
         """Articles about C797S should be classified as resistance signal."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=5)
-
-            resistance_signals = [a for a in articles if a.get_signal_type() == 'resistance']
-            assert len(resistance_signals) > 0, (
-                "At least one article should have resistance signal type"
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=5
             )
+
+            resistance_signals = [
+                a for a in articles if a.get_signal_type() == "resistance"
+            ]
+            assert (
+                len(resistance_signals) > 0
+            ), "At least one article should have resistance signal type"
 
 
 class TestPubMedEGFRT790M:
@@ -67,15 +81,21 @@ class TestPubMedEGFRT790M:
     async def test_returns_articles(self):
         """EGFR T790M should return resistance-related articles."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "T790M", max_results=5)
-            assert len(articles) >= 1, "EGFR T790M should have at least 1 resistance article"
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "T790M", max_results=5
+            )
+            assert (
+                len(articles) >= 1
+            ), "EGFR T790M should have at least 1 resistance article"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_first_gen_tkis_mentioned(self):
         """T790M articles should mention first-generation EGFR TKIs."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "T790M", max_results=5)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "T790M", max_results=5
+            )
 
             expected_drugs = {"erlotinib", "gefitinib", "afatinib"}
             all_drugs = set()
@@ -84,9 +104,9 @@ class TestPubMedEGFRT790M:
                 all_drugs.update(d.lower() for d in drugs)
 
             found = all_drugs & expected_drugs
-            assert len(found) > 0, (
-                f"T790M articles should mention first-gen TKIs {expected_drugs}, got: {all_drugs}"
-            )
+            assert (
+                len(found) > 0
+            ), f"T790M articles should mention first-gen TKIs {expected_drugs}, got: {all_drugs}"
 
 
 class TestPubMedKRASG12C:
@@ -97,7 +117,9 @@ class TestPubMedKRASG12C:
     async def test_returns_articles(self):
         """KRAS G12C should return articles (though may not be resistance-focused)."""
         async with PubMedClient() as client:
-            articles = await client.search_variant_literature("KRAS", "G12C", max_results=5)
+            articles = await client.search_variant_literature(
+                "KRAS", "G12C", max_results=5
+            )
             assert len(articles) >= 1, "KRAS G12C should have literature"
 
 
@@ -109,7 +131,9 @@ class TestPubMedArticleStructure:
     async def test_required_fields(self):
         """Articles should have required fields with correct types."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=3)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=3
+            )
 
             for article in articles:
                 assert isinstance(article.pmid, str)
@@ -124,7 +148,9 @@ class TestPubMedArticleStructure:
     async def test_methods_work(self):
         """Article methods should work without error."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=3)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=3
+            )
 
             for article in articles:
                 _ = article.mentions_resistance()
@@ -138,11 +164,20 @@ class TestPubMedArticleStructure:
     async def test_to_dict_keys(self):
         """to_dict should return expected keys."""
         async with PubMedClient() as client:
-            articles = await client.search_therapeutic_literature("EGFR", "C797S", max_results=3)
+            articles = await client.search_therapeutic_literature(
+                "EGFR", "C797S", max_results=3
+            )
 
             expected_keys = {
-                "pmid", "title", "abstract", "authors", "journal",
-                "year", "doi", "url", "signal_type"
+                "pmid",
+                "title",
+                "abstract",
+                "authors",
+                "journal",
+                "year",
+                "doi",
+                "url",
+                "signal_type",
             }
 
             for article in articles:
@@ -164,7 +199,9 @@ class TestPubMedSearchQueries:
             )
 
             # Should still find results
-            assert len(articles) >= 0  # May or may not find results with narrowed search
+            assert (
+                len(articles) >= 0
+            )  # May or may not find results with narrowed search
 
     @pytest.mark.integration
     @pytest.mark.asyncio

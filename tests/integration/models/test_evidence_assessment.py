@@ -23,10 +23,10 @@ from oncomind.models.extracted.evidence_gaps import (
 )
 from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent
 
-
 # =============================================================================
 # LAYER 1: WELL-CHARACTERIZED DETAILED FIELD TESTS
 # =============================================================================
+
 
 class TestWellCharacterizedDetailed:
     """Tests for well_characterized_detailed field with basis explanations."""
@@ -35,7 +35,7 @@ class TestWellCharacterizedDetailed:
         """CharacterizedAspect model should have aspect and basis."""
         aspect = CharacterizedAspect(
             aspect="clinical actionability",
-            basis="5 FDA approvals + 2 CIViC assertions"
+            basis="5 FDA approvals + 2 CIViC assertions",
         )
 
         assert aspect.aspect == "clinical actionability"
@@ -47,10 +47,9 @@ class TestWellCharacterizedDetailed:
             well_characterized=["clinical actionability"],
             well_characterized_detailed=[
                 CharacterizedAspect(
-                    aspect="clinical actionability",
-                    basis="5 FDA approvals"
+                    aspect="clinical actionability", basis="5 FDA approvals"
                 )
-            ]
+            ],
         )
 
         assert len(gaps.well_characterized_detailed) == 1
@@ -91,15 +90,21 @@ class TestWellCharacterizedDetailed:
 
         # Find the hotspot characterization
         hotspot_items = [
-            item for item in gaps.well_characterized_detailed
+            item
+            for item in gaps.well_characterized_detailed
             if "hotspot" in item.aspect.lower()
         ]
 
-        assert len(hotspot_items) > 0, "Should have hotspot in well_characterized_detailed"
+        assert (
+            len(hotspot_items) > 0
+        ), "Should have hotspot in well_characterized_detailed"
 
         # Basis should mention cancerhotspots.org
         hotspot = hotspot_items[0]
-        assert "cancerhotspots" in hotspot.basis.lower() or "codon" in hotspot.basis.lower()
+        assert (
+            "cancerhotspots" in hotspot.basis.lower()
+            or "codon" in hotspot.basis.lower()
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -115,15 +120,18 @@ class TestWellCharacterizedDetailed:
 
         # Find clinical actionability
         clinical_items = [
-            item for item in gaps.well_characterized_detailed
-            if "clinical" in item.aspect.lower() or "actionability" in item.aspect.lower()
+            item
+            for item in gaps.well_characterized_detailed
+            if "clinical" in item.aspect.lower()
+            or "actionability" in item.aspect.lower()
         ]
 
         if clinical_items:
             # Basis should mention FDA or CIViC
             basis = clinical_items[0].basis.lower()
-            assert "fda" in basis or "civic" in basis, \
-                f"Clinical basis should mention FDA or CIViC: {clinical_items[0].basis}"
+            assert (
+                "fda" in basis or "civic" in basis
+            ), f"Clinical basis should mention FDA or CIViC: {clinical_items[0].basis}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -139,7 +147,8 @@ class TestWellCharacterizedDetailed:
 
         # Find pathogenicity characterization
         path_items = [
-            item for item in gaps.well_characterized_detailed
+            item
+            for item in gaps.well_characterized_detailed
             if "pathogenicity" in item.aspect.lower()
         ]
 
@@ -147,10 +156,11 @@ class TestWellCharacterizedDetailed:
             basis = path_items[0].basis
             # Should have at least one prediction tool mentioned
             has_predictor = any(
-                tool in basis.lower()
-                for tool in ["alphamissense", "cadd", "polyphen"]
+                tool in basis.lower() for tool in ["alphamissense", "cadd", "polyphen"]
             )
-            assert has_predictor, f"Pathogenicity basis should mention predictors: {basis}"
+            assert (
+                has_predictor
+            ), f"Pathogenicity basis should mention predictors: {basis}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -177,6 +187,7 @@ class TestWellCharacterizedDetailed:
 # LAYER 2: EVIDENCE BASIS TAGS IN RESEARCH HYPOTHESES
 # =============================================================================
 
+
 class TestEvidenceBasisTags:
     """Tests for evidence basis tags in LLM-generated research hypotheses."""
 
@@ -192,14 +203,12 @@ class TestEvidenceBasisTags:
     @pytest.mark.asyncio
     @pytest.mark.skipif(
         not pytest.importorskip("openai", reason="OpenAI not installed"),
-        reason="Requires OpenAI API"
+        reason="Requires OpenAI API",
     )
     async def test_research_hypotheses_have_tags(self):
         """Research hypotheses should include evidence basis tags."""
         config = ConductorConfig(
-            enable_llm=True,
-            enable_literature=False,
-            llm_model="gpt-4o-mini"
+            enable_llm=True, enable_literature=False, llm_model="gpt-4o-mini"
         )
 
         try:
@@ -210,8 +219,7 @@ class TestEvidenceBasisTags:
                 for hypothesis in result.llm.research_hypotheses:
                     # Each hypothesis should start with a valid tag
                     has_tag = any(
-                        hypothesis.strip().startswith(tag)
-                        for tag in self.VALID_TAGS
+                        hypothesis.strip().startswith(tag) for tag in self.VALID_TAGS
                     )
                     # Allow for hypotheses without tags (LLM may not always comply)
                     # but warn if none have tags
@@ -224,6 +232,7 @@ class TestEvidenceBasisTags:
 # =============================================================================
 # LAYER 3: HOTSPOT DETECTION IN GAP ANALYSIS
 # =============================================================================
+
 
 class TestHotspotGapIntegration:
     """Tests for hotspot detection integration with gap analysis."""
@@ -250,8 +259,9 @@ class TestHotspotGapIntegration:
                     gaps = result.evidence.compute_evidence_gaps()
 
                 # Should have "Known Cancer Hotspot" in well_characterized (title case)
-                assert "Known Cancer Hotspot" in gaps.well_characterized, \
-                    f"{gene} {variant} should be recognized as hotspot"
+                assert (
+                    "Known Cancer Hotspot" in gaps.well_characterized
+                ), f"{gene} {variant} should be recognized as hotspot"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -268,16 +278,14 @@ class TestHotspotGapIntegration:
 
         # Should recognize it's near a hotspot
         near_hotspot = [
-            w for w in gaps.well_characterized
-            if "near hotspot" in w.lower()
+            w for w in gaps.well_characterized if "near hotspot" in w.lower()
         ]
         assert len(near_hotspot) > 0, "Should recognize variant is near hotspot"
 
         # Should have a FUNCTIONAL gap for characterization
         functional_gaps = gaps.get_gaps_by_category(GapCategory.FUNCTIONAL)
         hotspot_gaps = [
-            g for g in functional_gaps
-            if "hotspot" in g.description.lower()
+            g for g in functional_gaps if "hotspot" in g.description.lower()
         ]
         assert len(hotspot_gaps) > 0, "Should flag need for functional characterization"
 
@@ -348,7 +356,9 @@ class TestStreamlitBackendEvidenceGaps:
         assert "evidence_gaps" in result
         wc_detailed = result["evidence_gaps"]["well_characterized_detailed"]
 
-        assert len(wc_detailed) > 0, "Should have at least one well-characterized aspect"
+        assert (
+            len(wc_detailed) > 0
+        ), "Should have at least one well-characterized aspect"
 
         for item in wc_detailed:
             assert "aspect" in item, "Item should have 'aspect' key"
@@ -409,6 +419,7 @@ class TestStreamlitBackendEvidenceGaps:
 # LAYER 5: END-TO-END PIPELINE TESTS
 # =============================================================================
 
+
 class TestEndToEndPipeline:
     """End-to-end tests from API through to UI-ready data."""
 
@@ -447,17 +458,25 @@ class TestEndToEndPipeline:
         assert result["variant"]["variant"] == "V600E"
 
         # Evidence quality for well-characterized variant
-        assert result["evidence_gaps"]["overall_quality"] in ("comprehensive", "moderate")
+        assert result["evidence_gaps"]["overall_quality"] in (
+            "comprehensive",
+            "moderate",
+        )
 
         # Should have therapies
-        assert len(result["recommended_therapies"]) > 0 or len(result.get("fda_biomarker_evidence", [])) > 0
+        assert (
+            len(result["recommended_therapies"]) > 0
+            or len(result.get("fda_biomarker_evidence", [])) > 0
+        )
 
         # Should have well-characterized detailed with basis
         wc_detailed = result["evidence_gaps"]["well_characterized_detailed"]
         assert len(wc_detailed) > 0
 
         # Hotspot should be marked
-        hotspot_items = [item for item in wc_detailed if "hotspot" in item["aspect"].lower()]
+        hotspot_items = [
+            item for item in wc_detailed if "hotspot" in item["aspect"].lower()
+        ]
         assert len(hotspot_items) > 0
 
     @pytest.mark.integration
@@ -484,7 +503,11 @@ class TestEndToEndPipeline:
 
         # Should have research priority set
         assert result["evidence_gaps"]["research_priority"] in (
-            "very_high", "high", "medium", "low", "unknown"
+            "very_high",
+            "high",
+            "medium",
+            "low",
+            "unknown",
         )
 
     @pytest.mark.integration
@@ -502,6 +525,7 @@ class TestEndToEndPipeline:
 
         # Get gaps from backend
         from backend import get_variant_insight
+
         backend_result = await get_variant_insight(
             gene="EGFR",
             variant="L858R",
@@ -519,13 +543,18 @@ class TestEndToEndPipeline:
         assert model_gaps.research_priority == backend_gaps["research_priority"]
 
         # Number of well-characterized items should match
-        assert len(model_gaps.well_characterized) == len(backend_gaps["well_characterized"])
-        assert len(model_gaps.well_characterized_detailed) == len(backend_gaps["well_characterized_detailed"])
+        assert len(model_gaps.well_characterized) == len(
+            backend_gaps["well_characterized"]
+        )
+        assert len(model_gaps.well_characterized_detailed) == len(
+            backend_gaps["well_characterized_detailed"]
+        )
 
 
 # =============================================================================
 # LAYER 6: SERIALIZATION TESTS
 # =============================================================================
+
 
 class TestEvidenceGapsSerialization:
     """Tests for evidence gaps serialization to JSON."""

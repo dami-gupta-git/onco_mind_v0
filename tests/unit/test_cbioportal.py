@@ -22,8 +22,12 @@ class TestCoMutationData:
             samples_with_exact_variant=217,
             gene_prevalence_pct=51.2,
             variant_prevalence_pct=48.3,
-            co_occurring=[{"gene": "CDKN2A", "count": 98, "pct": 45.2, "odds_ratio": 2.34}],
-            mutually_exclusive=[{"gene": "NRAS", "count": 2, "pct": 0.9, "odds_ratio": 0.08}],
+            co_occurring=[
+                {"gene": "CDKN2A", "count": 98, "pct": 45.2, "odds_ratio": 2.34}
+            ],
+            mutually_exclusive=[
+                {"gene": "NRAS", "count": 2, "pct": 0.9, "odds_ratio": 0.08}
+            ],
             study_name="Skin Cutaneous Melanoma (TCGA, PanCancer Atlas)",
         )
 
@@ -86,7 +90,10 @@ class TestCBioPortalEvidence:
 
         url = evidence.get_study_url()
 
-        assert url == "https://www.cbioportal.org/study/summary?id=skcm_tcga_pan_can_atlas_2018"
+        assert (
+            url
+            == "https://www.cbioportal.org/study/summary?id=skcm_tcga_pan_can_atlas_2018"
+        )
 
     def test_get_study_url_none(self):
         """Test study URL is None when no study_id."""
@@ -107,7 +114,9 @@ class TestCBioPortalEvidence:
             samples_with_exact_variant=217,
             gene_prevalence_pct=51.2,
             variant_prevalence_pct=48.3,
-            co_occurring=[CoMutationEntry(gene="TP53", count=28, pct=12.9, odds_ratio=1.56)],
+            co_occurring=[
+                CoMutationEntry(gene="TP53", count=28, pct=12.9, odds_ratio=1.56)
+            ],
             mutually_exclusive=[],
         )
 
@@ -131,8 +140,12 @@ class TestCBioPortalEvidence:
             samples_with_exact_variant=217,
             gene_prevalence_pct=51.2,
             variant_prevalence_pct=48.3,
-            co_occurring=[CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)],
-            mutually_exclusive=[CoMutationEntry(gene="NRAS", count=2, pct=0.9, odds_ratio=0.08)],
+            co_occurring=[
+                CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)
+            ],
+            mutually_exclusive=[
+                CoMutationEntry(gene="NRAS", count=2, pct=0.9, odds_ratio=0.08)
+            ],
         )
 
         context = evidence.to_prompt_context()
@@ -284,7 +297,9 @@ class TestCBioPortalClient:
         client = CBioPortalClient()
 
         with patch.object(client, "_get_entrez_id", return_value=None):
-            result = await client.fetch_co_mutation_data("UNKNOWNGENE", "X123Y", "Melanoma")
+            result = await client.fetch_co_mutation_data(
+                "UNKNOWNGENE", "X123Y", "Melanoma"
+            )
 
         assert result is None
 
@@ -308,5 +323,3 @@ class TestCBioPortalClient:
         await client.close()
 
         assert client._client is None
-
-

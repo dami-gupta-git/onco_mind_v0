@@ -18,7 +18,6 @@ from typing import Any
 
 from oncomind.models.evidence.base import tumor_types_match
 
-
 # =============================================================================
 # GENE CLASS CONFIGURATION
 # =============================================================================
@@ -29,12 +28,40 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
     "ddr": {
         "description": "DNA Damage Response / Homologous Recombination genes with synthetic lethality implications",
         "genes": [
-            "ATM", "BRCA1", "BRCA2", "PALB2", "CHEK2", "RAD51C", "RAD51D",
-            "BRIP1", "FANCA", "RAD51B", "BARD1", "CDK12", "NBN", "RAD50", "MRE11",
-            "RAD51", "FANCC", "FANCD2", "FANCE", "FANCF", "FANCG", "FANCI",
-            "FANCL", "FANCM", "ATR", "CHEK1", "BLM", "WRN", "RECQL4",
+            "ATM",
+            "BRCA1",
+            "BRCA2",
+            "PALB2",
+            "CHEK2",
+            "RAD51C",
+            "RAD51D",
+            "BRIP1",
+            "FANCA",
+            "RAD51B",
+            "BARD1",
+            "CDK12",
+            "NBN",
+            "RAD50",
+            "MRE11",
+            "RAD51",
+            "FANCC",
+            "FANCD2",
+            "FANCE",
+            "FANCF",
+            "FANCG",
+            "FANCI",
+            "FANCL",
+            "FANCM",
+            "ATR",
+            "CHEK1",
+            "BLM",
+            "WRN",
+            "RECQL4",
             # Emerging broader HRD genes with growing evidence
-            "WEE1", "PTEN", "ARID1A", "PPP2R2A",
+            "WEE1",
+            "PTEN",
+            "ARID1A",
+            "PPP2R2A",
         ],
         "therapeutic_implications": {
             "drugs": [
@@ -54,7 +81,6 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "II-D",
         },
     },
-
     # Mismatch Repair (MMR) genes
     "mmr": {
         "description": "Mismatch Repair genes - loss leads to MSI-H and immunotherapy sensitivity",
@@ -75,7 +101,6 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "II-D",
         },
     },
-
     # Splicing Factor genes
     "splicing": {
         "description": "Splicing factor genes with diagnostic/prognostic significance in MDS/AML",
@@ -96,14 +121,24 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "III-C",
         },
     },
-
     # Oncogenic gene fusions – high-priority addition for research
     "fusion_drivers": {
         "description": "Genes frequently involved in oncogenic fusions (kinase or transcription factor)",
         "genes": [
-            "ALK", "ROS1", "RET", "NTRK1", "NTRK2", "NTRK3",
-            "FGFR1", "FGFR2", "FGFR3", "BRAF", "RAF1",
-            "ETV6", "TMPRSS2", "EML4",
+            "ALK",
+            "ROS1",
+            "RET",
+            "NTRK1",
+            "NTRK2",
+            "NTRK3",
+            "FGFR1",
+            "FGFR2",
+            "FGFR3",
+            "BRAF",
+            "RAF1",
+            "ETV6",
+            "TMPRSS2",
+            "EML4",
         ],
         "therapeutic_implications": {
             "drugs": [
@@ -123,13 +158,20 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "partner_unknown": "III",
         },
     },
-
     # PI3K/AKT/mTOR pathway – frequent alterations with emerging targeting
     "pi3k_mtor": {
         "description": "PI3K/AKT/mTOR pathway - frequently altered in solid tumors",
         "genes": [
-            "PIK3CA", "PTEN", "AKT1", "AKT2", "MTOR",
-            "TSC1", "TSC2", "STK11", "RICTOR", "DEPDC5",
+            "PIK3CA",
+            "PTEN",
+            "AKT1",
+            "AKT2",
+            "MTOR",
+            "TSC1",
+            "TSC2",
+            "STK11",
+            "RICTOR",
+            "DEPDC5",
         ],
         "therapeutic_implications": {
             "drugs": [
@@ -147,13 +189,19 @@ GENE_CLASS_CONFIG: dict[str, Any] = {
             "preclinical_only": "II-D",
         },
     },
-
     # Epigenetic modifiers – emerging synthetic lethality and immunotherapy links
     "epigenetic_modifiers": {
         "description": "Chromatin remodelers and epigenetic writers with emerging therapeutic targeting",
         "genes": [
-            "ARID1A", "ARID1B", "SMARCA4", "SMARCB1", "PBRM1",  # SWI/SNF complex
-            "KMT2C", "KMT2D", "EZH2", "KDM6A",                  # Histone modifiers
+            "ARID1A",
+            "ARID1B",
+            "SMARCA4",
+            "SMARCB1",
+            "PBRM1",  # SWI/SNF complex
+            "KMT2C",
+            "KMT2D",
+            "EZH2",
+            "KDM6A",  # Histone modifiers
         ],
         "therapeutic_implications": {
             "drugs": [
@@ -256,8 +304,8 @@ class GeneClassConfig:
 
         # Build reverse mapping: gene -> class name
         for class_name, class_config in config.items():
-            if isinstance(class_config, dict) and 'genes' in class_config:
-                for gene in class_config['genes']:
+            if isinstance(class_config, dict) and "genes" in class_config:
+                for gene in class_config["genes"]:
                     self._gene_to_class[gene.upper()] = class_name
 
     def get_gene_class(self, gene: str) -> str | None:
@@ -266,20 +314,20 @@ class GeneClassConfig:
 
     def is_ddr_gene(self, gene: str) -> bool:
         """Check if a gene is a DNA Damage Repair gene."""
-        return self.get_gene_class(gene) == 'ddr'
+        return self.get_gene_class(gene) == "ddr"
 
     def is_mmr_gene(self, gene: str) -> bool:
         """Check if a gene is a Mismatch Repair gene."""
-        return self.get_gene_class(gene) == 'mmr'
+        return self.get_gene_class(gene) == "mmr"
 
     def is_splicing_gene(self, gene: str) -> bool:
         """Check if a gene is a splicing factor gene."""
-        return self.get_gene_class(gene) == 'splicing'
+        return self.get_gene_class(gene) == "splicing"
 
     def get_genes_in_class(self, class_name: str) -> list[str]:
         """Get all genes in a specific class."""
         class_config = self._config.get(class_name, {})
-        return class_config.get('genes', [])
+        return class_config.get("genes", [])
 
     def get_therapeutic_drugs(self, gene: str) -> list[str]:
         """Get therapeutic drugs/classes for a gene's class."""
@@ -288,8 +336,8 @@ class GeneClassConfig:
             return []
 
         class_config = self._config.get(class_name, {})
-        implications = class_config.get('therapeutic_implications', {})
-        return implications.get('drugs', [])
+        implications = class_config.get("therapeutic_implications", {})
+        return implications.get("drugs", [])
 
     def get_tier_for_evidence_pattern(self, gene: str, pattern: str) -> str | None:
         """Get the tier recommendation based on evidence pattern.
@@ -306,7 +354,7 @@ class GeneClassConfig:
             return None
 
         class_config = self._config.get(class_name, {})
-        tier_rules = class_config.get('tier_rules', {})
+        tier_rules = class_config.get("tier_rules", {})
         return tier_rules.get(pattern)
 
     def get_class_description(self, gene: str) -> str | None:
@@ -316,7 +364,7 @@ class GeneClassConfig:
             return None
 
         class_config = self._config.get(class_name, {})
-        return class_config.get('description')
+        return class_config.get("description")
 
     def get_therapeutic_mechanism(self, gene: str) -> str | None:
         """Get the therapeutic mechanism explanation for a gene's class."""
@@ -325,8 +373,8 @@ class GeneClassConfig:
             return None
 
         class_config = self._config.get(class_name, {})
-        implications = class_config.get('therapeutic_implications', {})
-        return implications.get('mechanism')
+        implications = class_config.get("therapeutic_implications", {})
+        return implications.get("mechanism")
 
 
 @lru_cache(maxsize=1)
@@ -341,9 +389,12 @@ def load_gene_classes() -> GeneClassConfig:
 
 class GeneRole(Enum):
     """Functional role of a gene in cancer."""
+
     ONCOGENE = "oncogene"
     TSG = "tumor_suppressor"
-    TSG_PATHWAY_ACTIONABLE = "tsg_pathway_actionable"  # TSGs where LOF activates druggable pathway
+    TSG_PATHWAY_ACTIONABLE = (
+        "tsg_pathway_actionable"  # TSGs where LOF activates druggable pathway
+    )
     FUSION = "fusion"
     DDR = "ddr"  # DNA Damage Repair - special therapeutic handling
     UNKNOWN = "unknown"
@@ -369,28 +420,53 @@ PATHWAY_ACTIONABLE_TSGS: dict[str, dict] = {
         "pathway": "PI3K/AKT/mTOR",
         "mechanism": "PTEN loss → unrestrained PI3K signaling → AKT/mTOR activation",
         "drugs": ["alpelisib", "capivasertib", "everolimus", "ipatasertib"],
-        "high_prevalence_tumors": ["endometrial", "endometrium", "prostate", "breast", "glioblastoma", "gbm"],
+        "high_prevalence_tumors": [
+            "endometrial",
+            "endometrium",
+            "prostate",
+            "breast",
+            "glioblastoma",
+            "gbm",
+        ],
         "fda_context": "Capivasertib (TRUQAP) FDA-approved for PIK3CA/AKT1/PTEN-altered breast cancer",
     },
     "TSC1": {
         "pathway": "mTOR",
         "mechanism": "TSC1 loss → mTORC1 hyperactivation → cell growth/proliferation",
         "drugs": ["everolimus", "sirolimus", "temsirolimus"],
-        "high_prevalence_tumors": ["renal", "kidney", "bladder", "subependymal giant cell astrocytoma", "sega"],
+        "high_prevalence_tumors": [
+            "renal",
+            "kidney",
+            "bladder",
+            "subependymal giant cell astrocytoma",
+            "sega",
+        ],
         "fda_context": "Everolimus FDA-approved for TSC-associated tumors",
     },
     "TSC2": {
         "pathway": "mTOR",
         "mechanism": "TSC2 loss → mTORC1 hyperactivation → cell growth/proliferation",
         "drugs": ["everolimus", "sirolimus", "temsirolimus"],
-        "high_prevalence_tumors": ["renal", "kidney", "bladder", "subependymal giant cell astrocytoma", "sega"],
+        "high_prevalence_tumors": [
+            "renal",
+            "kidney",
+            "bladder",
+            "subependymal giant cell astrocytoma",
+            "sega",
+        ],
         "fda_context": "Everolimus FDA-approved for TSC-associated tumors",
     },
     "NF1": {
         "pathway": "RAS/MAPK",
         "mechanism": "NF1 loss → unrestrained RAS signaling → MEK/ERK activation",
         "drugs": ["selumetinib", "trametinib", "binimetinib", "cobimetinib"],
-        "high_prevalence_tumors": ["neurofibroma", "plexiform neurofibroma", "mpnst", "glioma", "melanoma"],
+        "high_prevalence_tumors": [
+            "neurofibroma",
+            "plexiform neurofibroma",
+            "mpnst",
+            "glioma",
+            "melanoma",
+        ],
         "fda_context": "Selumetinib FDA-approved for NF1-associated plexiform neurofibromas",
     },
     "STK11": {
@@ -404,7 +480,13 @@ PATHWAY_ACTIONABLE_TSGS: dict[str, dict] = {
         "pathway": "HIF",
         "mechanism": "VHL loss → HIF stabilization → VEGF/angiogenesis activation",
         "drugs": ["belzutifan", "axitinib", "pazopanib", "cabozantinib"],
-        "high_prevalence_tumors": ["renal", "kidney", "clear cell renal", "ccRCC", "hemangioblastoma"],
+        "high_prevalence_tumors": [
+            "renal",
+            "kidney",
+            "clear cell renal",
+            "ccRCC",
+            "hemangioblastoma",
+        ],
         "fda_context": "Belzutifan FDA-approved for VHL-associated tumors including RCC",
     },
 }
@@ -433,7 +515,14 @@ ONCOGENE_MUTATION_CLASSES: dict[str, dict] = {
             "variants": ["V600E", "V600K", "V600D", "V600R", "V600M", "V600G"],
             "mechanism": "RAS-independent monomer signaling",
             "drugs": ["vemurafenib", "dabrafenib", "encorafenib"],
-            "fda_tumors": ["melanoma", "nsclc", "lung", "colorectal", "thyroid", "hairy cell leukemia"],
+            "fda_tumors": [
+                "melanoma",
+                "nsclc",
+                "lung",
+                "colorectal",
+                "thyroid",
+                "hairy cell leukemia",
+            ],
             "note": "Standard V600-specific inhibitors are effective",
             "tumor_specific": {
                 "colorectal": "Encorafenib + cetuximab (Braftovi + Erbitux) is FDA-approved standard-of-care for BRAF V600E mCRC. BRAF inhibitor monotherapy is ineffective in CRC due to EGFR feedback.",
@@ -445,20 +534,47 @@ ONCOGENE_MUTATION_CLASSES: dict[str, dict] = {
             # These variants signal as RAS-independent dimers
             # They are RESISTANT to V600-specific inhibitors but SENSITIVE to MEK inhibitors
             "variants": [
-                "G469A", "G469V", "G469E", "G469R", "G469S",  # Glycine-rich loop
-                "K601E", "K601N", "K601T",  # Activation loop
-                "L597Q", "L597R", "L597S", "L597V",  # Catalytic loop
-                "G464V", "G464E", "G464R",  # P-loop
-                "G466V", "G466E", "G466A", "G466R",  # P-loop
-                "N581S", "N581I", "N581K",  # Catalytic loop
+                "G469A",
+                "G469V",
+                "G469E",
+                "G469R",
+                "G469S",  # Glycine-rich loop
+                "K601E",
+                "K601N",
+                "K601T",  # Activation loop
+                "L597Q",
+                "L597R",
+                "L597S",
+                "L597V",  # Catalytic loop
+                "G464V",
+                "G464E",
+                "G464R",  # P-loop
+                "G466V",
+                "G466E",
+                "G466A",
+                "G466R",  # P-loop
+                "N581S",
+                "N581I",
+                "N581K",  # Catalytic loop
                 "F595L",  # DFG motif
-                "A598V", "A598T",
-                "T599I", "T599_V600insT",
+                "A598V",
+                "A598T",
+                "T599I",
+                "T599_V600insT",
                 "V600_K601delinsE",
             ],
             "mechanism": "RAS-independent dimer signaling - RESISTANT to V600 inhibitors",
-            "drugs": ["trametinib", "binimetinib", "cobimetinib", "selumetinib", "encorafenib + binimetinib"],
-            "fda_tumors": ["nsclc", "lung"],  # 2024 FDA approval for encorafenib + binimetinib
+            "drugs": [
+                "trametinib",
+                "binimetinib",
+                "cobimetinib",
+                "selumetinib",
+                "encorafenib + binimetinib",
+            ],
+            "fda_tumors": [
+                "nsclc",
+                "lung",
+            ],  # 2024 FDA approval for encorafenib + binimetinib
             "fda_context": "Encorafenib + binimetinib FDA-approved for BRAF Class II/III NSCLC (2024)",
             "note": "V600 inhibitors cause paradoxical pathway activation - use MEK inhibitors",
         },
@@ -466,8 +582,15 @@ ONCOGENE_MUTATION_CLASSES: dict[str, dict] = {
             "name": "Class III (kinase-impaired)",
             # These have impaired kinase activity but still activate MAPK via RAS
             "variants": [
-                "D594G", "D594N", "D594E", "D594H", "D594A", "D594V",  # Kinase-dead
-                "G596R", "G596D", "G596C",
+                "D594G",
+                "D594N",
+                "D594E",
+                "D594H",
+                "D594A",
+                "D594V",  # Kinase-dead
+                "G596R",
+                "G596D",
+                "G596C",
             ],
             "mechanism": "Kinase-impaired, RAS-dependent signaling",
             "drugs": ["trametinib", "binimetinib", "cobimetinib"],
@@ -519,7 +642,9 @@ def get_oncogene_mutation_class(gene: str, variant: str) -> dict | None:
     return None
 
 
-def is_oncogene_class_fda_tumor(gene: str, variant: str, tumor_type: str | None) -> bool:
+def is_oncogene_class_fda_tumor(
+    gene: str, variant: str, tumor_type: str | None
+) -> bool:
     """Check if tumor type has FDA approval for this oncogene mutation class.
 
     Args:
@@ -548,6 +673,7 @@ def is_oncogene_class_fda_tumor(gene: str, variant: str, tumor_type: str | None)
 @dataclass
 class GeneContext:
     """Context about a gene from multiple sources."""
+
     gene: str
     is_cancer_gene: bool
     role: GeneRole
@@ -562,50 +688,202 @@ class GeneContext:
 # Source: PMID 32958822, PMID 29320312 (HRD gene reviews)
 DDR_GENES = {
     # Core HRR genes
-    "BRCA1", "BRCA2", "PALB2", "RAD51", "RAD51B", "RAD51C", "RAD51D",
-    "BRIP1", "BARD1", "FANCA", "FANCC", "FANCD2", "FANCE", "FANCF",
-    "FANCG", "FANCI", "FANCL", "FANCM",
+    "BRCA1",
+    "BRCA2",
+    "PALB2",
+    "RAD51",
+    "RAD51B",
+    "RAD51C",
+    "RAD51D",
+    "BRIP1",
+    "BARD1",
+    "FANCA",
+    "FANCC",
+    "FANCD2",
+    "FANCE",
+    "FANCF",
+    "FANCG",
+    "FANCI",
+    "FANCL",
+    "FANCM",
     # Other DDR genes
-    "ATM", "ATR", "CHEK1", "CHEK2", "NBN", "MRE11", "RAD50",
-    "BLM", "WRN", "RECQL4",
+    "ATM",
+    "ATR",
+    "CHEK1",
+    "CHEK2",
+    "NBN",
+    "MRE11",
+    "RAD50",
+    "BLM",
+    "WRN",
+    "RECQL4",
     # MMR genes (different pathway but also DDR)
-    "MLH1", "MSH2", "MSH6", "PMS2", "EPCAM",
+    "MLH1",
+    "MSH2",
+    "MSH6",
+    "PMS2",
+    "EPCAM",
 }
 
 # Oncogenes - gain-of-function mutations matter
 # Source: OncoKB, COSMIC CGC
 ONCOGENES = {
-    "KRAS", "NRAS", "HRAS", "BRAF", "EGFR", "ERBB2", "MET", "ALK",
-    "ROS1", "RET", "NTRK1", "NTRK2", "NTRK3", "FGFR1", "FGFR2",
-    "FGFR3", "FGFR4", "PIK3CA", "AKT1", "MTOR", "KIT", "PDGFRA",
-    "ABL1", "JAK2", "MPL", "CALR", "FLT3", "IDH1", "IDH2", "NPM1",
-    "CTNNB1", "SMO", "PTPN11", "RAC1", "RHOA", "MAP2K1", "MAP2K2",
-    "ARAF", "RAF1", "ERBB3", "ERBB4", "DDR2", "ESR1", "AR", "GNA11",
-    "GNAQ", "SF3B1", "U2AF1", "SRSF2", "MYD88", "CXCR4", "BTK",
+    "KRAS",
+    "NRAS",
+    "HRAS",
+    "BRAF",
+    "EGFR",
+    "ERBB2",
+    "MET",
+    "ALK",
+    "ROS1",
+    "RET",
+    "NTRK1",
+    "NTRK2",
+    "NTRK3",
+    "FGFR1",
+    "FGFR2",
+    "FGFR3",
+    "FGFR4",
+    "PIK3CA",
+    "AKT1",
+    "MTOR",
+    "KIT",
+    "PDGFRA",
+    "ABL1",
+    "JAK2",
+    "MPL",
+    "CALR",
+    "FLT3",
+    "IDH1",
+    "IDH2",
+    "NPM1",
+    "CTNNB1",
+    "SMO",
+    "PTPN11",
+    "RAC1",
+    "RHOA",
+    "MAP2K1",
+    "MAP2K2",
+    "ARAF",
+    "RAF1",
+    "ERBB3",
+    "ERBB4",
+    "DDR2",
+    "ESR1",
+    "AR",
+    "GNA11",
+    "GNAQ",
+    "SF3B1",
+    "U2AF1",
+    "SRSF2",
+    "MYD88",
+    "CXCR4",
+    "BTK",
 }
 
 # Tumor suppressors - loss-of-function mutations matter
 # Source: OncoKB, COSMIC CGC
 TUMOR_SUPPRESSORS = {
-    "TP53", "RB1", "PTEN", "APC", "CDKN2A", "CDKN2B", "CDKN1B",
-    "NF1", "NF2", "VHL", "STK11", "KEAP1", "SMAD4", "FBXW7",
-    "ARID1A", "ARID1B", "ARID2", "SMARCA4", "SMARCB1", "PBRM1",
-    "BAP1", "SETD2", "KMT2A", "KMT2C", "KMT2D", "CREBBP", "EP300",
-    "KDM6A", "ASXL1", "TET2", "DNMT3A", "WT1", "BCOR", "BCORL1",
-    "PHF6", "STAG2", "RAD21", "SMC1A", "SMC3", "RUNX1", "GATA3",
-    "RNF43", "ZNRF3", "AXIN1", "AXIN2", "CDH1", "MAP3K1", "CASP8",
-    "HLA-A", "HLA-B", "B2M", "JAK1", "IFNGR1", "IFNGR2",
-    "PTPRD", "PTPRT", "FAT1", "FAT4", "LATS1", "LATS2",
-    "TSC1", "TSC2", "FLCN", "FH", "SDHB", "SDHC", "SDHD", "SDHA",
-    "MAX", "MEN1", "DAXX", "ATRX", "CIC", "FUBP1", "NOTCH1",
-    "NOTCH2", "TRAF7", "KLF4",
+    "TP53",
+    "RB1",
+    "PTEN",
+    "APC",
+    "CDKN2A",
+    "CDKN2B",
+    "CDKN1B",
+    "NF1",
+    "NF2",
+    "VHL",
+    "STK11",
+    "KEAP1",
+    "SMAD4",
+    "FBXW7",
+    "ARID1A",
+    "ARID1B",
+    "ARID2",
+    "SMARCA4",
+    "SMARCB1",
+    "PBRM1",
+    "BAP1",
+    "SETD2",
+    "KMT2A",
+    "KMT2C",
+    "KMT2D",
+    "CREBBP",
+    "EP300",
+    "KDM6A",
+    "ASXL1",
+    "TET2",
+    "DNMT3A",
+    "WT1",
+    "BCOR",
+    "BCORL1",
+    "PHF6",
+    "STAG2",
+    "RAD21",
+    "SMC1A",
+    "SMC3",
+    "RUNX1",
+    "GATA3",
+    "RNF43",
+    "ZNRF3",
+    "AXIN1",
+    "AXIN2",
+    "CDH1",
+    "MAP3K1",
+    "CASP8",
+    "HLA-A",
+    "HLA-B",
+    "B2M",
+    "JAK1",
+    "IFNGR1",
+    "IFNGR2",
+    "PTPRD",
+    "PTPRT",
+    "FAT1",
+    "FAT4",
+    "LATS1",
+    "LATS2",
+    "TSC1",
+    "TSC2",
+    "FLCN",
+    "FH",
+    "SDHB",
+    "SDHC",
+    "SDHD",
+    "SDHA",
+    "MAX",
+    "MEN1",
+    "DAXX",
+    "ATRX",
+    "CIC",
+    "FUBP1",
+    "NOTCH1",
+    "NOTCH2",
+    "TRAF7",
+    "KLF4",
 }
 
 # Fusion genes - often rearrangements rather than point mutations
 FUSION_GENES = {
-    "ALK", "ROS1", "RET", "NTRK1", "NTRK2", "NTRK3",
-    "FGFR2", "FGFR3", "NRG1", "BRAF", "MET", "EGFR",
-    "PDGFRA", "PDGFRB", "ABL1", "JAK2", "FGFR1",
+    "ALK",
+    "ROS1",
+    "RET",
+    "NTRK1",
+    "NTRK2",
+    "NTRK3",
+    "FGFR2",
+    "FGFR3",
+    "NRG1",
+    "BRAF",
+    "MET",
+    "EGFR",
+    "PDGFRA",
+    "PDGFRB",
+    "ABL1",
+    "JAK2",
+    "FGFR1",
 }
 
 
@@ -755,21 +1033,21 @@ def is_likely_lof(variant: str) -> tuple[bool, str]:
     v = variant.upper()
 
     # Truncating variants - high confidence LOF
-    if '*' in v:
+    if "*" in v:
         return True, "nonsense (stop codon)"
-    if 'FS' in v or 'FRAMESHIFT' in v:
+    if "FS" in v or "FRAMESHIFT" in v:
         return True, "frameshift"
-    if 'DEL' in v and not any(c.isdigit() for c in v.replace('DEL', '')):
+    if "DEL" in v and not any(c.isdigit() for c in v.replace("DEL", "")):
         # Large deletion (not just single AA deletion like "K27del")
         return True, "deletion"
 
     # Splice site variants
-    if 'SPLICE' in v:
+    if "SPLICE" in v:
         return True, "splice site"
 
     # Check for splice notation patterns
-    if v.startswith('C.') or v.startswith('IVS'):
-        if any(p in v for p in ['+1', '+2', '-1', '-2', 'SPLICE']):
+    if v.startswith("C.") or v.startswith("IVS"):
+        if any(p in v for p in ["+1", "+2", "-1", "-2", "SPLICE"]):
             return True, "splice site"
 
     return False, ""
@@ -818,7 +1096,9 @@ def get_therapeutic_implication(gene_context: GeneContext, is_lof: bool) -> str 
                 "May have prognostic implications."
             )
         else:
-            return None  # TSG without LOF = likely benign or VUS, no therapeutic relevance
+            return (
+                None  # TSG without LOF = likely benign or VUS, no therapeutic relevance
+            )
 
     return None
 
@@ -849,8 +1129,13 @@ def get_lof_assessment(
     if snpeff_effect:
         effect_lower = snpeff_effect.lower()
         truncating_effects = [
-            "frameshift", "stop_gained", "splice_donor", "splice_acceptor",
-            "start_lost", "stop_lost", "transcript_ablation"
+            "frameshift",
+            "stop_gained",
+            "splice_donor",
+            "splice_acceptor",
+            "start_lost",
+            "stop_lost",
+            "transcript_ablation",
         ]
         if any(t in effect_lower for t in truncating_effects):
             return True, "high", f"truncating variant ({snpeff_effect})"
@@ -935,6 +1220,7 @@ def _get_hotspot_codons(gene: str) -> list[int]:
         List of codon positions that are hotspots for this gene
     """
     from oncomind.api.hotspots import get_cancer_hotspots
+
     return get_cancer_hotspots(gene)
 
 
@@ -998,7 +1284,6 @@ NON_ACTIONABLE_VARIANTS: dict[str, list[str]] = {
     # Despite being a stop-gain, it's in a non-critical C-terminal region
     # ClinVar: Benign (VCV000038266)
     "BRCA2": ["K3326X", "K3326*", "p.K3326X", "p.K3326*", "Lys3326Ter"],
-
     # Add other known benign variants as discovered
     # Example patterns:
     # "GENE": ["V123M", "p.V123M"],  # Common polymorphism, ClinVar Benign
@@ -1073,9 +1358,7 @@ def is_clinvar_pathogenic(clinvar_significance: str | None) -> bool:
 
 
 def is_likely_benign_variant(
-    gene: str,
-    variant: str,
-    clinvar_significance: str | None = None
+    gene: str, variant: str, clinvar_significance: str | None = None
 ) -> tuple[bool, str]:
     """Determine if a variant is likely benign based on multiple signals.
 
@@ -1173,7 +1456,9 @@ def is_variant_not_actionable(
     return False, ""
 
 
-def is_hotspot_adjacent(gene: str, variant: str, window: int = 5) -> tuple[bool, int | None]:
+def is_hotspot_adjacent(
+    gene: str, variant: str, window: int = 5
+) -> tuple[bool, int | None]:
     """Check if a variant is near (but not at) a known cancer hotspot.
 
     Data source: MSK Cancer Hotspots (cancerhotspots.org)

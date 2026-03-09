@@ -42,6 +42,7 @@ class ClinicalTrialsRateLimitError(Exception):
 
 class ClinicalTrialsError(Exception):
     """Exception raised for ClinicalTrials.gov API errors."""
+
     pass
 
 
@@ -62,18 +63,20 @@ class ClinicalTrial:
 
     def is_recruiting(self) -> bool:
         """Check if trial is actively recruiting."""
-        return self.status in ['RECRUITING', 'ENROLLING_BY_INVITATION']
+        return self.status in ["RECRUITING", "ENROLLING_BY_INVITATION"]
 
     def is_active(self) -> bool:
         """Check if trial is active (recruiting or not)."""
         return self.status in [
-            'RECRUITING',
-            'ENROLLING_BY_INVITATION',
-            'ACTIVE_NOT_RECRUITING',
-            'NOT_YET_RECRUITING'
+            "RECRUITING",
+            "ENROLLING_BY_INVITATION",
+            "ACTIVE_NOT_RECRUITING",
+            "NOT_YET_RECRUITING",
         ]
 
-    def mentions_variant(self, variant: str | None, gene: str | None = None) -> tuple[str, str | None]:
+    def mentions_variant(
+        self, variant: str | None, gene: str | None = None
+    ) -> tuple[str, str | None]:
         """Check if trial mentions the gene and/or variant with codon-level matching.
 
         Uses parse_biomarker_specificity() to extract what variant the trial describes,
@@ -95,26 +98,32 @@ class ClinicalTrial:
             - ("none", None) - no match found
         """
         from oncomind.config.constants import BROAD_VARIANTS
-        from oncomind.insight_builder.fda_processor import parse_biomarker_specificity, is_variant_covered
+        from oncomind.insight_builder.fda_processor import (
+            parse_biomarker_specificity,
+            is_variant_covered,
+        )
 
         import re
+
         gene_upper = gene.upper() if gene else None
 
         # Build gene pattern for word boundary matching
-        gene_pattern = rf'\b{re.escape(gene_upper)}\b' if gene_upper else None
+        gene_pattern = rf"\b{re.escape(gene_upper)}\b" if gene_upper else None
 
         # Priority check: gene must appear in title OR eligibility criteria
         # If gene only appears in summary (background info), it's not a real match
         # e.g., a trial for "IDH1-Mutated AML" may mention "IDH1 or IDH2" in background
         # but is only actually studying IDH1
         title_upper = self.title.upper() if self.title else ""
-        eligibility_upper = self.eligibility_criteria.upper() if self.eligibility_criteria else ""
+        eligibility_upper = (
+            self.eligibility_criteria.upper() if self.eligibility_criteria else ""
+        )
         primary_text = f"{title_upper} {eligibility_upper}"
 
         gene_in_primary = bool(gene_pattern and re.search(gene_pattern, primary_text))
 
         if not gene_in_primary:
-            return ('none', None)
+            return ("none", None)
 
         # Combine all text for deeper analysis (variant matching, etc.)
         search_texts = [self.title]
@@ -138,53 +147,56 @@ class ClinicalTrial:
                 if not matched_var and biomarker_spec.get("specified_variants"):
                     # For variant_list, find the matching one
                     matched_var = next(
-                        (v for v in biomarker_spec["specified_variants"]
-                         if v.upper() == variant.upper()),
-                        biomarker_spec["specified_variants"][0]
+                        (
+                            v
+                            for v in biomarker_spec["specified_variants"]
+                            if v.upper() == variant.upper()
+                        ),
+                        biomarker_spec["specified_variants"][0],
                     )
-                biomarker = f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
-                return ('variant', biomarker)
+                biomarker = (
+                    f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
+                )
+                return ("variant", biomarker)
 
             elif match_level == "codon":
                 # Codon-level match (e.g., trial has G12C, query is G12D)
                 codon = biomarker_spec.get("codon")
                 biomarker = f"{gene} {codon}" if codon else gene
-                return ('codon', biomarker)
+                return ("codon", biomarker)
 
             elif match_level == "gene":
-                return ('gene', gene)
+                return ("gene", gene)
 
         # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
         # Use primary_text (title + eligibility) for consistency
         ambig_variants = [
-            (g, v) for (g, v) in BROAD_VARIANTS
+            (g, v)
+            for (g, v) in BROAD_VARIANTS
             if g.upper() in primary_text and v.upper() in primary_text
         ]
         matched_ambig = next(
-            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper),
-            None
+            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper), None
         )
         if matched_ambig:
             g, v = matched_ambig
-            return ('ambiguous', f"{g} {v}")
+            return ("ambiguous", f"{g} {v}")
 
         # Gene-level only (we already verified gene_in_primary above)
-        return ('gene', gene)
-
-       
+        return ("gene", gene)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
-            'nct_id': self.nct_id,
-            'title': self.title,
-            'status': self.status,
-            'phase': self.phase,
-            'conditions': self.conditions,
-            'interventions': self.interventions,
-            'brief_summary': self.brief_summary[:500] if self.brief_summary else None,
-            'sponsor': self.sponsor,
-            'url': self.url,
+            "nct_id": self.nct_id,
+            "title": self.title,
+            "status": self.status,
+            "phase": self.phase,
+            "conditions": self.conditions,
+            "interventions": self.interventions,
+            "brief_summary": self.brief_summary[:500] if self.brief_summary else None,
+            "sponsor": self.sponsor,
+            "url": self.url,
         }
 
 
@@ -248,7 +260,9 @@ class ClinicalTrialsClient:
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create the HTTP client."""
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self.timeout, headers=self._headers)
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout, headers=self._headers
+            )
         return self._client
 
     def _build_search_query(
@@ -272,13 +286,13 @@ class ClinicalTrialsClient:
 
         if variant:
             # Add variant in multiple formats for better matching
-            variant_clean = variant.upper().replace('P.', '')
+            variant_clean = variant.upper().replace("P.", "")
             parts.append(variant_clean)
             # Also try gene+variant concatenated (e.g., "KRASG12D")
             parts.append(f"{gene.upper()}{variant_clean}")
 
         # Join with OR for broader matching
-        query = ' OR '.join(parts)
+        query = " OR ".join(parts)
 
         return query
 
@@ -292,47 +306,47 @@ class ClinicalTrialsClient:
             ClinicalTrial object or None if parsing fails
         """
         try:
-            protocol = study.get('protocolSection', {})
+            protocol = study.get("protocolSection", {})
 
             # Identification
-            id_module = protocol.get('identificationModule', {})
-            nct_id = id_module.get('nctId', '')
-            title = id_module.get('briefTitle', '') or id_module.get('officialTitle', '')
+            id_module = protocol.get("identificationModule", {})
+            nct_id = id_module.get("nctId", "")
+            title = id_module.get("briefTitle", "") or id_module.get(
+                "officialTitle", ""
+            )
 
             # Status
-            status_module = protocol.get('statusModule', {})
-            status = status_module.get('overallStatus', 'UNKNOWN')
+            status_module = protocol.get("statusModule", {})
+            status = status_module.get("overallStatus", "UNKNOWN")
 
             # Design - phase
-            design_module = protocol.get('designModule', {})
-            phases = design_module.get('phases', [])
+            design_module = protocol.get("designModule", {})
+            phases = design_module.get("phases", [])
             phase = phases[0] if phases else None
 
             # Conditions
-            conditions_module = protocol.get('conditionsModule', {})
-            conditions = conditions_module.get('conditions', [])
+            conditions_module = protocol.get("conditionsModule", {})
+            conditions = conditions_module.get("conditions", [])
 
             # Interventions
-            arms_module = protocol.get('armsInterventionsModule', {})
-            interventions_list = arms_module.get('interventions', [])
+            arms_module = protocol.get("armsInterventionsModule", {})
+            interventions_list = arms_module.get("interventions", [])
             interventions = [
-                i.get('name', '')
-                for i in interventions_list
-                if i.get('name')
+                i.get("name", "") for i in interventions_list if i.get("name")
             ]
 
             # Description
-            desc_module = protocol.get('descriptionModule', {})
-            brief_summary = desc_module.get('briefSummary', '')
+            desc_module = protocol.get("descriptionModule", {})
+            brief_summary = desc_module.get("briefSummary", "")
 
             # Eligibility
-            eligibility_module = protocol.get('eligibilityModule', {})
-            eligibility_criteria = eligibility_module.get('eligibilityCriteria', '')
+            eligibility_module = protocol.get("eligibilityModule", {})
+            eligibility_criteria = eligibility_module.get("eligibilityCriteria", "")
 
             # Sponsor
-            sponsor_module = protocol.get('sponsorCollaboratorsModule', {})
-            lead_sponsor = sponsor_module.get('leadSponsor', {})
-            sponsor = lead_sponsor.get('name', '')
+            sponsor_module = protocol.get("sponsorCollaboratorsModule", {})
+            lead_sponsor = sponsor_module.get("leadSponsor", {})
+            sponsor = lead_sponsor.get("name", "")
 
             # Build URL
             url = f"https://clinicaltrials.gov/study/{nct_id}"
@@ -449,34 +463,39 @@ class ClinicalTrialsClient:
 
         # Filter to last 10 years
         from datetime import datetime
+
         current_year = datetime.now().year
         min_year = current_year - 10
 
         # Build parameters - request only needed fields to reduce payload
         params: dict[str, Any] = {
-            'query.term': query,
-            'pageSize': min(max_results * 2, self.DEFAULT_PAGE_SIZE),
-            'countTotal': 'true',
-            'format': 'json',
-            'fields': '|'.join(self.FIELDS),  # Only fetch fields we need
-            'filter.advanced': f'AREA[StartDate]RANGE[01/01/{min_year}, MAX]',  # Started in last 10 years
+            "query.term": query,
+            "pageSize": min(max_results * 2, self.DEFAULT_PAGE_SIZE),
+            "countTotal": "true",
+            "format": "json",
+            "fields": "|".join(self.FIELDS),  # Only fetch fields we need
+            "filter.advanced": f"AREA[StartDate]RANGE[01/01/{min_year}, MAX]",  # Started in last 10 years
         }
 
         # Add condition filter if tumor type specified
         if tumor_type:
-            params['query.cond'] = tumor_type
+            params["query.cond"] = tumor_type
 
         # Filter by status if recruiting only
         if recruiting_only:
-            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING'
+            params["filter.overallStatus"] = (
+                "RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING"
+            )
         else:
-            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING'
+            params["filter.overallStatus"] = (
+                "RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING"
+            )
 
         # Make request - let errors propagate for caller to handle retry
         data = await self._make_request(params)
 
         # Parse studies
-        studies = data.get('studies', [])
+        studies = data.get("studies", [])
         trials = []
 
         for study in studies:
@@ -521,30 +540,35 @@ class ClinicalTrialsClient:
         """
         # Filter to last 10 years
         from datetime import datetime
+
         current_year = datetime.now().year
         min_year = current_year - 10
 
         # Build parameters - search by condition only
         params: dict[str, Any] = {
-            'query.cond': tumor_type,
-            'pageSize': min(max_results * 2, self.DEFAULT_PAGE_SIZE),
-            'countTotal': 'true',
-            'format': 'json',
-            'fields': '|'.join(self.FIELDS),
-            'filter.advanced': f'AREA[StartDate]RANGE[01/01/{min_year}, MAX]',  # Started in last 10 years
+            "query.cond": tumor_type,
+            "pageSize": min(max_results * 2, self.DEFAULT_PAGE_SIZE),
+            "countTotal": "true",
+            "format": "json",
+            "fields": "|".join(self.FIELDS),
+            "filter.advanced": f"AREA[StartDate]RANGE[01/01/{min_year}, MAX]",  # Started in last 10 years
         }
 
         # Filter by status
         if recruiting_only:
-            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING'
+            params["filter.overallStatus"] = (
+                "RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING"
+            )
         else:
-            params['filter.overallStatus'] = 'RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING'
+            params["filter.overallStatus"] = (
+                "RECRUITING|ENROLLING_BY_INVITATION|NOT_YET_RECRUITING|ACTIVE_NOT_RECRUITING"
+            )
 
         # Make request
         data = await self._make_request(params)
 
         # Parse studies
-        studies = data.get('studies', [])
+        studies = data.get("studies", [])
         trials = []
 
         for study in studies:
@@ -637,19 +661,21 @@ class ClinicalTrialsClient:
                     origin="trial",
                 )
 
-            evidence_list.append(ClinicalTrialEvidence(
-                nct_id=trial.nct_id,
-                title=trial.title,
-                status=trial.status,
-                phase=trial.phase,
-                conditions=trial.conditions,
-                interventions=trial.interventions,
-                sponsor=trial.sponsor,
-                url=trial.url,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-                matched_biomarker=matched_biomarker,
-            ))
+            evidence_list.append(
+                ClinicalTrialEvidence(
+                    nct_id=trial.nct_id,
+                    title=trial.title,
+                    status=trial.status,
+                    phase=trial.phase,
+                    conditions=trial.conditions,
+                    interventions=trial.interventions,
+                    sponsor=trial.sponsor,
+                    url=trial.url,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                    matched_biomarker=matched_biomarker,
+                )
+            )
 
         return evidence_list
 
@@ -694,7 +720,9 @@ class ClinicalTrialsClient:
             locus_variant_match = None
             matched_biomarker = None
             if gene:
-                match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
+                match_type, matched_biomarker = trial.mentions_variant(
+                    variant, gene=gene
+                )
                 if match_type == "variant":
                     locus_variant_match = EvidenceLevel(
                         level="variant",
@@ -734,19 +762,21 @@ class ClinicalTrialsClient:
                 origin="trial",
             )
 
-            evidence_list.append(ClinicalTrialEvidence(
-                nct_id=trial.nct_id,
-                title=trial.title,
-                status=trial.status,
-                phase=trial.phase,
-                conditions=trial.conditions,
-                interventions=trial.interventions,
-                sponsor=trial.sponsor,
-                url=trial.url,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-                matched_biomarker=matched_biomarker,
-            ))
+            evidence_list.append(
+                ClinicalTrialEvidence(
+                    nct_id=trial.nct_id,
+                    title=trial.title,
+                    status=trial.status,
+                    phase=trial.phase,
+                    conditions=trial.conditions,
+                    interventions=trial.interventions,
+                    sponsor=trial.sponsor,
+                    url=trial.url,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                    matched_biomarker=matched_biomarker,
+                )
+            )
 
         return evidence_list
 

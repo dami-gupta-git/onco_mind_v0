@@ -85,15 +85,23 @@ class CBioPortalEvidence(EvidenceItemBase):
             source_cite = f"cBioPortal ({study_display})"
 
         # Compact header
-        lines.append(f"Study: {self.study_id} ({self.total_samples} {tumor_str} samples)")
+        lines.append(
+            f"Study: {self.study_id} ({self.total_samples} {tumor_str} samples)"
+        )
 
         # Prevalence - compact format with clear distinction between gene and variant
-        lines.append(f"Gene prevalence: {self.gene} mutations in {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples})")
+        lines.append(
+            f"Gene prevalence: {self.gene} mutations in {self.gene_prevalence_pct:.1f}% ({self.samples_with_gene_mutation}/{self.total_samples})"
+        )
         if self.variant:
             if self.samples_with_exact_variant > 0:
-                lines.append(f"Variant prevalence: {self.gene} {self.variant} specifically in {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples})")
+                lines.append(
+                    f"Variant prevalence: {self.gene} {self.variant} specifically in {self.variant_prevalence_pct:.1f}% ({self.samples_with_exact_variant}/{self.total_samples})"
+                )
             else:
-                lines.append(f"Variant prevalence: {self.gene} {self.variant} NOT FOUND in this study (0/{self.total_samples}) - this specific variant may be rare in {tumor_str}")
+                lines.append(
+                    f"Variant prevalence: {self.gene} {self.variant} NOT FOUND in this study (0/{self.total_samples}) - this specific variant may be rare in {tumor_str}"
+                )
 
         # Co-occurring mutations - top 3 only, compact format
         if self.co_occurring:

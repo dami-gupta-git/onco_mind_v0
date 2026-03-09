@@ -195,10 +195,18 @@ class TestCGIClient:
         assert client._variant_matches(kit_exon_range, "KIT", "G100V") is False
 
         # Edge cases - exact boundaries
-        assert client._variant_matches(kit_exon_range, "KIT", "X449Y") is True  # Start of first range
-        assert client._variant_matches(kit_exon_range, "KIT", "X828Y") is True  # End of last range
-        assert client._variant_matches(kit_exon_range, "KIT", "X448Y") is False  # Just before first range
-        assert client._variant_matches(kit_exon_range, "KIT", "X829Y") is False  # Just after last range
+        assert (
+            client._variant_matches(kit_exon_range, "KIT", "X449Y") is True
+        )  # Start of first range
+        assert (
+            client._variant_matches(kit_exon_range, "KIT", "X828Y") is True
+        )  # End of last range
+        assert (
+            client._variant_matches(kit_exon_range, "KIT", "X448Y") is False
+        )  # Just before first range
+        assert (
+            client._variant_matches(kit_exon_range, "KIT", "X829Y") is False
+        )  # Just after last range
 
     def test_cache_is_valid_no_file(self):
         """Test cache validation when file doesn't exist."""
@@ -249,7 +257,9 @@ class TestCGIClient:
             },
         ]
 
-        biomarkers = client.fetch_biomarkers("EGFR", "G719S", "Non-Small Cell Lung Cancer")
+        biomarkers = client.fetch_biomarkers(
+            "EGFR", "G719S", "Non-Small Cell Lung Cancer"
+        )
 
         assert len(biomarkers) == 2
         assert all(b.gene == "EGFR" for b in biomarkers)
@@ -325,7 +335,9 @@ class TestCGIClient:
         biomarkers = client.fetch_fda_approved("EGFR", "G719S")
 
         assert len(biomarkers) == 1
-        assert biomarkers[0].drug == "AFATINIB"  # Drug names are normalized to uppercase
+        assert (
+            biomarkers[0].drug == "AFATINIB"
+        )  # Drug names are normalized to uppercase
         assert biomarkers[0].is_fda_approved() is True
         assert biomarkers[0].association == "Responsive"
 
@@ -352,7 +364,9 @@ class TestCGIClient:
         biomarkers = client.fetch_biomarkers("NRAS", "Q61K", "Melanoma")
 
         assert len(biomarkers) == 1
-        assert biomarkers[0].drug == "BINIMETINIB"  # Drug names are normalized to uppercase
+        assert (
+            biomarkers[0].drug == "BINIMETINIB"
+        )  # Drug names are normalized to uppercase
 
 
 class TestCGIClientIntegration:
@@ -364,7 +378,9 @@ class TestCGIClientIntegration:
         client = CGIClient()
 
         # This will download the actual CGI file
-        biomarkers = client.fetch_biomarkers("EGFR", "G719S", "Non-Small Cell Lung Cancer")
+        biomarkers = client.fetch_biomarkers(
+            "EGFR", "G719S", "Non-Small Cell Lung Cancer"
+        )
 
         # Should find some biomarkers
         assert len(biomarkers) > 0

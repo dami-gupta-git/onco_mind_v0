@@ -47,12 +47,20 @@ def insight(
     gene: str = typer.Argument(..., help="Gene symbol (e.g., BRAF)"),
     variant: str = typer.Argument(..., help="Variant notation (e.g., V600E)"),
     tumor: Optional[str] = typer.Option(None, "--tumor", "-t", help="Tumor type"),
-    lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
+    lit: bool = typer.Option(
+        False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"
+    ),
     llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
-    model: str = typer.Option(LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
-    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
+    model: str = typer.Option(
+        LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"
+    ),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output JSON file"
+    ),
+    log_level: str = typer.Option(
+        "INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"
+    ),
 ) -> None:
     """Get variant insight with structured evidence and optional LLM narrative.
 
@@ -111,16 +119,26 @@ def insight(
         async with Conductor(config) as conductor:
             result = await conductor.run(f"{gene} {variant}", tumor_type=tumor)
 
-        logger.debug(f"Result received: evidence_sources={len(result.evidence.fda_biomarker_evidence)} FDA, "
-                    f"{len(result.evidence.civic_assertions)} CIViC, llm={'yes' if result.llm else 'no'}")
+        logger.debug(
+            f"Result received: evidence_sources={len(result.evidence.fda_biomarker_evidence)} FDA, "
+            f"{len(result.evidence.civic_assertions)} CIViC, llm={'yes' if result.llm else 'no'}"
+        )
 
         # LLM Insight (debug logging only)
         logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
         if result.llm:
-            logger.debug(f"LLM Insight functional_summary: {result.llm.functional_summary}")
-            logger.debug(f"LLM Insight biological_context: {result.llm.biological_context}")
-            logger.debug(f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}")
-            logger.debug(f"LLM Insight research_implications: {result.llm.research_implications}")
+            logger.debug(
+                f"LLM Insight functional_summary: {result.llm.functional_summary}"
+            )
+            logger.debug(
+                f"LLM Insight biological_context: {result.llm.biological_context}"
+            )
+            logger.debug(
+                f"LLM Insight therapeutic_landscape: {result.llm.therapeutic_landscape}"
+            )
+            logger.debug(
+                f"LLM Insight research_implications: {result.llm.research_implications}"
+            )
             logger.debug(f"LLM Insight llm_summary: {result.llm.llm_summary}")
         logger.debug("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
@@ -132,7 +150,11 @@ def insight(
             variant_title += f" [dim]in[/dim] {tumor}"
 
         # Build metrics line
-        therapies_count = len(result.llm.recommended_therapies if result.llm else result.evidence.get_therapeutic_evidence())
+        therapies_count = len(
+            result.llm.recommended_therapies
+            if result.llm
+            else result.evidence.get_therapeutic_evidence()
+        )
         clinvar_sig = result.evidence.clinvar_significance or "N/A"
         am_score = result.functional.alphamissense_score
         am_display = f"{am_score:.2f}" if am_score else "N/A"
@@ -144,36 +166,50 @@ def insight(
         from rich.console import Group
 
         # Center each line individually
-        title_line = Align.center(f"[bold bright_white]{variant_title}[/bold bright_white]")
+        title_line = Align.center(
+            f"[bold bright_white]{variant_title}[/bold bright_white]"
+        )
         metrics_centered = Align.center(metrics_line)
         header_content = Group(title_line, metrics_centered)
 
-        console.print(Panel(
-            header_content,
-            border_style="bold bright_white",
-            box=DOUBLE,
-            padding=(0, 2),
-        ))
+        console.print(
+            Panel(
+                header_content,
+                border_style="bold bright_white",
+                box=DOUBLE,
+                padding=(0, 2),
+            )
+        )
 
         # Check for LLM error and display to user
-        if result.llm and result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:"):
-            error_msg = result.llm.rationale.replace("LLM narrative generation failed: ", "")
-            console.print(Panel(
-                f"[yellow]LLM synthesis failed: {error_msg}[/yellow]\n\n[dim]Showing evidence-only results below.[/dim]",
-                title="[bold yellow]⚠ LLM Error[/bold yellow]",
-                border_style="yellow",
-                padding=(0, 2),
-            ))
+        if (
+            result.llm
+            and result.llm.rationale
+            and result.llm.rationale.startswith("LLM narrative generation failed:")
+        ):
+            error_msg = result.llm.rationale.replace(
+                "LLM narrative generation failed: ", ""
+            )
+            console.print(
+                Panel(
+                    f"[yellow]LLM synthesis failed: {error_msg}[/yellow]\n\n[dim]Showing evidence-only results below.[/dim]",
+                    title="[bold yellow]⚠ LLM Error[/bold yellow]",
+                    border_style="yellow",
+                    padding=(0, 2),
+                )
+            )
 
         # Summary panel
         summary_text = result.get_summary()
         wrapped_summary = textwrap.fill(summary_text, width=74)
-        console.print(Panel(
-            f"[cyan]{wrapped_summary}[/cyan]",
-            title="[bold]Summary[/bold]",
-            border_style="cyan",
-            padding=(0, 2),
-        ))
+        console.print(
+            Panel(
+                f"[cyan]{wrapped_summary}[/cyan]",
+                title="[bold]Summary[/bold]",
+                border_style="cyan",
+                padding=(0, 2),
+            )
+        )
 
         # Build IDs and Scores content
         ids_lines = []
@@ -184,17 +220,27 @@ def insight(
         if result.identifiers.dbsnp_id:
             ids_lines.append(f"[dim]dbSNP:[/dim]        {result.identifiers.dbsnp_id}")
         if result.identifiers.clinvar_id:
-            ids_lines.append(f"[dim]ClinVar ID:[/dim]   {result.identifiers.clinvar_id}")
+            ids_lines.append(
+                f"[dim]ClinVar ID:[/dim]   {result.identifiers.clinvar_id}"
+            )
         if result.identifiers.ncbi_gene_id:
-            ids_lines.append(f"[dim]NCBI Gene:[/dim]    {result.identifiers.ncbi_gene_id}")
+            ids_lines.append(
+                f"[dim]NCBI Gene:[/dim]    {result.identifiers.ncbi_gene_id}"
+            )
 
         # HGVS notations
         if result.identifiers.hgvs_protein:
-            ids_lines.append(f"[dim]HGVS.p:[/dim]       {result.identifiers.hgvs_protein}")
+            ids_lines.append(
+                f"[dim]HGVS.p:[/dim]       {result.identifiers.hgvs_protein}"
+            )
         if result.identifiers.hgvs_transcript:
-            ids_lines.append(f"[dim]HGVS.c:[/dim]       {result.identifiers.hgvs_transcript}")
+            ids_lines.append(
+                f"[dim]HGVS.c:[/dim]       {result.identifiers.hgvs_transcript}"
+            )
         if result.identifiers.hgvs_genomic:
-            ids_lines.append(f"[dim]HGVS.g:[/dim]       {result.identifiers.hgvs_genomic}")
+            ids_lines.append(
+                f"[dim]HGVS.g:[/dim]       {result.identifiers.hgvs_genomic}"
+            )
 
         # Add separator before scores if we have IDs
         if ids_lines:
@@ -212,16 +258,22 @@ def insight(
         # gnomAD frequency
         if result.functional.gnomad_exome_af is not None:
             af = result.functional.gnomad_exome_af
-            ids_lines.append(f"[dim]gnomAD AF:[/dim]    {af:.2e}" if af > 0 else "[dim]gnomAD AF:[/dim]    0")
+            ids_lines.append(
+                f"[dim]gnomAD AF:[/dim]    {af:.2e}"
+                if af > 0
+                else "[dim]gnomAD AF:[/dim]    0"
+            )
 
         # Show panel only if we have content
         if ids_lines:
-            console.print(Panel(
-                "\n".join(ids_lines),
-                title="[bold]IDs and Scores[/bold]",
-                border_style="blue",
-                padding=(0, 2),
-            ))
+            console.print(
+                Panel(
+                    "\n".join(ids_lines),
+                    title="[bold]IDs and Scores[/bold]",
+                    border_style="blue",
+                    padding=(0, 2),
+                )
+            )
 
         # NOTE: Evidence Specificity panel commented out pending validation
         # match_summary = result.evidence.get_match_level_summary()
@@ -264,13 +316,27 @@ def insight(
             # Overall quality and research priority
             quality = evidence_gaps.overall_evidence_quality or "unknown"
             priority = evidence_gaps.research_priority or "unknown"
-            quality_colors = {"comprehensive": "green", "moderate": "yellow", "limited": "red", "minimal": "red"}
-            priority_colors = {"very_high": "red", "high": "red", "medium": "yellow", "low": "green"}
+            quality_colors = {
+                "comprehensive": "green",
+                "moderate": "yellow",
+                "limited": "red",
+                "minimal": "red",
+            }
+            priority_colors = {
+                "very_high": "red",
+                "high": "red",
+                "medium": "yellow",
+                "low": "green",
+            }
             q_color = quality_colors.get(quality.lower(), "white")
             p_color = priority_colors.get(priority.lower(), "white")
 
-            gap_lines.append(f"[dim]Evidence Quality:[/dim]   [{q_color}]{quality.capitalize()}[/{q_color}]")
-            gap_lines.append(f"[dim]Research Priority:[/dim]  [{p_color}]{priority.replace('_', ' ').title()}[/{p_color}]")
+            gap_lines.append(
+                f"[dim]Evidence Quality:[/dim]   [{q_color}]{quality.capitalize()}[/{q_color}]"
+            )
+            gap_lines.append(
+                f"[dim]Research Priority:[/dim]  [{p_color}]{priority.replace('_', ' ').title()}[/{p_color}]"
+            )
 
             # Well characterized aspects (compact)
             if evidence_gaps.well_characterized:
@@ -281,9 +347,12 @@ def insight(
 
             # Evidence gaps by severity
             from oncomind.models.extracted.evidence_gaps import GapSeverity
+
             critical_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.CRITICAL)
             high_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.HIGH)
-            significant_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.SIGNIFICANT)
+            significant_gaps = evidence_gaps.get_gaps_by_severity(
+                GapSeverity.SIGNIFICANT
+            )
             moderate_gaps = evidence_gaps.get_gaps_by_severity(GapSeverity.MODERATE)
 
             if critical_gaps:
@@ -294,32 +363,43 @@ def insight(
 
             if high_gaps:
                 gap_lines.append("")
-                gap_lines.append(f"[bright_red]🟠 High Gaps ({len(high_gaps)}):[/bright_red]")
+                gap_lines.append(
+                    f"[bright_red]🟠 High Gaps ({len(high_gaps)}):[/bright_red]"
+                )
                 for g in high_gaps[:3]:
                     gap_lines.append(f"   • {g.description}")
 
             if significant_gaps:
                 gap_lines.append("")
-                gap_lines.append(f"[yellow]🟡 Significant Gaps ({len(significant_gaps)}):[/yellow]")
+                gap_lines.append(
+                    f"[yellow]🟡 Significant Gaps ({len(significant_gaps)}):[/yellow]"
+                )
                 for g in significant_gaps[:3]:
                     gap_lines.append(f"   • {g.description}")
 
             if moderate_gaps:
                 gap_lines.append("")
-                gap_lines.append(f"[blue]🔵 Moderate Gaps ({len(moderate_gaps)}):[/blue]")
+                gap_lines.append(
+                    f"[blue]🔵 Moderate Gaps ({len(moderate_gaps)}):[/blue]"
+                )
                 for g in moderate_gaps[:3]:
                     gap_lines.append(f"   • {g.description}")
 
             if gap_lines:
-                console.print(Panel(
-                    "\n".join(gap_lines),
-                    title="[bold]Gap Analysis[/bold]",
-                    border_style="magenta",
-                    padding=(0, 2),
-                ))
+                console.print(
+                    Panel(
+                        "\n".join(gap_lines),
+                        title="[bold]Gap Analysis[/bold]",
+                        border_style="magenta",
+                        padding=(0, 2),
+                    )
+                )
 
         # LLM Research Synthesis panel (only if LLM was enabled and succeeded)
-        if result.llm and not (result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:")):
+        if result.llm and not (
+            result.llm.rationale
+            and result.llm.rationale.startswith("LLM narrative generation failed:")
+        ):
             llm_lines = []
 
             # Functional summary
@@ -337,15 +417,25 @@ def insight(
             if tl:
                 tl_parts = []
                 if tl.get("fda_approved"):
-                    tl_parts.append(f"[green]FDA-approved:[/green] {', '.join(tl['fda_approved'])}")
+                    tl_parts.append(
+                        f"[green]FDA-approved:[/green] {', '.join(tl['fda_approved'])}"
+                    )
                 if tl.get("clinical_evidence"):
-                    tl_parts.append(f"[yellow]Clinical evidence:[/yellow] {', '.join(tl['clinical_evidence'])}")
+                    tl_parts.append(
+                        f"[yellow]Clinical evidence:[/yellow] {', '.join(tl['clinical_evidence'])}"
+                    )
                 if tl.get("preclinical"):
-                    tl_parts.append(f"[dim]Preclinical:[/dim] {', '.join(tl['preclinical'])}")
+                    tl_parts.append(
+                        f"[dim]Preclinical:[/dim] {', '.join(tl['preclinical'])}"
+                    )
                 if tl.get("resistance_mechanisms"):
-                    tl_parts.append(f"[red]Resistance:[/red] {', '.join(tl['resistance_mechanisms'])}")
+                    tl_parts.append(
+                        f"[red]Resistance:[/red] {', '.join(tl['resistance_mechanisms'])}"
+                    )
                 if tl_parts:
-                    llm_lines.append(f"\n[bold]Therapeutic Landscape:[/bold]\n" + "\n".join(tl_parts))
+                    llm_lines.append(
+                        f"\n[bold]Therapeutic Landscape:[/bold]\n" + "\n".join(tl_parts)
+                    )
 
             # Research implications
             if result.llm.research_implications:
@@ -356,7 +446,9 @@ def insight(
             if result.llm.research_hypotheses:
                 llm_lines.append(f"\n[bold]Research Hypotheses:[/bold]")
                 for hyp in result.llm.research_hypotheses[:3]:
-                    wrapped = textwrap.fill(f"• {hyp}", width=70, subsequent_indent="  ")
+                    wrapped = textwrap.fill(
+                        f"• {hyp}", width=70, subsequent_indent="  "
+                    )
                     llm_lines.append(wrapped)
 
             # Conflicting evidence
@@ -372,13 +464,18 @@ def insight(
 
             if llm_lines:
                 # Add AI disclaimer at the top
-                llm_lines.insert(0, "[yellow]⚠️ AI-generated — may contain inaccuracies or extrapolations. Verify claims against primary sources.[/yellow]\n")
-                console.print(Panel(
-                    "\n".join(llm_lines),
-                    title="[bold]🤖 LLM Research Synthesis[/bold]",
-                    border_style="bright_magenta",
-                    padding=(0, 2),
-                ))
+                llm_lines.insert(
+                    0,
+                    "[yellow]⚠️ AI-generated — may contain inaccuracies or extrapolations. Verify claims against primary sources.[/yellow]\n",
+                )
+                console.print(
+                    Panel(
+                        "\n".join(llm_lines),
+                        title="[bold]🤖 LLM Research Synthesis[/bold]",
+                        border_style="bright_magenta",
+                        padding=(0, 2),
+                    )
+                )
 
         # Save JSON if requested
         if output:
@@ -394,12 +491,20 @@ def insight(
 def batch(
     input_file: Path = typer.Argument(..., help="Input JSON file with variants"),
     output: Path = typer.Option("results.json", "--output", "-o", help="Output file"),
-    lit: bool = typer.Option(False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"),
+    lit: bool = typer.Option(
+        False, "--lit", help="Enable literature search (PubMed/Semantic Scholar)"
+    ),
     llm: bool = typer.Option(False, "--llm", help="Enable LLM synthesis"),
     full: bool = typer.Option(False, "--full", help="Enable both --lit and --llm"),
-    model: str = typer.Option(LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"),
-    temperature: float = typer.Option(LLM_DEFAULT_TEMPERATURE, "--temperature", help="LLM temperature (0.0-1.0)"),
-    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
+    model: str = typer.Option(
+        LLM_DEFAULT_MODEL, "--model", "-m", help="LLM model (only used with --llm)"
+    ),
+    temperature: float = typer.Option(
+        LLM_DEFAULT_TEMPERATURE, "--temperature", help="LLM temperature (0.0-1.0)"
+    ),
+    log_level: str = typer.Option(
+        "INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"
+    ),
 ) -> None:
     """Batch process multiple variants.
 
@@ -434,10 +539,10 @@ def batch(
         variant_strs = []
         tumor_types = []
         for item in data:
-            g = item.get('gene', '')
-            v = item.get('variant', '')
+            g = item.get("gene", "")
+            v = item.get("variant", "")
             variant_strs.append(f"{g} {v}")
-            tumor_types.append(item.get('tumor_type'))
+            tumor_types.append(item.get("tumor_type"))
 
         # Handle flag combinations:
         # --full implies both --lit and --llm
@@ -445,7 +550,9 @@ def batch(
         enable_lit = lit or full
         enable_llm_mode = llm or full
 
-        mode_str = "llm" if enable_llm_mode else ("literature" if enable_lit else "annotation")
+        mode_str = (
+            "llm" if enable_llm_mode else ("literature" if enable_lit else "annotation")
+        )
         logger.info(f"Loaded {len(variant_strs)} variants from {input_file}")
         logger.info(f"Mode: {mode_str}")
         print(f"\nLoaded {len(variant_strs)} variants from {input_file}")
@@ -460,10 +567,12 @@ def batch(
 
         def progress_callback(current: int, total: int) -> None:
             logger.info(f"Processing {current}/{total}...")
-            print(f"  Processing {current}/{total}...", end='\r')
+            print(f"  Processing {current}/{total}...", end="\r")
 
         async with Conductor(config) as conductor:
-            results = await conductor.run_batch(variant_strs, progress_callback=progress_callback)
+            results = await conductor.run_batch(
+                variant_strs, progress_callback=progress_callback
+            )
         print()  # Clear progress line
 
         # Apply tumor types and build output, tracking LLM errors
@@ -474,14 +583,22 @@ def batch(
                 result.context.tumor_type = tumor_types[i]
             output_data.append(result.model_dump(mode="json"))
             # Track LLM errors
-            if result.llm and result.llm.rationale and result.llm.rationale.startswith("LLM narrative generation failed:"):
-                error_msg = result.llm.rationale.replace("LLM narrative generation failed: ", "")
+            if (
+                result.llm
+                and result.llm.rationale
+                and result.llm.rationale.startswith("LLM narrative generation failed:")
+            ):
+                error_msg = result.llm.rationale.replace(
+                    "LLM narrative generation failed: ", ""
+                )
                 llm_errors.append(f"{variant_strs[i]}: {error_msg}")
 
         with open(output, "w") as f:
             json.dump(output_data, f, indent=2)
 
-        logger.info(f"Successfully processed {len(results)}/{len(variant_strs)} variants")
+        logger.info(
+            f"Successfully processed {len(results)}/{len(variant_strs)} variants"
+        )
         print(f"\nSuccessfully processed {len(results)}/{len(variant_strs)} variants")
 
         # Show LLM errors if any occurred
@@ -501,8 +618,12 @@ def batch(
 @app.command()
 def annotate(
     vcf_file: Path = typer.Argument(..., help="Input VCF file"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output JSON file"),
-    log_level: str = typer.Option("INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output JSON file"
+    ),
+    log_level: str = typer.Option(
+        "INFO", "--log-level", "-l", help="Log level: DEBUG, INFO, WARN, ERROR"
+    ),
 ) -> None:
     """Annotate variants from a VCF file.
 
@@ -545,6 +666,7 @@ def annotate(
 def version() -> None:
     """Show version information."""
     from oncomind import __version__
+
     print(f"OncoMind version {__version__}")
 
 

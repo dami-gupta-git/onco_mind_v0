@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 
 from oncomind.models.extracted.evidence_gaps import GapCategory, GapSeverity
 from oncomind.models.evidence.tumor_evidence import TumorEvidenceMatch
-from oncomind.models.gene_context import is_hotspot_variant, is_hotspot_adjacent, _extract_codon_position
+from oncomind.models.gene_context import (
+    is_hotspot_variant,
+    is_hotspot_adjacent,
+    _extract_codon_position,
+)
 from oncomind.config.constants import (
     GNOMAD_COMMON_AF_THRESHOLD,
     LITERATURE_WELL_CHARACTERIZED_THRESHOLD,
@@ -19,7 +23,10 @@ from oncomind.config.constants import (
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 
 from .helpers import (
-    MatchCounts, count_with_levels, count_fda_match_levels, _get_locus_match
+    MatchCounts,
+    count_with_levels,
+    count_fda_match_levels,
+    _get_locus_match,
 )
 
 if TYPE_CHECKING:
@@ -31,24 +38,27 @@ if TYPE_CHECKING:
 # HOTSPOT CONTEXT
 # =============================================================================
 
+
 def check_hotspot_context(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check if variant is at or near a known cancer hotspot."""
     is_hotspot = is_hotspot_variant(ctx.gene, ctx.variant)
-    is_adjacent, nearest_hotspot = is_hotspot_adjacent(ctx.gene, ctx.variant, window=HOTSPOT_ADJACENCY_WINDOW)
+    is_adjacent, nearest_hotspot = is_hotspot_adjacent(
+        ctx.gene, ctx.variant, window=HOTSPOT_ADJACENCY_WINDOW
+    )
 
     if is_hotspot:
         ctx.add_well_characterized(
             "known cancer hotspot",
             f"Codon {_extract_codon_position(ctx.variant)} is in cancerhotspots.org",
             category=GapCategory.FUNCTIONAL,
-            matches_on="codon"
+            matches_on="codon",
         )
     elif is_adjacent and nearest_hotspot:
         # Rare variant near a hotspot - high research value
         ctx.add_well_characterized(
             f"near hotspot codon {nearest_hotspot}",
             f"Within {HOTSPOT_ADJACENCY_WINDOW} codons of known hotspot — structural similarity likely",
-            category=GapCategory.FUNCTIONAL
+            category=GapCategory.FUNCTIONAL,
         )
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
@@ -57,9 +67,13 @@ def check_hotspot_context(evidence: "Evidence", ctx: "GapDetectionContext") -> N
             suggested_studies=[
                 f"Compare to nearby hotspot {ctx.gene} codon {nearest_hotspot}",
                 "Structural modeling to assess activation mechanism",
-                "Functional assay (transformation, signaling)"
+                "Functional assay (transformation, signaling)",
             ],
-            addressable_with=["AlphaFold", "Literature on nearby hotspot", "Isogenic models"]
+            addressable_with=[
+                "AlphaFold",
+                "Literature on nearby hotspot",
+                "Isogenic models",
+            ],
         )
         ctx.add_poorly_characterized("rare-near-hotspot variant function")
 
@@ -68,19 +82,24 @@ def check_hotspot_context(evidence: "Evidence", ctx: "GapDetectionContext") -> N
 # FUNCTIONAL PREDICTIONS
 # =============================================================================
 
-def check_functional_predictions(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+
+def check_functional_predictions(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for computational pathogenicity predictions."""
     has_functional = (
-        evidence.functional.alphamissense_score is not None or
-        evidence.functional.cadd_score is not None or
-        evidence.functional.polyphen2_prediction is not None or
-        evidence.functional.sift_prediction is not None
+        evidence.functional.alphamissense_score is not None
+        or evidence.functional.cadd_score is not None
+        or evidence.functional.polyphen2_prediction is not None
+        or evidence.functional.sift_prediction is not None
     )
 
     if has_functional:
         func_sources = []
         if evidence.functional.alphamissense_score is not None:
-            func_sources.append(f"AlphaMissense={evidence.functional.alphamissense_score:.2f}")
+            func_sources.append(
+                f"AlphaMissense={evidence.functional.alphamissense_score:.2f}"
+            )
         if evidence.functional.cadd_score is not None:
             func_sources.append(f"CADD={evidence.functional.cadd_score:.1f}")
         if evidence.functional.polyphen2_prediction:
@@ -91,7 +110,7 @@ def check_functional_predictions(evidence: "Evidence", ctx: "GapDetectionContext
             "computational pathogenicity",
             " | ".join(func_sources) if func_sources else "Predictions available",
             category=GapCategory.FUNCTIONAL,
-            matches_on="variant"
+            matches_on="variant",
         )
     else:
         ctx.add_gap(
@@ -99,7 +118,7 @@ def check_functional_predictions(evidence: "Evidence", ctx: "GapDetectionContext
             severity=GapSeverity.SIGNIFICANT,
             description=f"No computational pathogenicity predictions for {ctx.gene} {ctx.variant}",
             suggested_studies=["Run AlphaMissense, CADD, PolyPhen2, SIFT"],
-            addressable_with=["MyVariant.info", "VEP"]
+            addressable_with=["MyVariant.info", "VEP"],
         )
         ctx.add_poorly_characterized("pathogenicity predictions")
 
@@ -110,17 +129,21 @@ def check_functional_predictions(evidence: "Evidence", ctx: "GapDetectionContext
 
     # Check for gnomAD population frequency data (informational, not a penalty)
     # If gnomAD AF > 0.01% (0.0001), note that the variant is observed in the general population
-    gnomad_af = evidence.functional.gnomad_exome_af or evidence.functional.gnomad_genome_af
+    gnomad_af = (
+        evidence.functional.gnomad_exome_af or evidence.functional.gnomad_genome_af
+    )
     if gnomad_af is not None and gnomad_af > GNOMAD_COMMON_AF_THRESHOLD:
         af_pct = gnomad_af * 100
         ctx.add_well_characterized(
             "population frequency",
             f"Observed in general population (gnomAD AF: {af_pct:.3f}%)",
-            category=GapCategory.PREVALENCE
+            category=GapCategory.PREVALENCE,
         )
 
 
-def check_conflicting_predictions(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+def check_conflicting_predictions(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for conflicting functional predictions, especially PolyPhen2 vs others.
 
     PolyPhen2 was trained primarily on germline disease variants and has known
@@ -135,28 +158,29 @@ def check_conflicting_predictions(evidence: "Evidence", ctx: "GapDetectionContex
     polyphen2_pred = func.polyphen2_prediction
 
     # Only check if PolyPhen2 predicts Benign (B)
-    if not polyphen2_pred or polyphen2_pred.upper() != 'B':
+    if not polyphen2_pred or polyphen2_pred.upper() != "B":
         return
 
     # Check if other predictors indicate pathogenicity
     alphamissense_pathogenic = (
-        func.alphamissense_prediction is not None and
-        func.alphamissense_prediction.upper() in ('P', 'PATHOGENIC')
+        func.alphamissense_prediction is not None
+        and func.alphamissense_prediction.upper() in ("P", "PATHOGENIC")
     )
     cadd_deleterious = (
-        func.cadd_score is not None and
-        func.cadd_score > CADD_DELETERIOUS_THRESHOLD
+        func.cadd_score is not None and func.cadd_score > CADD_DELETERIOUS_THRESHOLD
     )
     sift_deleterious = (
-        func.sift_prediction is not None and
-        func.sift_prediction.upper() in ('D', 'DELETERIOUS')
+        func.sift_prediction is not None
+        and func.sift_prediction.upper() in ("D", "DELETERIOUS")
     )
 
     # Count how many other predictors disagree with PolyPhen2
     disagreeing_predictors = []
     if alphamissense_pathogenic:
         score = func.alphamissense_score
-        disagreeing_predictors.append(f"AlphaMissense={score:.2f}" if score else "AlphaMissense=P")
+        disagreeing_predictors.append(
+            f"AlphaMissense={score:.2f}" if score else "AlphaMissense=P"
+        )
     if cadd_deleterious:
         disagreeing_predictors.append(f"CADD={func.cadd_score:.1f}")
     if sift_deleterious:
@@ -189,9 +213,9 @@ def check_conflicting_predictions(evidence: "Evidence", ctx: "GapDetectionContex
             suggested_studies=[
                 "Prioritize AlphaMissense/CADD over PolyPhen2 for cancer variants",
                 "Check ClinVar/COSMIC for clinical evidence",
-                "Consider functional assay if interpretation is critical"
+                "Consider functional assay if interpretation is critical",
             ],
-            addressable_with=["Literature review", "ClinVar", "Functional assay"]
+            addressable_with=["Literature review", "ClinVar", "Functional assay"],
         )
 
 
@@ -199,19 +223,22 @@ def check_conflicting_predictions(evidence: "Evidence", ctx: "GapDetectionContex
 # GENE MECHANISM
 # =============================================================================
 
+
 def check_gene_mechanism(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for gene function and essentiality data."""
     has_mechanism = bool(evidence.context.gene_role) or bool(evidence.context.pathway)
     has_depmap_essentiality = (
-        evidence.depmap_evidence is not None and
-        evidence.depmap_evidence.gene_dependency is not None
+        evidence.depmap_evidence is not None
+        and evidence.depmap_evidence.gene_dependency is not None
     )
 
     if has_mechanism:
         role = evidence.context.gene_role or "unknown"
         pathway = evidence.context.pathway or ""
         basis = f"Role: {role}" + (f", Pathway: {pathway}" if pathway else "")
-        ctx.add_well_characterized("gene function", basis, category=GapCategory.FUNCTIONAL, matches_on="gene")
+        ctx.add_well_characterized(
+            "gene function", basis, category=GapCategory.FUNCTIONAL, matches_on="gene"
+        )
 
     # Only show gene essentiality if the gene IS essential (CERES < -0.5)
     # Gene essentiality is pan-cancer data, so don't show non-essential scores
@@ -220,15 +247,24 @@ def check_gene_mechanism(evidence: "Evidence", ctx: "GapDetectionContext") -> No
         score = dep.mean_dependency_score if dep else None
         pct = dep.dependency_pct if dep else 0
         score_str = f"CERES={score:.2f}, {pct:.0f}% of cell lines depend on it"
-        ctx.add_well_characterized("gene essentiality", score_str, category=GapCategory.FUNCTIONAL, matches_on="gene")
+        ctx.add_well_characterized(
+            "gene essentiality",
+            score_str,
+            category=GapCategory.FUNCTIONAL,
+            matches_on="gene",
+        )
 
     if not has_mechanism and not has_depmap_essentiality:
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
             severity=GapSeverity.SIGNIFICANT,
             description=f"Functional impact of {ctx.variant} on {ctx.gene} protein is unknown",
-            suggested_studies=["Functional assay", "Structural modeling", "Cell-based reporter"],
-            addressable_with=["UniProt", "Literature search", "DepMap"]
+            suggested_studies=[
+                "Functional assay",
+                "Structural modeling",
+                "Cell-based reporter",
+            ],
+            addressable_with=["UniProt", "Literature search", "DepMap"],
         )
         ctx.add_poorly_characterized("functional mechanism")
 
@@ -236,6 +272,7 @@ def check_gene_mechanism(evidence: "Evidence", ctx: "GapDetectionContext") -> No
 # =============================================================================
 # CLINICAL EVIDENCE
 # =============================================================================
+
 
 def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for FDA-approved therapies using fda_biomarker_evidence.
@@ -261,29 +298,37 @@ def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") ->
     # Count CIViC Level A assertions (FDA-approved companion diagnostic or guideline-included)
     # Only count Assertions (AIDs) with amp_level_letter == "A", not Evidence Items (EIDs)
     civic_assertions_level_a = [
-        a for a in evidence.civic_assertions
+        a
+        for a in evidence.civic_assertions
         if a.amp_level_letter and a.amp_level_letter.upper() == "A"
     ]
     civic_level_a_count = len(civic_assertions_level_a)
 
     # Count CGI biomarkers with fda_approved=True
-    cgi_fda_approved = [
-        b for b in evidence.cgi_biomarkers
-        if b.fda_approved
-    ]
+    cgi_fda_approved = [b for b in evidence.cgi_biomarkers if b.fda_approved]
     cgi_approved_count = len(cgi_fda_approved)
 
-    ctx.has_clinical = bool(evidence.civic_assertions) or bool(evidence.civic_evidence) or fda_count > 0
+    ctx.has_clinical = (
+        bool(evidence.civic_assertions)
+        or bool(evidence.civic_evidence)
+        or fda_count > 0
+    )
 
     # Build clinical actionability basis from FDA, CIViC Level A, and CGI FDA-approved
     # No locus/tumor match icons for clinical actionability - it's about approvals, not match specificity
     actionability_parts = []
     if fda_count > 0:
-        actionability_parts.append(f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}")
+        actionability_parts.append(
+            f"{fda_count} FDA-approved indication{'s' if fda_count > 1 else ''}"
+        )
     if civic_level_a_count > 0:
-        actionability_parts.append(f"{civic_level_a_count} approval{'s' if civic_level_a_count > 1 else ''} from CIViC assertions")
+        actionability_parts.append(
+            f"{civic_level_a_count} approval{'s' if civic_level_a_count > 1 else ''} from CIViC assertions"
+        )
     if cgi_approved_count > 0:
-        actionability_parts.append(f"{cgi_approved_count} approval{'s' if cgi_approved_count > 1 else ''} from CGI")
+        actionability_parts.append(
+            f"{cgi_approved_count} approval{'s' if cgi_approved_count > 1 else ''} from CGI"
+        )
 
     if actionability_parts:
         basis = ", ".join(actionability_parts)
@@ -302,7 +347,7 @@ def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") ->
                 severity=GapSeverity.SIGNIFICANT,
                 description=f"FDA-approved therapies for {ctx.gene} exist but don't match {ctx.variant}",
                 suggested_studies=["Basket trial", "Off-label use case series"],
-                addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"]
+                addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"],
             )
         elif not ctx.has_clinical:
             # No clinical evidence at all (no FDA, CIViC assertions, or CIViC evidence)
@@ -310,8 +355,12 @@ def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") ->
                 category=GapCategory.CLINICAL,
                 severity=GapSeverity.CRITICAL,
                 description=f"No curated clinical evidence for {ctx.gene} {ctx.variant}",
-                suggested_studies=["Case series", "Retrospective cohort", "Basket trial inclusion"],
-                addressable_with=["CIViC submission", "Literature curation"]
+                suggested_studies=[
+                    "Case series",
+                    "Retrospective cohort",
+                    "Basket trial inclusion",
+                ],
+                addressable_with=["CIViC submission", "Literature curation"],
             )
             ctx.add_poorly_characterized("clinical evidence")
 
@@ -319,6 +368,7 @@ def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") ->
 # =============================================================================
 # TUMOR TYPE EVIDENCE
 # =============================================================================
+
 
 def check_tumor_type_evidence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for tumor-type-specific evidence."""
@@ -335,7 +385,7 @@ def check_tumor_type_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
                 tumor_match.sources_str,
                 category=GapCategory.TUMOR_TYPE,
                 matches_on=tumor_match.matches_on_str,
-                tumor_match=tumor_match.tumor_count_str
+                tumor_match=tumor_match.tumor_count_str,
             )
         else:
             # Tumor evidence exists but only at gene/codon level — MODERATE gap
@@ -346,13 +396,17 @@ def check_tumor_type_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
                     description=f"Evidence in {ctx.tumor_type} exists for {ctx.gene} but not specifically for {ctx.variant} (gene-level only)",
                     suggested_studies=[
                         f"Variant-specific case series in {ctx.tumor_type}",
-                        "Retrospective analysis of variant outcomes"
+                        "Retrospective analysis of variant outcomes",
                     ],
-                    addressable_with=["ClinicalTrials.gov", "Real-world evidence databases"]
+                    addressable_with=[
+                        "ClinicalTrials.gov",
+                        "Real-world evidence databases",
+                    ],
                 )
                 ctx.add_poorly_characterized(f"variant-specific {ctx.tumor_type} data")
             elif tumor_match.total_codon_level > 0:
                 from oncomind.models.evidence.base import extract_variant_position
+
                 codon_pos = extract_variant_position(ctx.variant) or ""
                 ctx.add_gap(
                     category=GapCategory.TUMOR_TYPE,
@@ -360,9 +414,12 @@ def check_tumor_type_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
                     description=f"Evidence in {ctx.tumor_type} exists for {ctx.gene} codon {codon_pos} but not specifically for {ctx.variant}",
                     suggested_studies=[
                         "Variant-specific response comparison",
-                        f"Case series of {ctx.variant} in {ctx.tumor_type}"
+                        f"Case series of {ctx.variant} in {ctx.tumor_type}",
                     ],
-                    addressable_with=["Published case reports", "Basket trial subgroup analyses"]
+                    addressable_with=[
+                        "Published case reports",
+                        "Basket trial subgroup analyses",
+                    ],
                 )
                 ctx.add_poorly_characterized(f"variant-specific {ctx.tumor_type} data")
     else:
@@ -381,14 +438,16 @@ def check_tumor_type_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
             suggested_studies=[
                 f"Case series in {ctx.tumor_type}",
                 f"Retrospective analysis in {ctx.tumor_type} cohort",
-                "Basket trial with histology-specific cohort"
+                "Basket trial with histology-specific cohort",
             ],
-            addressable_with=["ClinicalTrials.gov", "Literature search"]
+            addressable_with=["ClinicalTrials.gov", "Literature search"],
         )
         ctx.add_poorly_characterized(f"{ctx.tumor_type}-specific data")
 
 
-def check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> TumorEvidenceMatch:
+def check_tumor_specific_evidence(
+    evidence: "Evidence", tumor_type: str
+) -> TumorEvidenceMatch:
     """Check which evidence sources have tumor-specific data.
 
     Returns a TumorEvidenceMatch with per-source breakdown of:
@@ -424,51 +483,49 @@ def check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tumo
 
     # CIViC assertions - use the tumor_match property already computed by API client
     counts = count_matches(
-        evidence.civic_assertions,
-        lambda a: a.disease and a.tumor_match
+        evidence.civic_assertions, lambda a: a.disease and a.tumor_match
     )
     if counts[0] > 0:
         result.add_source_match("CIViC Assertions", *counts)
 
     # CIViC evidence
     counts = count_matches(
-        evidence.civic_evidence,
-        lambda c: c.disease and c.tumor_match
+        evidence.civic_evidence, lambda c: c.disease and c.tumor_match
     )
     if counts[0] > 0:
         result.add_source_match("CIViC", *counts)
 
     # FDA biomarker evidence - filter for REQUIRED_POSITIVE only AND tumor match
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
     fda_filtered = [
-        ev for ev in evidence.fda_biomarker_evidence
+        ev
+        for ev in evidence.fda_biomarker_evidence
         if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE
     ]
     # Only count FDA evidence that actually matches the queried tumor
     counts = count_matches(
         fda_filtered,
-        lambda f: f.tumor_types and any(
+        lambda f: f.tumor_types
+        and any(
             tumor_types_match(t, tumor_type) or is_pan_cancer_term(t)
             for t in f.tumor_types
-        )
+        ),
     )
     if counts[0] > 0:
         result.add_source_match("FDA", *counts)
 
     # VICC evidence - use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
     vicc_unique = evidence.get_vicc_unique()
-    counts = count_matches(
-        vicc_unique,
-        lambda v: v.disease and v.tumor_match
-    )
+    counts = count_matches(vicc_unique, lambda v: v.disease and v.tumor_match)
     if counts[0] > 0:
         result.add_source_match("VICC (meta-KB)", *counts)
 
     # CGI biomarkers (all tiers combined) - use tumor_match property
     all_cgi = (
-        list(evidence.cgi_biomarkers) +
-        list(evidence.preclinical_biomarkers) +
-        list(evidence.early_phase_biomarkers)
+        list(evidence.cgi_biomarkers)
+        + list(evidence.preclinical_biomarkers)
+        + list(evidence.early_phase_biomarkers)
     )
     counts = count_matches(all_cgi, lambda c: c.tumor_type and c.tumor_match)
     if counts[0] > 0:
@@ -480,6 +537,7 @@ def check_tumor_specific_evidence(evidence: "Evidence", tumor_type: str) -> Tumo
 # =============================================================================
 # DRUG RESPONSE
 # =============================================================================
+
 
 def check_drug_response(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for FDA-approved therapies and drug response data.
@@ -510,7 +568,9 @@ def check_drug_response(evidence: "Evidence", ctx: "GapDetectionContext") -> Non
             f"{fda_count} FDA approval{'s' if fda_count > 1 else ''}",
             category=GapCategory.DRUG_RESPONSE,
             matches_on=fda_match_counts.matches_on_str,
-            tumor_match=fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None,
+            tumor_match=(
+                fda_match_counts.tumor_breakdown_str if ctx.tumor_type else None
+            ),
         )
     elif not evidence.fda_biomarker_evidence:
         # No FDA-approved therapy at all - this is a significant gap
@@ -519,9 +579,17 @@ def check_drug_response(evidence: "Evidence", ctx: "GapDetectionContext") -> Non
             severity=GapSeverity.SIGNIFICANT,
             description=f"No FDA-approved therapy for {ctx.gene} {ctx.variant}",
             suggested_studies=["Clinical trial enrollment", "Off-label use evaluation"],
-            addressable_with=["ClinicalTrials.gov", "NCCN guidelines", "Basket trials"]
+            addressable_with=["ClinicalTrials.gov", "NCCN guidelines", "Basket trials"],
         )
-    # Note: If FDA drugs exist but don't match this variant/tumor, check_clinical_evidence handles that gap
+    else:
+        # FDA drugs exist for the gene but none match this variant/tumor
+        ctx.add_gap(
+            category=GapCategory.DRUG_RESPONSE,
+            severity=GapSeverity.SIGNIFICANT,
+            description=f"No FDA-approved therapy for {ctx.gene} {ctx.variant}",
+            suggested_studies=["Basket trial", "Off-label use case series"],
+            addressable_with=["ClinicalTrials.gov", "FDA label expansion studies"],
+        )
 
     # =========================================================================
     # 2. Set context flag for drug data (VICC, CGI used for context, not displayed)
@@ -535,14 +603,10 @@ def check_drug_response(evidence: "Evidence", ctx: "GapDetectionContext") -> Non
     # Set context flag for any drug data (used by other gap checks)
     ctx.has_drug_data = drug_response_counts.total > 0 or fda_count > 0
 
-    # Handle preclinical/early phase biomarkers separately
-    check_preclinical_biomarkers(evidence, ctx)
 
-    # Handle DepMap drug sensitivity separately
-    check_depmap_drug_sensitivity(evidence, ctx)
-
-
-def check_preclinical_biomarkers(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+def check_preclinical_biomarkers(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for preclinical and early phase biomarker data.
 
     These are lower evidence tier than FDA-approved biomarkers:
@@ -581,11 +645,13 @@ def check_preclinical_biomarkers(evidence: "Evidence", ctx: "GapDetectionContext
             severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
             description=f"Preclinical biomarker data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
             suggested_studies=["Tumor-specific cell line studies", "PDX models"],
-            addressable_with=["DepMap", "GDSC", "Literature search"]
+            addressable_with=["DepMap", "GDSC", "Literature search"],
         )
 
 
-def check_depmap_drug_sensitivity(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+def check_depmap_drug_sensitivity(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for DepMap drug sensitivity data.
 
     Only adds if tumor-matched cell lines exist (or no tumor type specified).
@@ -595,11 +661,15 @@ def check_depmap_drug_sensitivity(evidence: "Evidence", ctx: "GapDetectionContex
 
     has_tumor_matched = False
     if ctx.tumor_type and evidence.depmap_evidence.cell_line_models:
-        mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        mutant_models = [
+            cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation
+        ]
         # Args: source_disease (from model), queried_tumor (user's query)
         tumor_models = [
-            m for m in mutant_models
-            if m.primary_disease and tumor_types_match(m.primary_disease, ctx.tumor_type)
+            m
+            for m in mutant_models
+            if m.primary_disease
+            and tumor_types_match(m.primary_disease, ctx.tumor_type)
         ]
         has_tumor_matched = bool(tumor_models)
     elif not ctx.tumor_type:
@@ -613,7 +683,7 @@ def check_depmap_drug_sensitivity(evidence: "Evidence", ctx: "GapDetectionContex
             "preclinical drug sensitivity (DepMap)",
             f"{n_drugs} drugs tested",
             category=GapCategory.PRECLINICAL,
-            matches_on=f"{n_drugs} variant"
+            matches_on=f"{n_drugs} variant",
         )
 
 
@@ -621,7 +691,10 @@ def check_depmap_drug_sensitivity(evidence: "Evidence", ctx: "GapDetectionContex
 # RESISTANCE MECHANISMS
 # =============================================================================
 
-def check_resistance_mechanisms(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+
+def check_resistance_mechanisms(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for resistance mechanism data.
 
     Checks multiple sources for resistance signals:
@@ -637,38 +710,54 @@ def check_resistance_mechanisms(evidence: "Evidence", ctx: "GapDetectionContext"
 
     # 1. PubMed articles with resistance evidence
     # PubMed articles don't have locus_match (count as gene-level) or tumor type info
-    resistance_articles = [a for a in evidence.pubmed_articles if a.is_resistance_evidence()]
+    resistance_articles = [
+        a for a in evidence.pubmed_articles if a.is_resistance_evidence()
+    ]
     if resistance_articles:
-        resistance_sources.append(f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}")
+        resistance_sources.append(
+            f"{len(resistance_articles)} PubMed article{'s' if len(resistance_articles) != 1 else ''}"
+        )
         counts.total += len(resistance_articles)
         counts.gene += len(resistance_articles)
 
     # 2. CGI biomarkers with resistance association
     cgi_resistance = [
-        b for b in evidence.cgi_biomarkers
+        b
+        for b in evidence.cgi_biomarkers
         if b.association and "RESIST" in b.association.upper()
     ]
     if cgi_resistance:
-        resistance_sources.append(f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}")
+        resistance_sources.append(
+            f"{len(cgi_resistance)} CGI biomarker{'s' if len(cgi_resistance) != 1 else ''}"
+        )
         counts.add(count_with_levels(cgi_resistance, ctx.tumor_type))
 
     # 3. CIViC assertions with is_resistance=True
     civic_resistance = [a for a in evidence.civic_assertions if a.is_resistance]
     if civic_resistance:
-        resistance_sources.append(f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}")
+        resistance_sources.append(
+            f"{len(civic_resistance)} CIViC assertion{'s' if len(civic_resistance) != 1 else ''}"
+        )
         counts.add(count_with_levels(civic_resistance, ctx.tumor_type))
 
     # 4. CIViC evidence items with is_resistance=True
     # Uses computed property that checks both clinical_significance AND evidence_direction
     civic_evidence_resistance = [e for e in evidence.civic_evidence if e.is_resistance]
     if civic_evidence_resistance:
-        resistance_sources.append(f"{len(civic_evidence_resistance)} CIViC evidence item{'s' if len(civic_evidence_resistance) != 1 else ''}")
+        resistance_sources.append(
+            f"{len(civic_evidence_resistance)} CIViC evidence item{'s' if len(civic_evidence_resistance) != 1 else ''}"
+        )
         counts.add(count_with_levels(civic_evidence_resistance, ctx.tumor_type))
 
     # 5. VICC evidence with resistance response types
     vicc_resistance = [
-        v for v in evidence.vicc_evidence
-        if v.response_type and ("RESIST" in v.response_type.upper() or "REDUCED SENSITIVITY" in v.response_type.upper())
+        v
+        for v in evidence.vicc_evidence
+        if v.response_type
+        and (
+            "RESIST" in v.response_type.upper()
+            or "REDUCED SENSITIVITY" in v.response_type.upper()
+        )
     ]
     if vicc_resistance:
         resistance_sources.append(f"{len(vicc_resistance)} VICC evidence")
@@ -679,7 +768,9 @@ def check_resistance_mechanisms(evidence: "Evidence", ctx: "GapDetectionContext"
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
         drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)
         if drugs:
-            resistance_sources.append(f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})")
+            resistance_sources.append(
+                f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})"
+            )
             # Count without tumor matching (literature entries don't have tumor type)
             lit_counts = count_with_levels(evidence.literature_knowledge.resistant_to)
             counts.total += lit_counts.total
@@ -705,16 +796,23 @@ def check_resistance_mechanisms(evidence: "Evidence", ctx: "GapDetectionContext"
                 category=GapCategory.RESISTANCE,
                 severity=GapSeverity.MODERATE,  # Data exists, just in different tumor context
                 description=f"Resistance data for {ctx.gene} {ctx.variant} exists only in other cancers ({other_cancers_str}), not {ctx.tumor_type}",
-                suggested_studies=["Tumor-specific resistance screen", "Serial biopsy study"],
-                addressable_with=["Literature search", "CIViC"]
+                suggested_studies=[
+                    "Tumor-specific resistance screen",
+                    "Serial biopsy study",
+                ],
+                addressable_with=["Literature search", "CIViC"],
             )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
             category=GapCategory.RESISTANCE,
             severity=GapSeverity.SIGNIFICANT,
             description=f"Resistance mechanisms for {ctx.gene} {ctx.variant} not well characterized",
-            suggested_studies=["Serial biopsy study", "ctDNA monitoring", "Resistance screen"],
-            addressable_with=["Literature search", "CIViC"]
+            suggested_studies=[
+                "Serial biopsy study",
+                "ctDNA monitoring",
+                "Resistance screen",
+            ],
+            addressable_with=["Literature search", "CIViC"],
         )
         ctx.add_poorly_characterized("resistance mechanisms")
 
@@ -722,6 +820,7 @@ def check_resistance_mechanisms(evidence: "Evidence", ctx: "GapDetectionContext"
 # =============================================================================
 # PREVALENCE
 # =============================================================================
+
 
 def check_prevalence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for prevalence/epidemiology data.
@@ -749,7 +848,7 @@ def check_prevalence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
             f"{pct:.1f}%",
             category=GapCategory.PREVALENCE,
             matches_on="variant",
-            tumor_match="Yes"  # cBioPortal data is already tumor-specific
+            tumor_match="Yes",  # cBioPortal data is already tumor-specific
         )
     else:
         # We have gene-level data but not variant-specific data
@@ -759,13 +858,15 @@ def check_prevalence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
         elif ctx.is_cancer_gene:
             severity = GapSeverity.MINOR
         else:
-            severity = GapSeverity.INFORMATIONAL  # Minor limitation for non-cancer genes
+            severity = (
+                GapSeverity.INFORMATIONAL
+            )  # Minor limitation for non-cancer genes
         ctx.add_gap(
             category=GapCategory.PREVALENCE,
             severity=severity,
             description=f"Prevalence of {ctx.gene} {ctx.variant} in {ctx.tumor_type or 'cancer'} unknown (gene seen in {cbio.samples_with_gene_mutation}/{cbio.total_samples} samples, but not this variant)",
             suggested_studies=["Epidemiological study", "Registry analysis"],
-            addressable_with=["cBioPortal", "COSMIC", "TCGA"]
+            addressable_with=["cBioPortal", "COSMIC", "TCGA"],
         )
         ctx.add_poorly_characterized("prevalence data")
 
@@ -773,6 +874,7 @@ def check_prevalence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
 # =============================================================================
 # CLINICAL TRIALS
 # =============================================================================
+
 
 def check_clinical_trials(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for active clinical trials."""
@@ -817,7 +919,7 @@ def check_clinical_trials(evidence: "Evidence", ctx: "GapDetectionContext") -> N
             f"{n_trials} active trial{'s' if n_trials != 1 else ''}",
             category=GapCategory.CLINICAL,
             matches_on=matches_on_str,
-            tumor_match=tumor_match_str
+            tumor_match=tumor_match_str,
         )
     elif ctx.has_clinical or ctx.has_drug_data:
         ctx.add_gap(
@@ -825,7 +927,7 @@ def check_clinical_trials(evidence: "Evidence", ctx: "GapDetectionContext") -> N
             severity=GapSeverity.INFORMATIONAL,  # Not a true gap, just noting no active trials
             description=f"No active clinical trials for {ctx.gene} {ctx.variant}",
             suggested_studies=["Clinical trial design", "Basket trial proposal"],
-            addressable_with=["ClinicalTrials.gov"]
+            addressable_with=["ClinicalTrials.gov"],
         )
 
 
@@ -833,11 +935,11 @@ def check_clinical_trials(evidence: "Evidence", ctx: "GapDetectionContext") -> N
 # PRECLINICAL MODELS
 # =============================================================================
 
+
 def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for cell line models with the mutation."""
-    has_cell_line_models = (
-        evidence.depmap_evidence is not None and
-        bool(evidence.depmap_evidence.cell_line_models)
+    has_cell_line_models = evidence.depmap_evidence is not None and bool(
+        evidence.depmap_evidence.cell_line_models
     )
 
     if has_cell_line_models:
@@ -851,8 +953,10 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
             if ctx.tumor_type:
                 # Args: source_disease (from model), queried_tumor (user's query)
                 tumor_models = [
-                    m for m in mutant_models
-                    if m.primary_disease and tumor_types_match(m.primary_disease, ctx.tumor_type)
+                    m
+                    for m in mutant_models
+                    if m.primary_disease
+                    and tumor_types_match(m.primary_disease, ctx.tumor_type)
                 ]
                 if tumor_models:
                     # Only add tumor-specific entry (not the general one)
@@ -867,7 +971,7 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                         "DepMap CCLE",
                         category=GapCategory.PRECLINICAL,
                         matches_on=f"{len(tumor_models)} variant",
-                        tumor_match=tumor_match_str
+                        tumor_match=tumor_match_str,
                     )
                 else:
                     # No tumor-specific models found - only add gap (not well_characterized)
@@ -878,11 +982,17 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                         suggested_studies=[
                             f"Test in {ctx.tumor_type}-derived organoids",
                             "Compare drug response vs other histologies",
-                            f"Generate isogenic model in {ctx.tumor_type} background"
+                            f"Generate isogenic model in {ctx.tumor_type} background",
                         ],
-                        addressable_with=["DepMap CCLE", "Patient-derived organoids", "CRISPR knock-in"]
+                        addressable_with=[
+                            "DepMap CCLE",
+                            "Patient-derived organoids",
+                            "CRISPR knock-in",
+                        ],
                     )
-                    ctx.add_poorly_characterized(f"{ctx.tumor_type}-specific preclinical models")
+                    ctx.add_poorly_characterized(
+                        f"{ctx.tumor_type}-specific preclinical models"
+                    )
             else:
                 # No tumor type specified - add general entry
                 # Cell lines have the exact variant (has_mutation=True), so match is "variant"
@@ -890,7 +1000,7 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                     f"model cell lines ({len(mutant_models)} with mutation)",
                     "DepMap CCLE",
                     category=GapCategory.PRECLINICAL,
-                    matches_on=f"{len(mutant_models)} variant"
+                    matches_on=f"{len(mutant_models)} variant",
                 )
         else:
             # No cell lines have the mutation - this is a gap, not well-characterized
@@ -899,8 +1009,11 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                     category=GapCategory.PRECLINICAL,
                     severity=GapSeverity.MINOR,
                     description=f"DepMap has {n_models} cell lines for {ctx.gene} but none with {ctx.variant}",
-                    suggested_studies=["Generate isogenic model with mutation", "CRISPR knock-in"],
-                    addressable_with=["DepMap CCLE", "CRISPR screens"]
+                    suggested_studies=[
+                        "Generate isogenic model with mutation",
+                        "CRISPR knock-in",
+                    ],
+                    addressable_with=["DepMap CCLE", "CRISPR screens"],
                 )
                 ctx.add_poorly_characterized("variant-specific cell models")
     else:
@@ -909,8 +1022,11 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                 category=GapCategory.PRECLINICAL,
                 severity=GapSeverity.MINOR,
                 description=f"No cell line models identified for {ctx.gene} {ctx.variant}",
-                suggested_studies=["Identify cell lines with mutation", "Generate isogenic model"],
-                addressable_with=["DepMap CCLE", "Cellosaurus"]
+                suggested_studies=[
+                    "Identify cell lines with mutation",
+                    "Generate isogenic model",
+                ],
+                addressable_with=["DepMap CCLE", "Cellosaurus"],
             )
             ctx.add_poorly_characterized("preclinical model systems")
 
@@ -918,6 +1034,7 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
 # =============================================================================
 # LITERATURE
 # =============================================================================
+
 
 def check_literature_depth(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for published literature coverage."""
@@ -927,28 +1044,34 @@ def check_literature_depth(evidence: "Evidence", ctx: "GapDetectionContext") -> 
     pub_count = len(evidence.pubmed_articles)
 
     if pub_count == 0:
-        severity = GapSeverity.CRITICAL if ctx.is_cancer_gene else GapSeverity.SIGNIFICANT
+        severity = (
+            GapSeverity.CRITICAL if ctx.is_cancer_gene else GapSeverity.SIGNIFICANT
+        )
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
             severity=severity,
             description=f"No published literature found for {ctx.gene} {ctx.variant}",
             suggested_studies=["Case report", "Functional characterization study"],
-            addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"]
+            addressable_with=["PubMed", "Semantic Scholar", "bioRxiv"],
         )
         ctx.add_poorly_characterized("published literature")
     elif pub_count < LITERATURE_WELL_CHARACTERIZED_THRESHOLD:
         ctx.add_poorly_characterized("literature depth (limited publications)")
     else:
         # Show ">= N" when we hit the limit (indicates more articles may exist)
-        count_str = f">= {pub_count}" if pub_count >= MAX_LITERATURE_RESULTS else str(pub_count)
+        count_str = (
+            f">= {pub_count}" if pub_count >= MAX_LITERATURE_RESULTS else str(pub_count)
+        )
         ctx.add_well_characterized(
             "published literature",
             f"{count_str} PubMed articles",
-            category=GapCategory.FUNCTIONAL
+            category=GapCategory.FUNCTIONAL,
         )
 
 
-def check_literature_database_integration(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
+def check_literature_database_integration(
+    evidence: "Evidence", ctx: "GapDetectionContext"
+) -> None:
     """Check for literature evidence not integrated into curated databases.
 
     Identifies when PubMed articles mention drug sensitivity/resistance signals
@@ -974,6 +1097,7 @@ def check_literature_database_integration(evidence: "Evidence", ctx: "GapDetecti
 
     # FDA biomarker evidence (only REQUIRED_POSITIVE)
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
     for ev in evidence.fda_biomarker_evidence:
         if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE:
             if ev.drug_name:
@@ -1024,9 +1148,9 @@ def check_literature_database_integration(evidence: "Evidence", ctx: "GapDetecti
             suggested_studies=[
                 "Submit to CIViC for curation",
                 "Validate findings in independent cohort",
-                "Cross-reference with clinical trial results"
+                "Cross-reference with clinical trial results",
             ],
-            addressable_with=["CIViC submission", "Literature review"]
+            addressable_with=["CIViC submission", "Literature review"],
         )
 
 
@@ -1034,38 +1158,46 @@ def check_literature_database_integration(evidence: "Evidence", ctx: "GapDetecti
 # VALIDATION GAP
 # =============================================================================
 
+
 def check_validation_gap(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for strong oncogenic signal with limited therapeutic validation."""
     has_strong_oncogenic_signal = (
-        ctx.has_pathogenic_signal and
-        evidence.depmap_evidence is not None and
-        evidence.depmap_evidence.is_essential()
+        ctx.has_pathogenic_signal
+        and evidence.depmap_evidence is not None
+        and evidence.depmap_evidence.is_essential()
     )
 
-    has_therapeutic_validation = (
-        bool(evidence.civic_assertions) or
-        bool(evidence.fda_biomarker_evidence) or
-        bool(evidence.vicc_evidence)
+    has_therapeutic_validation = bool(evidence.civic_assertions) or bool(
+        evidence.fda_biomarker_evidence
     )
 
     if has_strong_oncogenic_signal:
         ctx.add_well_characterized(
             "biological driver potential",
             "Pathogenic prediction + gene essentiality",
-            category=GapCategory.VALIDATION
+            category=GapCategory.VALIDATION,
         )
 
         if not has_therapeutic_validation:
             ctx.add_gap(
                 category=GapCategory.VALIDATION,
-                severity=GapSeverity.CRITICAL if ctx.is_cancer_gene else GapSeverity.SIGNIFICANT,
+                severity=(
+                    GapSeverity.CRITICAL
+                    if ctx.is_cancer_gene
+                    else GapSeverity.SIGNIFICANT
+                ),
                 description="Strong oncogenic signal but limited therapeutic validation",
                 suggested_studies=[
                     "Functional validation in isogenic models",
                     "Drug sensitivity screening (PRISM/GDSC)",
                     "Patient-derived organoid testing",
-                    "Structural modeling of activation mechanism"
+                    "Structural modeling of activation mechanism",
                 ],
-                addressable_with=["AlphaFold", "DepMap", "CRISPR screens", "Literature"]
+                addressable_with=[
+                    "AlphaFold",
+                    "DepMap",
+                    "CRISPR screens",
+                    "Literature",
+                ],
             )
             ctx.add_poorly_characterized("therapeutic validation")

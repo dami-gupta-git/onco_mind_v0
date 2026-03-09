@@ -13,10 +13,10 @@ from oncomind.models.extracted.evidence_gaps import (
     CharacterizedAspect,
 )
 
-
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def base_context():
@@ -45,6 +45,7 @@ def context_no_tumor():
 # =============================================================================
 # TEST GapDetectionContext initialization
 # =============================================================================
+
 
 class TestGapDetectionContextInit:
     """Tests for GapDetectionContext initialization."""
@@ -77,6 +78,7 @@ class TestGapDetectionContextInit:
 # =============================================================================
 # TEST add_well_characterized
 # =============================================================================
+
 
 class TestAddWellCharacterized:
     """Tests for add_well_characterized method."""
@@ -115,7 +117,9 @@ class TestAddWellCharacterized:
         )
 
         assert base_context.well_characterized[0] == "Fda-Approved Therapy"
-        assert base_context.well_characterized_detailed[0].aspect == "Fda-Approved Therapy"
+        assert (
+            base_context.well_characterized_detailed[0].aspect == "Fda-Approved Therapy"
+        )
 
     def test_includes_matches_on(self, base_context):
         """Should include matches_on field when provided."""
@@ -164,6 +168,7 @@ class TestAddWellCharacterized:
 # =============================================================================
 # TEST add_gap
 # =============================================================================
+
 
 class TestAddGap:
     """Tests for add_gap method."""
@@ -251,6 +256,7 @@ class TestAddGap:
 # TEST add_poorly_characterized
 # =============================================================================
 
+
 class TestAddPoorlyCharacterized:
     """Tests for add_poorly_characterized method."""
 
@@ -283,6 +289,7 @@ class TestAddPoorlyCharacterized:
 # TEST context flags
 # =============================================================================
 
+
 class TestContextFlags:
     """Tests for context flags (has_clinical, has_drug_data)."""
 
@@ -306,6 +313,7 @@ class TestContextFlags:
 # =============================================================================
 # TEST combined usage
 # =============================================================================
+
 
 class TestCombinedUsage:
     """Tests for using multiple context methods together."""

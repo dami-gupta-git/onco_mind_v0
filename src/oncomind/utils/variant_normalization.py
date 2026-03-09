@@ -29,14 +29,16 @@ class VariantNormalizer:
     AA_1TO3 = AMINO_ACID_1TO3
 
     # Variant type patterns
-    MISSENSE_PATTERN = re.compile(r'^([A-Z*])(\d+)([A-Z*])$', re.IGNORECASE)
-    MISSENSE_3LETTER_PATTERN = re.compile(r'^([A-Z]{3})(\d+)([A-Z]{3})$', re.IGNORECASE)
-    HGVS_PROTEIN_PATTERN = re.compile(r'^p\.([A-Z]{1,3})(\d+)([A-Z*]{1,3})$', re.IGNORECASE)
-    DELETION_PATTERN = re.compile(r'del', re.IGNORECASE)
-    INSERTION_PATTERN = re.compile(r'ins', re.IGNORECASE)
-    DUPLICATION_PATTERN = re.compile(r'dup', re.IGNORECASE)
-    FRAMESHIFT_PATTERN = re.compile(r'fs', re.IGNORECASE)
-    NONSENSE_PATTERN = re.compile(r'([A-Z*])(\d+)\*', re.IGNORECASE)
+    MISSENSE_PATTERN = re.compile(r"^([A-Z*])(\d+)([A-Z*])$", re.IGNORECASE)
+    MISSENSE_3LETTER_PATTERN = re.compile(r"^([A-Z]{3})(\d+)([A-Z]{3})$", re.IGNORECASE)
+    HGVS_PROTEIN_PATTERN = re.compile(
+        r"^p\.([A-Z]{1,3})(\d+)([A-Z*]{1,3})$", re.IGNORECASE
+    )
+    DELETION_PATTERN = re.compile(r"del", re.IGNORECASE)
+    INSERTION_PATTERN = re.compile(r"ins", re.IGNORECASE)
+    DUPLICATION_PATTERN = re.compile(r"dup", re.IGNORECASE)
+    FRAMESHIFT_PATTERN = re.compile(r"fs", re.IGNORECASE)
+    NONSENSE_PATTERN = re.compile(r"([A-Z*])(\d+)\*", re.IGNORECASE)
 
     @staticmethod
     def normalize_protein_change(variant: str) -> Dict[str, Optional[str]]:
@@ -62,17 +64,17 @@ class VariantNormalizer:
         variant = variant.strip()
 
         # Remove common prefixes
-        if variant.lower().startswith('p.'):
+        if variant.lower().startswith("p."):
             variant = variant[2:]
 
         result = {
-            'short_form': None,
-            'hgvs_protein': None,
-            'long_form': None,
-            'position': None,
-            'ref_aa': None,
-            'alt_aa': None,
-            'is_missense': False
+            "short_form": None,
+            "hgvs_protein": None,
+            "long_form": None,
+            "position": None,
+            "ref_aa": None,
+            "alt_aa": None,
+            "is_missense": False,
         }
 
         # Try one-letter missense format (V600E)
@@ -81,14 +83,16 @@ class VariantNormalizer:
             ref, pos, alt = match.groups()
             ref = ref.upper()
             alt = alt.upper()
-            result['short_form'] = f"{ref}{pos}{alt}"
-            result['hgvs_protein'] = f"p.{ref}{pos}{alt}"
-            result['position'] = int(pos)
-            result['ref_aa'] = ref
-            result['alt_aa'] = alt
-            result['is_missense'] = alt != '*'
+            result["short_form"] = f"{ref}{pos}{alt}"
+            result["hgvs_protein"] = f"p.{ref}{pos}{alt}"
+            result["position"] = int(pos)
+            result["ref_aa"] = ref
+            result["alt_aa"] = alt
+            result["is_missense"] = alt != "*"
             if ref in VariantNormalizer.AA_1TO3 and alt in VariantNormalizer.AA_1TO3:
-                result['long_form'] = f"{VariantNormalizer.AA_1TO3[ref]}{pos}{VariantNormalizer.AA_1TO3[alt]}"
+                result["long_form"] = (
+                    f"{VariantNormalizer.AA_1TO3[ref]}{pos}{VariantNormalizer.AA_1TO3[alt]}"
+                )
             return result
 
         # Try three-letter missense format (Val600Glu)
@@ -98,16 +102,19 @@ class VariantNormalizer:
             ref_3 = ref_3.upper()
             alt_3 = alt_3.upper()
 
-            if ref_3 in VariantNormalizer.AA_3TO1 and alt_3 in VariantNormalizer.AA_3TO1:
+            if (
+                ref_3 in VariantNormalizer.AA_3TO1
+                and alt_3 in VariantNormalizer.AA_3TO1
+            ):
                 ref = VariantNormalizer.AA_3TO1[ref_3]
                 alt = VariantNormalizer.AA_3TO1[alt_3]
-                result['short_form'] = f"{ref}{pos}{alt}"
-                result['hgvs_protein'] = f"p.{ref}{pos}{alt}"
-                result['long_form'] = f"{ref_3}{pos}{alt_3}"
-                result['position'] = int(pos)
-                result['ref_aa'] = ref
-                result['alt_aa'] = alt
-                result['is_missense'] = alt != '*'
+                result["short_form"] = f"{ref}{pos}{alt}"
+                result["hgvs_protein"] = f"p.{ref}{pos}{alt}"
+                result["long_form"] = f"{ref_3}{pos}{alt_3}"
+                result["position"] = int(pos)
+                result["ref_aa"] = ref
+                result["alt_aa"] = alt
+                result["is_missense"] = alt != "*"
                 return result
 
         return result
@@ -127,35 +134,37 @@ class VariantNormalizer:
         variant_lower = variant.lower()
 
         # Check for structural variants
-        if any(kw in variant_lower for kw in ['fusion', 'fus', 'rearrangement']):
-            return 'fusion'
-        if any(kw in variant_lower for kw in ['amp', 'amplification', 'overexpression']):
-            return 'amplification'
-        if 'truncat' in variant_lower:
-            return 'truncating'
-        if any(kw in variant_lower for kw in ['splice', 'exon', 'skip']):
-            return 'splice'
+        if any(kw in variant_lower for kw in ["fusion", "fus", "rearrangement"]):
+            return "fusion"
+        if any(
+            kw in variant_lower for kw in ["amp", "amplification", "overexpression"]
+        ):
+            return "amplification"
+        if "truncat" in variant_lower:
+            return "truncating"
+        if any(kw in variant_lower for kw in ["splice", "exon", "skip"]):
+            return "splice"
 
         # Check for indels
         if VariantNormalizer.FRAMESHIFT_PATTERN.search(variant):
-            return 'frameshift'
+            return "frameshift"
         if VariantNormalizer.DELETION_PATTERN.search(variant):
-            return 'deletion'
+            return "deletion"
         if VariantNormalizer.INSERTION_PATTERN.search(variant):
-            return 'insertion'
+            return "insertion"
         if VariantNormalizer.DUPLICATION_PATTERN.search(variant):
-            return 'duplication'
+            return "duplication"
 
         # Check for nonsense
         if VariantNormalizer.NONSENSE_PATTERN.search(variant):
-            return 'nonsense'
+            return "nonsense"
 
         # Check for missense
         normalized = VariantNormalizer.normalize_protein_change(variant)
-        if normalized['is_missense']:
-            return 'missense'
+        if normalized["is_missense"]:
+            return "missense"
 
-        return 'unknown'
+        return "unknown"
 
     @classmethod
     def normalize_variant(cls, gene: str, variant: str) -> Dict[str, any]:
@@ -174,23 +183,24 @@ class VariantNormalizer:
             - protein_change: Normalized protein change details (if applicable)
         """
         result = {
-            'gene': gene.upper().strip(),
-            'variant_original': variant,
-            'variant_normalized': variant.strip(),
-            'variant_type': cls.classify_variant_type(variant),
-            'protein_change': None
+            "gene": gene.upper().strip(),
+            "variant_original": variant,
+            "variant_normalized": variant.strip(),
+            "variant_type": cls.classify_variant_type(variant),
+            "protein_change": None,
         }
 
         # Attempt protein change normalization for point mutations
         protein_norm = cls.normalize_protein_change(variant)
-        if protein_norm['short_form']:
-            result['variant_normalized'] = protein_norm['short_form']
-            result['protein_change'] = protein_norm
+        if protein_norm["short_form"]:
+            result["variant_normalized"] = protein_norm["short_form"]
+            result["protein_change"] = protein_norm
 
         return result
 
 
 # Convenience functions for common operations
+
 
 def normalize_variant(gene: str, variant: str) -> Dict[str, any]:
     """Normalize a variant to standard representation.
@@ -230,7 +240,7 @@ def is_missense_variant(gene: str, variant: str) -> bool:
         False
     """
     norm = VariantNormalizer.normalize_variant(gene, variant)
-    return norm['variant_type'] == 'missense'
+    return norm["variant_type"] == "missense"
 
 
 def get_protein_position(variant: str) -> Optional[int]:
@@ -253,7 +263,7 @@ def get_protein_position(variant: str) -> Optional[int]:
         None
     """
     protein_norm = VariantNormalizer.normalize_protein_change(variant)
-    return protein_norm.get('position')
+    return protein_norm.get("position")
 
 
 def to_hgvs_protein(variant: str) -> Optional[str]:
@@ -276,7 +286,7 @@ def to_hgvs_protein(variant: str) -> Optional[str]:
         None
     """
     protein_norm = VariantNormalizer.normalize_protein_change(variant)
-    return protein_norm.get('hgvs_protein')
+    return protein_norm.get("hgvs_protein")
 
 
 def to_hgvs_protein_three_letter(variant: str) -> Optional[str]:
@@ -302,13 +312,13 @@ def to_hgvs_protein_three_letter(variant: str) -> Optional[str]:
         None
     """
     protein_norm = VariantNormalizer.normalize_protein_change(variant)
-    long_form = protein_norm.get('long_form')
+    long_form = protein_norm.get("long_form")
     if long_form:
         # long_form is like "VAL600GLU", need to convert to "p.Val600Glu"
         # Extract components and format with proper case
-        ref_aa = protein_norm.get('ref_aa')
-        alt_aa = protein_norm.get('alt_aa')
-        position = protein_norm.get('position')
+        ref_aa = protein_norm.get("ref_aa")
+        alt_aa = protein_norm.get("alt_aa")
+        position = protein_norm.get("position")
         if ref_aa and alt_aa and position:
             ref_three = AMINO_ACID_1TO3.get(ref_aa)
             alt_three = AMINO_ACID_1TO3.get(alt_aa)
@@ -341,7 +351,7 @@ def is_snp_or_small_indel(gene: str, variant: str) -> bool:
         False
     """
     norm = VariantNormalizer.normalize_variant(gene, variant)
-    return norm['variant_type'] in VariantNormalizer.ALLOWED_VARIANT_TYPES
+    return norm["variant_type"] in VariantNormalizer.ALLOWED_VARIANT_TYPES
 
 
 def normalize_protein_change(variant: str) -> Dict[str, Optional[str]]:
@@ -386,7 +396,7 @@ def to_short_form(variant: str) -> Optional[str]:
         None
     """
     protein_norm = VariantNormalizer.normalize_protein_change(variant)
-    return protein_norm.get('short_form')
+    return protein_norm.get("short_form")
 
 
 def classify_variant_type(variant: str) -> str:
@@ -461,14 +471,15 @@ async def lookup_genomic_info(gene: str, variant: str) -> Dict[str, Any]:
         result["chromosome"] = GENE_CHROMOSOMES[gene_upper]
 
     # Query MyVariant.info API
-    protein_notation = f"p.{variant}" if not variant.lower().startswith("p.") else variant
+    protein_notation = (
+        f"p.{variant}" if not variant.lower().startswith("p.") else variant
+    )
     query = f"{gene} {protein_notation}"
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
-                "https://myvariant.info/v1/query",
-                params={"q": query, "size": 1}
+                "https://myvariant.info/v1/query", params={"q": query, "size": 1}
             )
             response.raise_for_status()
             data = response.json()
@@ -518,9 +529,7 @@ async def lookup_genomic_info(gene: str, variant: str) -> Dict[str, Any]:
 
 
 def normalize_variant_extended(
-    gene: str,
-    variant: str,
-    genomic_info: Optional[Dict[str, Any]] = None
+    gene: str, variant: str, genomic_info: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Normalize a variant with extended information including query formats.
 
@@ -548,31 +557,37 @@ def normalize_variant_extended(
     result = normalize_variant(gene, variant)
 
     # Add additional useful fields
-    result['hgvs_protein'] = to_hgvs_protein(variant)
-    result['position'] = get_protein_position(variant)
-    result['is_allowed_type'] = is_snp_or_small_indel(gene, variant)
+    result["hgvs_protein"] = to_hgvs_protein(variant)
+    result["position"] = get_protein_position(variant)
+    result["is_allowed_type"] = is_snp_or_small_indel(gene, variant)
 
     # Add chromosome from local mapping
     gene_upper = gene.upper()
-    result['chromosome'] = GENE_CHROMOSOMES.get(gene_upper)
+    result["chromosome"] = GENE_CHROMOSOMES.get(gene_upper)
 
     # Add genomic info if provided (from API lookup)
     if genomic_info:
-        result['chromosome'] = genomic_info.get('chromosome') or result.get('chromosome')
-        result['hgvs_genomic'] = genomic_info.get('hgvs_genomic')
-        result['gene_name'] = genomic_info.get('gene_name')
-        result['gene_id'] = genomic_info.get('gene_id')
-        result['transcript_id'] = genomic_info.get('transcript_id')
-        result['exon'] = genomic_info.get('exon')
-        result['genomic_position'] = genomic_info.get('genomic_position')
-        result['ref_allele'] = genomic_info.get('ref_allele')
-        result['alt_allele'] = genomic_info.get('alt_allele')
+        result["chromosome"] = genomic_info.get("chromosome") or result.get(
+            "chromosome"
+        )
+        result["hgvs_genomic"] = genomic_info.get("hgvs_genomic")
+        result["gene_name"] = genomic_info.get("gene_name")
+        result["gene_id"] = genomic_info.get("gene_id")
+        result["transcript_id"] = genomic_info.get("transcript_id")
+        result["exon"] = genomic_info.get("exon")
+        result["genomic_position"] = genomic_info.get("genomic_position")
+        result["ref_allele"] = genomic_info.get("ref_allele")
+        result["alt_allele"] = genomic_info.get("alt_allele")
 
     # Add query formats for common APIs
-    result['query_formats'] = {
-        'myvariant': f"{result['gene']} p.{result['variant_normalized']}" if result['protein_change'] else f"{result['gene']} {result['variant_normalized']}",
-        'vicc': f"{result['gene']} {result['variant_normalized']}",
-        'civic': f"{result['gene']} {result['variant_normalized']}",
+    result["query_formats"] = {
+        "myvariant": (
+            f"{result['gene']} p.{result['variant_normalized']}"
+            if result["protein_change"]
+            else f"{result['gene']} {result['variant_normalized']}"
+        ),
+        "vicc": f"{result['gene']} {result['variant_normalized']}",
+        "civic": f"{result['gene']} {result['variant_normalized']}",
     }
 
     return result

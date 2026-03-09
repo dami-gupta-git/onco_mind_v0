@@ -29,7 +29,16 @@ class TestFetchCancerGeneList:
     async def test_contains_well_known_cancer_genes(self):
         """Should contain well-known cancer genes."""
         genes = await fetch_cancer_gene_list()
-        expected_genes = {"BRAF", "EGFR", "KRAS", "TP53", "PIK3CA", "ALK", "BRCA1", "BRCA2"}
+        expected_genes = {
+            "BRAF",
+            "EGFR",
+            "KRAS",
+            "TP53",
+            "PIK3CA",
+            "ALK",
+            "BRCA1",
+            "BRCA2",
+        }
         for gene in expected_genes:
             assert gene in genes, f"Expected {gene} in OncoKB cancer gene list"
 

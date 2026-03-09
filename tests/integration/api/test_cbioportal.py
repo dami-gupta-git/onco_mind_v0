@@ -121,9 +121,7 @@ class TestCBioPortalClientIntegration:
         nras_in_exclusive = any(
             m.get("gene") == "NRAS" for m in result.mutually_exclusive
         )
-        nras_in_co_occurring = any(
-            c.get("gene") == "NRAS" for c in result.co_occurring
-        )
+        nras_in_co_occurring = any(c.get("gene") == "NRAS" for c in result.co_occurring)
 
         # NRAS should NOT be co-occurring with BRAF (same pathway = mutually exclusive)
         # It may or may not show up in mutually_exclusive depending on thresholds

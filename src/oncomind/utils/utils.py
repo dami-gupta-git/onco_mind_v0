@@ -82,8 +82,19 @@ def is_kit_false_positive(indication_text: str | None) -> bool:
     has_exclusion = any(pattern in text_lower for pattern in FDA_KIT_EXCLUSION_PATTERNS)
 
     # Check for oncology context
-    oncology_terms = ["cancer", "tumor", "malignant", "neoplasm", "carcinoma", "leukemia",
-                      "lymphoma", "melanoma", "sarcoma", "gist", "mastocytosis"]
+    oncology_terms = [
+        "cancer",
+        "tumor",
+        "malignant",
+        "neoplasm",
+        "carcinoma",
+        "leukemia",
+        "lymphoma",
+        "melanoma",
+        "sarcoma",
+        "gist",
+        "mastocytosis",
+    ]
     has_oncology = any(term in text_lower for term in oncology_terms)
 
     # If it has exclusion patterns and no oncology context, it's a false positive
@@ -108,25 +119,28 @@ def dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
         if e.evidence_id in seen_ids:
             continue
         seen_ids.add(e.evidence_id)
-        deduped.append({
-            "evidence_id": e.evidence_id,
-            "eid": e.eid,  # Formatted ID (e.g., "EID5586")
-            "civic_url": e.civic_url,  # Direct link to CIViC
-            "evidence_type": e.evidence_type,
-            "evidence_level": e.evidence_level,
-            "clinical_significance": e.clinical_significance,
-            "disease": e.disease,
-            "drugs": e.drugs,
-            "description": e.description,
-            "pmid": e.pmid,
-            "source_url": e.source_url,
-            "trust_rating": e.trust_rating or e.rating,  # Use trust_rating if available, else rating
-            "evidence_direction": e.evidence_direction,
-            # Match specificity tracking
-            "locus_match": e.locus_match,
-            "matched_profile": e.matched_profile,
-            "tumor_match": e.tumor_match,
-        })
+        deduped.append(
+            {
+                "evidence_id": e.evidence_id,
+                "eid": e.eid,  # Formatted ID (e.g., "EID5586")
+                "civic_url": e.civic_url,  # Direct link to CIViC
+                "evidence_type": e.evidence_type,
+                "evidence_level": e.evidence_level,
+                "clinical_significance": e.clinical_significance,
+                "disease": e.disease,
+                "drugs": e.drugs,
+                "description": e.description,
+                "pmid": e.pmid,
+                "source_url": e.source_url,
+                "trust_rating": e.trust_rating
+                or e.rating,  # Use trust_rating if available, else rating
+                "evidence_direction": e.evidence_direction,
+                # Match specificity tracking
+                "locus_match": e.locus_match,
+                "matched_profile": e.matched_profile,
+                "tumor_match": e.tumor_match,
+            }
+        )
     return deduped
 
 
@@ -157,18 +171,24 @@ def dedupe_vicc_evidence(vicc_evidence_list) -> List[Dict[str, Any]]:
             continue
         seen_keys.add(dedup_key)
 
-        deduped.append({
-            "source": v.source,
-            "drugs": v.drugs,
-            "disease": v.disease,
-            "response_type": v.response_type,
-            "evidence_level": v.evidence_level,
-            "molecular_profile": v.molecular_profile,
-            "molecular_profile_score": v.molecular_profile_score,
-            "publication_url": v.publication_url[0] if isinstance(v.publication_url, list) and v.publication_url else v.publication_url,
-            # Match specificity tracking
-            "locus_match": v.locus_match,
-            "matched_profile": v.matched_profile,
-            "tumor_match": v.tumor_match,
-        })
+        deduped.append(
+            {
+                "source": v.source,
+                "drugs": v.drugs,
+                "disease": v.disease,
+                "response_type": v.response_type,
+                "evidence_level": v.evidence_level,
+                "molecular_profile": v.molecular_profile,
+                "molecular_profile_score": v.molecular_profile_score,
+                "publication_url": (
+                    v.publication_url[0]
+                    if isinstance(v.publication_url, list) and v.publication_url
+                    else v.publication_url
+                ),
+                # Match specificity tracking
+                "locus_match": v.locus_match,
+                "matched_profile": v.matched_profile,
+                "tumor_match": v.tumor_match,
+            }
+        )
     return deduped

@@ -26,85 +26,79 @@ class TherapeuticData(BaseModel):
     drug_name: str = Field(..., description="Name of the therapeutic agent")
     evidence_level: str | None = Field(
         None,
-        description="Level of evidence: FDA-approved | Phase 3 | Phase 2 | Phase 1 | Preclinical | In vitro | Computational | Case report"
+        description="Level of evidence: FDA-approved | Phase 3 | Phase 2 | Phase 1 | Preclinical | In vitro | Computational | Case report",
     )
     approval_status: str | None = Field(
         None,
-        description="FDA approval status: Approved in indication | Approved different histology | Investigational | Off-label | Not approved"
+        description="FDA approval status: Approved in indication | Approved different histology | Investigational | Off-label | Not approved",
     )
     clinical_context: str | None = Field(
         None,
-        description="Clinical context (e.g., first-line, second-line, resistance setting, maintenance)"
+        description="Clinical context (e.g., first-line, second-line, resistance setting, maintenance)",
     )
 
     # === Research-focused fields ===
 
     # Response type
     response_type: str | None = Field(
-        None,
-        description="Sensitivity | Resistance | Mixed | Unknown"
+        None, description="Sensitivity | Resistance | Mixed | Unknown"
     )
 
     # Mechanism (critical for research)
     mechanism: str | None = Field(
         None,
-        description="Mechanism of action or resistance (e.g., 'Constitutive kinase activation', 'EGFR feedback reactivation')"
+        description="Mechanism of action or resistance (e.g., 'Constitutive kinase activation', 'EGFR feedback reactivation')",
     )
 
     # Tumor context
     tumor_types_tested: list[str] = Field(
         default_factory=list,
-        description="Tumor types where this drug-variant relationship was tested"
+        description="Tumor types where this drug-variant relationship was tested",
     )
 
     # Preclinical context
     cell_lines_tested: list[str] = Field(
         default_factory=list,
-        description="Cell lines where response was observed (e.g., 'A375', 'SK-MEL-28')"
+        description="Cell lines where response was observed (e.g., 'A375', 'SK-MEL-28')",
     )
 
     # Quantitative data (when available)
     ic50_nm: float | None = Field(
-        None,
-        description="IC50 value in nanomolar (from cell line studies)"
+        None, description="IC50 value in nanomolar (from cell line studies)"
     )
     response_rate_pct: float | None = Field(
-        None,
-        description="Clinical response rate percentage (from trials)"
+        None, description="Clinical response rate percentage (from trials)"
     )
 
     # Source attribution
     source: str | None = Field(
         None,
-        description="Evidence source: CIViC | CGI | VICC | FDA | GDSC | CTRP | Literature"
+        description="Evidence source: CIViC | CGI | VICC | FDA | GDSC | CTRP | Literature",
     )
     pmids: list[str] = Field(
-        default_factory=list,
-        description="PubMed IDs supporting this evidence"
+        default_factory=list, description="PubMed IDs supporting this evidence"
     )
     source_url: str | None = Field(
-        None,
-        description="URL to source evidence (e.g., CIViC assertion page)"
+        None, description="URL to source evidence (e.g., CIViC assertion page)"
     )
 
     # Confidence assessment
     confidence: str = Field(
-        "low",
-        description="Confidence level: high | moderate | low"
+        "low", description="Confidence level: high | moderate | low"
     )
 
     # Match specificity tracking
     locus_match: str | None = Field(
         None,
-        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)"
+        description="Level of match: 'variant' (exact), 'codon' (same position), 'gene' (gene-only)",
     )
 
     # Cancer type specificity tracking
     cancer_specificity: str | None = Field(
         None,
         description="Cancer type specificity: 'cancer_specific' (matches queried tumor), "
-                    "'pan_cancer' (tumor-agnostic), or specific cancer name (e.g., 'ovarian cancer') "
-                    "when evidence is for a different cancer than queried"
+        "'pan_cancer' (tumor-agnostic), or specific cancer name (e.g., 'ovarian cancer') "
+        "when evidence is for a different cancer than queried",
     )
 
     # === Helper methods ===
@@ -112,7 +106,11 @@ class TherapeuticData(BaseModel):
     def is_sensitivity(self) -> bool:
         """Check if this represents drug sensitivity."""
         if self.response_type:
-            return self.response_type.lower() in ("sensitivity", "response", "responsive")
+            return self.response_type.lower() in (
+                "sensitivity",
+                "response",
+                "responsive",
+            )
         return False
 
     def is_resistance(self) -> bool:
@@ -140,7 +138,10 @@ class TherapeuticData(BaseModel):
         """Check if evidence is from preclinical studies."""
         if self.evidence_level:
             level = self.evidence_level.lower()
-            return any(term in level for term in ["preclinical", "in vitro", "cell line", "computational"])
+            return any(
+                term in level
+                for term in ["preclinical", "in vitro", "cell line", "computational"]
+            )
         return False
 
     def get_evidence_tier(self) -> int:

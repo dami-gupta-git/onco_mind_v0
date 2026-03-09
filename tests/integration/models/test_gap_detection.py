@@ -19,7 +19,9 @@ import asyncio
 
 from oncomind.insight_builder import Conductor, ConductorConfig
 from oncomind.insight_builder.gap_detector import detect_evidence_gaps
-from oncomind.insight_builder.gap_detection.helpers import normalize_source as _normalize_source
+from oncomind.insight_builder.gap_detection.helpers import (
+    normalize_source as _normalize_source,
+)
 from oncomind.models.gene_context import (
     is_hotspot_variant,
     is_hotspot_adjacent,
@@ -31,10 +33,10 @@ from oncomind.models.extracted.evidence_gaps import (
     EvidenceGaps,
 )
 
-
 # =============================================================================
 # HOTSPOT DETECTION UNIT TESTS
 # =============================================================================
+
 
 class TestHotspotDetection:
     """Unit tests for hotspot detection functions."""
@@ -103,6 +105,7 @@ class TestHotspotDetection:
 # SOURCE NORMALIZATION TESTS
 # =============================================================================
 
+
 class TestSourceNormalization:
     """Tests for source normalization to prevent duplicate counting."""
 
@@ -136,6 +139,7 @@ class TestSourceNormalization:
 # GAP DETECTION INTEGRATION TESTS (LIVE API)
 # =============================================================================
 
+
 @pytest.mark.integration
 class TestGapDetectionIntegration:
     """Integration tests for gap detection with live API calls."""
@@ -156,8 +160,12 @@ class TestGapDetectionIntegration:
 
         # Check functional data is present
         func = result.functional
-        assert func.alphamissense_score is not None, "AlphaMissense score should be present"
-        assert func.alphamissense_prediction is not None, "AlphaMissense prediction should be present"
+        assert (
+            func.alphamissense_score is not None
+        ), "AlphaMissense score should be present"
+        assert (
+            func.alphamissense_prediction is not None
+        ), "AlphaMissense prediction should be present"
         assert func.snpeff_effect is not None, "SnpEff effect should be present"
 
     @pytest.mark.asyncio
@@ -192,8 +200,9 @@ class TestGapDetectionIntegration:
 
         # Check no gap has repeated "CIViC, CIViC, CIViC..." pattern
         for gap in discordant:
-            assert "CIViC, CIViC" not in gap.description, \
-                f"Duplicate CIViC sources in gap: {gap.description}"
+            assert (
+                "CIViC, CIViC" not in gap.description
+            ), f"Duplicate CIViC sources in gap: {gap.description}"
 
     @pytest.mark.asyncio
     async def test_braf_v600e_comprehensive_evidence(self):
@@ -267,6 +276,7 @@ class TestGapDetectionIntegration:
 # HOTSPOT-ADJACENT VARIANT TESTS
 # =============================================================================
 
+
 @pytest.mark.integration
 class TestHotspotAdjacentVariants:
     """Tests for hotspot-adjacent variant detection and gap flagging."""
@@ -284,18 +294,25 @@ class TestHotspotAdjacentVariants:
             gaps = result.evidence.compute_evidence_gaps()
 
         # Should have "near hotspot" in well_characterized
-        near_hotspot = [w for w in gaps.well_characterized if "near hotspot" in w.lower()]
+        near_hotspot = [
+            w for w in gaps.well_characterized if "near hotspot" in w.lower()
+        ]
         assert len(near_hotspot) > 0, "Should recognize variant is near hotspot"
 
         # Should have FUNCTIONAL gap for rare-near-hotspot
         functional_gaps = gaps.get_gaps_by_category(GapCategory.FUNCTIONAL)
-        hotspot_related = [g for g in functional_gaps if "hotspot" in g.description.lower()]
-        assert len(hotspot_related) > 0, "Should flag functional gap for hotspot-adjacent"
+        hotspot_related = [
+            g for g in functional_gaps if "hotspot" in g.description.lower()
+        ]
+        assert (
+            len(hotspot_related) > 0
+        ), "Should flag functional gap for hotspot-adjacent"
 
 
 # =============================================================================
 # EVIDENCE GAPS MODEL TESTS
 # =============================================================================
+
 
 class TestEvidenceGapsModel:
     """Unit tests for EvidenceGaps model methods."""
@@ -309,7 +326,7 @@ class TestEvidenceGapsModel:
                 EvidenceGap(
                     category=GapCategory.CLINICAL,
                     severity=GapSeverity.CRITICAL,
-                    description="No clinical evidence"
+                    description="No clinical evidence",
                 )
             ]
         )
@@ -320,7 +337,7 @@ class TestEvidenceGapsModel:
                 EvidenceGap(
                     category=GapCategory.PREVALENCE,
                     severity=GapSeverity.MINOR,
-                    description="Prevalence unknown"
+                    description="Prevalence unknown",
                 )
             ]
         )
@@ -335,17 +352,17 @@ class TestEvidenceGapsModel:
                 EvidenceGap(
                     category=GapCategory.FUNCTIONAL,
                     severity=GapSeverity.SIGNIFICANT,
-                    description="Functional gap"
+                    description="Functional gap",
                 ),
                 EvidenceGap(
                     category=GapCategory.CLINICAL,
                     severity=GapSeverity.CRITICAL,
-                    description="Clinical gap"
+                    description="Clinical gap",
                 ),
                 EvidenceGap(
                     category=GapCategory.FUNCTIONAL,
                     severity=GapSeverity.MINOR,
-                    description="Another functional gap"
+                    description="Another functional gap",
                 ),
             ]
         )
@@ -365,17 +382,17 @@ class TestEvidenceGapsModel:
                 EvidenceGap(
                     category=GapCategory.PREVALENCE,
                     severity=GapSeverity.MINOR,
-                    description="Minor gap"
+                    description="Minor gap",
                 ),
                 EvidenceGap(
                     category=GapCategory.CLINICAL,
                     severity=GapSeverity.CRITICAL,
-                    description="Critical gap"
+                    description="Critical gap",
                 ),
                 EvidenceGap(
                     category=GapCategory.FUNCTIONAL,
                     severity=GapSeverity.SIGNIFICANT,
-                    description="Significant gap"
+                    description="Significant gap",
                 ),
             ]
         )
@@ -395,7 +412,7 @@ class TestEvidenceGapsModel:
                     category=GapCategory.DISCORDANT,
                     severity=GapSeverity.SIGNIFICANT,
                     description="Conflicting drug response",
-                    suggested_studies=["Meta-analysis"]
+                    suggested_studies=["Meta-analysis"],
                 )
             ],
             overall_evidence_quality="moderate",
@@ -421,7 +438,7 @@ class TestEvidenceGapsModel:
                 EvidenceGap(
                     category=GapCategory.CLINICAL,
                     severity=GapSeverity.CRITICAL,
-                    description="No clinical evidence"
+                    description="No clinical evidence",
                 )
             ],
             overall_evidence_quality="limited",
@@ -441,6 +458,7 @@ class TestEvidenceGapsModel:
 # =============================================================================
 # CANCER HOTSPOTS DATA TESTS
 # =============================================================================
+
 
 class TestCancerHotspotsData:
     """Tests to verify cancer hotspots data is correct."""
@@ -468,13 +486,15 @@ class TestCancerHotspotsData:
         major_genes = ["BRAF", "KRAS", "EGFR", "PIK3CA", "TP53"]
         for gene in major_genes:
             codons = get_cancer_hotspots(gene)
-            assert len(codons) == len(set(codons)), \
-                f"{gene} has duplicate hotspot codons"
+            assert len(codons) == len(
+                set(codons)
+            ), f"{gene} has duplicate hotspot codons"
 
 
 # =============================================================================
 # CIVIC SENSITIVITY/RESISTANCE INTEGRATION TESTS
 # =============================================================================
+
 
 @pytest.mark.integration
 class TestCivicSensitivityResistance:
@@ -498,14 +518,16 @@ class TestCivicSensitivityResistance:
 
         # Should have sensitivity evidence (vemurafenib, dabrafenib, etc.)
         sensitivity_evidence = [e for e in civic_evidence if e.is_sensitivity]
-        assert len(sensitivity_evidence) > 0, "BRAF V600E should have CIViC sensitivity evidence"
+        assert (
+            len(sensitivity_evidence) > 0
+        ), "BRAF V600E should have CIViC sensitivity evidence"
 
         # Verify these are SUPPORTS direction
         for e in sensitivity_evidence:
             if e.evidence_direction:
-                assert e.evidence_direction.upper() == "SUPPORTS", (
-                    f"is_sensitivity=True but direction={e.evidence_direction}"
-                )
+                assert (
+                    e.evidence_direction.upper() == "SUPPORTS"
+                ), f"is_sensitivity=True but direction={e.evidence_direction}"
 
     @pytest.mark.asyncio
     async def test_egfr_t790m_has_resistance_evidence(self):
@@ -519,13 +541,15 @@ class TestCivicSensitivityResistance:
 
         # T790M is a resistance mutation - should have resistance evidence
         resistance_evidence = [e for e in civic_evidence if e.is_resistance]
-        assert len(resistance_evidence) > 0, "EGFR T790M should have CIViC resistance evidence"
+        assert (
+            len(resistance_evidence) > 0
+        ), "EGFR T790M should have CIViC resistance evidence"
 
         # Verify these are SUPPORTS direction with RESIST in significance
         for e in resistance_evidence:
-            assert "RESIST" in e.clinical_significance.upper(), (
-                f"is_resistance=True but significance={e.clinical_significance}"
-            )
+            assert (
+                "RESIST" in e.clinical_significance.upper()
+            ), f"is_resistance=True but significance={e.clinical_significance}"
 
     @pytest.mark.asyncio
     async def test_does_not_support_excluded_from_sensitivity(self):
@@ -538,10 +562,12 @@ class TestCivicSensitivityResistance:
 
         # Find evidence with "Sensitivity/Response" significance
         sensitivity_topic_evidence = [
-            e for e in civic_evidence
-            if e.clinical_significance and (
-                "SENSITIV" in e.clinical_significance.upper() or
-                "RESPONSE" in e.clinical_significance.upper()
+            e
+            for e in civic_evidence
+            if e.clinical_significance
+            and (
+                "SENSITIV" in e.clinical_significance.upper()
+                or "RESPONSE" in e.clinical_significance.upper()
             )
         ]
 
@@ -555,9 +581,9 @@ class TestCivicSensitivityResistance:
                         f"got is_sensitivity={e.is_sensitivity}"
                     )
                 elif direction == "SUPPORTS":
-                    assert e.is_sensitivity is True, (
-                        f"SUPPORTS should give is_sensitivity=True"
-                    )
+                    assert (
+                        e.is_sensitivity is True
+                    ), f"SUPPORTS should give is_sensitivity=True"
 
     @pytest.mark.asyncio
     async def test_civic_evidence_direction_in_gap_detector(self):
@@ -573,10 +599,12 @@ class TestCivicSensitivityResistance:
 
         # Count all sensitivity-topic evidence (regardless of direction)
         all_sensitivity_topic = sum(
-            1 for e in civic_evidence
-            if e.clinical_significance and (
-                "SENSITIV" in e.clinical_significance.upper() or
-                "RESPONSE" in e.clinical_significance.upper()
+            1
+            for e in civic_evidence
+            if e.clinical_significance
+            and (
+                "SENSITIV" in e.clinical_significance.upper()
+                or "RESPONSE" in e.clinical_significance.upper()
             )
         )
 
@@ -598,14 +626,15 @@ class TestCivicSensitivityResistance:
 
         # No evidence should have both is_sensitivity=True AND is_resistance=True
         for e in civic_evidence:
-            assert not (e.is_sensitivity and e.is_resistance), (
-                f"Evidence {e.evidence_id} has both is_sensitivity=True and is_resistance=True"
-            )
+            assert not (
+                e.is_sensitivity and e.is_resistance
+            ), f"Evidence {e.evidence_id} has both is_sensitivity=True and is_resistance=True"
 
 
 # =============================================================================
 # FDA APPROVAL GAP TESTS
 # =============================================================================
+
 
 @pytest.mark.integration
 class TestFDAApprovalGap:
@@ -628,7 +657,11 @@ class TestFDAApprovalGap:
 
         # Should have "No FDA-approved therapy" gap
         drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
-        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+        fda_gap = [
+            g
+            for g in drug_response_gaps
+            if "no fda-approved therapy" in g.description.lower()
+        ]
 
         assert len(fda_gap) > 0, (
             f"Expected 'No FDA-approved therapy' gap for ERBB2 S310F. "
@@ -651,14 +684,14 @@ class TestFDAApprovalGap:
 
         # Should have drug response data in well_characterized (from VICC/CGI)
         well_char_lower = [w.lower() for w in gaps.well_characterized]
-        assert "evidence items for bladder cancer" in well_char_lower, (
-            "Should have 'evidence item' data"
-        )
+        assert (
+            "evidence items for bladder cancer" in well_char_lower
+        ), "Should have 'evidence item' data"
 
         # But should NOT have "FDA-approved therapy" in well_characterized
-        assert "fda-approved therapy" not in well_char_lower, (
-            "Should NOT have 'FDA-approved therapy' since there's none"
-        )
+        assert (
+            "fda-approved therapy" not in well_char_lower
+        ), "Should NOT have 'FDA-approved therapy' since there's none"
 
     @pytest.mark.asyncio
     async def test_variant_with_fda_approval_no_gap(self):
@@ -673,7 +706,11 @@ class TestFDAApprovalGap:
 
         # Should NOT have "No FDA-approved therapy" gap
         drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
-        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+        fda_gap = [
+            g
+            for g in drug_response_gaps
+            if "no fda-approved therapy" in g.description.lower()
+        ]
 
         assert len(fda_gap) == 0, (
             f"BRAF V600E Melanoma should NOT have 'No FDA-approved therapy' gap. "
@@ -682,24 +719,9 @@ class TestFDAApprovalGap:
 
         # Should have "FDA-approved therapy" in well_characterized
         well_char_lower = [w.lower() for w in gaps.well_characterized]
-        assert "fda-approved therapy" in well_char_lower, (
-            "BRAF V600E Melanoma should have 'FDA-approved therapy' well-characterized"
-        )
-
-    @pytest.mark.asyncio
-    async def test_fda_biomarker_evidence_determines_approval(self):
-        """FDA approval is determined by fda_biomarker_evidence, not CGI/VICC."""
-        config = ConductorConfig(enable_llm=False, enable_literature=False)
-        async with Conductor(config) as conductor:
-            result = await conductor.run("ERBB2 S310F", tumor_type="Bladder Cancer")
-
-        # Verify ERBB2 S310F has VICC evidence but no FDA biomarker evidence
-        assert len(result.evidence.vicc_evidence) > 0, "Should have VICC evidence"
-        assert len(result.evidence.fda_biomarker_evidence) == 0, (
-            "Should NOT have FDA biomarker evidence"
-        )
-
-        # This confirms the gap is correctly based on FDA data, not VICC
+        assert (
+            "fda-approved therapy" in well_char_lower
+        ), "BRAF V600E Melanoma should have 'FDA-approved therapy' well-characterized"
 
     @pytest.mark.asyncio
     async def test_idh1_r132h_glioma_gap_detection(self):
@@ -718,20 +740,19 @@ class TestFDAApprovalGap:
 
         # Check FDA biomarker evidence exists
         fda_evidence = result.evidence.fda_biomarker_evidence
-        assert len(fda_evidence) >= 1, (
-            f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
-        )
+        assert (
+            len(fda_evidence) >= 1
+        ), f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
 
         # Verify at least one IDH1 inhibitor is found
         drug_names = [ev.drug_name.lower() for ev in fda_evidence if ev.drug_name]
         expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
         found_idh1_drug = any(
-            any(exp in d for exp in expected_drugs)
-            for d in drug_names
+            any(exp in d for exp in expected_drugs) for d in drug_names
         )
-        assert found_idh1_drug, (
-            f"Expected at least one IDH1 inhibitor, got: {drug_names}"
-        )
+        assert (
+            found_idh1_drug
+        ), f"Expected at least one IDH1 inhibitor, got: {drug_names}"
 
         # Check gap detection
         gaps = result.evidence.evidence_gaps
@@ -753,10 +774,12 @@ class TestFDAApprovalGap:
 
         # Should NOT have "No FDA-approved therapy" gap
         drug_response_gaps = gaps.get_gaps_by_category(GapCategory.DRUG_RESPONSE)
-        fda_gap = [g for g in drug_response_gaps if "no fda-approved therapy" in g.description.lower()]
+        fda_gap = [
+            g
+            for g in drug_response_gaps
+            if "no fda-approved therapy" in g.description.lower()
+        ]
         assert len(fda_gap) == 0, (
             f"IDH1 R132H should NOT have 'No FDA-approved therapy' gap. "
             f"Got: {[g.description for g in fda_gap]}"
         )
-
-

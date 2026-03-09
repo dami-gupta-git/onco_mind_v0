@@ -58,7 +58,9 @@ class CGIBiomarker:
         self.drug = drug
         self.drug_status = drug_status  # "Approved", "Clinical trial", etc.
         self.association = association  # "Responsive", "Resistant"
-        self.evidence_level = evidence_level  # "FDA guidelines", "NCCN guidelines", etc.
+        self.evidence_level = (
+            evidence_level  # "FDA guidelines", "NCCN guidelines", etc.
+        )
         self.source = source
         self.tumor_type = tumor_type
         self.tumor_type_full = tumor_type_full
@@ -209,7 +211,7 @@ class CGIClient:
 
         # Point mutations (like C797S) should not match insertion/deletion-specific entries
         # Point mutations have format: single letter + digits + single letter (e.g., C797S, V600E)
-        is_point_mutation = bool(re.match(r'^[A-Z]\d+[A-Z]$', variant_upper))
+        is_point_mutation = bool(re.match(r"^[A-Z]\d+[A-Z]$", variant_upper))
 
         if has_consequence_qualifier and is_point_mutation:
             # Don't match point mutations to insertion/deletion-specific biomarkers
@@ -218,7 +220,7 @@ class CGIClient:
 
         # Extract variant position for range matching (e.g., 816 from D816V)
         variant_position = None
-        variant_match = re.match(r'^([A-Z]?)(\d+)([A-Z]?)$', variant_upper)
+        variant_match = re.match(r"^([A-Z]?)(\d+)([A-Z]?)$", variant_upper)
         if variant_match:
             variant_position = int(variant_match.group(2))
 
@@ -244,7 +246,7 @@ class CGIClient:
 
             # Range pattern: "449-514" or "788-828" matches positions in that range
             # Used for exon-based patterns like "KIT:449-514,550-592,627-664,664-714,788-828"
-            range_match = re.match(r'^(\d+)-(\d+)$', part)
+            range_match = re.match(r"^(\d+)-(\d+)$", part)
             if range_match and variant_position is not None:
                 range_start = int(range_match.group(1))
                 range_end = int(range_match.group(2))
@@ -257,21 +259,24 @@ class CGIClient:
                 # Extract base pattern (e.g., "G719" from "G719.")
                 base_pattern = part[:-1]
                 # Check if variant starts with base and has exactly one more character
-                if variant_upper.startswith(base_pattern) and len(variant_upper) == len(
-                    base_pattern
-                ) + 1:
+                if (
+                    variant_upper.startswith(base_pattern)
+                    and len(variant_upper) == len(base_pattern) + 1
+                ):
                     return True
 
             # Position-based wildcard: ".13." matches any mutation at position 13
             # Format: .{position}. where position is a number
             # This matches variants like G13D, G13C, G13V, etc.
             if part.startswith(".") and part.endswith(".") and len(part) > 2:
-                position_str = part[1:-1]  # Extract position number (e.g., "13" from ".13.")
+                position_str = part[
+                    1:-1
+                ]  # Extract position number (e.g., "13" from ".13.")
                 if position_str.isdigit():
                     position = position_str
                     # Extract position from variant (e.g., "13" from "G13D")
                     # Variant format: {ref_aa}{position}{alt_aa} like G13D
-                    pos_match = re.match(r'^([A-Z])(\d+)([A-Z])$', variant_upper)
+                    pos_match = re.match(r"^([A-Z])(\d+)([A-Z])$", variant_upper)
                     if pos_match:
                         var_pos = pos_match.group(2)
                         if var_pos == position:
@@ -279,7 +284,9 @@ class CGIClient:
 
         return False
 
-    def _determine_locus_match(self, cgi_alteration: str, gene: str, variant: str) -> str:
+    def _determine_locus_match(
+        self, cgi_alteration: str, gene: str, variant: str
+    ) -> str:
         """Determine the match specificity level for a CGI alteration.
 
         CGI-specific parsing handles:
@@ -312,7 +319,7 @@ class CGIClient:
         # Point mutations (like C797S) should not match insertion/deletion-specific entries
         # Point mutations have format: single letter + digits + single letter (e.g., C797S, V600E)
         variant_upper = variant.upper().replace("P.", "")
-        is_point_mutation = bool(re.match(r'^[A-Z]\d+[A-Z]$', variant_upper))
+        is_point_mutation = bool(re.match(r"^[A-Z]\d+[A-Z]$", variant_upper))
 
         if has_consequence_qualifier and is_point_mutation:
             # Don't match point mutations to insertion/deletion-specific biomarkers
@@ -346,7 +353,7 @@ class CGIClient:
 
             # Range pattern: "449-514" or "788-828" = codon level (exon-based)
             # Matches if variant position falls within the range
-            range_match = re.match(r'^(\d+)-(\d+)$', part)
+            range_match = re.match(r"^(\d+)-(\d+)$", part)
             if range_match and variant_position_int is not None:
                 range_start = int(range_match.group(1))
                 range_end = int(range_match.group(2))
@@ -409,7 +416,11 @@ class CGIClient:
 
             # Check tumor type match if specified
             cgi_tumor = row.get("Primary Tumor type", "")
-            if tumor_type and not is_pan_cancer_term(cgi_tumor) and not tumor_types_match(cgi_tumor, tumor_type):
+            if (
+                tumor_type
+                and not is_pan_cancer_term(cgi_tumor)
+                and not tumor_types_match(cgi_tumor, tumor_type)
+            ):
                 continue
 
             # Get drug name, falling back to drug family if Drug is empty/placeholder
@@ -498,14 +509,21 @@ class CGIClient:
 
         for biomarker in biomarkers:
             # Determine match specificity
-            locus_match = self._determine_locus_match(biomarker.alteration, gene, variant)
+            locus_match = self._determine_locus_match(
+                biomarker.alteration, gene, variant
+            )
 
             # Determine tumor match using centralized function
             # Args: source_disease (from biomarker), queried_tumor (user's query)
-            tumor_matches = tumor_types_match(biomarker.tumor_type, tumor_type) if tumor_type else False
+            tumor_matches = (
+                tumor_types_match(biomarker.tumor_type, tumor_type)
+                if tumor_type
+                else False
+            )
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
+
             locus_variant_match = EvidenceLevel(
                 level=locus_match,
                 scope="specific" if locus_match == "variant" else "unspecified",
@@ -519,20 +537,22 @@ class CGIClient:
                     origin="kb",
                 )
 
-            evidence_list.append(CGIBiomarkerEvidence(
-                gene=biomarker.gene,
-                alteration=biomarker.alteration,
-                drug=biomarker.drug,
-                drug_status=biomarker.drug_status,
-                association=biomarker.association,
-                evidence_level=biomarker.evidence_level,
-                source=biomarker.source,
-                tumor_type=biomarker.tumor_type,
-                fda_approved=biomarker.is_fda_approved(),
-                fda_url=biomarker.get_fda_url(),
-                matched_alteration=biomarker.alteration,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-            ))
+            evidence_list.append(
+                CGIBiomarkerEvidence(
+                    gene=biomarker.gene,
+                    alteration=biomarker.alteration,
+                    drug=biomarker.drug,
+                    drug_status=biomarker.drug_status,
+                    association=biomarker.association,
+                    evidence_level=biomarker.evidence_level,
+                    source=biomarker.source,
+                    tumor_type=biomarker.tumor_type,
+                    fda_approved=biomarker.is_fda_approved(),
+                    fda_url=biomarker.get_fda_url(),
+                    matched_alteration=biomarker.alteration,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                )
+            )
 
         return evidence_list

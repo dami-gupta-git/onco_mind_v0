@@ -39,8 +39,8 @@ class LLMDecisionLogger:
             console_handler = logging.StreamHandler()
             console_handler.setLevel(logging.INFO)
             console_formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
             )
             console_handler.setFormatter(console_formatter)
             self.logger.addHandler(console_handler)
@@ -59,7 +59,7 @@ class LLMDecisionLogger:
             # Use a separate file handler that only logs DEBUG messages
             self.file_handler = logging.FileHandler(log_file)
             self.file_handler.setLevel(logging.DEBUG)
-            self.file_handler.setFormatter(logging.Formatter('%(message)s'))
+            self.file_handler.setFormatter(logging.Formatter("%(message)s"))
             self.file_handler.addFilter(lambda record: record.levelno == logging.DEBUG)
             self.logger.addHandler(self.file_handler)
 
@@ -96,15 +96,17 @@ class LLMDecisionLogger:
                 "evidence_summary_length": len(evidence_summary),
                 "model": model,
                 "temperature": temperature,
-            }
+            },
         }
 
         if self.enable_console_logging:
-            self.logger.info(f"LLM Request: {gene} {variant} (tumor: {tumor_type or 'unspecified'}) using {model}")
+            self.logger.info(
+                f"LLM Request: {gene} {variant} (tumor: {tumor_type or 'unspecified'}) using {model}"
+            )
 
         # Write JSON to file handler only
         if self.file_handler:
-            self.file_handler.stream.write(json.dumps(log_entry) + '\n')
+            self.file_handler.stream.write(json.dumps(log_entry) + "\n")
             self.file_handler.flush()
 
         return request_id
@@ -139,7 +141,7 @@ class LLMDecisionLogger:
                 "rationale": rationale,
                 "recommended_therapies": recommended_therapies,
                 "references": references,
-            }
+            },
         }
 
         if raw_response:
@@ -153,7 +155,7 @@ class LLMDecisionLogger:
 
         # Write JSON to file handler only
         if self.file_handler:
-            self.file_handler.stream.write(json.dumps(log_entry) + '\n')
+            self.file_handler.stream.write(json.dumps(log_entry) + "\n")
             self.file_handler.flush()
 
     def log_llm_error(
@@ -176,7 +178,7 @@ class LLMDecisionLogger:
             "error": {
                 "type": type(error).__name__,
                 "message": str(error),
-            }
+            },
         }
 
         # Always log errors to console (even if console logging is disabled)
@@ -184,7 +186,7 @@ class LLMDecisionLogger:
 
         # Write JSON to file handler only
         if self.file_handler:
-            self.file_handler.stream.write(json.dumps(log_entry) + '\n')
+            self.file_handler.stream.write(json.dumps(log_entry) + "\n")
             self.file_handler.flush()
 
     def log_decision_summary(
@@ -218,11 +220,7 @@ class LLMDecisionLogger:
         for evidence in key_evidence:
             summary += f"  • {evidence}\n"
 
-        summary += (
-            f"{'='*80}\n"
-            f"RATIONALE:\n{decision_rationale}\n"
-            f"{'='*80}\n"
-        )
+        summary += f"{'='*80}\n" f"RATIONALE:\n{decision_rationale}\n" f"{'='*80}\n"
 
         self.logger.info(summary)
 

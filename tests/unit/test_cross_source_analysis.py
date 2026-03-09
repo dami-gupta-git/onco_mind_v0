@@ -121,9 +121,10 @@ class TestCreateCrossSourcePrompt:
 
         system_content = messages[0]["content"].lower()
         # Should contain guidance about cross-source analysis
-        assert any(term in system_content for term in [
-            "cross-source", "evidence", "synthesis", "analyze", "drug"
-        ])
+        assert any(
+            term in system_content
+            for term in ["cross-source", "evidence", "synthesis", "analyze", "drug"]
+        )
 
 
 class TestGetCrossSourceAnalysis:
@@ -171,14 +172,18 @@ class TestGetCrossSourceAnalysis:
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps({
-                        "strongest_evidence": [],
-                        "conflicting_signals": [],
-                        "emerging_targets": [],
-                        "key_gaps": [],
-                        "summary": "Test summary"
-                    })),
-                    finish_reason="stop"
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "strongest_evidence": [],
+                                "conflicting_signals": [],
+                                "emerging_targets": [],
+                                "key_gaps": [],
+                                "summary": "Test summary",
+                            }
+                        )
+                    ),
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -205,14 +210,18 @@ class TestGetCrossSourceAnalysis:
         """Should return properly structured result dict."""
         llm_response = {
             "strongest_evidence": [
-                {"drug": "vemurafenib", "evidence_level": "FDA", "sources": ["CGI", "CIViC"]}
+                {
+                    "drug": "vemurafenib",
+                    "evidence_level": "FDA",
+                    "sources": ["CGI", "CIViC"],
+                }
             ],
             "conflicting_signals": [],
             "emerging_targets": [
                 {"drug": "encorafenib", "rationale": "Newer BRAF inhibitor"}
             ],
             "key_gaps": ["Resistance mechanisms"],
-            "summary": "V600E is well-characterized actionable target"
+            "summary": "V600E is well-characterized actionable target",
         }
 
         async def mock_acompletion(**kwargs):
@@ -220,7 +229,7 @@ class TestGetCrossSourceAnalysis:
             mock_response.choices = [
                 AsyncMock(
                     message=AsyncMock(content=json.dumps(llm_response)),
-                    finish_reason="stop"
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -245,6 +254,7 @@ class TestGetCrossSourceAnalysis:
     @pytest.mark.asyncio
     async def test_returns_none_on_llm_error(self):
         """Should return None when LLM call fails."""
+
         async def mock_acompletion(**kwargs):
             raise Exception("LLM API error")
 
@@ -268,7 +278,7 @@ class TestGetCrossSourceAnalysis:
             "conflicting_signals": [],
             "emerging_targets": [],
             "key_gaps": [],
-            "summary": "Test"
+            "summary": "Test",
         }
         markdown_wrapped = f"```json\n{json.dumps(llm_response)}\n```"
 
@@ -276,8 +286,7 @@ class TestGetCrossSourceAnalysis:
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=markdown_wrapped),
-                    finish_reason="stop"
+                    message=AsyncMock(content=markdown_wrapped), finish_reason="stop"
                 )
             ]
             return mock_response
@@ -307,14 +316,18 @@ class TestGetCrossSourceAnalysis:
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps({
-                        "strongest_evidence": [],
-                        "conflicting_signals": [],
-                        "emerging_targets": [],
-                        "key_gaps": [],
-                        "summary": "Test"
-                    })),
-                    finish_reason="stop"
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "strongest_evidence": [],
+                                "conflicting_signals": [],
+                                "emerging_targets": [],
+                                "key_gaps": [],
+                                "summary": "Test",
+                            }
+                        )
+                    ),
+                    finish_reason="stop",
                 )
             ]
             return mock_response

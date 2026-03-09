@@ -66,11 +66,14 @@ class TestVEPFunctionalPredictions:
         # PolyPhen predictions: benign, possibly_damaging, probably_damaging
         if annotation.polyphen_prediction:
             assert annotation.polyphen_prediction in [
-                "benign", "possibly_damaging", "probably_damaging"
+                "benign",
+                "possibly_damaging",
+                "probably_damaging",
             ]
             # BRAF V600E is known pathogenic, should be damaging
             assert annotation.polyphen_prediction in [
-                "possibly_damaging", "probably_damaging"
+                "possibly_damaging",
+                "probably_damaging",
             ], f"BRAF V600E expected damaging, got {annotation.polyphen_prediction}"
 
     @pytest.mark.integration
@@ -84,18 +87,21 @@ class TestVEPFunctionalPredictions:
         assert annotation.hgvs_genomic is not None
 
         # Check at least one prediction source is available
-        has_prediction = any([
-            annotation.polyphen_prediction,
-            annotation.sift_prediction,
-            annotation.cadd_phred,
-        ])
+        has_prediction = any(
+            [
+                annotation.polyphen_prediction,
+                annotation.sift_prediction,
+                annotation.cadd_phred,
+            ]
+        )
 
         if has_prediction:
             # If we have predictions, TP53 R248W should be predicted damaging
             is_damaging = (
-                annotation.polyphen_prediction in ["possibly_damaging", "probably_damaging"] or
-                annotation.sift_prediction == "deleterious" or
-                (annotation.cadd_phred and annotation.cadd_phred >= 20)
+                annotation.polyphen_prediction
+                in ["possibly_damaging", "probably_damaging"]
+                or annotation.sift_prediction == "deleterious"
+                or (annotation.cadd_phred and annotation.cadd_phred >= 20)
             )
             assert is_damaging, (
                 f"TP53 R248W should be predicted damaging. "
@@ -113,7 +119,11 @@ class TestVEPFunctionalPredictions:
 
         assert annotation is not None
         # KRAS G12D is oncogenic and should be predicted damaging
-        if annotation.polyphen_prediction or annotation.sift_prediction or annotation.cadd_phred:
+        if (
+            annotation.polyphen_prediction
+            or annotation.sift_prediction
+            or annotation.cadd_phred
+        ):
             result = annotation.is_predicted_damaging()
             assert isinstance(result, bool)
 
@@ -235,15 +245,18 @@ class TestVEPMyVariantIntegration:
             assert evidence.civic is not None
 
             # If VEP worked, should have genomic HGVS and/or predictions
-            has_vep_data = any([
-                evidence.hgvs_genomic,
-                evidence.polyphen2_prediction,
-                evidence.cadd_score,
-                evidence.alphamissense_prediction,
-            ])
+            has_vep_data = any(
+                [
+                    evidence.hgvs_genomic,
+                    evidence.polyphen2_prediction,
+                    evidence.cadd_score,
+                    evidence.alphamissense_prediction,
+                ]
+            )
 
             # Note: VEP may not always return predictions, so we just check structure
             assert isinstance(evidence.civic, list)
+
 
 class TestVEPCaching:
     """Tests for VEP client caching behavior."""

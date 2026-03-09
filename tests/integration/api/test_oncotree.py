@@ -59,7 +59,10 @@ class TestOncoTreeCodeLookup:
 
         assert tumor_type is not None
         assert tumor_type["code"].upper() == "LUAD"
-        assert "adenocarcinoma" in tumor_type["name"].lower() or "lung" in tumor_type["name"].lower()
+        assert (
+            "adenocarcinoma" in tumor_type["name"].lower()
+            or "lung" in tumor_type["name"].lower()
+        )
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -214,15 +217,25 @@ class TestOncoTreeCommonCancerTypes:
     async def test_common_codes_exist(self):
         """Common cancer type codes should exist in OncoTree."""
         common_codes = [
-            "NSCLC", "LUAD", "LUSC",  # Lung
-            "BRCA", "IDC", "ILC",  # Breast
-            "COADREAD", "COAD", "READ",  # Colorectal
-            "MEL", "SKCM",  # Melanoma
+            "NSCLC",
+            "LUAD",
+            "LUSC",  # Lung
+            "BRCA",
+            "IDC",
+            "ILC",  # Breast
+            "COADREAD",
+            "COAD",
+            "READ",  # Colorectal
+            "MEL",
+            "SKCM",  # Melanoma
             "PAAD",  # Pancreatic
-            "GB", "DIFG",  # Brain (GB=Glioblastoma, DIFG=Diffuse Glioma)
+            "GB",
+            "DIFG",  # Brain (GB=Glioblastoma, DIFG=Diffuse Glioma)
             "PRAD",  # Prostate
-            "HGSOC", "SOC",  # Ovarian (High-Grade/Serous Ovarian Cancer)
-            "AML", "BLL",  # Leukemia (BLL = B-Lymphoblastic Leukemia)
+            "HGSOC",
+            "SOC",  # Ovarian (High-Grade/Serous Ovarian Cancer)
+            "AML",
+            "BLL",  # Leukemia (BLL = B-Lymphoblastic Leukemia)
         ]
 
         async with OncoTreeClient() as client:

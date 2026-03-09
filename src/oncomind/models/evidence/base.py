@@ -4,17 +4,21 @@ import re
 from typing import Literal
 from pydantic import BaseModel, Field, computed_field
 
-from oncomind.config.constants import BROAD_VARIANTS, PAN_CANCER_TERMS, PAN_CANCER_BIOMARKERS, TUMOR_TYPE_MAPPINGS
-
+from oncomind.config.constants import (
+    BROAD_VARIANTS,
+    PAN_CANCER_TERMS,
+    PAN_CANCER_BIOMARKERS,
+    TUMOR_TYPE_MAPPINGS,
+)
 
 # Type alias for locus match levels
 LocusMatch = Literal["variant", "codon", "gene"]
 
 # Regex pattern to extract position from variant notation (e.g., V600E -> 600, L858R -> 858)
-_VARIANT_POSITION_PATTERN = re.compile(r'[A-Z](\d+)')
+_VARIANT_POSITION_PATTERN = re.compile(r"[A-Z](\d+)")
 
 # Regex pattern to extract codon (ref AA + position) from variant notation (e.g., V600E -> V600)
-_VARIANT_CODON_PATTERN = re.compile(r'[A-Z]\d+')
+_VARIANT_CODON_PATTERN = re.compile(r"[A-Z]\d+")
 
 
 def determine_locus_match(
@@ -60,7 +64,7 @@ def determine_locus_match(
     # Substring match - but only if BOTH have a specific amino acid change
     # This prevents "V600" (codon-only) from matching "V600E" (specific variant)
     # Pattern: [A-Z]\d+[A-Z] means ref AA + position + alt AA (e.g., V600E, L858R)
-    has_full_variant_pattern = re.compile(r'^[A-Z]\d+[A-Z]')
+    has_full_variant_pattern = re.compile(r"^[A-Z]\d+[A-Z]")
     source_has_alt_aa = bool(has_full_variant_pattern.match(source_clean))
     queried_has_alt_aa = bool(has_full_variant_pattern.match(queried_clean))
 
@@ -205,7 +209,10 @@ def tumor_types_match(
 
     # Direct substring match (both directions)
     # Only if both strings are long enough to avoid false positives
-    if len(source_lower) >= min_substring_length and len(query_lower) >= min_substring_length:
+    if (
+        len(source_lower) >= min_substring_length
+        and len(query_lower) >= min_substring_length
+    ):
         if query_lower in source_lower or source_lower in query_lower:
             return True
 
@@ -213,24 +220,18 @@ def tumor_types_match(
     for abbrev, aliases in TUMOR_TYPE_MAPPINGS.items():
         # Check if queried tumor matches this mapping category
         # Use min_substring_length to avoid false positives like "ma" matching "melanoma"
-        query_matches = (
-            query_lower == abbrev or
-            any(
-                (query_lower in alias and len(query_lower) >= min_substring_length) or
-                (alias in query_lower and len(alias) >= min_substring_length) or
-                query_lower == alias
-                for alias in aliases
-            )
+        query_matches = query_lower == abbrev or any(
+            (query_lower in alias and len(query_lower) >= min_substring_length)
+            or (alias in query_lower and len(alias) >= min_substring_length)
+            or query_lower == alias
+            for alias in aliases
         )
         # Check if source disease matches this mapping category
-        source_matches = (
-            source_lower == abbrev or
-            any(
-                (source_lower in alias and len(source_lower) >= min_substring_length) or
-                (alias in source_lower and len(alias) >= min_substring_length) or
-                source_lower == alias
-                for alias in aliases
-            )
+        source_matches = source_lower == abbrev or any(
+            (source_lower in alias and len(source_lower) >= min_substring_length)
+            or (alias in source_lower and len(alias) >= min_substring_length)
+            or source_lower == alias
+            for alias in aliases
         )
         # If both match the same category, they're related
         if query_matches and source_matches:
@@ -301,15 +302,15 @@ class EvidenceLevel(BaseModel):
 
     level: VariantGeneLevel | CancerSpecificity | None = Field(
         default=None,
-        description="Evidence level: 'variant'/'gene' for variant level, 'cancer_specific'/'pan_cancer' for cancer type"
+        description="Evidence level: 'variant'/'gene' for variant level, 'cancer_specific'/'pan_cancer' for cancer type",
     )
     scope: Scope | None = Field(
         default=None,
-        description="Scope: 'specific' (exact match) or 'unspecified' or 'ambiguous'"
+        description="Scope: 'specific' (exact match) or 'unspecified' or 'ambiguous'",
     )
     origin: Origin | None = Field(
         default=None,
-        description="Origin: 'kb' (knowledge base), 'trial' (clinical trial), or 'inferred'"
+        description="Origin: 'kb' (knowledge base), 'trial' (clinical trial), or 'inferred'",
     )
 
 
@@ -322,12 +323,10 @@ class EvidenceItemBase(BaseModel):
     """
 
     locus_variant_match: EvidenceLevel | None = Field(
-        default=None,
-        description="Variant/gene level evidence metadata"
+        default=None, description="Variant/gene level evidence metadata"
     )
     cancer_type_match: EvidenceLevel | None = Field(
-        default=None,
-        description="Cancer type specificity evidence metadata"
+        default=None, description="Cancer type specificity evidence metadata"
     )
 
     @computed_field

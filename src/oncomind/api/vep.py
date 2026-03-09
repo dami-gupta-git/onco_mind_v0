@@ -22,11 +22,28 @@ VEP_API_URL = "https://rest.ensembl.org/vep/human/hgvs"
 
 # Amino acid 1-letter to 3-letter code mapping
 AA_1_TO_3 = {
-    'A': 'Ala', 'C': 'Cys', 'D': 'Asp', 'E': 'Glu', 'F': 'Phe',
-    'G': 'Gly', 'H': 'His', 'I': 'Ile', 'K': 'Lys', 'L': 'Leu',
-    'M': 'Met', 'N': 'Asn', 'P': 'Pro', 'Q': 'Gln', 'R': 'Arg',
-    'S': 'Ser', 'T': 'Thr', 'V': 'Val', 'W': 'Trp', 'Y': 'Tyr',
-    '*': 'Ter', 'X': 'Xaa'
+    "A": "Ala",
+    "C": "Cys",
+    "D": "Asp",
+    "E": "Glu",
+    "F": "Phe",
+    "G": "Gly",
+    "H": "His",
+    "I": "Ile",
+    "K": "Lys",
+    "L": "Leu",
+    "M": "Met",
+    "N": "Asn",
+    "P": "Pro",
+    "Q": "Gln",
+    "R": "Arg",
+    "S": "Ser",
+    "T": "Thr",
+    "V": "Val",
+    "W": "Trp",
+    "Y": "Tyr",
+    "*": "Ter",
+    "X": "Xaa",
 }
 
 # Reverse mapping for parsing VEP responses
@@ -40,6 +57,7 @@ class VEPAnnotation:
     Contains genomic coordinates, HGVS notations, and functional predictions
     from PolyPhen-2, SIFT, CADD, etc.
     """
+
     # Genomic location
     hgvs_genomic: str | None = None
     hgvs_transcript: str | None = None
@@ -50,7 +68,9 @@ class VEPAnnotation:
     alt_allele: str | None = None
 
     # Functional predictions
-    polyphen_prediction: str | None = None  # "benign", "possibly_damaging", "probably_damaging"
+    polyphen_prediction: str | None = (
+        None  # "benign", "possibly_damaging", "probably_damaging"
+    )
     polyphen_score: float | None = None
     sift_prediction: str | None = None  # "tolerated", "deleterious"
     sift_score: float | None = None
@@ -89,15 +109,24 @@ class VEPAnnotation:
         Returns True if ANY predictor suggests damaging effect.
         """
         polyphen_damaging = self.polyphen_prediction in [
-            "probably_damaging", "possibly_damaging"
+            "probably_damaging",
+            "possibly_damaging",
         ]
         sift_damaging = self.sift_prediction == "deleterious"
-        cadd_damaging = self.cadd_phred is not None and self.cadd_phred >= cadd_threshold
+        cadd_damaging = (
+            self.cadd_phred is not None and self.cadd_phred >= cadd_threshold
+        )
         alphamissense_damaging = self.alphamissense_prediction in [
-            "likely_pathogenic", "ambiguous"
+            "likely_pathogenic",
+            "ambiguous",
         ]
 
-        return polyphen_damaging or sift_damaging or cadd_damaging or alphamissense_damaging
+        return (
+            polyphen_damaging
+            or sift_damaging
+            or cadd_damaging
+            or alphamissense_damaging
+        )
 
     def get_prediction_summary(self) -> str:
         """Get a human-readable summary of predictions."""
@@ -115,7 +144,9 @@ class VEPAnnotation:
             parts.append(f"CADD: {self.cadd_phred:.1f}")
 
         if self.alphamissense_prediction:
-            score_str = f" ({self.alphamissense_score:.2f})" if self.alphamissense_score else ""
+            score_str = (
+                f" ({self.alphamissense_score:.2f})" if self.alphamissense_score else ""
+            )
             parts.append(f"AlphaMissense: {self.alphamissense_prediction}{score_str}")
 
         return "; ".join(parts) if parts else "No predictions available"
@@ -144,10 +175,7 @@ class VEPClient:
         self._cache: dict[str, VEPAnnotation | None] = {}
 
     async def annotate_variant(
-        self,
-        gene: str,
-        variant: str,
-        use_cache: bool = True
+        self, gene: str, variant: str, use_cache: bool = True
     ) -> VEPAnnotation | None:
         """Annotate a variant using VEP.
 
@@ -181,9 +209,7 @@ class VEPClient:
         return result
 
     async def annotate_variants_batch(
-        self,
-        variants: list[tuple[str, str]],
-        use_cache: bool = True
+        self, variants: list[tuple[str, str]], use_cache: bool = True
     ) -> dict[str, VEPAnnotation | None]:
         """Annotate multiple variants in a single request.
 
@@ -217,7 +243,7 @@ class VEPClient:
         # Query VEP in batches of 200
         batch_size = 200
         for i in range(0, len(to_query), batch_size):
-            batch = to_query[i:i + batch_size]
+            batch = to_query[i : i + batch_size]
             hgvs_notations = [item[2] for item in batch]
 
             batch_results = await self._query_vep_batch(hgvs_notations)
@@ -245,11 +271,11 @@ class VEPClient:
             variant = variant[2:]
 
         # Check if already 3-letter notation (e.g., Glu1978Lys)
-        if re.match(r'^[A-Z][a-z]{2}\d+[A-Z][a-z]{2}$', variant):
+        if re.match(r"^[A-Z][a-z]{2}\d+[A-Z][a-z]{2}$", variant):
             return f"{gene}:p.{variant}"
 
         # Convert 1-letter to 3-letter (e.g., E1978K -> Glu1978Lys)
-        match = re.match(r'^([A-Z*])(\d+)([A-Z*])$', variant.upper())
+        match = re.match(r"^([A-Z*])(\d+)([A-Z*])$", variant.upper())
         if match:
             ref, pos, alt = match.groups()
             ref_3 = AA_1_TO_3.get(ref)
@@ -258,7 +284,7 @@ class VEPClient:
                 return f"{gene}:p.{ref_3}{pos}{alt_3}"
 
         # Handle frameshift notation (e.g., W288fs, L287fs*12)
-        fs_match = re.match(r'^([A-Z])(\d+)fs', variant.upper())
+        fs_match = re.match(r"^([A-Z])(\d+)fs", variant.upper())
         if fs_match:
             ref, pos = fs_match.groups()
             ref_3 = AA_1_TO_3.get(ref)
@@ -266,7 +292,7 @@ class VEPClient:
                 return f"{gene}:p.{ref_3}{pos}fs"
 
         # Handle nonsense (e.g., R348*, Q61X)
-        nonsense_match = re.match(r'^([A-Z])(\d+)([*X])$', variant.upper())
+        nonsense_match = re.match(r"^([A-Z])(\d+)([*X])$", variant.upper())
         if nonsense_match:
             ref, pos, stop = nonsense_match.groups()
             ref_3 = AA_1_TO_3.get(ref)
@@ -274,7 +300,7 @@ class VEPClient:
                 return f"{gene}:p.{ref_3}{pos}Ter"
 
         # Handle deletion notation (e.g., E746_A750del)
-        del_match = re.match(r'^([A-Z])(\d+)_([A-Z])(\d+)del$', variant.upper())
+        del_match = re.match(r"^([A-Z])(\d+)_([A-Z])(\d+)del$", variant.upper())
         if del_match:
             ref1, pos1, ref2, pos2 = del_match.groups()
             ref1_3 = AA_1_TO_3.get(ref1)
@@ -290,7 +316,9 @@ class VEPClient:
         results = await self._query_vep_batch([hgvs_notation])
         return results[0] if results else None
 
-    async def _query_vep_batch(self, hgvs_notations: list[str]) -> list[VEPAnnotation | None]:
+    async def _query_vep_batch(
+        self, hgvs_notations: list[str]
+    ) -> list[VEPAnnotation | None]:
         """Query VEP API for multiple variants."""
         results: list[VEPAnnotation | None] = [None] * len(hgvs_notations)
 
@@ -301,7 +329,7 @@ class VEPClient:
                         VEP_API_URL,
                         headers={
                             "Content-Type": "application/json",
-                            "Accept": "application/json"
+                            "Accept": "application/json",
                         },
                         json={
                             "hgvs_notations": hgvs_notations,
@@ -311,7 +339,7 @@ class VEPClient:
                             "hgvs": 1,
                             "canonical": 1,
                             "mane": 1,
-                        }
+                        },
                     )
 
                     # Handle rate limiting
@@ -319,6 +347,7 @@ class VEPClient:
                         retry_after = int(response.headers.get("Retry-After", 1))
                         logger.warning(f"VEP rate limited, waiting {retry_after}s")
                         import asyncio
+
                         await asyncio.sleep(retry_after)
                         continue
 
@@ -333,22 +362,28 @@ class VEPClient:
 
                     for i, notation in enumerate(hgvs_notations):
                         if notation in response_map:
-                            results[i] = self._parse_vep_response(response_map[notation])
+                            results[i] = self._parse_vep_response(
+                                response_map[notation]
+                            )
 
                     return results
 
             except httpx.TimeoutException:
-                logger.warning(f"VEP timeout (attempt {attempt + 1}/{self.max_retries})")
+                logger.warning(
+                    f"VEP timeout (attempt {attempt + 1}/{self.max_retries})"
+                )
                 if attempt < self.max_retries - 1:
                     import asyncio
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
             except httpx.HTTPStatusError as e:
                 logger.error(f"VEP HTTP error: {e.response.status_code}")
                 if e.response.status_code >= 500:
                     # Server error - retry
                     if attempt < self.max_retries - 1:
                         import asyncio
-                        await asyncio.sleep(2 ** attempt)
+
+                        await asyncio.sleep(2**attempt)
                 else:
                     # Client error - don't retry
                     break

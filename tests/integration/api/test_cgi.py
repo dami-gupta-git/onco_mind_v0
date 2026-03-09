@@ -24,7 +24,9 @@ class TestCGIBRAFV600E:
         """BRAF V600E should have FDA-approved therapies."""
         client = CGIClient()
         fda_approved = client.fetch_fda_approved("BRAF", "V600E")
-        assert len(fda_approved) >= 1, "BRAF V600E should have at least 1 FDA-approved therapy"
+        assert (
+            len(fda_approved) >= 1
+        ), "BRAF V600E should have at least 1 FDA-approved therapy"
 
     @pytest.mark.integration
     def test_expected_braf_inhibitors(self):
@@ -32,13 +34,19 @@ class TestCGIBRAFV600E:
         client = CGIClient()
         biomarkers = client.fetch_biomarkers("BRAF", "V600E")
 
-        expected_drugs = {"vemurafenib", "dabrafenib", "encorafenib", "trametinib", "cobimetinib"}
+        expected_drugs = {
+            "vemurafenib",
+            "dabrafenib",
+            "encorafenib",
+            "trametinib",
+            "cobimetinib",
+        }
         all_drugs = {b.drug.lower() for b in biomarkers if b.drug}
 
         found_expected = all_drugs & expected_drugs
-        assert len(found_expected) > 0, (
-            f"Expected at least one of {expected_drugs}, got: {all_drugs}"
-        )
+        assert (
+            len(found_expected) > 0
+        ), f"Expected at least one of {expected_drugs}, got: {all_drugs}"
 
     @pytest.mark.integration
     def test_melanoma_coverage(self):
@@ -79,9 +87,9 @@ class TestCGIEGFRL858R:
         all_drugs = {b.drug.lower() for b in biomarkers if b.drug}
 
         found_expected = all_drugs & expected_drugs
-        assert len(found_expected) > 0, (
-            f"Expected at least one of {expected_drugs}, got: {all_drugs}"
-        )
+        assert (
+            len(found_expected) > 0
+        ), f"Expected at least one of {expected_drugs}, got: {all_drugs}"
 
     @pytest.mark.integration
     def test_nsclc_coverage(self):
@@ -131,9 +139,9 @@ class TestCGIKRASG12:
         biomarkers = client.fetch_biomarkers("KRAS", "G12C")
 
         drugs = {b.drug.lower() for b in biomarkers if b.drug}
-        assert "sotorasib" in drugs or "adagrasib" in drugs, (
-            f"Expected sotorasib or adagrasib for KRAS G12C, got: {drugs}"
-        )
+        assert (
+            "sotorasib" in drugs or "adagrasib" in drugs
+        ), f"Expected sotorasib or adagrasib for KRAS G12C, got: {drugs}"
 
     @pytest.mark.integration
     def test_kras_g12d_biomarkers(self):
@@ -168,9 +176,19 @@ class TestCGIBiomarkerStructure:
         biomarkers = client.fetch_biomarkers("BRAF", "V600E")
 
         expected_keys = {
-            "gene", "alteration", "drug", "drug_status", "association",
-            "evidence_level", "source", "tumor_type", "tumor_type_full",
-            "fda_approved", "fda_url", "comments", "drug_full_name"
+            "gene",
+            "alteration",
+            "drug",
+            "drug_status",
+            "association",
+            "evidence_level",
+            "source",
+            "tumor_type",
+            "tumor_type_full",
+            "fda_approved",
+            "fda_url",
+            "comments",
+            "drug_full_name",
         }
 
         for biomarker in biomarkers:
@@ -184,9 +202,11 @@ class TestCGIBiomarkerStructure:
         biomarkers = client.fetch_biomarkers("BRAF", "V600E")
 
         for biomarker in biomarkers:
-            assert biomarker.association.upper() in ["RESPONSIVE", "RESISTANT", "NO RESPONSIVE"], (
-                f"Unexpected association: {biomarker.association}"
-            )
+            assert biomarker.association.upper() in [
+                "RESPONSIVE",
+                "RESISTANT",
+                "NO RESPONSIVE",
+            ], f"Unexpected association: {biomarker.association}"
 
 
 class TestCGITumorTypeFilter:
@@ -201,9 +221,11 @@ class TestCGITumorTypeFilter:
         # All results should be melanoma-related
         for biomarker in biomarkers:
             tumor_lower = (biomarker.tumor_type + biomarker.tumor_type_full).lower()
-            assert "melanoma" in tumor_lower or "mel" in tumor_lower or "skin" in tumor_lower, (
-                f"Expected melanoma-related tumor type, got: {biomarker.tumor_type}"
-            )
+            assert (
+                "melanoma" in tumor_lower
+                or "mel" in tumor_lower
+                or "skin" in tumor_lower
+            ), f"Expected melanoma-related tumor type, got: {biomarker.tumor_type}"
 
     @pytest.mark.integration
     def test_nsclc_filter(self):
@@ -246,9 +268,9 @@ class TestCGIBiomarkerEvidence:
 
         v600e_evidence = [e for e in evidence_list if "V600E" in e.alteration.upper()]
         for evidence in v600e_evidence:
-            assert evidence.locus_match == "variant", (
-                f"V600E exact match should be variant level, got {evidence.locus_match}"
-            )
+            assert (
+                evidence.locus_match == "variant"
+            ), f"V600E exact match should be variant level, got {evidence.locus_match}"
 
     @pytest.mark.integration
     def test_locus_match_codon(self):
@@ -262,9 +284,9 @@ class TestCGIBiomarkerEvidence:
         variant_matches = [e for e in evidence_list if e.locus_match == "variant"]
 
         # G719S should match either as exact variant or via G719. pattern (codon)
-        assert len(codon_matches) > 0 or len(variant_matches) > 0, (
-            "EGFR G719S should have variant or codon-level matches"
-        )
+        assert (
+            len(codon_matches) > 0 or len(variant_matches) > 0
+        ), "EGFR G719S should have variant or codon-level matches"
 
 
 class TestCGIResistanceMarkers:
@@ -277,7 +299,9 @@ class TestCGIResistanceMarkers:
         biomarkers = client.fetch_biomarkers("EGFR", "T790M")
 
         # T790M should have some resistance biomarkers
-        resistance_markers = [b for b in biomarkers if b.association.upper() == "RESISTANT"]
+        resistance_markers = [
+            b for b in biomarkers if b.association.upper() == "RESISTANT"
+        ]
 
         # T790M confers resistance to erlotinib/gefitinib but sensitivity to osimertinib
         # So we expect a mix
@@ -291,4 +315,7 @@ class TestCGIResistanceMarkers:
 
         for biomarker in biomarkers:
             if biomarker.association.upper() == "RESISTANT":
-                assert "resistance" in biomarker.association.lower() or biomarker.association.upper() == "RESISTANT"
+                assert (
+                    "resistance" in biomarker.association.lower()
+                    or biomarker.association.upper() == "RESISTANT"
+                )

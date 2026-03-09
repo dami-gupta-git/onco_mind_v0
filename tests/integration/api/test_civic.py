@@ -25,8 +25,12 @@ class TestCIViCBRAFV600E:
     async def test_has_predictive_assertions(self):
         """BRAF V600E should have predictive (therapy response) assertions."""
         async with CIViCClient() as client:
-            assertions = await client.fetch_predictive_assertions("BRAF", "V600E", max_results=50)
-            assert len(assertions) >= 1, "BRAF V600E should have at least 1 predictive assertion"
+            assertions = await client.fetch_predictive_assertions(
+                "BRAF", "V600E", max_results=50
+            )
+            assert (
+                len(assertions) >= 1
+            ), "BRAF V600E should have at least 1 predictive assertion"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -35,16 +39,22 @@ class TestCIViCBRAFV600E:
         async with CIViCClient() as client:
             assertions = await client.fetch_assertions("BRAF", "V600E", max_results=50)
 
-            expected_drugs = {"vemurafenib", "dabrafenib", "encorafenib", "trametinib", "cobimetinib"}
+            expected_drugs = {
+                "vemurafenib",
+                "dabrafenib",
+                "encorafenib",
+                "trametinib",
+                "cobimetinib",
+            }
             all_drugs = set()
             for assertion in assertions:
                 for drug in assertion.therapies:
                     all_drugs.add(drug.lower())
 
             found_expected = all_drugs & expected_drugs
-            assert len(found_expected) > 0, (
-                f"Expected at least one of {expected_drugs}, got: {all_drugs}"
-            )
+            assert (
+                len(found_expected) > 0
+            ), f"Expected at least one of {expected_drugs}, got: {all_drugs}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -53,7 +63,9 @@ class TestCIViCBRAFV600E:
         async with CIViCClient() as client:
             assertions = await client.fetch_assertions("BRAF", "V600E", max_results=50)
             sensitivity_asserts = [a for a in assertions if a.is_sensitivity()]
-            assert len(sensitivity_asserts) > 0, "BRAF V600E should have sensitivity assertions"
+            assert (
+                len(sensitivity_asserts) > 0
+            ), "BRAF V600E should have sensitivity assertions"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -61,7 +73,9 @@ class TestCIViCBRAFV600E:
         """BRAF V600E should have Tier I (strongest evidence) assertions."""
         async with CIViCClient() as client:
             assertions = await client.fetch_tier_i_assertions("BRAF", "V600E")
-            assert len(assertions) >= 1, "BRAF V600E should have at least 1 Tier I assertion"
+            assert (
+                len(assertions) >= 1
+            ), "BRAF V600E should have at least 1 Tier I assertion"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -72,7 +86,9 @@ class TestCIViCBRAFV600E:
 
             diseases = {a.disease.lower() for a in assertions if a.disease}
             melanoma_related = any("melanoma" in d for d in diseases)
-            assert melanoma_related, f"Should have melanoma-related evidence, got: {diseases}"
+            assert (
+                melanoma_related
+            ), f"Should have melanoma-related evidence, got: {diseases}"
 
 
 class TestCIViCEGFRL858R:
@@ -100,9 +116,9 @@ class TestCIViCEGFRL858R:
                     all_drugs.add(drug.lower())
 
             found_expected = all_drugs & expected_drugs
-            assert len(found_expected) > 0, (
-                f"Expected at least one EGFR TKI {expected_drugs}, got: {all_drugs}"
-            )
+            assert (
+                len(found_expected) > 0
+            ), f"Expected at least one EGFR TKI {expected_drugs}, got: {all_drugs}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -111,7 +127,9 @@ class TestCIViCEGFRL858R:
         async with CIViCClient() as client:
             assertions = await client.fetch_assertions("EGFR", "L858R", max_results=50)
             sensitivity_asserts = [a for a in assertions if a.is_sensitivity()]
-            assert len(sensitivity_asserts) > 0, "EGFR L858R should have sensitivity assertions"
+            assert (
+                len(sensitivity_asserts) > 0
+            ), "EGFR L858R should have sensitivity assertions"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -122,8 +140,7 @@ class TestCIViCEGFRL858R:
 
             diseases = {a.disease.lower() for a in assertions if a.disease}
             lung_related = any(
-                "lung" in d or "nsclc" in d or "non-small" in d
-                for d in diseases
+                "lung" in d or "nsclc" in d or "non-small" in d for d in diseases
             )
             assert lung_related, f"Should have lung cancer evidence, got: {diseases}"
 
@@ -203,10 +220,23 @@ class TestCIViCAssertionStructure:
             assertions = await client.fetch_assertions("BRAF", "V600E", max_results=10)
 
             expected_keys = {
-                "assertion_id", "name", "amp_level", "amp_tier", "amp_level_letter",
-                "assertion_type", "assertion_direction", "significance", "status",
-                "molecular_profile", "disease", "therapies", "fda_companion_test",
-                "nccn_guideline", "description", "is_sensitivity", "is_resistance"
+                "assertion_id",
+                "name",
+                "amp_level",
+                "amp_tier",
+                "amp_level_letter",
+                "assertion_type",
+                "assertion_direction",
+                "significance",
+                "status",
+                "molecular_profile",
+                "disease",
+                "therapies",
+                "fda_companion_test",
+                "nccn_guideline",
+                "description",
+                "is_sensitivity",
+                "is_resistance",
             }
 
             for assertion in assertions:
@@ -229,9 +259,9 @@ class TestCIViCTumorTypeFilter:
             # If we got results, they should be melanoma-related
             for assertion in assertions:
                 disease_lower = assertion.disease.lower()
-                assert "melanoma" in disease_lower or "skin" in disease_lower, (
-                    f"Expected melanoma-related disease, got: {assertion.disease}"
-                )
+                assert (
+                    "melanoma" in disease_lower or "skin" in disease_lower
+                ), f"Expected melanoma-related disease, got: {assertion.disease}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -243,7 +273,9 @@ class TestCIViCTumorTypeFilter:
             )
 
             # EGFR L858R in NSCLC should return results
-            assert len(assertions) >= 1, "EGFR L858R with NSCLC filter should have results"
+            assert (
+                len(assertions) >= 1
+            ), "EGFR L858R with NSCLC filter should have results"
 
 
 class TestCIViCAssertionEvidence:
@@ -254,7 +286,9 @@ class TestCIViCAssertionEvidence:
     async def test_fetch_assertion_evidence(self):
         """fetch_assertion_evidence should return evidence objects."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=10)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=10
+            )
 
             assert len(evidence_list) >= 1, "Should return at least 1 evidence object"
             for evidence in evidence_list:
@@ -266,21 +300,27 @@ class TestCIViCAssertionEvidence:
     async def test_locus_match_tracking(self):
         """Locus match should be correctly tracked in evidence."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=10)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=10
+            )
 
             # V600E exact matches should have variant-level match
-            v600e_evidence = [e for e in evidence_list if "V600E" in e.molecular_profile.upper()]
+            v600e_evidence = [
+                e for e in evidence_list if "V600E" in e.molecular_profile.upper()
+            ]
             for evidence in v600e_evidence:
-                assert evidence.locus_match == "variant", (
-                    f"V600E exact match should be variant level, got {evidence.locus_match}"
-                )
+                assert (
+                    evidence.locus_match == "variant"
+                ), f"V600E exact match should be variant level, got {evidence.locus_match}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_evidence_has_required_fields(self):
         """Evidence objects should have all required fields populated."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=5)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=5
+            )
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:
@@ -305,13 +345,15 @@ class TestCIViCAssertionEvidence:
     async def test_evidence_sensitivity_resistance_flags(self):
         """Evidence should correctly flag sensitivity and resistance."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=20)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=20
+            )
 
             # Should have at least one sensitivity assertion for BRAF V600E
             sensitivity_evidence = [e for e in evidence_list if e.is_sensitivity]
-            assert len(sensitivity_evidence) > 0, (
-                "BRAF V600E should have sensitivity evidence"
-            )
+            assert (
+                len(sensitivity_evidence) > 0
+            ), "BRAF V600E should have sensitivity evidence"
 
             # Check flags are boolean
             for evidence in evidence_list:
@@ -323,7 +365,9 @@ class TestCIViCAssertionEvidence:
     async def test_evidence_amp_tier_levels(self):
         """Evidence should have AMP tier information."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=20)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=20
+            )
 
             # At least some BRAF V600E evidence should have AMP tier (Tier I)
             tiered_evidence = [e for e in evidence_list if e.amp_tier]
@@ -355,15 +399,17 @@ class TestCIViCAssertionEvidence:
     async def test_evidence_egfr_l858r(self):
         """EGFR L858R should return evidence with expected structure."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("EGFR", "L858R", max_results=10)
+            evidence_list = await client.fetch_assertion_evidence(
+                "EGFR", "L858R", max_results=10
+            )
 
             assert len(evidence_list) >= 1, "EGFR L858R should have evidence"
 
             # Should have sensitivity evidence (EGFR TKI sensitivity)
             sensitivity_evidence = [e for e in evidence_list if e.is_sensitivity]
-            assert len(sensitivity_evidence) > 0, (
-                "EGFR L858R should have TKI sensitivity evidence"
-            )
+            assert (
+                len(sensitivity_evidence) > 0
+            ), "EGFR L858R should have TKI sensitivity evidence"
 
             # Should have therapies
             for evidence in sensitivity_evidence:
@@ -375,7 +421,9 @@ class TestCIViCAssertionEvidence:
     async def test_evidence_gene_only_query(self):
         """Querying by gene only should return gene-level matches."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", max_results=10)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", max_results=10
+            )
 
             assert len(evidence_list) >= 1, "BRAF gene query should return evidence"
 
@@ -388,7 +436,9 @@ class TestCIViCAssertionEvidence:
     async def test_evidence_serialization(self):
         """Evidence should serialize correctly via model_dump."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_assertion_evidence("BRAF", "V600E", max_results=3)
+            evidence_list = await client.fetch_assertion_evidence(
+                "BRAF", "V600E", max_results=3
+            )
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:
@@ -428,9 +478,9 @@ class TestCIViCEvidenceItems:
             # Check for uniqueness - no duplicate EIDs
             evidence_ids = [e.evidence_id for e in evidence_list]
             unique_ids = set(evidence_ids)
-            assert len(evidence_ids) == len(unique_ids), (
-                f"Duplicate EIDs found: {evidence_ids}"
-            )
+            assert len(evidence_ids) == len(
+                unique_ids
+            ), f"Duplicate EIDs found: {evidence_ids}"
 
             # Verify each item has required fields
             for evidence in evidence_list:
@@ -444,16 +494,18 @@ class TestCIViCEvidenceItems:
             for e in evidence_list:
                 drug_names.extend(e.drugs or [])
             drug_names_lower = [d.lower() for d in drug_names]
-            assert any("capiva" in d for d in drug_names_lower), (
-                f"Should have Capivasertib evidence, found: {drug_names}"
-            )
+            assert any(
+                "capiva" in d for d in drug_names_lower
+            ), f"Should have Capivasertib evidence, found: {drug_names}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_fetch_evidence_items_braf_v600e(self):
         """BRAF V600E should return evidence items (EIDs)."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=10
+            )
 
             assert len(evidence_list) >= 1, "BRAF V600E should have evidence items"
 
@@ -475,7 +527,9 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_have_required_fields(self):
         """Evidence items should have all required fields populated."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=5)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=5
+            )
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:
@@ -493,11 +547,15 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_with_drugs(self):
         """BRAF V600E evidence items should include drug information."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=20)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=20
+            )
 
             # At least some evidence should have drugs
             evidence_with_drugs = [e for e in evidence_list if e.drugs]
-            assert len(evidence_with_drugs) > 0, "BRAF V600E should have evidence with drug info"
+            assert (
+                len(evidence_with_drugs) > 0
+            ), "BRAF V600E should have evidence with drug info"
 
             for evidence in evidence_with_drugs:
                 assert isinstance(evidence.drugs, list)
@@ -508,7 +566,9 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_with_pmid(self):
         """Evidence items should have PMID references."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=10
+            )
 
             # At least some evidence should have PMIDs
             evidence_with_pmid = [e for e in evidence_list if e.pmid]
@@ -524,13 +584,17 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_egfr_l858r(self):
         """EGFR L858R should return evidence items."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("EGFR", "L858R", max_per_level=10)
+            evidence_list = await client.fetch_evidence_items(
+                "EGFR", "L858R", max_per_level=10
+            )
 
             assert len(evidence_list) >= 1, "EGFR L858R should have evidence items"
 
             # Should have variant-level matches
             variant_matches = [e for e in evidence_list if e.locus_match == "variant"]
-            assert len(variant_matches) > 0, "EGFR L858R should have variant-level matches"
+            assert (
+                len(variant_matches) > 0
+            ), "EGFR L858R should have variant-level matches"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -566,7 +630,9 @@ class TestCIViCEvidenceItems:
     async def test_evidence_items_serialization(self):
         """Evidence items should serialize correctly via model_dump."""
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=3)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=3
+            )
 
             assert len(evidence_list) >= 1
             for evidence in evidence_list:

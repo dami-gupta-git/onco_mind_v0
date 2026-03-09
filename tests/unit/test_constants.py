@@ -18,11 +18,16 @@ class TestIsAcquiredResistanceMutation:
 
     def test_alk_f1174l_lung_adeno(self):
         # Substring match on "lung"
-        assert is_acquired_resistance_mutation("ALK", "F1174L", "Lung adenocarcinoma") is True
+        assert (
+            is_acquired_resistance_mutation("ALK", "F1174L", "Lung adenocarcinoma")
+            is True
+        )
 
     def test_alk_f1174l_neuroblastoma(self):
         # Primary oncogenic driver in neuroblastoma — NOT acquired resistance
-        assert is_acquired_resistance_mutation("ALK", "F1174L", "Neuroblastoma") is False
+        assert (
+            is_acquired_resistance_mutation("ALK", "F1174L", "Neuroblastoma") is False
+        )
 
     def test_alk_f1174l_no_tumor_type(self):
         # Unknown context — safe default is False

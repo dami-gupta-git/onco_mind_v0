@@ -298,20 +298,14 @@ class TestParseVcfVariant:
 
     def test_gene_from_info(self):
         """Test extraction of gene from INFO field."""
-        result = parse_vcf_variant(
-            "chr7", 140453136, "A", "T",
-            info={"GENE": "BRAF"}
-        )
+        result = parse_vcf_variant("chr7", 140453136, "A", "T", info={"GENE": "BRAF"})
 
         assert result.gene == "BRAF"
         assert result.parse_confidence == 0.8
 
     def test_gene_from_info_lowercase(self):
         """Test extraction of gene from lowercase INFO key."""
-        result = parse_vcf_variant(
-            "chr7", 140453136, "A", "T",
-            info={"gene": "EGFR"}
-        )
+        result = parse_vcf_variant("chr7", 140453136, "A", "T", info={"gene": "EGFR"})
 
         assert result.gene == "EGFR"
 
@@ -363,17 +357,20 @@ class TestParsedVariantDataclass:
 class TestRealWorldVariants:
     """Tests with real-world variant examples."""
 
-    @pytest.mark.parametrize("input_str,expected_gene,expected_variant", [
-        ("BRAF V600E", "BRAF", "V600E"),
-        ("EGFR L858R", "EGFR", "L858R"),
-        ("KRAS G12C", "KRAS", "G12C"),
-        ("KRAS G12D", "KRAS", "G12D"),
-        ("TP53 R175H", "TP53", "R175H"),
-        ("PIK3CA H1047R", "PIK3CA", "H1047R"),
-        ("NRAS Q61K", "NRAS", "Q61K"),
-        ("IDH1 R132H", "IDH1", "R132H"),
-        ("KIT D816V", "KIT", "D816V"),
-    ])
+    @pytest.mark.parametrize(
+        "input_str,expected_gene,expected_variant",
+        [
+            ("BRAF V600E", "BRAF", "V600E"),
+            ("EGFR L858R", "EGFR", "L858R"),
+            ("KRAS G12C", "KRAS", "G12C"),
+            ("KRAS G12D", "KRAS", "G12D"),
+            ("TP53 R175H", "TP53", "R175H"),
+            ("PIK3CA H1047R", "PIK3CA", "H1047R"),
+            ("NRAS Q61K", "NRAS", "Q61K"),
+            ("IDH1 R132H", "IDH1", "R132H"),
+            ("KIT D816V", "KIT", "D816V"),
+        ],
+    )
     def test_common_cancer_variants(self, input_str, expected_gene, expected_variant):
         """Test parsing common cancer variants."""
         result = parse_variant_input(input_str)
@@ -382,11 +379,14 @@ class TestRealWorldVariants:
         assert result.variant == expected_variant
         assert result.variant_type == "missense"
 
-    @pytest.mark.parametrize("input_str,expected_gene,expected_variant", [
-        ("BRAF:V600E", "BRAF", "V600E"),
-        ("EGFR:L858R", "EGFR", "L858R"),
-        ("KRAS:G12C", "KRAS", "G12C"),
-    ])
+    @pytest.mark.parametrize(
+        "input_str,expected_gene,expected_variant",
+        [
+            ("BRAF:V600E", "BRAF", "V600E"),
+            ("EGFR:L858R", "EGFR", "L858R"),
+            ("KRAS:G12C", "KRAS", "G12C"),
+        ],
+    )
     def test_colon_format_variants(self, input_str, expected_gene, expected_variant):
         """Test parsing colon-separated format."""
         result = parse_variant_input(input_str)
@@ -394,12 +394,15 @@ class TestRealWorldVariants:
         assert result.gene == expected_gene
         assert result.variant == expected_variant
 
-    @pytest.mark.parametrize("input_str,expected_tumor", [
-        ("EGFR L858R in NSCLC", "NSCLC"),
-        ("BRAF V600E in melanoma", "melanoma"),
-        ("KRAS G12C with lung cancer", "lung cancer"),
-        ("PIK3CA H1047R for breast cancer", "breast cancer"),
-    ])
+    @pytest.mark.parametrize(
+        "input_str,expected_tumor",
+        [
+            ("EGFR L858R in NSCLC", "NSCLC"),
+            ("BRAF V600E in melanoma", "melanoma"),
+            ("KRAS G12C with lung cancer", "lung cancer"),
+            ("PIK3CA H1047R for breast cancer", "breast cancer"),
+        ],
+    )
     def test_variants_with_tumor_types(self, input_str, expected_tumor):
         """Test parsing variants with tumor types."""
         result = parse_variant_input(input_str)

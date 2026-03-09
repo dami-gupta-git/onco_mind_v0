@@ -42,7 +42,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "capivasertib",
         "approval_date": "2023-11-16",
     },
-
     # BRAF inhibitors
     "vemurafenib": {
         "appl_no": "202429",
@@ -80,7 +79,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "encorafenib",
         "approval_date": "2018-06-27",
     },
-
     # MEK inhibitors
     "trametinib": {
         "appl_no": "204114",
@@ -118,7 +116,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "binimetinib",
         "approval_date": "2018-06-27",
     },
-
     # EGFR inhibitors
     "erlotinib": {
         "appl_no": "021743",
@@ -174,7 +171,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "osimertinib",
         "approval_date": "2015-11-13",
     },
-
     # ALK inhibitors
     "crizotinib": {
         "appl_no": "202570",
@@ -236,7 +232,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "lorlatinib",
         "approval_date": "2018-11-02",
     },
-
     # KRAS G12C inhibitors
     "sotorasib": {
         "appl_no": "214665",
@@ -280,7 +275,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "adagrasib",
         "approval_date": "2022-12-12",
     },
-
     # HER2 inhibitors
     "trastuzumab": {
         "appl_no": "103792",
@@ -354,7 +348,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "trastuzumab deruxtecan",
         "approval_date": "2019-12-20",
     },
-
     # PARP inhibitors
     "olaparib": {
         "appl_no": "206162",
@@ -404,7 +397,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "talazoparib",
         "approval_date": "2018-10-16",
     },
-
     # Checkpoint inhibitors
     "pembrolizumab": {
         "appl_no": "125514",
@@ -466,7 +458,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "ipilimumab",
         "approval_date": "2011-03-25",
     },
-
     # BCR-ABL inhibitors
     "imatinib": {
         "appl_no": "021588",
@@ -528,7 +519,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "ponatinib",
         "approval_date": "2012-12-14",
     },
-
     # CDK4/6 inhibitors
     "palbociclib": {
         "appl_no": "207103",
@@ -566,7 +556,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "abemaciclib",
         "approval_date": "2017-09-28",
     },
-
     # PI3K inhibitors
     "alpelisib": {
         "appl_no": "212526",
@@ -580,7 +569,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "alpelisib",
         "approval_date": "2019-05-24",
     },
-
     # RET inhibitors
     "selpercatinib": {
         "appl_no": "213246",
@@ -606,7 +594,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "pralsetinib",
         "approval_date": "2020-09-04",
     },
-
     # MET inhibitors
     "capmatinib": {
         "appl_no": "213591",
@@ -632,7 +619,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "tepotinib",
         "approval_date": "2021-02-03",
     },
-
     # EZH2 inhibitors
     "tazemetostat": {
         "appl_no": "213400",
@@ -646,7 +632,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "tazemetostat",
         "approval_date": "2020-01-23",
     },
-
     # IDH inhibitors
     "ivosidenib": {
         "appl_no": "211192",
@@ -672,7 +657,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "enasidenib",
         "approval_date": "2017-08-01",
     },
-
     # FGFR inhibitors
     "erdafitinib": {
         "appl_no": "212018",
@@ -698,7 +682,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "pemigatinib",
         "approval_date": "2020-04-17",
     },
-
     # NTRK inhibitors
     "larotrectinib": {
         "appl_no": "211710",
@@ -724,7 +707,6 @@ ONCOLOGY_DRUG_MAPPINGS: dict[str, dict[str, Any]] = {
         "generic": "entrectinib",
         "approval_date": "2019-08-15",
     },
-
     # Fulvestrant (ER antagonist)
     "fulvestrant": {
         "appl_no": "021344",
@@ -747,8 +729,12 @@ class FDADrugLookup:
     # URL templates
     DRUGS_AT_FDA_PRODUCT_URL = "https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={appl_no}"
     DRUGS_AT_FDA_SEARCH_URL = "https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=BasicSearch.process&searchTerm={drug_name}"
-    FDA_PRESS_SEARCH_URL = "https://www.fda.gov/news-events/press-announcements?search={drug_name}"
-    FDA_SITE_SEARCH_URL = "https://search.usa.gov/search?affiliate=fda1&query={drug_name}"
+    FDA_PRESS_SEARCH_URL = (
+        "https://www.fda.gov/news-events/press-announcements?search={drug_name}"
+    )
+    FDA_SITE_SEARCH_URL = (
+        "https://search.usa.gov/search?affiliate=fda1&query={drug_name}"
+    )
 
     def __init__(self):
         self.mappings = ONCOLOGY_DRUG_MAPPINGS
@@ -760,7 +746,7 @@ class FDADrugLookup:
         # Remove common suffixes/prefixes
         for suffix in [" hydrochloride", " hcl", " mesylate", " tosylate", " maleate"]:
             if normalized.endswith(suffix):
-                normalized = normalized[:-len(suffix)]
+                normalized = normalized[: -len(suffix)]
         return normalized
 
     def get_drug_info(self, drug_name: str) -> dict[str, Any]:
@@ -793,10 +779,18 @@ class FDADrugLookup:
                 "generic": mapping.get("generic"),
                 "appl_no": appl_no,
                 "approval_date": mapping.get("approval_date"),
-                "drugs_at_fda_url": self.DRUGS_AT_FDA_PRODUCT_URL.format(appl_no=appl_no),
-                "drugs_at_fda_search_url": self.DRUGS_AT_FDA_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
-                "fda_press_search_url": self.FDA_PRESS_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
-                "fda_site_search_url": self.FDA_SITE_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
+                "drugs_at_fda_url": self.DRUGS_AT_FDA_PRODUCT_URL.format(
+                    appl_no=appl_no
+                ),
+                "drugs_at_fda_search_url": self.DRUGS_AT_FDA_SEARCH_URL.format(
+                    drug_name=quote_plus(drug_name)
+                ),
+                "fda_press_search_url": self.FDA_PRESS_SEARCH_URL.format(
+                    drug_name=quote_plus(drug_name)
+                ),
+                "fda_site_search_url": self.FDA_SITE_SEARCH_URL.format(
+                    drug_name=quote_plus(drug_name)
+                ),
             }
 
         # Not in curated mapping - return search URLs
@@ -807,9 +801,15 @@ class FDADrugLookup:
             "appl_no": None,
             "approval_date": None,
             "drugs_at_fda_url": None,  # Can't generate direct URL without appl_no
-            "drugs_at_fda_search_url": self.DRUGS_AT_FDA_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
-            "fda_press_search_url": self.FDA_PRESS_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
-            "fda_site_search_url": self.FDA_SITE_SEARCH_URL.format(drug_name=quote_plus(drug_name)),
+            "drugs_at_fda_search_url": self.DRUGS_AT_FDA_SEARCH_URL.format(
+                drug_name=quote_plus(drug_name)
+            ),
+            "fda_press_search_url": self.FDA_PRESS_SEARCH_URL.format(
+                drug_name=quote_plus(drug_name)
+            ),
+            "fda_site_search_url": self.FDA_SITE_SEARCH_URL.format(
+                drug_name=quote_plus(drug_name)
+            ),
         }
 
     def get_drugs_at_fda_url(self, drug_name: str) -> str | None:
@@ -881,79 +881,68 @@ class FDALabelInfo(BaseModel):
 
     # FDA identifiers
     application_number: str | None = Field(
-        default=None,
-        description="FDA application number (NDA/BLA/ANDA)"
+        default=None, description="FDA application number (NDA/BLA/ANDA)"
     )
     set_id: str | None = Field(
-        default=None,
-        description="Unique identifier for this label set"
+        default=None, description="Unique identifier for this label set"
     )
 
     # URLs
     drugs_at_fda_url: str | None = Field(
-        default=None,
-        description="Direct URL to Drugs@FDA product page"
+        default=None, description="Direct URL to Drugs@FDA product page"
     )
     label_pdf_url: str | None = Field(
-        default=None,
-        description="URL to FDA label PDF (from DailyMed)"
+        default=None, description="URL to FDA label PDF (from DailyMed)"
     )
     pubmed_url: str | None = Field(
-        default=None,
-        description="PubMed search URL for the drug"
+        default=None, description="PubMed search URL for the drug"
     )
     approval_docs: list[str] = Field(
         default_factory=list,
-        description="URLs to approval letters, medical reviews, etc."
+        description="URLs to approval letters, medical reviews, etc.",
     )
 
     # Approval information
     approval_date: str | None = None
     approval_date_source: str = Field(
         default="openfda",
-        description="Source of approval date: 'openfda', 'curated', or 'label_text'"
+        description="Source of approval date: 'openfda', 'curated', or 'label_text'",
     )
 
     # Label content
     indications_and_usage: str | None = Field(
-        default=None,
-        description="Full indications and usage text from label"
+        default=None, description="Full indications and usage text from label"
     )
     biomarker_text_exact: str | None = Field(
-        default=None,
-        description="Extracted biomarker-specific indication text"
+        default=None, description="Extracted biomarker-specific indication text"
     )
 
     # Biomarker specificity - is approval for gene-level or specific variant?
     biomarker_specificity: str | None = Field(
         default=None,
         description="'variant' if approval is for specific variant (e.g., BRAF V600E), "
-                    "'gene' if for any mutation in gene (e.g., BRCA-mutated), "
-                    "'phenotype' if for phenotype (e.g., MSI-H, HRD)"
+        "'gene' if for any mutation in gene (e.g., BRCA-mutated), "
+        "'phenotype' if for phenotype (e.g., MSI-H, HRD)",
     )
     specific_variants: list[str] = Field(
         default_factory=list,
-        description="List of specific variants mentioned in approval (e.g., ['V600E', 'V600K'])"
+        description="List of specific variants mentioned in approval (e.g., ['V600E', 'V600K'])",
     )
     target_genes: list[str] = Field(
-        default_factory=list,
-        description="List of genes mentioned in approval"
+        default_factory=list, description="List of genes mentioned in approval"
     )
 
     # Extracted clinical data
     trials_cited: list[str] = Field(
-        default_factory=list,
-        description="NCT IDs of trials cited in the label"
+        default_factory=list, description="NCT IDs of trials cited in the label"
     )
 
     # Metadata
     effective_date: str | None = Field(
-        default=None,
-        description="Effective date of this label version"
+        default=None, description="Effective date of this label version"
     )
     api_success: bool = Field(
-        default=False,
-        description="Whether OpenFDA API call succeeded"
+        default=False, description="Whether OpenFDA API call succeeded"
     )
     error_message: str | None = None
 
@@ -965,28 +954,30 @@ class OpenFDAClient:
     """
 
     BASE_URL = "https://api.fda.gov/drug/label.json"
-    DAILYMED_LABEL_URL = "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={set_id}"
+    DAILYMED_LABEL_URL = (
+        "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={set_id}"
+    )
     PUBMED_SEARCH_URL = "https://pubmed.ncbi.nlm.nih.gov/?term={drug_name}+cancer"
 
     # Patterns for extracting biomarker text
     BIOMARKER_PATTERNS = [
         # Gene + variant patterns
-        r'((?:EGFR|BRAF|KRAS|NRAS|HER2|ERBB2|ALK|ROS1|RET|MET|NTRK|BRCA|PIK3CA|AKT1|IDH1|IDH2|FGFR|KIT|PDGFRA|FLT3|NPM1|TP53|ATM|PALB2|RAD51|CHEK2|CDH1|STK11|NF1|PTEN|RB1|SMAD4|ARID1A|MSH2|MLH1|MSH6|PMS2|POLE|POLD1)[^.]*(?:mutation|mutant|mutated|alteration|amplification|fusion|rearrangement|deletion|insertion|exon)[^.]*\.)',
+        r"((?:EGFR|BRAF|KRAS|NRAS|HER2|ERBB2|ALK|ROS1|RET|MET|NTRK|BRCA|PIK3CA|AKT1|IDH1|IDH2|FGFR|KIT|PDGFRA|FLT3|NPM1|TP53|ATM|PALB2|RAD51|CHEK2|CDH1|STK11|NF1|PTEN|RB1|SMAD4|ARID1A|MSH2|MLH1|MSH6|PMS2|POLE|POLD1)[^.]*(?:mutation|mutant|mutated|alteration|amplification|fusion|rearrangement|deletion|insertion|exon)[^.]*\.)",
         # MSI-H/dMMR patterns
-        r'(microsatellite instability[^.]*\.)',
-        r'(mismatch repair deficien[^.]*\.)',
-        r'(MSI-H[^.]*\.)',
-        r'(dMMR[^.]*\.)',
+        r"(microsatellite instability[^.]*\.)",
+        r"(mismatch repair deficien[^.]*\.)",
+        r"(MSI-H[^.]*\.)",
+        r"(dMMR[^.]*\.)",
         # HRD patterns
-        r'(homologous recombination[^.]*\.)',
-        r'(HRD[^.]*\.)',
+        r"(homologous recombination[^.]*\.)",
+        r"(HRD[^.]*\.)",
         # TMB patterns
-        r'(tumor mutational burden[^.]*\.)',
-        r'(TMB[^.]*\.)',
+        r"(tumor mutational burden[^.]*\.)",
+        r"(TMB[^.]*\.)",
     ]
 
     # Pattern for NCT IDs
-    NCT_PATTERN = r'NCT\d{8}'
+    NCT_PATTERN = r"NCT\d{8}"
 
     def __init__(self, timeout: float = 10.0):
         self.timeout = timeout
@@ -1037,11 +1028,14 @@ class OpenFDAClient:
                             break
 
         if not result.api_success and not curated_info["found"]:
-            result.error_message = f"Drug '{drug_name}' not found in OpenFDA or curated mapping"
+            result.error_message = (
+                f"Drug '{drug_name}' not found in OpenFDA or curated mapping"
+            )
 
         # Generate PubMed search URL using generic name if available
         search_term = result.generic_name or drug_name
         from urllib.parse import quote
+
         result.pubmed_url = self.PUBMED_SEARCH_URL.format(drug_name=quote(search_term))
 
         return result
@@ -1061,8 +1055,7 @@ class OpenFDAClient:
             for query in search_queries:
                 try:
                     response = await client.get(
-                        self.BASE_URL,
-                        params={"search": query, "limit": 1}
+                        self.BASE_URL, params={"search": query, "limit": 1}
                     )
 
                     if response.status_code == 200:
@@ -1096,10 +1089,12 @@ class OpenFDAClient:
             # Build Drugs@FDA URL if we don't have one
             if not result.drugs_at_fda_url:
                 # Extract just the number part (remove NDA/BLA prefix)
-                num_match = re.search(r'\d+', appl_no)
+                num_match = re.search(r"\d+", appl_no)
                 if num_match:
-                    result.drugs_at_fda_url = self._drug_lookup.DRUGS_AT_FDA_PRODUCT_URL.format(
-                        appl_no=num_match.group()
+                    result.drugs_at_fda_url = (
+                        self._drug_lookup.DRUGS_AT_FDA_PRODUCT_URL.format(
+                            appl_no=num_match.group()
+                        )
                     )
 
         # Set ID for DailyMed label URL
@@ -1130,7 +1125,11 @@ class OpenFDAClient:
         # Extract NCT IDs from clinical studies section
         clinical_studies = data.get("clinical_studies", [])
         if clinical_studies:
-            studies_text = " ".join(clinical_studies) if isinstance(clinical_studies, list) else str(clinical_studies)
+            studies_text = (
+                " ".join(clinical_studies)
+                if isinstance(clinical_studies, list)
+                else str(clinical_studies)
+            )
             result.trials_cited = self._extract_nct_ids(studies_text)
 
         # Also check indications for NCT IDs
@@ -1190,18 +1189,59 @@ class OpenFDAClient:
 
         # Known oncology genes - scan text for all mentioned genes
         oncology_genes = [
-            'EGFR', 'BRAF', 'KRAS', 'NRAS', 'HER2', 'ERBB2', 'ALK', 'ROS1', 'RET',
-            'MET', 'NTRK', 'NTRK1', 'NTRK2', 'NTRK3', 'BRCA1', 'BRCA2', 'BRCA',
-            'PIK3CA', 'AKT1', 'IDH1', 'IDH2', 'FGFR', 'FGFR1', 'FGFR2', 'FGFR3',
-            'KIT', 'PDGFRA', 'FLT3', 'NPM1', 'TP53', 'ATM', 'PALB2', 'RAD51',
-            'CHEK2', 'CDH1', 'STK11', 'NF1', 'PTEN', 'RB1', 'SMAD4', 'ARID1A',
-            'MSH2', 'MLH1', 'MSH6', 'PMS2', 'POLE', 'POLD1'
+            "EGFR",
+            "BRAF",
+            "KRAS",
+            "NRAS",
+            "HER2",
+            "ERBB2",
+            "ALK",
+            "ROS1",
+            "RET",
+            "MET",
+            "NTRK",
+            "NTRK1",
+            "NTRK2",
+            "NTRK3",
+            "BRCA1",
+            "BRCA2",
+            "BRCA",
+            "PIK3CA",
+            "AKT1",
+            "IDH1",
+            "IDH2",
+            "FGFR",
+            "FGFR1",
+            "FGFR2",
+            "FGFR3",
+            "KIT",
+            "PDGFRA",
+            "FLT3",
+            "NPM1",
+            "TP53",
+            "ATM",
+            "PALB2",
+            "RAD51",
+            "CHEK2",
+            "CDH1",
+            "STK11",
+            "NF1",
+            "PTEN",
+            "RB1",
+            "SMAD4",
+            "ARID1A",
+            "MSH2",
+            "MLH1",
+            "MSH6",
+            "PMS2",
+            "POLE",
+            "POLD1",
         ]
 
         # Find all genes mentioned in text
         genes_found = set()
         for gene in oncology_genes:
-            gene_pattern = rf'\b{gene}\b'
+            gene_pattern = rf"\b{gene}\b"
             if re.search(gene_pattern, text_upper):
                 genes_found.add(gene)
 
@@ -1296,12 +1336,13 @@ class OpenFDAClient:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.get(
-                    self.BASE_URL,
-                    params={"search": search_query, "limit": limit}
+                    self.BASE_URL, params={"search": search_query, "limit": limit}
                 )
 
                 if response.status_code != 200:
-                    logger.warning(f"OpenFDA biomarker search failed: {response.status_code}")
+                    logger.warning(
+                        f"OpenFDA biomarker search failed: {response.status_code}"
+                    )
                     return results
 
                 data = response.json()
@@ -1311,8 +1352,16 @@ class OpenFDAClient:
                     # Parse into FDALabelInfo
                     openfda = label_data.get("openfda", {})
 
-                    brand_name = openfda.get("brand_name", [None])[0] if openfda.get("brand_name") else None
-                    generic_name = openfda.get("generic_name", [None])[0] if openfda.get("generic_name") else None
+                    brand_name = (
+                        openfda.get("brand_name", [None])[0]
+                        if openfda.get("brand_name")
+                        else None
+                    )
+                    generic_name = (
+                        openfda.get("generic_name", [None])[0]
+                        if openfda.get("generic_name")
+                        else None
+                    )
                     drug_name = generic_name or brand_name or "Unknown"
 
                     result = FDALabelInfo(drug_name=drug_name)
@@ -1325,7 +1374,9 @@ class OpenFDAClient:
 
                     # Apply biomarker specificity analysis
                     if result.indications_and_usage:
-                        self._apply_biomarker_specificity(result.indications_and_usage, result)
+                        self._apply_biomarker_specificity(
+                            result.indications_and_usage, result
+                        )
 
                     # Verify the gene is actually in target_genes
                     # (API search may have false positives)
@@ -1360,7 +1411,9 @@ class OpenFDAClient:
                 seen_drugs.add(key)
                 unique_results.append(result)
 
-        logger.info(f"OpenFDA biomarker search for {gene}: found {len(unique_results)} drugs")
+        logger.info(
+            f"OpenFDA biomarker search for {gene}: found {len(unique_results)} drugs"
+        )
         return unique_results
 
 
@@ -1421,8 +1474,7 @@ async def get_fda_labels_for_biomarker(
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(
-            base_url,
-            params={"search": search_query, "limit": limit}
+            base_url, params={"search": search_query, "limit": limit}
         )
 
         # q1 = 'indications_and_usage:"EGFR"'
@@ -1448,7 +1500,6 @@ async def get_fda_labels_for_biomarker(
         if response.status_code == 200:
             data = response.json()
             labels = data.get("results", [])
-
 
     return labels
 
@@ -1508,7 +1559,9 @@ class FDALabelCache:
                     data = json.load(f)
                     self._cache = data.get("drugs", {})
                     self._last_updated = data.get("last_updated")
-                    logger.info(f"Loaded FDA label cache: {len(self._cache)} drugs, updated {self._last_updated}")
+                    logger.info(
+                        f"Loaded FDA label cache: {len(self._cache)} drugs, updated {self._last_updated}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to load FDA label cache: {e}")
                 self._cache = {}
@@ -1534,9 +1587,15 @@ class FDALabelCache:
             cached_data = self._cache[normalized]
         else:
             # Try without common suffixes
-            for suffix in [" hydrochloride", " hcl", " mesylate", " tosylate", " maleate"]:
+            for suffix in [
+                " hydrochloride",
+                " hcl",
+                " mesylate",
+                " tosylate",
+                " maleate",
+            ]:
                 if normalized.endswith(suffix):
-                    stripped = normalized[:-len(suffix)]
+                    stripped = normalized[: -len(suffix)]
                     if stripped in self._cache:
                         cached_data = self._cache[stripped]
                         break
@@ -1550,8 +1609,11 @@ class FDALabelCache:
         # Generate PubMed URL if not present (for backwards compatibility with old cache)
         if not info.pubmed_url:
             from urllib.parse import quote
+
             search_term = info.generic_name or info.drug_name
-            info.pubmed_url = f"https://pubmed.ncbi.nlm.nih.gov/?term={quote(search_term)}+cancer"
+            info.pubmed_url = (
+                f"https://pubmed.ncbi.nlm.nih.gov/?term={quote(search_term)}+cancer"
+            )
 
         return info
 
@@ -1565,15 +1627,14 @@ class FDALabelCache:
         """Save cache to disk."""
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = {
-            "last_updated": datetime.now().isoformat(),
-            "drugs": self._cache
-        }
+        data = {"last_updated": datetime.now().isoformat(), "drugs": self._cache}
 
         with open(self.cache_path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
-        logger.info(f"Saved FDA label cache: {len(self._cache)} drugs to {self.cache_path}")
+        logger.info(
+            f"Saved FDA label cache: {len(self._cache)} drugs to {self.cache_path}"
+        )
 
     @property
     def last_updated(self) -> str | None:
@@ -1603,7 +1664,9 @@ def get_cached_fda_label(drug_name: str) -> FDALabelInfo | None:
     return get_fda_label_cache().get(drug_name)
 
 
-def get_fda_label_with_fallback(drug_name: str, fetch_if_missing: bool = False) -> FDALabelInfo | None:
+def get_fda_label_with_fallback(
+    drug_name: str, fetch_if_missing: bool = False
+) -> FDALabelInfo | None:
     """Get FDA label info from cache, optionally fetching if missing.
 
     Args:
@@ -1622,6 +1685,7 @@ def get_fda_label_with_fallback(drug_name: str, fetch_if_missing: bool = False) 
 
     # Fetch on-demand
     import asyncio
+
     try:
         loop = asyncio.get_running_loop()
         # Can't use asyncio.run() in async context
@@ -1640,8 +1704,7 @@ def get_fda_label_with_fallback(drug_name: str, fetch_if_missing: bool = False) 
 
 
 async def refresh_fda_label_cache(
-    drugs: list[str] | None = None,
-    save: bool = True
+    drugs: list[str] | None = None, save: bool = True
 ) -> dict[str, FDALabelInfo]:
     """Refresh FDA label cache by fetching from OpenFDA API.
 
@@ -1677,7 +1740,7 @@ async def refresh_fda_label_cache(
     # Fetch in batches to avoid overwhelming the API
     batch_size = 5
     for i in range(0, len(drugs), batch_size):
-        batch = drugs[i:i + batch_size]
+        batch = drugs[i : i + batch_size]
         tasks = [client.get_label_info(drug) for drug in batch]
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1701,8 +1764,7 @@ async def refresh_fda_label_cache(
 
 
 async def ensure_fda_labels_cached(
-    drugs: list[str],
-    save: bool = True
+    drugs: list[str], save: bool = True
 ) -> dict[str, FDALabelInfo]:
     """Ensure FDA labels are cached for a list of drugs.
 
@@ -1736,12 +1798,14 @@ async def ensure_fda_labels_cached(
         logger.debug(f"All {len(drugs)} drugs already cached")
         return results
 
-    logger.info(f"Fetching {len(missing)} missing drugs (out of {len(drugs)} requested)...")
+    logger.info(
+        f"Fetching {len(missing)} missing drugs (out of {len(drugs)} requested)..."
+    )
 
     # Fetch missing drugs in batches
     batch_size = 5
     for i in range(0, len(missing), batch_size):
-        batch = missing[i:i + batch_size]
+        batch = missing[i : i + batch_size]
         tasks = [client.get_label_info(drug) for drug in batch]
         batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1763,7 +1827,9 @@ async def ensure_fda_labels_cached(
     return results
 
 
-def ensure_fda_labels_cached_sync(drugs: list[str], save: bool = True) -> dict[str, FDALabelInfo]:
+def ensure_fda_labels_cached_sync(
+    drugs: list[str], save: bool = True
+) -> dict[str, FDALabelInfo]:
     """Synchronous wrapper for ensure_fda_labels_cached.
 
     Use this when you need to fetch missing drugs from synchronous code.
@@ -1774,6 +1840,7 @@ def ensure_fda_labels_cached_sync(drugs: list[str], save: bool = True) -> dict[s
         loop = asyncio.get_running_loop()
         # If we're in an async context, can't use run()
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(asyncio.run, ensure_fda_labels_cached(drugs, save))
             return future.result()

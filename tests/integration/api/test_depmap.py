@@ -43,7 +43,9 @@ class TestDepMapClientIntegration:
 
         # Drug sensitivities require local data files - skip if unavailable
         if len(result.drug_sensitivities) == 0:
-            pytest.skip("Drug sensitivity data not available (missing local data files)")
+            pytest.skip(
+                "Drug sensitivity data not available (missing local data files)"
+            )
 
         # All returned drugs should be sensitive (log2fc <= -1.7)
         for ds in result.drug_sensitivities:
@@ -52,7 +54,9 @@ class TestDepMapClientIntegration:
 
         # Top drugs should have very negative log2fc (highly effective)
         top_drug = result.drug_sensitivities[0]
-        assert top_drug.mean_log2fc < -2.0, f"Expected potent drug, got log2fc={top_drug.mean_log2fc}"
+        assert (
+            top_drug.mean_log2fc < -2.0
+        ), f"Expected potent drug, got log2fc={top_drug.mean_log2fc}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -70,8 +74,9 @@ class TestDepMapClientIntegration:
         # Should include well-known BRAF V600E melanoma lines
         cell_line_names = [cl.name for cl in result.cell_line_models]
         # A375 may appear as "A375", "A-375", or "A375 SKIN CJ1" etc.
-        assert any("A375" in name or "A-375" in name for name in cell_line_names), \
-            f"Expected A375 cell line, got: {cell_line_names}"
+        assert any(
+            "A375" in name or "A-375" in name for name in cell_line_names
+        ), f"Expected A375 cell line, got: {cell_line_names}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -153,8 +158,9 @@ class TestDepMapClientIntegration:
 
         # KRAS should be essential pan-cancer (score < -0.5)
         if kras_result:
-            assert kras_result.is_essential() is True, \
-                f"Expected KRAS to be essential, got score: {kras_result.get_essential_score()}"
+            assert (
+                kras_result.is_essential() is True
+            ), f"Expected KRAS to be essential, got score: {kras_result.get_essential_score()}"
 
         # TP53 should not be essential
         if tp53_result:
@@ -195,7 +201,9 @@ class TestDepMapClientIntegration:
 
         # Drug sensitivities require local data files - skip if unavailable
         if len(result.drug_sensitivities) == 0:
-            pytest.skip("Drug sensitivity data not available (missing local data files)")
+            pytest.skip(
+                "Drug sensitivity data not available (missing local data files)"
+            )
 
         for ds in result.drug_sensitivities:
             # Should have drug name
@@ -228,15 +236,18 @@ class TestDepMapClientIntegration:
             assert len(cl.name) > 0
 
         # At least some cell lines should have disease annotation
-        lines_with_disease = [cl for cl in result.cell_line_models if cl.primary_disease]
-        assert len(lines_with_disease) > 0, "Expected at least some cell lines to have disease annotations"
+        lines_with_disease = [
+            cl for cl in result.cell_line_models if cl.primary_disease
+        ]
+        assert (
+            len(lines_with_disease) > 0
+        ), "Expected at least some cell lines to have disease annotations"
 
         # Common BRAF V600E-associated cancers should be present
         all_diseases = {cl.primary_disease.lower() for cl in lines_with_disease}
         # Check that melanoma/skin cancer is represented (most common BRAF V600E tumor type)
         assert any(
-            "melanoma" in d or "skin" in d
-            for d in all_diseases
+            "melanoma" in d or "skin" in d for d in all_diseases
         ), f"Expected melanoma/skin cancer among BRAF V600E lines, got: {all_diseases}"
 
     @pytest.mark.integration
@@ -296,7 +307,9 @@ class TestDepMapClientIntegration:
             result = await client.fetch_depmap_evidence("BRAF", "V600E")
 
         assert result is not None
-        assert len(result.drug_sensitivities) > 0, "Expected drug sensitivities for BRAF V600E"
+        assert (
+            len(result.drug_sensitivities) > 0
+        ), "Expected drug sensitivities for BRAF V600E"
 
         # Validate structure of returned data
         for ds in result.drug_sensitivities:
@@ -305,7 +318,9 @@ class TestDepMapClientIntegration:
             assert ds.mean_log2fc <= -1.7, "Only sensitive drugs should be returned"
             assert ds.n_cell_lines > 0
 
-        print(f"\nFound {len(result.drug_sensitivities)} sensitive drugs for BRAF V600E cell lines")
+        print(
+            f"\nFound {len(result.drug_sensitivities)} sensitive drugs for BRAF V600E cell lines"
+        )
         print(f"Top 5 drugs by sensitivity:")
         for ds in result.drug_sensitivities[:5]:
             print(f"  {ds.drug_name}: log2fc={ds.mean_log2fc:.2f}, n={ds.n_cell_lines}")

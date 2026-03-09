@@ -80,9 +80,9 @@ class HotspotEntry(BaseModel):
 
     def get_top_tumor_types(self, n: int = 3) -> list[HotspotTumorType]:
         """Get the top N most frequent tumor types."""
-        return sorted(
-            self.tumor_type_composition, key=lambda t: t.count, reverse=True
-        )[:n]
+        return sorted(self.tumor_type_composition, key=lambda t: t.count, reverse=True)[
+            :n
+        ]
 
 
 class HotspotsEvidence(EvidenceItemBase):
@@ -107,7 +107,9 @@ class HotspotsEvidence(EvidenceItemBase):
     is_exact_variant_match: bool = False  # True if exact AA change is in hotspot data
 
     # Adjacent hotspot data (for variants within ±5 codons of a hotspot)
-    adjacent_hotspot: HotspotEntry | None = None  # Nearest hotspot if variant is not at one
+    adjacent_hotspot: HotspotEntry | None = (
+        None  # Nearest hotspot if variant is not at one
+    )
     adjacent_distance: int | None = None  # Distance in codons to the adjacent hotspot
 
     def has_data(self) -> bool:
@@ -165,7 +167,9 @@ class HotspotsEvidence(EvidenceItemBase):
         """Get the Cancer Hotspots URL."""
         return "https://www.cancerhotspots.org/"
 
-    def _tumor_matches_hotspot(self, tumor_type: str | None, hotspot: HotspotEntry) -> bool:
+    def _tumor_matches_hotspot(
+        self, tumor_type: str | None, hotspot: HotspotEntry
+    ) -> bool:
         """Check if the queried tumor type matches the hotspot's tumor distribution.
 
         Args:
@@ -239,7 +243,10 @@ class HotspotsEvidence(EvidenceItemBase):
             # Top variants at this residue
             top_vars = h.get_top_variants(4)
             if top_vars:
-                var_strs = [f"{h.residue[0]}{h.residue[1:]}{v.amino_acid}:{v.count}" for v in top_vars]
+                var_strs = [
+                    f"{h.residue[0]}{h.residue[1:]}{v.amino_acid}:{v.count}"
+                    for v in top_vars
+                ]
                 lines.append(f"  Common changes: {', '.join(var_strs)}")
 
             # Top tumor types

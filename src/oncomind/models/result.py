@@ -25,7 +25,9 @@ class Result(BaseModel):
         ...     print(result.llm.llm_summary)
     """
 
-    evidence: Evidence = Field(..., description="Structured evidence from databases and APIs")
+    evidence: Evidence = Field(
+        ..., description="Structured evidence from databases and APIs"
+    )
     llm: LLMInsight | None = Field(
         default=None, description="LLM-generated narrative insight"
     )

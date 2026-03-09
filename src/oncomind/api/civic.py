@@ -32,6 +32,7 @@ logger = get_logger(__name__)
 
 class CIViCError(Exception):
     """Exception raised for CIViC API errors."""
+
     pass
 
 
@@ -397,8 +398,12 @@ class CIViCClient:
         Returns:
             List of predictive assertions
         """
-        all_assertions = await self.fetch_assertions(gene, variant, tumor_type, max_results * 2)
-        return [a for a in all_assertions if a.assertion_type == "PREDICTIVE"][:max_results]
+        all_assertions = await self.fetch_assertions(
+            gene, variant, tumor_type, max_results * 2
+        )
+        return [a for a in all_assertions if a.assertion_type == "PREDICTIVE"][
+            :max_results
+        ]
 
     async def fetch_tier_i_assertions(
         self,
@@ -418,7 +423,9 @@ class CIViCClient:
         Returns:
             List of Tier I assertions
         """
-        all_assertions = await self.fetch_assertions(gene, variant, tumor_type, max_results=50)
+        all_assertions = await self.fetch_assertions(
+            gene, variant, tumor_type, max_results=50
+        )
         return [a for a in all_assertions if a.get_amp_tier() == "Tier I"]
 
     # GraphQL query for evidence items
@@ -499,7 +506,8 @@ class CIViCClient:
 
             # Also try codon-level (e.g., V600E -> V600)
             import re
-            codon_match = re.match(r'^([A-Z])(\d+)[A-Z]*$', clean_variant)
+
+            codon_match = re.match(r"^([A-Z])(\d+)[A-Z]*$", clean_variant)
             if codon_match:
                 codon_variant = f"{codon_match.group(1)}{codon_match.group(2)}"
                 if codon_variant != clean_variant:
@@ -536,7 +544,9 @@ class CIViCClient:
                 logger.warning(f"CIViC evidence query failed for {search_term}: {e}")
                 continue
             except Exception as e:
-                logger.warning(f"Failed to parse CIViC evidence response for {search_term}: {e}")
+                logger.warning(
+                    f"Failed to parse CIViC evidence response for {search_term}: {e}"
+                )
                 continue
 
             # Check for GraphQL errors
@@ -545,7 +555,9 @@ class CIViCClient:
                 continue
 
             # Parse evidence items from molecular profiles
-            profiles = data.get("data", {}).get("molecularProfiles", {}).get("nodes", [])
+            profiles = (
+                data.get("data", {}).get("molecularProfiles", {}).get("nodes", [])
+            )
 
             for profile in profiles:
                 profile_name = profile.get("name", "")
@@ -560,7 +572,11 @@ class CIViCClient:
                     seen_evidence_ids.add(evidence_id)
 
                     # Extract disease
-                    disease = node.get("disease", {}).get("name") if node.get("disease") else None
+                    disease = (
+                        node.get("disease", {}).get("name")
+                        if node.get("disease")
+                        else None
+                    )
 
                     # Filter by tumor type if specified
                     # Include pan-cancer evidence (e.g., "Cancer") but filter out non-matching specific cancers
@@ -582,13 +598,20 @@ class CIViCClient:
                     pmid = source_data.get("pmid") if source_data else None
 
                     # Determine match level
-                    locus_match = self._determine_locus_match(profile_name, gene, variant)
+                    locus_match = self._determine_locus_match(
+                        profile_name, gene, variant
+                    )
 
                     # Determine tumor match
-                    tumor_matches = tumor_types_match(disease, tumor_type) if tumor_type and disease else False
+                    tumor_matches = (
+                        tumor_types_match(disease, tumor_type)
+                        if tumor_type and disease
+                        else False
+                    )
 
                     # Build EvidenceLevel objects for consistency with other models
                     from oncomind.models.evidence.base import EvidenceLevel
+
                     locus_variant_match = EvidenceLevel(
                         level=locus_match,
                         scope="specific" if locus_match == "variant" else "unspecified",
@@ -602,24 +625,30 @@ class CIViCClient:
                             origin="kb",
                         )
 
-                    evidence_list.append(CIViCEvidence(
-                        evidence_id=evidence_id,
-                        evidence_type=node.get("evidenceType"),
-                        evidence_level=node.get("evidenceLevel"),
-                        evidence_direction=node.get("evidenceDirection"),
-                        clinical_significance=node.get("significance"),
-                        disease=disease,
-                        drugs=drugs,
-                        description=node.get("description"),
-                        source=source,
-                        rating=node.get("evidenceRating"),
-                        pmid=str(pmid) if pmid else None,
-                        source_url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else None,
-                        trust_rating=node.get("evidenceRating"),
-                        matched_profile=profile_name,
-                        locus_variant_match=locus_variant_match,
-                        cancer_type_match=cancer_type_match,
-                    ))
+                    evidence_list.append(
+                        CIViCEvidence(
+                            evidence_id=evidence_id,
+                            evidence_type=node.get("evidenceType"),
+                            evidence_level=node.get("evidenceLevel"),
+                            evidence_direction=node.get("evidenceDirection"),
+                            clinical_significance=node.get("significance"),
+                            disease=disease,
+                            drugs=drugs,
+                            description=node.get("description"),
+                            source=source,
+                            rating=node.get("evidenceRating"),
+                            pmid=str(pmid) if pmid else None,
+                            source_url=(
+                                f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+                                if pmid
+                                else None
+                            ),
+                            trust_rating=node.get("evidenceRating"),
+                            matched_profile=profile_name,
+                            locus_variant_match=locus_variant_match,
+                            cancer_type_match=cancer_type_match,
+                        )
+                    )
 
         # Apply per-level limiting: take up to max_per_level items per evidence level
         # Evidence levels in CIViC: A (highest), B, C, D, E (lowest)
@@ -673,10 +702,15 @@ class CIViCClient:
                 variant,
             )
             # Check if tumor matches (tumor type filtering already applied, but track it)
-            tumor_matches = tumor_types_match(assertion.disease, tumor_type) if tumor_type else False
+            tumor_matches = (
+                tumor_types_match(assertion.disease, tumor_type)
+                if tumor_type
+                else False
+            )
 
             # Build EvidenceLevel objects for consistency with other models
             from oncomind.models.evidence.base import EvidenceLevel
+
             locus_variant_match = EvidenceLevel(
                 level=locus_match,
                 scope="specific" if locus_match == "variant" else "unspecified",
@@ -690,27 +724,29 @@ class CIViCClient:
                     origin="kb",
                 )
 
-            evidence_list.append(CIViCAssertionEvidence(
-                assertion_id=assertion.assertion_id,
-                name=assertion.name,
-                amp_level=assertion.amp_level,
-                amp_tier=assertion.get_amp_tier(),
-                amp_level_letter=assertion.get_amp_level(),
-                assertion_type=assertion.assertion_type,
-                significance=assertion.significance,
-                status=assertion.status,
-                molecular_profile=assertion.molecular_profile,
-                disease=assertion.disease,
-                therapies=assertion.therapies,
-                fda_companion_test=assertion.fda_companion_test,
-                nccn_guideline=assertion.nccn_guideline,
-                description=assertion.description,
-                is_sensitivity=assertion.is_sensitivity(),
-                is_resistance=assertion.is_resistance(),
-                matched_profile=assertion.molecular_profile,
-                locus_variant_match=locus_variant_match,
-                cancer_type_match=cancer_type_match,
-            ))
+            evidence_list.append(
+                CIViCAssertionEvidence(
+                    assertion_id=assertion.assertion_id,
+                    name=assertion.name,
+                    amp_level=assertion.amp_level,
+                    amp_tier=assertion.get_amp_tier(),
+                    amp_level_letter=assertion.get_amp_level(),
+                    assertion_type=assertion.assertion_type,
+                    significance=assertion.significance,
+                    status=assertion.status,
+                    molecular_profile=assertion.molecular_profile,
+                    disease=assertion.disease,
+                    therapies=assertion.therapies,
+                    fda_companion_test=assertion.fda_companion_test,
+                    nccn_guideline=assertion.nccn_guideline,
+                    description=assertion.description,
+                    is_sensitivity=assertion.is_sensitivity(),
+                    is_resistance=assertion.is_resistance(),
+                    matched_profile=assertion.molecular_profile,
+                    locus_variant_match=locus_variant_match,
+                    cancer_type_match=cancer_type_match,
+                )
+            )
 
         return evidence_list
 

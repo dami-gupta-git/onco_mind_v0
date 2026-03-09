@@ -107,14 +107,18 @@ class TestCGIAssociationHandling:
         """_drug_has_sensitivity_for_gene should only match explicit 'Responsive'."""
         # Create evidence with "No Responsive" - should NOT count as sensitivity
         no_responsive = make_biomarker("No Responsive", "Gefitinib")
-        evidence = Evidence(identifiers=make_identifiers(), cgi_biomarkers=[no_responsive])
+        evidence = Evidence(
+            identifiers=make_identifiers(), cgi_biomarkers=[no_responsive]
+        )
 
         # Should return False - "No Responsive" is not sensitivity
         assert evidence._drug_has_sensitivity_for_gene("gefitinib") is False
 
         # Now with actual "Responsive"
         responsive = make_biomarker("Responsive", "Erlotinib")
-        evidence2 = Evidence(identifiers=make_identifiers(), cgi_biomarkers=[responsive])
+        evidence2 = Evidence(
+            identifiers=make_identifiers(), cgi_biomarkers=[responsive]
+        )
 
         # Should return True
         assert evidence2._drug_has_sensitivity_for_gene("erlotinib") is True

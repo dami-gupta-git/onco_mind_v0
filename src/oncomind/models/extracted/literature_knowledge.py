@@ -5,19 +5,36 @@ from pydantic import BaseModel, Field
 
 class LitDrugResistance(BaseModel):
     """Drug resistance information extracted from literature."""
+
     drug: str = Field(..., description="Drug name")
-    evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
+    evidence: str = Field(
+        "unknown",
+        description="Evidence level: in vitro, preclinical, clinical, FDA-labeled",
+    )
     mechanism: str | None = Field(None, description="Mechanism of resistance if known")
-    is_predictive: bool = Field(True, description="True if PREDICTIVE resistance (affects drug selection), False if just prognostic")
-    locus_match: str = Field("gene", description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)")
+    is_predictive: bool = Field(
+        True,
+        description="True if PREDICTIVE resistance (affects drug selection), False if just prognostic",
+    )
+    locus_match: str = Field(
+        "gene",
+        description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)",
+    )
 
 
 class LitDrugSensitivity(BaseModel):
     """Drug sensitivity information extracted from literature."""
+
     drug: str = Field(..., description="Drug name")
-    evidence: str = Field("unknown", description="Evidence level: in vitro, preclinical, clinical, FDA-labeled")
+    evidence: str = Field(
+        "unknown",
+        description="Evidence level: in vitro, preclinical, clinical, FDA-labeled",
+    )
     ic50_nM: str | None = Field(None, description="IC50 value if reported")
-    locus_match: str = Field("gene", description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)")
+    locus_match: str = Field(
+        "gene",
+        description="Match specificity: variant (exact variant), codon (same position), gene (any mutation in gene)",
+    )
 
 
 class LiteratureKnowledge(BaseModel):
@@ -29,47 +46,41 @@ class LiteratureKnowledge(BaseModel):
 
     mutation_type: str = Field(
         "unknown",
-        description="primary (driver), secondary (acquired/resistance), both, or unknown"
+        description="primary (driver), secondary (acquired/resistance), both, or unknown",
     )
 
     is_prognostic_only: bool = Field(
         False,
-        description="True if variant is ONLY prognostic (affects survival) but does NOT predict response to specific drugs"
+        description="True if variant is ONLY prognostic (affects survival) but does NOT predict response to specific drugs",
     )
 
     resistant_to: list[LitDrugResistance] = Field(
-        default_factory=list,
-        description="Drugs this variant causes resistance to"
+        default_factory=list, description="Drugs this variant causes resistance to"
     )
 
     sensitive_to: list[LitDrugSensitivity] = Field(
-        default_factory=list,
-        description="Drugs this variant may respond to"
+        default_factory=list, description="Drugs this variant may respond to"
     )
 
     clinical_significance: str = Field(
-        "",
-        description="Summary of clinical implications"
+        "", description="Summary of clinical implications"
     )
 
     evidence_level: str = Field(
         "None",
-        description="Highest evidence level: FDA-approved, Phase 3, Phase 2, Preclinical, Case reports, None"
+        description="Highest evidence level: FDA-approved, Phase 3, Phase 2, Preclinical, Case reports, None",
     )
 
     references: list[str] = Field(
-        default_factory=list,
-        description="PMIDs supporting the findings"
+        default_factory=list, description="PMIDs supporting the findings"
     )
 
     key_findings: list[str] = Field(
-        default_factory=list,
-        description="Most important findings from literature"
+        default_factory=list, description="Most important findings from literature"
     )
 
     confidence: float = Field(
-        0.0,
-        description="Confidence score 0-1 for extraction quality"
+        0.0, description="Confidence score 0-1 for extraction quality"
     )
 
     def get_resistance_drugs(self, predictive_only: bool = False) -> list[str]:

@@ -58,11 +58,13 @@ logger = get_logger(__name__)
 
 class DepMapError(Exception):
     """Exception raised for DepMap API errors."""
+
     pass
 
 
 class DepMapRateLimitError(DepMapError):
     """Rate limit exceeded."""
+
     pass
 
 
@@ -93,7 +95,9 @@ class DepMapClient:
     Data is accessed via direct download URLs from the DepMap portal.
     """
 
-    def __init__(self, timeout: float = DEPMAP_DEFAULT_TIMEOUT, cache_dir: Path | None = None):
+    def __init__(
+        self, timeout: float = DEPMAP_DEFAULT_TIMEOUT, cache_dir: Path | None = None
+    ):
         """Initialize the DepMap client.
 
         Args:
@@ -138,7 +142,9 @@ class DepMapClient:
             url += f"&release={release}"
         return url
 
-    async def _fetch_csv_data(self, url: str, max_rows: int | None = None) -> list[dict]:
+    async def _fetch_csv_data(
+        self, url: str, max_rows: int | None = None
+    ) -> list[dict]:
         """Fetch and parse CSV data from a URL.
 
         Args:
@@ -194,7 +200,9 @@ class DepMapClient:
         # Drug metadata — maps column IDs to drug names, targets, MOA
         drugs = pd.read_csv(DEPMAP_PRISM_DRUG_INFO_URL)
 
-        logger.info(f"Loaded PRISM data: {sensitivity.shape[0]} cell lines, {sensitivity.shape[1]} drugs")
+        logger.info(
+            f"Loaded PRISM data: {sensitivity.shape[0]} cell lines, {sensitivity.shape[1]} drugs"
+        )
         return sensitivity, drugs
 
     def fetch_drug_sensitivities(
@@ -221,8 +229,12 @@ class DepMapClient:
             return []
 
         data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
-        sensitivity_file = data_dir / "primary-screen-replicate-collapsed-logfold-change.csv"
-        treatment_file = data_dir / "primary-screen-replicate-collapsed-treatment-info.csv"
+        sensitivity_file = (
+            data_dir / "primary-screen-replicate-collapsed-logfold-change.csv"
+        )
+        treatment_file = (
+            data_dir / "primary-screen-replicate-collapsed-treatment-info.csv"
+        )
 
         if not sensitivity_file.exists() or not treatment_file.exists():
             logger.warning("PRISM data files not found")
@@ -250,7 +262,9 @@ class DepMapClient:
             ]
 
             if len(available_variant_lines) < min_cell_lines:
-                logger.debug(f"Only {len(available_variant_lines)} variant lines in PRISM data")
+                logger.debug(
+                    f"Only {len(available_variant_lines)} variant lines in PRISM data"
+                )
                 return []
 
             # Calculate mean response for variant cell lines for each drug
@@ -270,7 +284,9 @@ class DepMapClient:
                     drug_name = drug_name_map.get(drug_col)
                     if not drug_name:
                         # Try to match by broad_id prefix
-                        broad_id = drug_col.split("::")[0] if "::" in drug_col else drug_col
+                        broad_id = (
+                            drug_col.split("::")[0] if "::" in drug_col else drug_col
+                        )
                         matches = treatment_df[treatment_df["broad_id"] == broad_id]
                         if not matches.empty:
                             drug_name = matches.iloc[0].get("name")
@@ -280,20 +296,27 @@ class DepMapClient:
 
                     # Get list of sensitive cell lines
                     sensitive_lines = [
-                        line for line in available_variant_lines
+                        line
+                        for line in available_variant_lines
                         if pd.notna(variant_df.loc[line, drug_col])
                         and variant_df.loc[line, drug_col] <= sensitivity_threshold
                     ]
 
-                    sensitivities.append(DrugSensitivity(
-                        drug_name=drug_name,
-                        mean_log2fc=round(mean_log2fc, 3),
-                        n_cell_lines=len(responses),
-                        sensitive_lines=sensitive_lines[:DEPMAP_SENSITIVE_LINES_DISPLAY],
-                    ))
+                    sensitivities.append(
+                        DrugSensitivity(
+                            drug_name=drug_name,
+                            mean_log2fc=round(mean_log2fc, 3),
+                            n_cell_lines=len(responses),
+                            sensitive_lines=sensitive_lines[
+                                :DEPMAP_SENSITIVE_LINES_DISPLAY
+                            ],
+                        )
+                    )
 
             # Sort by mean_log2fc (most negative = most sensitive)
-            sensitivities.sort(key=lambda x: x.mean_log2fc if x.mean_log2fc is not None else 0)
+            sensitivities.sort(
+                key=lambda x: x.mean_log2fc if x.mean_log2fc is not None else 0
+            )
 
             logger.debug(f"Found {len(sensitivities)} sensitive drugs for variant")
             return sensitivities[:top_n]
@@ -332,7 +355,13 @@ class DepMapClient:
             # Use chunked reading for the large file
             chunks = pd.read_csv(
                 mutations_file,
-                usecols=["ModelID", "HugoSymbol", "ProteinChange", "VariantType", "DNAChange"],
+                usecols=[
+                    "ModelID",
+                    "HugoSymbol",
+                    "ProteinChange",
+                    "VariantType",
+                    "DNAChange",
+                ],
                 chunksize=100000,
             )
 
@@ -355,12 +384,16 @@ class DepMapClient:
             # - V600E should match p.V600E but not V600Efs
             if variant:
                 import re
+
                 variant_upper = variant.upper()
                 # Escape regex special chars, then require word boundary or end after variant
                 # This ensures S1982R matches "p.S1982R" but not "p.S1982RfsTer22"
                 pattern = re.escape(variant_upper) + r"(?:[^A-Z]|$)"
                 mutations_df = mutations_df[
-                    mutations_df["ProteinChange"].fillna("").str.upper().str.contains(pattern, regex=True)
+                    mutations_df["ProteinChange"]
+                    .fillna("")
+                    .str.upper()
+                    .str.contains(pattern, regex=True)
                 ]
 
             if mutations_df.empty:
@@ -371,7 +404,13 @@ class DepMapClient:
             if sample_info_file.exists():
                 sample_info = pd.read_csv(
                     sample_info_file,
-                    usecols=["DepMap_ID", "cell_line_name", "CCLE_Name", "primary_disease", "Subtype"],
+                    usecols=[
+                        "DepMap_ID",
+                        "cell_line_name",
+                        "CCLE_Name",
+                        "primary_disease",
+                        "Subtype",
+                    ],
                 )
                 mutations_df = mutations_df.merge(
                     sample_info,
@@ -438,7 +477,9 @@ class DepMapClient:
                     download_url = status.get("result", {}).get("downloadUrl")
                     if download_url:
                         # Fetch the CSV data
-                        data_response = await client.get(download_url, timeout=DEPMAP_DOWNLOAD_TIMEOUT)
+                        data_response = await client.get(
+                            download_url, timeout=DEPMAP_DOWNLOAD_TIMEOUT
+                        )
                         data_response.raise_for_status()
 
                         # Parse CSV - first column is cell line ID, second is gene score
@@ -457,14 +498,18 @@ class DepMapClient:
                         if scores:
                             mean_score = sum(scores) / len(scores)
                             # Count dependent lines (score below threshold)
-                            n_dependent = sum(1 for s in scores if s < DEPMAP_DEPENDENCY_THRESHOLD)
+                            n_dependent = sum(
+                                1 for s in scores if s < DEPMAP_DEPENDENCY_THRESHOLD
+                            )
 
                             return GeneDependency(
                                 gene=gene.upper(),
                                 mean_dependency_score=mean_score,
                                 n_dependent_lines=n_dependent,
                                 n_total_lines=len(scores),
-                                dependency_pct=(n_dependent / len(scores) * 100) if scores else 0.0,
+                                dependency_pct=(
+                                    (n_dependent / len(scores) * 100) if scores else 0.0
+                                ),
                                 top_dependent_lines=[],  # Would need cell line names
                             )
                     break
@@ -525,15 +570,17 @@ class DepMapClient:
                     variant_cell_line_ids.append(line_id)
 
                     cell_line_name = clean_val(mut.get("cell_line_name"))
-                    cell_line_models.append(CellLineModel(
-                        name=cell_line_name or line_id,
-                        depmap_id=line_id,
-                        ccle_name=clean_val(mut.get("CCLE_Name")),
-                        primary_disease=clean_val(mut.get("primary_disease")),
-                        subtype=clean_val(mut.get("Subtype")),
-                        has_mutation=True,
-                        mutation_details=clean_val(mut.get("ProteinChange")),
-                    ))
+                    cell_line_models.append(
+                        CellLineModel(
+                            name=cell_line_name or line_id,
+                            depmap_id=line_id,
+                            ccle_name=clean_val(mut.get("CCLE_Name")),
+                            primary_disease=clean_val(mut.get("primary_disease")),
+                            subtype=clean_val(mut.get("Subtype")),
+                            has_mutation=True,
+                            mutation_details=clean_val(mut.get("ProteinChange")),
+                        )
+                    )
 
             # Fetch drug sensitivities for variant cell lines
             drug_sensitivities = self.fetch_drug_sensitivities(variant_cell_line_ids)

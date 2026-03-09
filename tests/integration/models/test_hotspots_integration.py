@@ -10,12 +10,16 @@ Tests the Hotspots integration functionality:
 import pytest
 
 from oncomind.insight_builder import Conductor, ConductorConfig
-from oncomind.api.hotspots import HotspotsClient, get_cancer_hotspots, is_hotspot_variant
-
+from oncomind.api.hotspots import (
+    HotspotsClient,
+    get_cancer_hotspots,
+    is_hotspot_variant,
+)
 
 # =============================================================================
 # HOTSPOTS API UNIT TESTS
 # =============================================================================
+
 
 class TestHotspotsAPI:
     """Unit tests for the Hotspots API client."""
@@ -68,10 +72,14 @@ class TestHotspotsAPI:
 
         assert evidence is not None
         assert evidence.is_hotspot is False, "G14 is not itself a hotspot"
-        assert evidence.is_adjacent_to_hotspot() is True, "G14D should be adjacent to G13 hotspot"
+        assert (
+            evidence.is_adjacent_to_hotspot() is True
+        ), "G14D should be adjacent to G13 hotspot"
         assert evidence.adjacent_hotspot is not None
         assert evidence.adjacent_distance == 1, "G14 is 1 codon from G13"
-        assert "13" in evidence.adjacent_hotspot.residue, "Adjacent hotspot should be G13"
+        assert (
+            "13" in evidence.adjacent_hotspot.residue
+        ), "Adjacent hotspot should be G13"
 
     def test_fetch_hotspot_evidence_adjacent_kras_g15a(self):
         """KRAS G15A (2 codons from G13) should detect adjacent hotspot."""
@@ -80,7 +88,9 @@ class TestHotspotsAPI:
 
         assert evidence is not None
         assert evidence.is_hotspot is False, "G15 is not itself a hotspot"
-        assert evidence.is_adjacent_to_hotspot() is True, "G15A should be adjacent to G13 hotspot"
+        assert (
+            evidence.is_adjacent_to_hotspot() is True
+        ), "G15A should be adjacent to G13 hotspot"
         assert evidence.adjacent_distance == 2
 
     def test_fetch_hotspot_evidence_adjacent_prioritizes_closest(self):
@@ -103,7 +113,9 @@ class TestHotspotsAPI:
 
         assert evidence is not None
         assert evidence.is_hotspot is False
-        assert evidence.is_adjacent_to_hotspot() is False, "A100 is too far from any hotspot"
+        assert (
+            evidence.is_adjacent_to_hotspot() is False
+        ), "A100 is too far from any hotspot"
         assert evidence.adjacent_hotspot is None
 
     def test_fetch_hotspot_evidence_exact_match_no_adjacent(self):
@@ -113,7 +125,9 @@ class TestHotspotsAPI:
 
         assert evidence is not None
         assert evidence.is_hotspot is True
-        assert evidence.is_adjacent_to_hotspot() is False, "Exact hotspot should not be 'adjacent'"
+        assert (
+            evidence.is_adjacent_to_hotspot() is False
+        ), "Exact hotspot should not be 'adjacent'"
         assert evidence.adjacent_hotspot is None
 
     def test_adjacent_hotspot_window_default(self):
@@ -130,12 +144,20 @@ class TestHotspotsAPI:
         """Custom adjacency window should be respected."""
         client = HotspotsClient()
         # KRAS G15A with window=1 should NOT find adjacent (distance is 2 from G13)
-        evidence_narrow = client.fetch_hotspot_evidence("KRAS", "G15A", adjacency_window=1)
-        assert evidence_narrow.is_adjacent_to_hotspot() is False, "Window=1 should not find G13 (2 codons away)"
+        evidence_narrow = client.fetch_hotspot_evidence(
+            "KRAS", "G15A", adjacency_window=1
+        )
+        assert (
+            evidence_narrow.is_adjacent_to_hotspot() is False
+        ), "Window=1 should not find G13 (2 codons away)"
 
         # Same variant with window=2 should find adjacent
-        evidence_wide = client.fetch_hotspot_evidence("KRAS", "G15A", adjacency_window=2)
-        assert evidence_wide.is_adjacent_to_hotspot() is True, "Window=2 should find G13"
+        evidence_wide = client.fetch_hotspot_evidence(
+            "KRAS", "G15A", adjacency_window=2
+        )
+        assert (
+            evidence_wide.is_adjacent_to_hotspot() is True
+        ), "Window=2 should find G13"
 
     def test_fetch_hotspot_evidence_braf_v600e(self):
         """fetch_hotspot_evidence should return detailed evidence for BRAF V600E."""
@@ -161,7 +183,9 @@ class TestHotspotsAPI:
         # Skin (melanoma) should be prominent
         top_tumors = evidence.hotspot.get_top_tumor_types(3)
         tumor_names = [t.tumor_type.lower() for t in top_tumors]
-        assert "skin" in tumor_names, "Melanoma (skin) should be a top tumor type for BRAF V600"
+        assert (
+            "skin" in tumor_names
+        ), "Melanoma (skin) should be a top tumor type for BRAF V600"
 
     def test_fetch_hotspot_evidence_codon_match(self):
         """fetch_hotspot_evidence should indicate codon-level match for less common variants."""
@@ -178,6 +202,7 @@ class TestHotspotsAPI:
 # =============================================================================
 # HOTSPOTS INTEGRATION TESTS
 # =============================================================================
+
 
 @pytest.mark.integration
 class TestHotspotsIntegration:
@@ -220,8 +245,9 @@ class TestHotspotsIntegration:
         bio_context = result.evidence.get_biological_context_for_llm()
 
         # Should include hotspot information
-        assert "CANCER HOTSPOT" in bio_context, \
-            f"Biological context should include CANCER HOTSPOT, got:\n{bio_context}"
+        assert (
+            "CANCER HOTSPOT" in bio_context
+        ), f"Biological context should include CANCER HOTSPOT, got:\n{bio_context}"
         assert "BRAF" in bio_context
         assert "V600" in bio_context
 
@@ -276,8 +302,9 @@ class TestHotspotsIntegration:
         hotspots = result.evidence.hotspots_evidence
         # May be None or have is_hotspot=False
         if hotspots is not None:
-            assert hotspots.is_hotspot is False or hotspots.has_data() is False, \
-                "CHEK2 I157T should not be a cancer hotspot"
+            assert (
+                hotspots.is_hotspot is False or hotspots.has_data() is False
+            ), "CHEK2 I157T should not be a cancer hotspot"
 
     # -------------------------------------------------------------------------
     # ADJACENT HOTSPOT INTEGRATION TESTS
@@ -293,7 +320,9 @@ class TestHotspotsIntegration:
         hotspots = result.evidence.hotspots_evidence
         assert hotspots is not None, "Should have hotspots_evidence"
         assert hotspots.is_hotspot is False, "G14D is not itself a hotspot"
-        assert hotspots.is_adjacent_to_hotspot() is True, "G14D should be adjacent to G13"
+        assert (
+            hotspots.is_adjacent_to_hotspot() is True
+        ), "G14D should be adjacent to G13"
         assert hotspots.adjacent_hotspot is not None
         assert hotspots.adjacent_distance == 1, "G14 is 1 codon from G13"
 
@@ -307,8 +336,9 @@ class TestHotspotsIntegration:
         bio_context = result.evidence.get_biological_context_for_llm()
 
         # Should include near-hotspot information
-        assert "NEAR HOTSPOT" in bio_context, \
-            f"Biological context should include NEAR HOTSPOT for adjacent variant, got:\n{bio_context}"
+        assert (
+            "NEAR HOTSPOT" in bio_context
+        ), f"Biological context should include NEAR HOTSPOT for adjacent variant, got:\n{bio_context}"
         assert "G14D" in bio_context
         assert "G13" in bio_context  # Adjacent to G13 hotspot
 
@@ -364,19 +394,26 @@ class TestHotspotsIntegration:
         # Should have "near hotspot codon X" in well-characterized
         well_char = gap_result.well_characterized
         near_hotspot_items = [w for w in well_char if "hotspot" in w.lower()]
-        assert len(near_hotspot_items) > 0, \
-            f"Should have near-hotspot in well_characterized, got: {well_char}"
+        assert (
+            len(near_hotspot_items) > 0
+        ), f"Should have near-hotspot in well_characterized, got: {well_char}"
 
         # Should have a functional gap about being near hotspot
         gap_descriptions = [g.description for g in gap_result.gaps]
-        near_hotspot_gaps = [d for d in gap_descriptions if "near" in d.lower() and "hotspot" in d.lower()]
-        assert len(near_hotspot_gaps) > 0, \
-            f"Should have near-hotspot gap, got: {gap_descriptions}"
+        near_hotspot_gaps = [
+            d
+            for d in gap_descriptions
+            if "near" in d.lower() and "hotspot" in d.lower()
+        ]
+        assert (
+            len(near_hotspot_gaps) > 0
+        ), f"Should have near-hotspot gap, got: {gap_descriptions}"
 
 
 # =============================================================================
 # HOTSPOTS DATA FILE TESTS
 # =============================================================================
+
 
 class TestHotspotsDataFile:
     """Tests for the hotspots data file integrity."""
@@ -385,7 +422,16 @@ class TestHotspotsDataFile:
         """Hotspots file should contain common cancer genes."""
         client = HotspotsClient()
 
-        expected_genes = ["BRAF", "KRAS", "NRAS", "PIK3CA", "EGFR", "TP53", "IDH1", "KIT"]
+        expected_genes = [
+            "BRAF",
+            "KRAS",
+            "NRAS",
+            "PIK3CA",
+            "EGFR",
+            "TP53",
+            "IDH1",
+            "KIT",
+        ]
         for gene in expected_genes:
             entries = client.get_hotspots_for_gene(gene)
             assert len(entries) > 0, f"{gene} should have hotspot entries"
@@ -397,7 +443,9 @@ class TestHotspotsDataFile:
         client._ensure_loaded()
 
         total_genes = len(client._data) if client._data else 0
-        assert total_genes > 100, f"Should have >100 genes with hotspots, got {total_genes}"
+        assert (
+            total_genes > 100
+        ), f"Should have >100 genes with hotspots, got {total_genes}"
 
     def test_hotspots_variant_counts_reasonable(self):
         """Hotspot variant counts should be reasonable."""
@@ -408,9 +456,11 @@ class TestHotspotsDataFile:
         assert evidence.hotspot is not None
 
         # BRAF V600 should have many samples
-        assert evidence.hotspot.total_samples > 100, \
-            f"BRAF V600 should have >100 samples, got {evidence.hotspot.total_samples}"
+        assert (
+            evidence.hotspot.total_samples > 100
+        ), f"BRAF V600 should have >100 samples, got {evidence.hotspot.total_samples}"
 
         # Q-value should be very small (highly significant)
-        assert evidence.hotspot.q_value < 0.01, \
-            f"BRAF V600 should have q<0.01, got {evidence.hotspot.q_value}"
+        assert (
+            evidence.hotspot.q_value < 0.01
+        ), f"BRAF V600 should have q<0.01, got {evidence.hotspot.q_value}"

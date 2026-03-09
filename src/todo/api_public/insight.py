@@ -136,7 +136,11 @@ async def get_insight(
     # Validate variant type if enabled
     if config.validate_variant_type:
         from oncomind.utils.variant_normalization import VariantNormalizer
-        if parsed.variant_type and parsed.variant_type not in VariantNormalizer.ALLOWED_VARIANT_TYPES:
+
+        if (
+            parsed.variant_type
+            and parsed.variant_type not in VariantNormalizer.ALLOWED_VARIANT_TYPES
+        ):
             raise ValueError(
                 f"Variant type '{parsed.variant_type}' is not supported. "
                 f"Only SNPs and small indels are allowed (missense, nonsense, insertion, deletion, frameshift). "
@@ -232,10 +236,16 @@ async def get_insights(
     # Validate variant types if enabled
     if config.validate_variant_type:
         from oncomind.utils.variant_normalization import VariantNormalizer
+
         valid_variants = []
         for parsed in parsed_variants:
-            if parsed.variant_type and parsed.variant_type not in VariantNormalizer.ALLOWED_VARIANT_TYPES:
-                print(f"  Skipping unsupported variant type: {parsed.gene} {parsed.variant} ({parsed.variant_type})")
+            if (
+                parsed.variant_type
+                and parsed.variant_type not in VariantNormalizer.ALLOWED_VARIANT_TYPES
+            ):
+                print(
+                    f"  Skipping unsupported variant type: {parsed.gene} {parsed.variant} ({parsed.variant_type})"
+                )
                 continue
             valid_variants.append(parsed)
         parsed_variants = valid_variants
@@ -259,7 +269,9 @@ async def get_insights(
                 evidence.compute_evidence_gaps()
                 evidences.append(evidence)
             except Exception as e:
-                print(f"  Warning: Failed to process {parsed.gene} {parsed.variant}: {str(e)}")
+                print(
+                    f"  Warning: Failed to process {parsed.gene} {parsed.variant}: {str(e)}"
+                )
 
         if progress_callback:
             progress_callback(total, total)
@@ -267,9 +279,9 @@ async def get_insights(
     # Apply LLM enhancement if enabled and wrap in Result
     results = []
     if config.enable_llm:
-        enhanced = await asyncio.gather(*[
-            _apply_llm_enhancement(evidence, config) for evidence in evidences
-        ])
+        enhanced = await asyncio.gather(
+            *[_apply_llm_enhancement(evidence, config) for evidence in evidences]
+        )
         for evidence, llm_insight in enhanced:
             results.append(Result(evidence=evidence, llm=llm_insight))
     else:
@@ -440,7 +452,9 @@ async def _apply_llm_enhancement(
                 # Skip if extraction failed
                 if knowledge_data is not None:
                     from oncomind.models.extracted.literature_knowledge import (
-                        LiteratureKnowledge, LitDrugResistance, LitDrugSensitivity
+                        LiteratureKnowledge,
+                        LitDrugResistance,
+                        LitDrugSensitivity,
                     )
 
                     resistant_to = []
@@ -450,17 +464,27 @@ async def _apply_llm_enhancement(
                                 r["is_predictive"] = True
                             resistant_to.append(LitDrugResistance(**r))
                         else:
-                            resistant_to.append(LitDrugResistance(drug=str(r), is_predictive=True))
+                            resistant_to.append(
+                                LitDrugResistance(drug=str(r), is_predictive=True)
+                            )
 
                     evidence.literature_knowledge = LiteratureKnowledge(
                         mutation_type=knowledge_data.get("mutation_type", "unknown"),
-                        is_prognostic_only=knowledge_data.get("is_prognostic_only", False),
+                        is_prognostic_only=knowledge_data.get(
+                            "is_prognostic_only", False
+                        ),
                         resistant_to=resistant_to,
                         sensitive_to=[
-                            LitDrugSensitivity(**s) if isinstance(s, dict) else LitDrugSensitivity(drug=str(s))
+                            (
+                                LitDrugSensitivity(**s)
+                                if isinstance(s, dict)
+                                else LitDrugSensitivity(drug=str(s))
+                            )
                             for s in knowledge_data.get("sensitive_to", [])
                         ],
-                        clinical_significance=knowledge_data.get("clinical_significance", ""),
+                        clinical_significance=knowledge_data.get(
+                            "clinical_significance", ""
+                        ),
                         evidence_level=knowledge_data.get("evidence_level", "None"),
                         references=knowledge_data.get("references", []),
                         key_findings=knowledge_data.get("key_findings", []),
@@ -486,6 +510,7 @@ async def _apply_llm_enhancement(
 
 
 # Synchronous wrappers for convenience
+
 
 def get_insight_sync(
     variant_str: str,

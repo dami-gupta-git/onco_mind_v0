@@ -19,38 +19,50 @@ class GapSeverity(str, Enum):
     - MINOR: Well-characterized overall, minor enrichment possible
     - INFORMATIONAL: Not a true gap, just noting a limitation
     """
-    CRITICAL = "critical"          # No data for actionable/clinically relevant variant
-    HIGH = "high"                  # Conflicting data, or data exists but unreliable/outdated
-    SIGNIFICANT = "significant"    # Limited data, clear research opportunity
-    MODERATE = "moderate"          # Some data but gaps in specific contexts
-    MINOR = "minor"                # Well-characterized overall, minor enrichment possible
+
+    CRITICAL = "critical"  # No data for actionable/clinically relevant variant
+    HIGH = "high"  # Conflicting data, or data exists but unreliable/outdated
+    SIGNIFICANT = "significant"  # Limited data, clear research opportunity
+    MODERATE = "moderate"  # Some data but gaps in specific contexts
+    MINOR = "minor"  # Well-characterized overall, minor enrichment possible
     INFORMATIONAL = "informational"  # Not a true gap, just noting a limitation
 
 
 class GapCategory(str, Enum):
     """Category of evidence gap."""
-    FUNCTIONAL = "functional"           # Mechanism unknown
-    CLINICAL = "clinical"               # No clinical trials/outcomes
-    TUMOR_TYPE = "tumor_type"           # Not studied in this tumor type
-    DRUG_RESPONSE = "drug_response"     # No drug sensitivity data
-    RESISTANCE = "resistance"           # Resistance mechanisms unknown
-    PRECLINICAL = "preclinical"         # No cell line/model data
-    PREVALENCE = "prevalence"           # Frequency unknown
-    PROGNOSTIC = "prognostic"           # Survival impact unknown
-    DISCORDANT = "discordant"           # Conflicting evidence between sources
-    VALIDATION = "validation"           # Strong oncogenic signal but lacks therapeutic validation
+
+    FUNCTIONAL = "functional"  # Mechanism unknown
+    CLINICAL = "clinical"  # No clinical trials/outcomes
+    TUMOR_TYPE = "tumor_type"  # Not studied in this tumor type
+    DRUG_RESPONSE = "drug_response"  # No drug sensitivity data
+    RESISTANCE = "resistance"  # Resistance mechanisms unknown
+    PRECLINICAL = "preclinical"  # No cell line/model data
+    PREVALENCE = "prevalence"  # Frequency unknown
+    PROGNOSTIC = "prognostic"  # Survival impact unknown
+    DISCORDANT = "discordant"  # Conflicting evidence between sources
+    VALIDATION = (
+        "validation"  # Strong oncogenic signal but lacks therapeutic validation
+    )
 
 
 class CharacterizedAspect(BaseModel):
     """A well-characterized aspect of the variant with its basis."""
 
-    aspect: str = Field(..., description="What is well characterized (e.g., 'clinical actionability')")
-    basis: str = Field(..., description="Why we think so (e.g., 'FDA-approved therapies exist')")
-    category: GapCategory | None = Field(None, description="Category this aspect belongs to (for grouping)")
-    matches_on: str | None = Field(None, description="Match level breakdown (e.g., '2 variant, 1 gene')")
+    aspect: str = Field(
+        ..., description="What is well characterized (e.g., 'clinical actionability')"
+    )
+    basis: str = Field(
+        ..., description="Why we think so (e.g., 'FDA-approved therapies exist')"
+    )
+    category: GapCategory | None = Field(
+        None, description="Category this aspect belongs to (for grouping)"
+    )
+    matches_on: str | None = Field(
+        None, description="Match level breakdown (e.g., '2 variant, 1 gene')"
+    )
     tumor_match: str | None = Field(
         None,
-        description="Tumor type match breakdown (e.g., '2 tumor, 1 other'). None if not applicable."
+        description="Tumor type match breakdown (e.g., '2 tumor, 1 other'). None if not applicable.",
     )
 
 
@@ -63,14 +75,13 @@ class EvidenceGap(BaseModel):
 
     # What would fill this gap?
     suggested_studies: list[str] = Field(
-        default_factory=list,
-        description="Types of studies that would address this gap"
+        default_factory=list, description="Types of studies that would address this gap"
     )
 
     # Is this gap addressable with existing tools/data?
     addressable_with: list[str] = Field(
         default_factory=list,
-        description="Databases or methods that could fill this gap"
+        description="Databases or methods that could fill this gap",
     )
 
 
@@ -81,31 +92,29 @@ class EvidenceGaps(BaseModel):
 
     # Overall assessment
     overall_evidence_quality: str = Field(
-        "unknown",
-        description="comprehensive | moderate | limited | minimal | none"
+        "unknown", description="comprehensive | moderate | limited | minimal | none"
     )
 
     # What's well-characterized vs not
     well_characterized: list[str] = Field(
         default_factory=list,
-        description="Aspects with strong evidence (legacy: simple strings)"
+        description="Aspects with strong evidence (legacy: simple strings)",
     )
 
     # Structured version with basis/reasoning
     well_characterized_detailed: list[CharacterizedAspect] = Field(
         default_factory=list,
-        description="Aspects with strong evidence, including basis for each"
+        description="Aspects with strong evidence, including basis for each",
     )
 
     poorly_characterized: list[str] = Field(
-        default_factory=list,
-        description="Aspects needing more research"
+        default_factory=list, description="Aspects needing more research"
     )
 
     # Research priority
     research_priority: str = Field(
         "unknown",
-        description="high | medium | low - based on gap severity and variant importance"
+        description="high | medium | low - based on gap severity and variant importance",
     )
 
     def has_critical_gaps(self) -> bool:
@@ -193,8 +202,7 @@ class EvidenceGaps(BaseModel):
 
         # Sort by severity (critical first)
         sorted_gaps = sorted(
-            self.gaps,
-            key=lambda g: severity_order.get(g.severity, 99)
+            self.gaps, key=lambda g: severity_order.get(g.severity, 99)
         )
 
         return sorted_gaps[:n]

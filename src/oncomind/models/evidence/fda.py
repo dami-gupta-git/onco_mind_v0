@@ -38,11 +38,36 @@ def extract_combination_partners(indication_text: str | None) -> list[str]:
 
     # Filter to only drug-like names
     drug_suffixes = (
-        'mab', 'nib', 'lib', 'tib', 'tin', 'zumab', 'ximab', 'mumab',
-        'platin', 'taxel', 'mustine', 'rubicin', 'mycin', 'tinib',
-        'ciclib', 'lisib', 'rafenib', 'metinib', 'sertib', 'parin',
-        'mide', 'uracil', 'citabine', 'trexed', 'fosfamide', 'imod',
-        'olimus', 'fulvestrant', 'pemetrexed', 'asertib',
+        "mab",
+        "nib",
+        "lib",
+        "tib",
+        "tin",
+        "zumab",
+        "ximab",
+        "mumab",
+        "platin",
+        "taxel",
+        "mustine",
+        "rubicin",
+        "mycin",
+        "tinib",
+        "ciclib",
+        "lisib",
+        "rafenib",
+        "metinib",
+        "sertib",
+        "parin",
+        "mide",
+        "uracil",
+        "citabine",
+        "trexed",
+        "fosfamide",
+        "imod",
+        "olimus",
+        "fulvestrant",
+        "pemetrexed",
+        "asertib",
     )
 
     filtered = []
@@ -50,10 +75,17 @@ def extract_combination_partners(indication_text: str | None) -> list[str]:
         p_lower = p.lower()
         # Skip generic terms
         skip_terms = (
-            'chemotherapy', 'radiotherapy', 'radiation', 'therapy',
-            'platinum-based', 'platinum', 'chemoradiotherapy',
-            'neoadjuvant treatment', 'fluoropyrimidine-based',
-            'platinum-containing', 'single agent',
+            "chemotherapy",
+            "radiotherapy",
+            "radiation",
+            "therapy",
+            "platinum-based",
+            "platinum",
+            "chemoradiotherapy",
+            "neoadjuvant treatment",
+            "fluoropyrimidine-based",
+            "platinum-containing",
+            "single agent",
         )
         if any(term in p_lower for term in skip_terms):
             continue

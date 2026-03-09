@@ -54,11 +54,23 @@ class TestOncoTreeClient:
         client = OncoTreeClient()
 
         mock_response = [
-            {"code": "NSCLC", "name": "Non-Small Cell Lung Cancer", "tissue": "Lung", "level": 2},
-            {"code": "LUAD", "name": "Lung Adenocarcinoma", "tissue": "Lung", "level": 3},
+            {
+                "code": "NSCLC",
+                "name": "Non-Small Cell Lung Cancer",
+                "tissue": "Lung",
+                "level": 2,
+            },
+            {
+                "code": "LUAD",
+                "name": "Lung Adenocarcinoma",
+                "tissue": "Lung",
+                "level": 3,
+            },
         ]
 
-        with patch.object(client, "_fetch_all_tumor_types", new_callable=AsyncMock) as mock_fetch:
+        with patch.object(
+            client, "_fetch_all_tumor_types", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = mock_response
 
             # Test exact match
@@ -88,7 +100,9 @@ class TestOncoTreeClient:
             {"code": "MEL", "name": "Melanoma", "tissue": "Skin"},
         ]
 
-        with patch.object(client, "_fetch_all_tumor_types", new_callable=AsyncMock) as mock_fetch:
+        with patch.object(
+            client, "_fetch_all_tumor_types", new_callable=AsyncMock
+        ) as mock_fetch:
             mock_fetch.return_value = mock_response
 
             # Test code resolution
@@ -100,11 +114,15 @@ class TestOncoTreeClient:
             assert resolved_mel == "Melanoma"
 
             # Test "CODE - Name" format
-            resolved_formatted = await client.resolve_tumor_type("NSCLC - Non-Small Cell Lung Cancer")
+            resolved_formatted = await client.resolve_tumor_type(
+                "NSCLC - Non-Small Cell Lung Cancer"
+            )
             assert resolved_formatted == "Non-Small Cell Lung Cancer"
 
             # Test full name passthrough
-            resolved_full = await client.resolve_tumor_type("Non-Small Cell Lung Cancer")
+            resolved_full = await client.resolve_tumor_type(
+                "Non-Small Cell Lung Cancer"
+            )
             assert resolved_full == "Non-Small Cell Lung Cancer"
 
             # Test unknown code (returns original)

@@ -16,7 +16,9 @@ class TestLLMService:
         service = LLMService()
 
         # Mock the acompletion call
-        with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
+        with patch(
+            "oncomind.llm.service.acompletion", new_callable=AsyncMock
+        ) as mock_call:
             # Create mock response object with new format (raw component fields)
             response_json = {
                 "functional_summary": "BRAF V600E is a well-characterized oncogenic mutation.",
@@ -26,15 +28,15 @@ class TestLLMService:
                     "fda_approved": ["Vemurafenib", "Dabrafenib"],
                     "clinical_evidence": [],
                     "preclinical": [],
-                    "resistance_mechanisms": []
+                    "resistance_mechanisms": [],
                 },
                 "evidence_assessment": {
                     "overall_quality": "comprehensive",
                     "well_characterized": ["therapeutic response"],
                     "knowledge_gaps": [],
-                    "conflicting_evidence": []
+                    "conflicting_evidence": [],
                 },
-                "key_references": ["PMID:12345"]
+                "key_references": ["PMID:12345"],
             }
             mock_response = AsyncMock()
             mock_response.choices = [AsyncMock()]
@@ -51,8 +53,14 @@ class TestLLMService:
 
             assert "BRAF V600E" in insight.llm_summary
             assert insight.clinical_trials_available is True
-            assert insight.functional_summary == "BRAF V600E is a well-characterized oncogenic mutation."
-            assert insight.therapeutic_landscape["fda_approved"] == ["Vemurafenib", "Dabrafenib"]
+            assert (
+                insight.functional_summary
+                == "BRAF V600E is a well-characterized oncogenic mutation."
+            )
+            assert insight.therapeutic_landscape["fda_approved"] == [
+                "Vemurafenib",
+                "Dabrafenib",
+            ]
 
     @pytest.mark.asyncio
     async def test_get_llm_insight_with_markdown(self):
@@ -65,12 +73,14 @@ class TestLLMService:
             "research_implications": "",
             "therapeutic_landscape": {},
             "evidence_assessment": {},
-            "key_references": []
+            "key_references": [],
         }
 
         markdown_response = f"```json\n{json.dumps(response_json)}\n```"
 
-        with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
+        with patch(
+            "oncomind.llm.service.acompletion", new_callable=AsyncMock
+        ) as mock_call:
             mock_response = AsyncMock()
             mock_response.choices = [AsyncMock()]
             mock_response.choices[0].message.content = markdown_response
@@ -101,10 +111,12 @@ class TestLLMService:
             "research_implications": "",
             "therapeutic_landscape": {},
             "evidence_assessment": {},
-            "key_references": []
+            "key_references": [],
         }
 
-        with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
+        with patch(
+            "oncomind.llm.service.acompletion", new_callable=AsyncMock
+        ) as mock_call:
             mock_response = AsyncMock()
             mock_response.choices = [AsyncMock()]
             mock_response.choices[0].message.content = json.dumps(response_json)
@@ -128,7 +140,9 @@ class TestLLMService:
         """Test that LLM failure still returns valid insight."""
         service = LLMService()
 
-        with patch("oncomind.llm.service.acompletion", new_callable=AsyncMock) as mock_call:
+        with patch(
+            "oncomind.llm.service.acompletion", new_callable=AsyncMock
+        ) as mock_call:
             mock_call.side_effect = Exception("LLM API error")
 
             insight = await service.get_llm_insight(
@@ -140,4 +154,7 @@ class TestLLMService:
 
             # Should still get a valid insight with fallback values
             assert "BRAF V600E" in insight.llm_summary
-            assert "failed" in insight.rationale.lower() or "error" in insight.rationale.lower()
+            assert (
+                "failed" in insight.rationale.lower()
+                or "error" in insight.rationale.lower()
+            )

@@ -86,7 +86,7 @@ class TestGetInsightFullMode:
         # Full mode should attempt literature search
         # (may or may not find articles depending on API availability)
         # Literature is accessed via panel.evidence.pubmed_articles
-        assert hasattr(panel.evidence, 'pubmed_articles')
+        assert hasattr(panel.evidence, "pubmed_articles")
 
 
 class TestGetInsightLLMOptions:
@@ -254,13 +254,13 @@ class TestInsightOutput:
         panel = await get_insight("BRAF V600E", config=config)
 
         # Check all sections exist via Result's evidence field
-        assert hasattr(panel, 'evidence')
-        assert hasattr(panel.evidence, 'identifiers')
-        assert hasattr(panel.evidence, 'functional')
-        assert hasattr(panel.evidence, 'pubmed_articles')
+        assert hasattr(panel, "evidence")
+        assert hasattr(panel.evidence, "identifiers")
+        assert hasattr(panel.evidence, "functional")
+        assert hasattr(panel.evidence, "pubmed_articles")
         # Result also has property shortcuts
-        assert hasattr(panel, 'identifiers')
-        assert hasattr(panel, 'functional')
+        assert hasattr(panel, "identifiers")
+        assert hasattr(panel, "functional")
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -284,8 +284,8 @@ class TestInsightOutput:
         # Should round-trip
         parsed = json.loads(json_str)
         # In new Result model, identifiers are nested under evidence
-        assert parsed['evidence']['identifiers']['gene'] == "BRAF"
-        assert parsed['evidence']['identifiers']['variant'] == "V600E"
+        assert parsed["evidence"]["identifiers"]["gene"] == "BRAF"
+        assert parsed["evidence"]["identifiers"]["variant"] == "V600E"
 
     @pytest.mark.integration
     @pytest.mark.asyncio

@@ -56,8 +56,10 @@ class TestDepMapClientAsync:
         client = DepMapClient()
 
         # Mock fetch_gene_dependency and fetch_mutations to return no data
-        with patch.object(client, "fetch_gene_dependency", return_value=None), \
-             patch.object(client, "fetch_mutations", return_value=[]):
+        with (
+            patch.object(client, "fetch_gene_dependency", return_value=None),
+            patch.object(client, "fetch_mutations", return_value=[]),
+        ):
             result = await client.fetch_depmap_evidence("NOTAREALGENE")
 
         assert result is None
@@ -78,10 +80,12 @@ class TestDepMapEvidence:
         """Test has_data returns True when drug sensitivities exist."""
         evidence = DepMapEvidence(
             gene="BRAF",
-            drug_sensitivities=[DrugSensitivity(
-                drug_name="vemurafenib",
-                mean_log2fc=-2.5,
-            )],
+            drug_sensitivities=[
+                DrugSensitivity(
+                    drug_name="vemurafenib",
+                    mean_log2fc=-2.5,
+                )
+            ],
         )
         assert evidence.has_data() is True
 
@@ -146,7 +150,9 @@ class TestDepMapEvidence:
         top_drugs = evidence.get_top_sensitive_drugs(2)
 
         assert len(top_drugs) == 2
-        assert top_drugs[0].drug_name == "drugB"  # Most negative log2fc = most sensitive
+        assert (
+            top_drugs[0].drug_name == "drugB"
+        )  # Most negative log2fc = most sensitive
         assert top_drugs[1].drug_name == "drugA"
 
     def test_get_model_cell_lines(self):

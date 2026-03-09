@@ -104,11 +104,17 @@ def _extract_functional_features(
     missing = config.missing_float
 
     return {
-        "alphamissense_score": fs.alphamissense_score if fs.alphamissense_score is not None else missing,
-        "alphamissense_pathogenic": _prediction_to_float(fs.alphamissense_prediction, {"P": 1.0, "A": 0.5, "B": 0.0}),
+        "alphamissense_score": (
+            fs.alphamissense_score if fs.alphamissense_score is not None else missing
+        ),
+        "alphamissense_pathogenic": _prediction_to_float(
+            fs.alphamissense_prediction, {"P": 1.0, "A": 0.5, "B": 0.0}
+        ),
         "cadd_score": fs.cadd_score if fs.cadd_score is not None else missing,
         "cadd_raw": fs.cadd_raw if fs.cadd_raw is not None else missing,
-        "polyphen2_score": fs.polyphen2_score if fs.polyphen2_score is not None else missing,
+        "polyphen2_score": (
+            fs.polyphen2_score if fs.polyphen2_score is not None else missing
+        ),
         "polyphen2_damaging": _prediction_to_float(
             fs.polyphen2_prediction,
             {"probably_damaging": 1.0, "possibly_damaging": 0.5, "benign": 0.0},
@@ -119,7 +125,9 @@ def _extract_functional_features(
             {"deleterious": 1.0, "tolerated": 0.0},
         ),
         "snpeff_high_impact": 1.0 if fs.snpeff_impact == "HIGH" else 0.0,
-        "spliceai_score": fs.spliceai_score if fs.spliceai_score is not None else missing,
+        "spliceai_score": (
+            fs.spliceai_score if fs.spliceai_score is not None else missing
+        ),
     }
 
 
@@ -136,8 +144,12 @@ def _extract_count_features(panel: Evidence) -> dict[str, int]:
         "clinical_trial_count": len(panel.clinical_trials),
         "pubmed_article_count": len(panel.pubmed_articles),
         "total_kb_evidence_count": (
-            len(panel.civic_evidence) + len(panel.civic_assertions) + len(panel.clinvar_entries) +
-            len(panel.cosmic_entries) + len(panel.cgi_biomarkers) + len(panel.vicc_evidence)
+            len(panel.civic_evidence)
+            + len(panel.civic_assertions)
+            + len(panel.clinvar_entries)
+            + len(panel.cosmic_entries)
+            + len(panel.cgi_biomarkers)
+            + len(panel.vicc_evidence)
         ),
     }
 
@@ -158,7 +170,8 @@ def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
 
     # Count variant-specific trials
     variant_specific_trials = sum(
-        1 for t in panel.clinical_trials
+        1
+        for t in panel.clinical_trials
         if t.locus_match and t.locus_match.level == "variant"
     )
 

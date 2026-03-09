@@ -145,6 +145,7 @@ class Conductor:
         # Parse string input if needed
         if isinstance(variant, str):
             from oncomind.normalization.input_parser import parse_variant_input
+
             parsed = parse_variant_input(variant, tumor_type=tumor_type)
         else:
             parsed = variant
@@ -160,7 +161,9 @@ class Conductor:
             parsed, parsed.tumor_type, enable_timing=self.config.enable_timing
         )
         timings["evidence_aggregation"] = time.time() - t0
-        logger.debug(f"Evidence aggregation completed in {timings['evidence_aggregation']:.2f}s")
+        logger.debug(
+            f"Evidence aggregation completed in {timings['evidence_aggregation']:.2f}s"
+        )
 
         # Step 2 & 3: Run gap computation and LLM call
         # Gap computation is fast but LLM needs it - run sequentially
@@ -185,7 +188,9 @@ class Conductor:
             logger.debug(f"LLM call completed in {timings['llm_parallel']:.2f}s")
 
         timings["total"] = time.time() - total_start
-        logger.debug(f"Total processing time for {gene_variant}: {timings['total']:.2f}s")
+        logger.debug(
+            f"Total processing time for {gene_variant}: {timings['total']:.2f}s"
+        )
 
         # Log timing breakdown if enabled
         if self.config.enable_timing:
@@ -196,7 +201,11 @@ class Conductor:
                 print(f"   LLM calls (parallel): {timings['llm_parallel']:.2f}s")
             print(f"   Total:                {timings['total']:.2f}s")
 
-        return Result(evidence=evidence, llm=llm_insight, cross_source_analysis=cross_source_analysis)
+        return Result(
+            evidence=evidence,
+            llm=llm_insight,
+            cross_source_analysis=cross_source_analysis,
+        )
 
     async def run_batch(
         self,
@@ -224,7 +233,9 @@ class Conductor:
         completed = 0
         semaphore = asyncio.Semaphore(self.config.batch_concurrency)
 
-        async def process_one(idx: int, variant: ParsedVariant | str) -> tuple[int, Result | None]:
+        async def process_one(
+            idx: int, variant: ParsedVariant | str
+        ) -> tuple[int, Result | None]:
             """Process a single variant with semaphore for concurrency control."""
             nonlocal completed
             async with semaphore:
@@ -235,7 +246,11 @@ class Conductor:
                         progress_callback(completed, total)
                     return (idx, result)
                 except Exception as e:
-                    gene = variant if isinstance(variant, str) else f"{variant.gene} {variant.variant}"
+                    gene = (
+                        variant
+                        if isinstance(variant, str)
+                        else f"{variant.gene} {variant.variant}"
+                    )
                     logger.error(f"Failed to process {gene}: {str(e)}")
                     completed += 1
                     if progress_callback:
@@ -287,7 +302,9 @@ class Conductor:
         tumor_type = evidence.context.tumor_type
         data_availability = {
             # Check if cBioPortal data is tumor-specific (not pan-cancer)
-            "has_tumor_specific_cbioportal": _check_tumor_specific_cbioportal(evidence, tumor_type),
+            "has_tumor_specific_cbioportal": _check_tumor_specific_cbioportal(
+                evidence, tumor_type
+            ),
             # Check if we have curated clinical evidence
             "has_civic_assertions": bool(evidence.civic_assertions),
             "has_fda_biomarker_evidence": bool(evidence.fda_biomarker_evidence),
@@ -388,8 +405,13 @@ def _check_tumor_specific_cbioportal(evidence, tumor_type: str | None) -> bool:
 
     # Pan-cancer indicators
     pan_cancer_indicators = [
-        "pan_cancer", "pancancer", "all_tcga", "msk_impact",
-        "mixed", "combined", "multi"
+        "pan_cancer",
+        "pancancer",
+        "all_tcga",
+        "msk_impact",
+        "mixed",
+        "combined",
+        "multi",
     ]
 
     # If study name suggests pan-cancer, return False

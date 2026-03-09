@@ -7,7 +7,9 @@ from unittest.mock import AsyncMock, patch
 from oncomind.annotator import Annotator, AnnotatorConfig
 from oncomind.annotator.models import MyVariantAnnotation
 
-FIXTURES_DIR = Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+FIXTURES_DIR = (
+    Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+)
 CANCER_PANEL_VCF = FIXTURES_DIR / "cancer_panel.vcf"
 SINGLE_VARIANT_VCF = FIXTURES_DIR / "single_variant.vcf"
 EMPTY_VCF = FIXTURES_DIR / "empty.vcf"

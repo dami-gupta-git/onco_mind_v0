@@ -115,12 +115,12 @@ class TestSemanticScholarClient:
 
             if paper is not None:
                 data = paper.to_dict()
-                assert 'paper_id' in data
-                assert 'pmid' in data
-                assert 'citation_count' in data
-                assert 'influential_citation_count' in data
-                assert 'impact_score' in data
-                assert 'tldr' in data
+                assert "paper_id" in data
+                assert "pmid" in data
+                assert "citation_count" in data
+                assert "influential_citation_count" in data
+                assert "impact_score" in data
+                assert "tldr" in data
 
     @pytest.mark.asyncio
     async def test_search_papers(self, client):
@@ -162,10 +162,14 @@ class TestSemanticScholarResistanceSearch:
                 for paper in papers:
                     # Verify paper has resistance signal
                     assert paper.mentions_resistance()
-                    assert paper.get_signal_type() in ['resistance', 'mixed']
+                    assert paper.get_signal_type() in ["resistance", "mixed"]
 
                     # Create PubMedEvidence from Semantic Scholar data
-                    url = f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}/" if paper.pmid else f"https://www.semanticscholar.org/paper/{paper.paper_id}"
+                    url = (
+                        f"https://pubmed.ncbi.nlm.nih.gov/{paper.pmid}/"
+                        if paper.pmid
+                        else f"https://www.semanticscholar.org/paper/{paper.paper_id}"
+                    )
 
                     evidence = PubMedEvidence(
                         pmid=paper.pmid or paper.paper_id,
@@ -191,4 +195,6 @@ class TestSemanticScholarResistanceSearch:
                     _ = evidence.get_impact_indicator()
                     _ = evidence.format_rich_citation()
 
-                    print(f"Found: {evidence.title[:50]}... [{evidence.get_impact_indicator()}]")
+                    print(
+                        f"Found: {evidence.title[:50]}... [{evidence.get_impact_indicator()}]"
+                    )

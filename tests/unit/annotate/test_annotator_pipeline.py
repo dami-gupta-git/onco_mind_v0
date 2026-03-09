@@ -8,7 +8,9 @@ from oncomind.annotator import Annotator, AnnotatorConfig
 from oncomind.annotator.ann_parsed_variant import AnnParsedVariant
 from oncomind.annotator.models import MyVariantAnnotation
 
-FIXTURES_DIR = Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+FIXTURES_DIR = (
+    Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+)
 CANCER_PANEL_VCF = FIXTURES_DIR / "cancer_panel.vcf"
 SINGLE_VARIANT_VCF = FIXTURES_DIR / "single_variant.vcf"
 EMPTY_VCF = FIXTURES_DIR / "empty.vcf"
@@ -265,7 +267,9 @@ class TestBuildAnnotations:
             return_value=mock_myvariant_response,
         ):
             async with Annotator() as annotator:
-                result = await annotator.build_annotations(variant, tumor_type="Melanoma")
+                result = await annotator.build_annotations(
+                    variant, tumor_type="Melanoma"
+                )
 
         assert result["tumor_type"] == "Melanoma"
 

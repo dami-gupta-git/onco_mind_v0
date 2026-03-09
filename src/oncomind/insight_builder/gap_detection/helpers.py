@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from oncomind.models.extracted.evidence_gaps import (
-    EvidenceGap, GapCategory, GapSeverity, CharacterizedAspect
+    EvidenceGap,
+    GapCategory,
+    GapSeverity,
+    CharacterizedAspect,
 )
 from oncomind.models.evidence.base import tumor_types_match, is_pan_cancer_term
 from oncomind.config.constants import CADD_DELETERIOUS_THRESHOLD
@@ -21,6 +24,7 @@ if TYPE_CHECKING:
 # MATCH COUNTING HELPERS
 # =============================================================================
 
+
 @dataclass
 class MatchCounts:
     """Counts of evidence items by match level and tumor match.
@@ -28,6 +32,7 @@ class MatchCounts:
     Reduces code duplication across gap detection functions that need to
     track variant/codon/gene match levels and tumor-specific counts.
     """
+
     total: int = 0
     variant: int = 0
     codon: int = 0
@@ -76,15 +81,13 @@ def _get_locus_match(item) -> str:
     Returns 'variant', 'codon', or 'gene'.
     """
     # Use locus_match computed property (returns string: 'variant', 'codon', or 'gene')
-    if hasattr(item, 'locus_match') and item.locus_match:
+    if hasattr(item, "locus_match") and item.locus_match:
         return item.locus_match
     return "gene"
 
 
 def count_with_levels(
-    items: list,
-    tumor_type: str | None = None,
-    tumor_check_fn: callable = None
+    items: list, tumor_type: str | None = None, tumor_check_fn: callable = None
 ) -> MatchCounts:
     """Count items with match level breakdown and tumor matching.
 
@@ -102,9 +105,9 @@ def count_with_levels(
     for item in items:
         counts.total += 1
         level = _get_locus_match(item)
-        if level == 'variant':
+        if level == "variant":
             counts.variant += 1
-        elif level == 'codon':
+        elif level == "codon":
             counts.codon += 1
         else:
             counts.gene += 1
@@ -112,11 +115,17 @@ def count_with_levels(
         # Tumor matching
         if tumor_type:
             # Get the disease/tumor from the item
-            tumor_attr = getattr(item, 'tumor_type', None)
-            disease_attr = getattr(item, 'disease', None)
-            tissue = (tumor_attr if isinstance(tumor_attr, str) and tumor_attr
-                      else disease_attr if isinstance(disease_attr, str) and disease_attr
-                      else None)
+            tumor_attr = getattr(item, "tumor_type", None)
+            disease_attr = getattr(item, "disease", None)
+            tissue = (
+                tumor_attr
+                if isinstance(tumor_attr, str) and tumor_attr
+                else (
+                    disease_attr
+                    if isinstance(disease_attr, str) and disease_attr
+                    else None
+                )
+            )
 
             if tumor_check_fn:
                 if tumor_check_fn(item):
@@ -126,10 +135,14 @@ def count_with_levels(
             else:
                 # Default: use the tumor_match property if available (single source of truth)
                 # This ensures consistency with evidence tables in the UI
-                item_tumor_match = getattr(item, 'tumor_match', None)
+                item_tumor_match = getattr(item, "tumor_match", None)
                 if item_tumor_match is True:
                     counts.tumor += 1
-                elif item_tumor_match is False and tissue and not is_pan_cancer_term(tissue):
+                elif (
+                    item_tumor_match is False
+                    and tissue
+                    and not is_pan_cancer_term(tissue)
+                ):
                     counts.other_cancers.add(tissue)
                 elif item_tumor_match is None:
                     # Fallback for items without tumor_match property
@@ -175,6 +188,7 @@ def count_fda_match_levels(
         else:
             # Fallback based on specificity level
             from oncomind.models.evidence.fda_biomarker import SpecificityLevel
+
             if fda_ev.specificity == SpecificityLevel.VARIANT:
                 counts.variant += 1
             elif fda_ev.specificity == SpecificityLevel.CODON:
@@ -207,6 +221,7 @@ def count_fda_match_levels(
 # PATHOGENICITY SIGNAL DETECTION
 # =============================================================================
 
+
 def has_pathogenic_signal(evidence: "Evidence") -> bool:
     """Check if variant has any signal suggesting pathogenicity.
 
@@ -225,7 +240,10 @@ def has_pathogenic_signal(evidence: "Evidence") -> bool:
 
     # AlphaMissense pathogenic prediction
     if func.alphamissense_prediction and func.alphamissense_prediction.lower() in (
-        "p", "pathogenic", "likely_pathogenic", "lp"
+        "p",
+        "pathogenic",
+        "likely_pathogenic",
+        "lp",
     ):
         return True
 
@@ -235,14 +253,15 @@ def has_pathogenic_signal(evidence: "Evidence") -> bool:
 
     # PolyPhen2 damaging prediction
     if func.polyphen2_prediction and func.polyphen2_prediction.lower() in (
-        "d", "damaging", "probably_damaging", "possibly_damaging"
+        "d",
+        "damaging",
+        "probably_damaging",
+        "possibly_damaging",
     ):
         return True
 
     # SIFT deleterious prediction (D = deleterious, T = tolerated)
-    if func.sift_prediction and func.sift_prediction.lower() in (
-        "d", "deleterious"
-    ):
+    if func.sift_prediction and func.sift_prediction.lower() in ("d", "deleterious"):
         return True
 
     # Has clinical evidence (strongest signal)
@@ -251,20 +270,33 @@ def has_pathogenic_signal(evidence: "Evidence") -> bool:
 
     # ClinVar pathogenic entries
     for entry in evidence.clinvar_entries:
-        if entry.clinical_significance and "pathogenic" in entry.clinical_significance.lower():
+        if (
+            entry.clinical_significance
+            and "pathogenic" in entry.clinical_significance.lower()
+        ):
             return True
 
     # Check if overall ClinVar significance is pathogenic
-    if evidence.clinvar_significance and "pathogenic" in evidence.clinvar_significance.lower():
+    if (
+        evidence.clinvar_significance
+        and "pathogenic" in evidence.clinvar_significance.lower()
+    ):
         return True
 
     # Truncating variants (nonsense, frameshift) are generally pathogenic
     if func.snpeff_effect:
         effect_lower = func.snpeff_effect.lower()
-        if any(term in effect_lower for term in [
-            "stop_gained", "frameshift", "splice_donor", "splice_acceptor",
-            "start_lost", "nonsense"
-        ]):
+        if any(
+            term in effect_lower
+            for term in [
+                "stop_gained",
+                "frameshift",
+                "splice_donor",
+                "splice_acceptor",
+                "start_lost",
+                "nonsense",
+            ]
+        ):
             return True
 
     return False
@@ -273,6 +305,7 @@ def has_pathogenic_signal(evidence: "Evidence") -> bool:
 # =============================================================================
 # SOURCE NORMALIZATION
 # =============================================================================
+
 
 def normalize_source(source: str) -> str:
     """Normalize source names to detect duplicates.
@@ -314,7 +347,7 @@ CATEGORY_ORDER: dict[GapCategory | None, int] = {
 
 
 def sort_characterized_by_category(
-    items: list[CharacterizedAspect]
+    items: list[CharacterizedAspect],
 ) -> list[CharacterizedAspect]:
     """Sort well-characterized aspects by category for grouped display.
 
@@ -333,16 +366,16 @@ def sort_characterized_by_category(
 
 # Research-oriented gap weights: biological unknowns weighted higher than clinical gaps
 GAP_CATEGORY_WEIGHTS: dict[GapCategory, float] = {
-    GapCategory.VALIDATION: 3.5,      # Strong signal + no validation = high research value
-    GapCategory.FUNCTIONAL: 3.0,      # Mechanism unknown
-    GapCategory.PRECLINICAL: 2.5,     # No models to test hypotheses
-    GapCategory.RESISTANCE: 2.0,      # Resistance mechanisms unknown
-    GapCategory.DISCORDANT: 2.0,      # Conflicting evidence needs resolution
-    GapCategory.DRUG_RESPONSE: 1.5,   # Drug sensitivity unknown
-    GapCategory.TUMOR_TYPE: 1.5,      # Not studied in this tumor
-    GapCategory.PREVALENCE: 1.0,      # Epidemiology unknown
-    GapCategory.CLINICAL: 1.0,        # Lower weight for research context
-    GapCategory.PROGNOSTIC: 1.0,      # Prognostic impact unknown
+    GapCategory.VALIDATION: 3.5,  # Strong signal + no validation = high research value
+    GapCategory.FUNCTIONAL: 3.0,  # Mechanism unknown
+    GapCategory.PRECLINICAL: 2.5,  # No models to test hypotheses
+    GapCategory.RESISTANCE: 2.0,  # Resistance mechanisms unknown
+    GapCategory.DISCORDANT: 2.0,  # Conflicting evidence needs resolution
+    GapCategory.DRUG_RESPONSE: 1.5,  # Drug sensitivity unknown
+    GapCategory.TUMOR_TYPE: 1.5,  # Not studied in this tumor
+    GapCategory.PREVALENCE: 1.0,  # Epidemiology unknown
+    GapCategory.CLINICAL: 1.0,  # Lower weight for research context
+    GapCategory.PROGNOSTIC: 1.0,  # Prognostic impact unknown
 }
 
 SEVERITY_MULTIPLIERS: dict[GapSeverity, float] = {
@@ -449,20 +482,26 @@ def compute_research_priority(
     significant_count = sum(1 for g in gaps if g.severity == GapSeverity.SIGNIFICANT)
 
     # Only return low if comprehensive AND no significant/critical/high gaps
-    if overall_quality == "comprehensive" and critical_count == 0 and high_count == 0 and significant_count == 0:
+    if (
+        overall_quality == "comprehensive"
+        and critical_count == 0
+        and high_count == 0
+        and significant_count == 0
+    ):
         return "low"
 
     gene = evidence.identifiers.gene
     variant = evidence.identifiers.variant
 
     has_strong_oncogenic_signal = (
-        has_pathogenic and
-        evidence.depmap_evidence is not None and
-        evidence.depmap_evidence.is_essential()
+        has_pathogenic
+        and evidence.depmap_evidence is not None
+        and evidence.depmap_evidence.is_essential()
     )
 
     has_biological_gaps = any(
-        g.category in (GapCategory.VALIDATION, GapCategory.FUNCTIONAL, GapCategory.PRECLINICAL)
+        g.category
+        in (GapCategory.VALIDATION, GapCategory.FUNCTIONAL, GapCategory.PRECLINICAL)
         for g in gaps
     )
 
@@ -499,21 +538,29 @@ def compute_research_priority(
 # CONTEXT-AWARE ENRICHMENT HELPERS
 # =============================================================================
 
+
 def get_primary_drug(evidence: "Evidence") -> str | None:
     """Get the primary approved drug for this variant."""
     # Use FDA biomarker evidence (only REQUIRED_POSITIVE)
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
     for ev in evidence.fda_biomarker_evidence:
         if ev.requirement != BiomarkerRequirement.REQUIRED_NEGATIVE and ev.drug_name:
             return ev.brand_name or ev.drug_name
     # Fall back to CIViC assertion therapies
     for assertion in evidence.civic_assertions:
         if assertion.therapies:
-            return assertion.therapies[0] if isinstance(assertion.therapies, list) else assertion.therapies
+            return (
+                assertion.therapies[0]
+                if isinstance(assertion.therapies, list)
+                else assertion.therapies
+            )
     return None
 
 
-def get_top_sensitive_drugs(evidence: "Evidence", tumor_type: str | None = None) -> list[str]:
+def get_top_sensitive_drugs(
+    evidence: "Evidence", tumor_type: str | None = None
+) -> list[str]:
     """Get top sensitive drugs from DepMap data.
 
     Only returns drugs if there are tumor-matched cell lines with the mutation,
@@ -524,10 +571,13 @@ def get_top_sensitive_drugs(evidence: "Evidence", tumor_type: str | None = None)
 
     # Check for tumor-matched cell lines
     if tumor_type and evidence.depmap_evidence.cell_line_models:
-        mutant_models = [cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation]
+        mutant_models = [
+            cl for cl in evidence.depmap_evidence.cell_line_models if cl.has_mutation
+        ]
         # Args: source_disease (from model), queried_tumor (user's query)
         tumor_matched = [
-            m for m in mutant_models
+            m
+            for m in mutant_models
             if m.primary_disease and tumor_types_match(m.primary_disease, tumor_type)
         ]
         if not tumor_matched:
@@ -549,6 +599,7 @@ def has_strong_cooccurrence(evidence: "Evidence", threshold_pct: float = None) -
     """Check if there's a strong co-occurrence signal (>threshold% co-mutation rate)."""
     if threshold_pct is None:
         from oncomind.config.constants import COOCCURRENCE_STRONG_THRESHOLD_PCT
+
         threshold_pct = COOCCURRENCE_STRONG_THRESHOLD_PCT
 
     if evidence.cbioportal_evidence and evidence.cbioportal_evidence.co_occurring:

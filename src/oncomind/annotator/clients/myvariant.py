@@ -43,7 +43,9 @@ class AnnotatorMyVariantClient:
             self._client = httpx.AsyncClient(timeout=self.timeout)
         return self._client
 
-    async def _query(self, query: str, fields: list[str] | None = None) -> dict[str, Any]:
+    async def _query(
+        self, query: str, fields: list[str] | None = None
+    ) -> dict[str, Any]:
         """Execute a query against MyVariant API.
 
         Args:

@@ -130,7 +130,10 @@ class TestFDABiomarkerEvidenceFields:
 
     def test_fda_biomarker_evidence_creation(self):
         """FDABiomarkerEvidence should be creatable with required fields."""
-        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
+        from oncomind.models.evidence.fda_biomarker import (
+            SpecificityLevel,
+            BiomarkerRequirement,
+        )
 
         evidence = FDABiomarkerEvidence(
             drug_name="Vemurafenib",
@@ -146,7 +149,10 @@ class TestFDABiomarkerEvidenceFields:
 
     def test_fda_biomarker_evidence_with_tumor_types(self):
         """FDABiomarkerEvidence should accept tumor_types."""
-        from oncomind.models.evidence.fda_biomarker import SpecificityLevel, BiomarkerRequirement
+        from oncomind.models.evidence.fda_biomarker import (
+            SpecificityLevel,
+            BiomarkerRequirement,
+        )
 
         evidence = FDABiomarkerEvidence(
             drug_name="Vemurafenib",
@@ -310,11 +316,13 @@ class TestBackendAnnotationsTab:
 
         # BRAF V600E is a well-characterized variant
         # At least some scores should be present
-        has_any_score = any([
-            annotations.get("alphamissense_score") is not None,
-            annotations.get("cadd_score") is not None,
-            annotations.get("polyphen2_prediction") is not None,
-        ])
+        has_any_score = any(
+            [
+                annotations.get("alphamissense_score") is not None,
+                annotations.get("cadd_score") is not None,
+                annotations.get("polyphen2_prediction") is not None,
+            ]
+        )
 
         # Note: This assertion may be relaxed if MyVariant doesn't return scores
         # for this specific query. The important thing is the structure exists.
@@ -426,7 +434,9 @@ class TestBackendEvidenceStructure:
         fda_biomarker_evidence = result.get("fda_biomarker_evidence", [])
 
         # BRAF V600E has multiple FDA-approved drugs
-        assert len(fda_biomarker_evidence) >= 1, "BRAF V600E should have at least 1 FDA biomarker evidence"
+        assert (
+            len(fda_biomarker_evidence) >= 1
+        ), "BRAF V600E should have at least 1 FDA biomarker evidence"
 
         # Verify expected fields are present
         expected_fields = [
@@ -438,7 +448,9 @@ class TestBackendEvidenceStructure:
 
         for evidence in fda_biomarker_evidence:
             for field in expected_fields:
-                assert field in evidence, f"Missing field '{field}' in FDA evidence: {evidence.get('drug_name')}"
+                assert (
+                    field in evidence
+                ), f"Missing field '{field}' in FDA evidence: {evidence.get('drug_name')}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -474,8 +486,12 @@ class TestCBioPortalEvidenceFields:
             samples_with_exact_variant=217,
             gene_prevalence_pct=51.2,
             variant_prevalence_pct=48.3,
-            co_occurring=[CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)],
-            mutually_exclusive=[CoMutationEntry(gene="NRAS", count=2, pct=0.9, odds_ratio=0.08)],
+            co_occurring=[
+                CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)
+            ],
+            mutually_exclusive=[
+                CoMutationEntry(gene="NRAS", count=2, pct=0.9, odds_ratio=0.08)
+            ],
         )
 
         assert evidence.gene == "BRAF"
@@ -501,7 +517,10 @@ class TestCBioPortalEvidenceFields:
         )
 
         url = evidence.get_study_url()
-        assert url == "https://www.cbioportal.org/study/summary?id=skcm_tcga_pan_can_atlas_2018"
+        assert (
+            url
+            == "https://www.cbioportal.org/study/summary?id=skcm_tcga_pan_can_atlas_2018"
+        )
 
     def test_cbioportal_evidence_study_url_none(self):
         """Test study URL is None when no study_id."""
@@ -557,7 +576,9 @@ class TestCBioPortalEvidenceFields:
             total_samples=449,
             samples_with_gene_mutation=230,
             gene_prevalence_pct=51.2,
-            co_occurring=[CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)],
+            co_occurring=[
+                CoMutationEntry(gene="CDKN2A", count=98, pct=45.2, odds_ratio=2.34)
+            ],
         )
 
         context = evidence.to_prompt_context()
@@ -1100,9 +1121,9 @@ class TestEvidenceCivicEvidenceField:
                 clinical_significance=sig,
                 evidence_direction=direction,
             )
-            assert evidence.is_sensitivity is expected, (
-                f"Expected is_sensitivity={expected} for sig={sig}, direction={direction}"
-            )
+            assert (
+                evidence.is_sensitivity is expected
+            ), f"Expected is_sensitivity={expected} for sig={sig}, direction={direction}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -1111,15 +1132,17 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=10)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=10
+            )
 
         assert len(evidence_list) >= 1, "BRAF V600E should have CIViC evidence items"
 
         # At least some evidence should have clinical_significance
         evidence_with_sig = [e for e in evidence_list if e.clinical_significance]
-        assert len(evidence_with_sig) > 0, (
-            "BRAF V600E should have evidence with clinical_significance"
-        )
+        assert (
+            len(evidence_with_sig) > 0
+        ), "BRAF V600E should have evidence with clinical_significance"
 
         for evidence in evidence_with_sig:
             assert isinstance(evidence.clinical_significance, str)
@@ -1132,24 +1155,26 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=20)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=20
+            )
 
         assert len(evidence_list) >= 1
 
         # BRAF V600E should have sensitivity evidence (responds to BRAF inhibitors)
         sensitivity_evidence = [e for e in evidence_list if e.is_sensitivity]
-        assert len(sensitivity_evidence) > 0, (
-            "BRAF V600E should have is_sensitivity=True evidence"
-        )
+        assert (
+            len(sensitivity_evidence) > 0
+        ), "BRAF V600E should have is_sensitivity=True evidence"
 
         # Verify the computed property logic
         for evidence in sensitivity_evidence:
             sig = evidence.clinical_significance
             assert sig is not None
             sig_upper = sig.upper()
-            assert "SENSITIV" in sig_upper or "RESPONSE" in sig_upper, (
-                f"is_sensitivity=True but clinical_significance={sig}"
-            )
+            assert (
+                "SENSITIV" in sig_upper or "RESPONSE" in sig_upper
+            ), f"is_sensitivity=True but clinical_significance={sig}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -1159,7 +1184,9 @@ class TestEvidenceCivicEvidenceField:
 
         # EGFR T790M is a known resistance mutation
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("EGFR", "T790M", max_per_level=20)
+            evidence_list = await client.fetch_evidence_items(
+                "EGFR", "T790M", max_per_level=20
+            )
 
         assert len(evidence_list) >= 1, "EGFR T790M should have CIViC evidence"
 
@@ -1170,9 +1197,9 @@ class TestEvidenceCivicEvidenceField:
         for evidence in resistance_evidence:
             sig = evidence.clinical_significance
             assert sig is not None
-            assert "RESIST" in sig.upper(), (
-                f"is_resistance=True but clinical_significance={sig}"
-            )
+            assert (
+                "RESIST" in sig.upper()
+            ), f"is_resistance=True but clinical_significance={sig}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -1181,12 +1208,13 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=30)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=30
+            )
 
         # Find evidence with both sensitivity significance and direction populated
         evidence_with_direction = [
-            e for e in evidence_list
-            if e.clinical_significance and e.evidence_direction
+            e for e in evidence_list if e.clinical_significance and e.evidence_direction
         ]
 
         for evidence in evidence_with_direction:
@@ -1204,9 +1232,9 @@ class TestEvidenceCivicEvidenceField:
                     )
                 # If direction is DOES_NOT_SUPPORT, is_sensitivity should be False
                 elif direction_upper == "DOES_NOT_SUPPORT":
-                    assert evidence.is_sensitivity is False, (
-                        f"DOES_NOT_SUPPORT + sensitivity topic should give is_sensitivity=False"
-                    )
+                    assert (
+                        evidence.is_sensitivity is False
+                    ), f"DOES_NOT_SUPPORT + sensitivity topic should give is_sensitivity=False"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -1215,7 +1243,9 @@ class TestEvidenceCivicEvidenceField:
         from oncomind.api.civic import CIViCClient
 
         async with CIViCClient() as client:
-            evidence_list = await client.fetch_evidence_items("BRAF", "V600E", max_per_level=5)
+            evidence_list = await client.fetch_evidence_items(
+                "BRAF", "V600E", max_per_level=5
+            )
 
         assert len(evidence_list) >= 1
 

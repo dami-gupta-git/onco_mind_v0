@@ -51,7 +51,7 @@ class TestLogLevel:
     def test_set_log_level_info(self):
         """Test setting log level to INFO."""
         set_log_level("DEBUG")  # First set to DEBUG
-        set_log_level("INFO")   # Then back to INFO
+        set_log_level("INFO")  # Then back to INFO
         assert get_log_level() == "INFO"
         assert is_debug() is False
 
@@ -193,32 +193,32 @@ class TestConvenienceFunctions:
     def test_debug_function(self):
         """Test the debug() convenience function."""
         set_log_level("DEBUG")
-        with patch.object(get_logger(), 'debug') as mock_debug:
+        with patch.object(get_logger(), "debug") as mock_debug:
             debug("Test message")
             mock_debug.assert_called_once_with("Test message")
 
     def test_info_function(self):
         """Test the info() convenience function."""
-        with patch.object(get_logger(), 'info') as mock_info:
+        with patch.object(get_logger(), "info") as mock_info:
             info("Test info message")
             mock_info.assert_called_once_with("Test info message")
 
     def test_warn_function(self):
         """Test the warn() convenience function."""
-        with patch.object(get_logger(), 'warning') as mock_warn:
+        with patch.object(get_logger(), "warning") as mock_warn:
             warn("Test warning message")
             mock_warn.assert_called_once_with("Test warning message")
 
     def test_error_function(self):
         """Test the error() convenience function."""
-        with patch.object(get_logger(), 'error') as mock_error:
+        with patch.object(get_logger(), "error") as mock_error:
             error("Test error message")
             mock_error.assert_called_once_with("Test error message")
 
     def test_debug_with_args(self):
         """Test debug function with formatting args."""
         set_log_level("DEBUG")
-        with patch.object(get_logger(), 'debug') as mock_debug:
+        with patch.object(get_logger(), "debug") as mock_debug:
             debug("Processing %s %s", "BRAF", "V600E")
             mock_debug.assert_called_once_with("Processing %s %s", "BRAF", "V600E")
 

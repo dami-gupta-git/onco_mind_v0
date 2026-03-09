@@ -192,6 +192,9 @@ class TestMyVariantClient:
             # Verify the first query used protein notation
             first_call_args = mock_query.call_args_list[0]
             # Should be called with "BRAF p.V600E"
-            assert "p.V600E" in first_call_args[0][0] or "BRAF p.V600E" == first_call_args[0][0]
+            assert (
+                "p.V600E" in first_call_args[0][0]
+                or "BRAF p.V600E" == first_call_args[0][0]
+            )
 
         await client.close()

@@ -20,7 +20,10 @@ import re
 from typing import Any
 from dataclasses import dataclass, field
 
-from oncomind.utils.variant_normalization import normalize_variant, classify_variant_type
+from oncomind.utils.variant_normalization import (
+    normalize_variant,
+    classify_variant_type,
+)
 from oncomind.config.constants import GENE_ALIASES
 
 
@@ -38,6 +41,7 @@ class ParsedVariant:
         parse_confidence: Confidence in parsing (0-1)
         parse_warnings: Any warnings from parsing
     """
+
     gene: str
     variant: str
     variant_normalized: str | None = None
@@ -64,29 +68,51 @@ class ParsedVariant:
 # Common variant patterns
 VARIANT_PATTERNS = [
     # Gene + variant (BRAF V600E, EGFR L858R)
-    re.compile(r'^([A-Z][A-Z0-9]+)\s+([A-Z]\d+[A-Z*])$', re.IGNORECASE),
+    re.compile(r"^([A-Z][A-Z0-9]+)\s+([A-Z]\d+[A-Z*])$", re.IGNORECASE),
     # Gene + variant with p. notation (BRAF p.V600E)
-    re.compile(r'^([A-Z][A-Z0-9]+)\s+p\.([A-Z][a-z]{0,2}\d+[A-Z][a-z]{0,2})$', re.IGNORECASE),
+    re.compile(
+        r"^([A-Z][A-Z0-9]+)\s+p\.([A-Z][a-z]{0,2}\d+[A-Z][a-z]{0,2})$", re.IGNORECASE
+    ),
     # Gene + complex variant (EGFR L747_P753delinsS)
-    re.compile(r'^([A-Z][A-Z0-9]+)\s+([A-Z]\d+[_A-Z\d]*(?:del|ins|dup|fs)[A-Z0-9]*)$', re.IGNORECASE),
+    re.compile(
+        r"^([A-Z][A-Z0-9]+)\s+([A-Z]\d+[_A-Z\d]*(?:del|ins|dup|fs)[A-Z0-9]*)$",
+        re.IGNORECASE,
+    ),
     # Gene + nonsense (TP53 R248*)
-    re.compile(r'^([A-Z][A-Z0-9]+)\s+([A-Z]\d+\*)$', re.IGNORECASE),
+    re.compile(r"^([A-Z][A-Z0-9]+)\s+([A-Z]\d+\*)$", re.IGNORECASE),
     # Gene colon variant (BRAF:V600E)
-    re.compile(r'^([A-Z][A-Z0-9]+):([A-Z0-9_*]+)$', re.IGNORECASE),
+    re.compile(r"^([A-Z][A-Z0-9]+):([A-Z0-9_*]+)$", re.IGNORECASE),
 ]
 
 # Tumor type keywords and patterns
 TUMOR_KEYWORDS = [
-    "in", "with", "cancer", "carcinoma", "tumor", "tumour",
-    "melanoma", "nsclc", "sclc", "lung", "breast", "colorectal",
-    "gist", "aml", "cml", "all", "cll", "lymphoma", "leukemia",
-    "glioma", "glioblastoma", "pancreatic", "ovarian", "prostate",
+    "in",
+    "with",
+    "cancer",
+    "carcinoma",
+    "tumor",
+    "tumour",
+    "melanoma",
+    "nsclc",
+    "sclc",
+    "lung",
+    "breast",
+    "colorectal",
+    "gist",
+    "aml",
+    "cml",
+    "all",
+    "cll",
+    "lymphoma",
+    "leukemia",
+    "glioma",
+    "glioblastoma",
+    "pancreatic",
+    "ovarian",
+    "prostate",
 ]
 
-TUMOR_SEPARATOR_PATTERN = re.compile(
-    r'\s+(?:in|with|for)\s+(.+)$',
-    re.IGNORECASE
-)
+TUMOR_SEPARATOR_PATTERN = re.compile(r"\s+(?:in|with|for)\s+(.+)$", re.IGNORECASE)
 
 
 def _resolve_gene_alias(gene: str) -> str:
@@ -120,7 +146,7 @@ def _extract_tumor_type(text: str) -> tuple[str, str | None]:
     match = TUMOR_SEPARATOR_PATTERN.search(text)
     if match:
         tumor_type = match.group(1).strip()
-        cleaned = text[:match.start()].strip()
+        cleaned = text[: match.start()].strip()
         return cleaned, tumor_type
 
     return text, None

@@ -59,11 +59,11 @@ class TestTwoStagePipeline:
                 content = hypothesis_response
 
             import json
+
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps(content)),
-                    finish_reason="stop"
+                    message=AsyncMock(content=json.dumps(content)), finish_reason="stop"
                 )
             ]
             return mock_response
@@ -98,7 +98,10 @@ class TestTwoStagePipeline:
         # Check synthesis system prompt keywords
         synthesis_system = synthesis_messages[0]["content"]
         assert "cancer genomics researcher" in synthesis_system.lower()
-        assert "synthesis" in synthesis_system.lower() or "functional" in synthesis_system.lower()
+        assert (
+            "synthesis" in synthesis_system.lower()
+            or "functional" in synthesis_system.lower()
+        )
         assert "calibration" in synthesis_system.lower()
 
         # Check synthesis user prompt keywords
@@ -157,11 +160,12 @@ class TestTwoStagePipeline:
             call_count += 1
 
             import json
+
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
                     message=AsyncMock(content=json.dumps(synthesis_response)),
-                    finish_reason="stop"
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -205,11 +209,12 @@ class TestTwoStagePipeline:
             call_count += 1
 
             import json
+
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
                     message=AsyncMock(content=json.dumps(synthesis_response)),
-                    finish_reason="stop"
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -231,7 +236,9 @@ class TestTwoStagePipeline:
             )
 
         # Should have made only 1 call (hypothesis disabled)
-        assert call_count == 1, f"Expected 1 LLM call when hypotheses disabled, got {call_count}"
+        assert (
+            call_count == 1
+        ), f"Expected 1 LLM call when hypotheses disabled, got {call_count}"
 
 
 class TestPromptContent:
@@ -247,15 +254,23 @@ class TestPromptContent:
             captured_system_prompt = kwargs["messages"][0]["content"]
 
             import json
+
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps({
-                        "functional_summary": "", "biological_context": "",
-                        "therapeutic_landscape": {}, "evidence_assessment": {},
-                        "key_references": [], "evidence_tags": []
-                    })),
-                    finish_reason="stop"
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "functional_summary": "",
+                                "biological_context": "",
+                                "therapeutic_landscape": {},
+                                "evidence_assessment": {},
+                                "key_references": [],
+                                "evidence_tags": [],
+                            }
+                        )
+                    ),
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -263,14 +278,22 @@ class TestPromptContent:
         with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
             service = LLMService()
             await service.get_llm_insight(
-                gene="EGFR", variant="L858R", tumor_type="NSCLC",
+                gene="EGFR",
+                variant="L858R",
+                tumor_type="NSCLC",
                 evidence_summary="test",
-                evidence_assessment={"overall_quality": "limited", "knowledge_gaps": []},
+                evidence_assessment={
+                    "overall_quality": "limited",
+                    "knowledge_gaps": [],
+                },
             )
 
         # Check calibration rules are present
         assert "calibration" in captured_system_prompt.lower()
-        assert "limited" in captured_system_prompt.lower() or "minimal" in captured_system_prompt.lower()
+        assert (
+            "limited" in captured_system_prompt.lower()
+            or "minimal" in captured_system_prompt.lower()
+        )
         assert "generic" in captured_system_prompt.lower()
 
     @pytest.mark.asyncio
@@ -283,15 +306,23 @@ class TestPromptContent:
             captured_system_prompt = kwargs["messages"][0]["content"]
 
             import json
+
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps({
-                        "functional_summary": "", "biological_context": "",
-                        "therapeutic_landscape": {}, "evidence_assessment": {},
-                        "key_references": [], "evidence_tags": []
-                    })),
-                    finish_reason="stop"
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "functional_summary": "",
+                                "biological_context": "",
+                                "therapeutic_landscape": {},
+                                "evidence_assessment": {},
+                                "key_references": [],
+                                "evidence_tags": [],
+                            }
+                        )
+                    ),
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -299,9 +330,14 @@ class TestPromptContent:
         with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
             service = LLMService()
             await service.get_llm_insight(
-                gene="GNAQ", variant="Q209L", tumor_type="Uveal Melanoma",
+                gene="GNAQ",
+                variant="Q209L",
+                tumor_type="Uveal Melanoma",
                 evidence_summary="test",
-                evidence_assessment={"overall_quality": "moderate", "knowledge_gaps": []},
+                evidence_assessment={
+                    "overall_quality": "moderate",
+                    "knowledge_gaps": [],
+                },
             )
 
         # Check match specificity guidance
@@ -316,6 +352,7 @@ class TestPromptContent:
         captured_hypothesis_system = None
 
         call_count = 0
+
         async def mock_acompletion(**kwargs):
             nonlocal captured_hypothesis_system, call_count
             call_count += 1
@@ -324,11 +361,15 @@ class TestPromptContent:
                 captured_hypothesis_system = kwargs["messages"][0]["content"]
 
             import json
+
             if call_count == 1:
                 response = {
-                    "functional_summary": "test", "biological_context": "",
-                    "therapeutic_landscape": {}, "evidence_assessment": {},
-                    "key_references": [], "evidence_tags": []
+                    "functional_summary": "test",
+                    "biological_context": "",
+                    "therapeutic_landscape": {},
+                    "evidence_assessment": {},
+                    "key_references": [],
+                    "evidence_tags": [],
                 }
             else:
                 response = {"research_hypotheses": [], "research_implications": ""}
@@ -337,7 +378,7 @@ class TestPromptContent:
             mock_response.choices = [
                 AsyncMock(
                     message=AsyncMock(content=json.dumps(response)),
-                    finish_reason="stop"
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -345,7 +386,9 @@ class TestPromptContent:
         with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
             service = LLMService()
             await service.get_llm_insight(
-                gene="KRAS", variant="G12C", tumor_type="NSCLC",
+                gene="KRAS",
+                variant="G12C",
+                tumor_type="NSCLC",
                 evidence_summary="test",
                 evidence_assessment={
                     "overall_quality": "moderate",

@@ -19,24 +19,46 @@ class PubMedEvidence(EvidenceItemBase):
     year: str | None = Field(None, description="Publication year")
     doi: str | None = Field(None, description="DOI")
     url: str = Field(..., description="PubMed URL")
-    signal_type: str | None = Field(None, description="resistance, sensitivity, mixed, prognostic, unclear, or None")
-    drugs_mentioned: list[str] = Field(default_factory=list, description="Drugs mentioned in article")
+    signal_type: str | None = Field(
+        None, description="resistance, sensitivity, mixed, prognostic, unclear, or None"
+    )
+    drugs_mentioned: list[str] = Field(
+        default_factory=list, description="Drugs mentioned in article"
+    )
 
     # Semantic Scholar enrichment fields
-    citation_count: int | None = Field(None, description="Total citation count from Semantic Scholar")
-    influential_citation_count: int | None = Field(None, description="Influential citations from Semantic Scholar")
-    tldr: str | None = Field(None, description="AI-generated paper summary from Semantic Scholar")
-    is_open_access: bool | None = Field(None, description="Whether paper is open access")
-    open_access_pdf_url: str | None = Field(None, description="URL to open access PDF if available")
-    semantic_scholar_id: str | None = Field(None, description="Semantic Scholar paper ID")
+    citation_count: int | None = Field(
+        None, description="Total citation count from Semantic Scholar"
+    )
+    influential_citation_count: int | None = Field(
+        None, description="Influential citations from Semantic Scholar"
+    )
+    tldr: str | None = Field(
+        None, description="AI-generated paper summary from Semantic Scholar"
+    )
+    is_open_access: bool | None = Field(
+        None, description="Whether paper is open access"
+    )
+    open_access_pdf_url: str | None = Field(
+        None, description="URL to open access PDF if available"
+    )
+    semantic_scholar_id: str | None = Field(
+        None, description="Semantic Scholar paper ID"
+    )
 
     def is_resistance_evidence(self) -> bool:
         """Check if this article provides resistance evidence."""
-        return self.signal_type is not None and self.signal_type in ['resistance', 'mixed']
+        return self.signal_type is not None and self.signal_type in [
+            "resistance",
+            "mixed",
+        ]
 
     def is_sensitivity_evidence(self) -> bool:
         """Check if this article provides sensitivity evidence."""
-        return self.signal_type is not None and self.signal_type in ['sensitivity', 'mixed']
+        return self.signal_type is not None and self.signal_type in [
+            "sensitivity",
+            "mixed",
+        ]
 
     def get_summary(self, max_length: int = 300) -> str:
         """Get a brief summary of the article."""
@@ -59,7 +81,10 @@ class PubMedEvidence(EvidenceItemBase):
 
     def is_influential(self, threshold: int = 5) -> bool:
         """Check if article has influential citations."""
-        return self.influential_citation_count is not None and self.influential_citation_count >= threshold
+        return (
+            self.influential_citation_count is not None
+            and self.influential_citation_count >= threshold
+        )
 
     def get_best_summary(self, max_length: int = 300) -> str:
         """Get the best available summary - TLDR if available, else abstract.

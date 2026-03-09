@@ -15,26 +15,30 @@ class LLMInsight(BaseModel):
     all the structured evidence and annotations.
     """
 
-    llm_summary: str = Field(..., description="LLM-generated narrative summary of the variant")
+    llm_summary: str = Field(
+        ..., description="LLM-generated narrative summary of the variant"
+    )
     rationale: str = Field("", description="Reasoning behind the summary")
     clinical_trials_available: bool = Field(False, description="Whether trials exist")
 
     # Raw component fields (UI layer handles formatting)
-    functional_summary: str | None = Field(None, description="Functional impact of the variant")
-    biological_context: str | None = Field(None, description="Biological context and mechanism")
+    functional_summary: str | None = Field(
+        None, description="Functional impact of the variant"
+    )
+    biological_context: str | None = Field(
+        None, description="Biological context and mechanism"
+    )
     therapeutic_summary: str | None = Field(
-        None,
-        description="Prose summary of the therapeutic landscape"
+        None, description="Prose summary of the therapeutic landscape"
     )
     therapeutic_landscape: dict | None = Field(
         None,
-        description="Therapeutic landscape: fda_approved, clinical_evidence, preclinical, resistance_mechanisms"
+        description="Therapeutic landscape: fda_approved, clinical_evidence, preclinical, resistance_mechanisms",
     )
 
     # Changed from recommended_therapies to therapeutic_evidence
     therapeutic_evidence: list[TherapeuticData] = Field(
-        default_factory=list,
-        description="Therapeutic evidence at all levels"
+        default_factory=list, description="Therapeutic evidence at all levels"
     )
 
     references: list[str] = Field(default_factory=list, description="Key references")
@@ -42,31 +46,28 @@ class LLMInsight(BaseModel):
     # New research-focused fields
     evidence_quality: str | None = Field(
         None,
-        description="Overall evidence quality assessment (comprehensive/moderate/limited/minimal)"
+        description="Overall evidence quality assessment (comprehensive/moderate/limited/minimal)",
     )
     knowledge_gaps: list[str] = Field(
-        default_factory=list,
-        description="Identified gaps in knowledge"
+        default_factory=list, description="Identified gaps in knowledge"
     )
     well_characterized: list[str] = Field(
-        default_factory=list,
-        description="Aspects with strong, consistent evidence"
+        default_factory=list, description="Aspects with strong, consistent evidence"
     )
     conflicting_evidence: list[str] = Field(
         default_factory=list,
-        description="Areas where sources disagree or suggest different interpretations"
+        description="Areas where sources disagree or suggest different interpretations",
     )
     research_implications: str | None = Field(
-        None,
-        description="Implications for future research"
+        None, description="Implications for future research"
     )
     evidence_tags: list[str] = Field(
         default_factory=list,
-        description="Labels indicating evidence types (e.g., 'direct clinical data', 'preclinical only')"
+        description="Labels indicating evidence types (e.g., 'direct clinical data', 'preclinical only')",
     )
     research_hypotheses: list[str] = Field(
         default_factory=list,
-        description="Testable research hypotheses generated from evidence gaps"
+        description="Testable research hypotheses generated from evidence gaps",
     )
 
     # Backwards compatibility

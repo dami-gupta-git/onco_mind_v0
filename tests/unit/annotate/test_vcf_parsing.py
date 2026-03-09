@@ -10,7 +10,9 @@ from oncomind.cli import app
 
 runner = CliRunner()
 
-FIXTURES_DIR = Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+FIXTURES_DIR = (
+    Path(__file__).parent.parent.parent / "integration" / "annotate" / "fixtures"
+)
 CANCER_PANEL_VCF = FIXTURES_DIR / "cancer_panel.vcf"
 SINGLE_VARIANT_VCF = FIXTURES_DIR / "single_variant.vcf"
 EMPTY_VCF = FIXTURES_DIR / "empty.vcf"
@@ -40,7 +42,9 @@ class TestAnnotateVCFParsing:
         """Test that annotate writes to output file when specified."""
         output_file = tmp_path / "output.json"
 
-        result = runner.invoke(app, ["annotate", str(SINGLE_VARIANT_VCF), "--output", str(output_file)])
+        result = runner.invoke(
+            app, ["annotate", str(SINGLE_VARIANT_VCF), "--output", str(output_file)]
+        )
 
         assert result.exit_code == 0
         assert output_file.exists()

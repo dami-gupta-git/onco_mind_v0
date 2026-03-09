@@ -21,6 +21,7 @@ LogLevel = Literal["DEBUG", "INFO", "WARN", "WARNING", "ERROR"]
 
 class LogLevels(str, Enum):
     """Available log levels."""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARN = "WARN"
@@ -69,8 +70,7 @@ def _create_logger(level: str = DEFAULT_LOG_LEVEL) -> logging.Logger:
 
     # Format: [LEVEL] module: message
     formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S"
+        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
     )
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
@@ -131,7 +131,9 @@ def set_log_level(level: LogLevel) -> None:
 
     level_upper = level.upper()
     if level_upper not in _LEVEL_MAP:
-        raise ValueError(f"Invalid log level: {level}. Must be one of: DEBUG, INFO, WARN, ERROR")
+        raise ValueError(
+            f"Invalid log level: {level}. Must be one of: DEBUG, INFO, WARN, ERROR"
+        )
 
     _current_level = level_upper
 

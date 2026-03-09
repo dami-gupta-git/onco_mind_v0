@@ -33,14 +33,16 @@ class TestFDABiomarkerPipeline:
         for e in fda_biomarker:
             # Use exact drug name (not normalized) - different formulations are allowed
             drug_key = (e.get("drug_name", "")).upper()
-            partners_key = tuple(sorted(p.upper() for p in e.get("combination_partners", [])))
+            partners_key = tuple(
+                sorted(p.upper() for p in e.get("combination_partners", []))
+            )
             key = (drug_key, partners_key)
             seen_keys.append(key)
 
         # Check no exact duplicate (drug_name, partners) combinations
-        assert len(seen_keys) == len(set(seen_keys)), (
-            f"Found duplicate FDA drugs after deduplication: {seen_keys}"
-        )
+        assert len(seen_keys) == len(
+            set(seen_keys)
+        ), f"Found duplicate FDA drugs after deduplication: {seen_keys}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -65,21 +67,21 @@ class TestFDABiomarkerPipeline:
         # Should find osimertinib (TAGRISSO) for EGFR L858R
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
 
-        assert len(fda_biomarker) == 10, (
-            f"Expected 10 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
-        )
-        assert any("osimertinib" in d for d in drug_names), (
-            f"Expected osimertinib in FDA biomarker evidence, got: {drug_names}"
-        )
+        assert (
+            len(fda_biomarker) == 10
+        ), f"Expected 10 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
+        assert any(
+            "osimertinib" in d for d in drug_names
+        ), f"Expected osimertinib in FDA biomarker evidence, got: {drug_names}"
 
         # Verify no duplicate drugs after deduplication
         self._check_no_duplicate_drugs(fda_biomarker)
 
         # EGFR L858R in NSCLC should have a reasonable number of unique drugs
         # (osimertinib, erlotinib, gefitinib, afatinib, amivantamab combinations, etc.)
-        assert len(fda_biomarker) >= 3, (
-            f"Expected at least 3 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
-        )
+        assert (
+            len(fda_biomarker) >= 3
+        ), f"Expected at least 3 FDA drugs for EGFR L858R NSCLC, got {len(fda_biomarker)}: {drug_names}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -120,17 +122,13 @@ class TestFDABiomarkerPipeline:
         if fda_biomarker:
             # Check for gene-level matches
             gene_level_matches = [
-                ev for ev in fda_biomarker
-                if ev.get("variant_match_result") == "gene"
+                ev for ev in fda_biomarker if ev.get("variant_match_result") == "gene"
             ]
             # IDH1 drugs are approved at gene level (any IDH1 mutation)
             # so we expect gene-level matches for R132H
             drug_names = [ev.get("drug_name", "").lower() for ev in fda_biomarker]
             expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
-            found = any(
-                any(exp in d for exp in expected_drugs)
-                for d in drug_names
-            )
+            found = any(any(exp in d for exp in expected_drugs) for d in drug_names)
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -179,10 +177,7 @@ class TestFDABiomarkerPipeline:
         # Should find dabrafenib, vemurafenib, or encorafenib
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
         expected_drugs = ["dabrafenib", "vemurafenib", "encorafenib"]
-        found = any(
-            any(exp in d for exp in expected_drugs)
-            for d in drug_names
-        )
+        found = any(any(exp in d for exp in expected_drugs) for d in drug_names)
         # Note: This may not always pass depending on FDA label coverage
         # Just verify structure is correct
         for ev in fda_biomarker:
@@ -194,9 +189,9 @@ class TestFDABiomarkerPipeline:
         self._check_no_duplicate_drugs(fda_biomarker)
 
         # BRAF V600E in Melanoma should have 8 FDA-approved drugs
-        assert len(fda_biomarker) == 8, (
-            f"Expected 8 FDA drugs for BRAF V600E Melanoma, got {len(fda_biomarker)}: {drug_names}"
-        )
+        assert (
+            len(fda_biomarker) == 8
+        ), f"Expected 8 FDA drugs for BRAF V600E Melanoma, got {len(fda_biomarker)}: {drug_names}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -232,14 +227,11 @@ class TestFDABiomarkerPipeline:
 
         # Should find exactly 2 drugs: sotorasib (LUMAKRAS) and adagrasib (KRAZATI)
         drug_names = [e.get("drug_name", "").lower() for e in fda_biomarker]
-        assert len(fda_biomarker) == 2, (
-            f"Expected 2 FDA drugs for KRAS G12C NSCLC, got {len(fda_biomarker)}: {drug_names}"
-        )
+        assert (
+            len(fda_biomarker) == 2
+        ), f"Expected 2 FDA drugs for KRAS G12C NSCLC, got {len(fda_biomarker)}: {drug_names}"
         expected_drugs = ["sotorasib", "adagrasib"]
-        found = any(
-            any(exp in d for exp in expected_drugs)
-            for d in drug_names
-        )
+        found = any(any(exp in d for exp in expected_drugs) for d in drug_names)
         # Verify structure
         for ev in fda_biomarker:
             assert "drug_name" in ev
@@ -342,8 +334,7 @@ class TestFDABiomarkerPipeline:
 
         # Gene-level approvals should still match
         gene_level_matches = [
-            ev for ev in fda_biomarker
-            if ev.get("variant_match_result") == "gene"
+            ev for ev in fda_biomarker if ev.get("variant_match_result") == "gene"
         ]
         # May or may not have gene-level matches depending on FDA labels
 
@@ -376,8 +367,10 @@ class TestFDABiomarkerPipeline:
 
         # Find entries with combination_partners
         combination_entries = [
-            ev for ev in fda_biomarker
-            if ev.get("combination_partners") and len(ev.get("combination_partners", [])) > 0
+            ev
+            for ev in fda_biomarker
+            if ev.get("combination_partners")
+            and len(ev.get("combination_partners", [])) > 0
         ]
 
         # Should find at least one combination therapy
@@ -395,8 +388,7 @@ class TestFDABiomarkerPipeline:
         # Known combination partners for BRAF inhibitors
         expected_partners = ["trametinib", "cobimetinib", "binimetinib"]
         found_partner = any(
-            any(exp in p for exp in expected_partners)
-            for p in all_partners
+            any(exp in p for exp in expected_partners) for p in all_partners
         )
 
         assert found_partner, (
@@ -435,19 +427,19 @@ class TestFDABiomarkerPipeline:
 
         # HGVS protein notation should be present
         hgvs_protein = hgvs.get("protein")
-        assert hgvs_protein is not None, (
-            f"Expected HGVS protein notation (p.Val600Lys), got: {hgvs}"
-        )
+        assert (
+            hgvs_protein is not None
+        ), f"Expected HGVS protein notation (p.Val600Lys), got: {hgvs}"
 
         # Should start with "p." prefix
-        assert hgvs_protein.startswith("p."), (
-            f"HGVS protein notation should start with 'p.', got: {hgvs_protein}"
-        )
+        assert hgvs_protein.startswith(
+            "p."
+        ), f"HGVS protein notation should start with 'p.', got: {hgvs_protein}"
 
         # For V600K, should contain Val600 (V600)
-        assert "Val600" in hgvs_protein or "600" in hgvs_protein, (
-            f"HGVS protein for V600K should contain Val600, got: {hgvs_protein}"
-        )
+        assert (
+            "Val600" in hgvs_protein or "600" in hgvs_protein
+        ), f"HGVS protein for V600K should contain Val600, got: {hgvs_protein}"
 
 
 class TestIDH1R132HPipeline:
@@ -479,17 +471,16 @@ class TestIDH1R132HPipeline:
         assert isinstance(fda_evidence, list)
 
         # IDH1 inhibitors should be found (gene-level approvals)
-        assert len(fda_evidence) >= 1, (
-            f"Expected at least 1 FDA drug for IDH1 R132H, got {len(fda_evidence)}"
-        )
+        assert (
+            len(fda_evidence) >= 1
+        ), f"Expected at least 1 FDA drug for IDH1 R132H, got {len(fda_evidence)}"
 
         drug_names = [ev.get("drug_name", "").lower() for ev in fda_evidence]
         expected_drugs = ["ivosidenib", "vorasidenib", "olutasidenib"]
 
         # At least one IDH1 inhibitor should be found
         found_idh1_drug = any(
-            any(exp in d for exp in expected_drugs)
-            for d in drug_names
+            any(exp in d for exp in expected_drugs) for d in drug_names
         )
         assert found_idh1_drug, (
             f"Expected at least one IDH1 inhibitor (ivosidenib, vorasidenib, olutasidenib), "
@@ -527,9 +518,9 @@ class TestIDH1R132HPipeline:
         assert hgvs_protein.startswith("p."), f"Expected p. prefix, got: {hgvs_protein}"
 
         # Should contain Arg132 (the reference amino acid at position 132)
-        assert "Arg132" in hgvs_protein or "132" in hgvs_protein, (
-            f"HGVS protein for R132H should contain Arg132, got: {hgvs_protein}"
-        )
+        assert (
+            "Arg132" in hgvs_protein or "132" in hgvs_protein
+        ), f"HGVS protein for R132H should contain Arg132, got: {hgvs_protein}"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -548,9 +539,9 @@ class TestIDH1R132HPipeline:
         fda_evidence = result.get("fda_biomarker_evidence", [])
 
         # Should have at least 1 FDA-approved drug
-        assert len(fda_evidence) >= 1, (
-            f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
-        )
+        assert (
+            len(fda_evidence) >= 1
+        ), f"IDH1 R132H Glioma should have at least 1 FDA drug, got {len(fda_evidence)}"
 
         # Check structure of each entry
         for ev in fda_evidence:

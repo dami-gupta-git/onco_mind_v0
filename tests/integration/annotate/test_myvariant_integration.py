@@ -113,7 +113,11 @@ class TestMyVariantIntegration:
         first_rcv = clinvar.rcv[0]
         assert first_rcv.accession.startswith("RCV")
         # BRAF V600E is pathogenic in cancer
-        assert first_rcv.clinical_significance in ("Pathogenic", "Likely pathogenic", "Pathogenic/Likely pathogenic")
+        assert first_rcv.clinical_significance in (
+            "Pathogenic",
+            "Likely pathogenic",
+            "Pathogenic/Likely pathogenic",
+        )
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_braf_v600e_cosmic_fields(self):
@@ -140,14 +144,19 @@ class TestMyVariantIntegration:
         dbnsfp = result.dbnsfp
 
         # Test Polyphen2 prediction - V600E should be predicted damaging
-        assert dbnsfp.polyphen2.hdiv.pred in ("D", "P")  # D=Damaging, P=Possibly damaging
+        assert dbnsfp.polyphen2.hdiv.pred in (
+            "D",
+            "P",
+        )  # D=Damaging, P=Possibly damaging
         assert 0 <= dbnsfp.polyphen2.hdiv.score <= 1
         assert dbnsfp.polyphen2.hdiv.score > 0.8  # Should be high for pathogenic
 
         # Test AlphaMissense prediction - should predict pathogenic
         assert dbnsfp.alphamissense.pred[0] in ("P", "A")  # P=Pathogenic, A=Ambiguous
         assert 0 <= dbnsfp.alphamissense.score[0] <= 1
-        assert dbnsfp.alphamissense.score[0] > 0.8  # Should be high for known pathogenic
+        assert (
+            dbnsfp.alphamissense.score[0] > 0.8
+        )  # Should be high for known pathogenic
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_tp53_r248w_cadd_fields(self):

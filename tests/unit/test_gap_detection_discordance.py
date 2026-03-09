@@ -48,6 +48,7 @@ def base_context():
 # TEST detect_discordant_evidence_internal
 # =============================================================================
 
+
 class TestDetectDiscordantEvidenceInternal:
     """Tests for detect_discordant_evidence_internal function."""
 
@@ -307,6 +308,7 @@ class TestDetectDiscordantEvidenceInternal:
 # TEST check_discordant_evidence
 # =============================================================================
 
+
 class TestCheckDiscordantEvidence:
     """Tests for check_discordant_evidence function."""
 
@@ -328,7 +330,9 @@ class TestCheckDiscordantEvidence:
 
         check_discordant_evidence(mock_evidence, base_context)
 
-        discordant_gaps = [g for g in base_context.gaps if g.category == GapCategory.DISCORDANT]
+        discordant_gaps = [
+            g for g in base_context.gaps if g.category == GapCategory.DISCORDANT
+        ]
         assert len(discordant_gaps) >= 1
         assert discordant_gaps[0].severity == GapSeverity.HIGH
 
@@ -356,8 +360,12 @@ class TestCheckDiscordantEvidence:
 
         check_discordant_evidence(mock_evidence, base_context)
 
-        discordant_gaps = [g for g in base_context.gaps if g.category == GapCategory.DISCORDANT]
-        significant_gaps = [g for g in discordant_gaps if g.severity == GapSeverity.SIGNIFICANT]
+        discordant_gaps = [
+            g for g in base_context.gaps if g.category == GapCategory.DISCORDANT
+        ]
+        significant_gaps = [
+            g for g in discordant_gaps if g.severity == GapSeverity.SIGNIFICANT
+        ]
         assert len(significant_gaps) >= 1
 
     def test_adds_poorly_characterized(self, mock_evidence, base_context):
@@ -384,5 +392,7 @@ class TestCheckDiscordantEvidence:
         """No conflicts should not add any gaps."""
         check_discordant_evidence(mock_evidence, base_context)
 
-        discordant_gaps = [g for g in base_context.gaps if g.category == GapCategory.DISCORDANT]
+        discordant_gaps = [
+            g for g in base_context.gaps if g.category == GapCategory.DISCORDANT
+        ]
         assert len(discordant_gaps) == 0

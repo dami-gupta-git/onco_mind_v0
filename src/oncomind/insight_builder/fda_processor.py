@@ -51,10 +51,10 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
 
     # 1. Phenotype-based approvals (gene-agnostic)
     phenotype_patterns = [
-        (r'MSI-H|MICROSATELLITE INSTABILITY[- ]HIGH', 'MSI-H'),
-        (r'DMMR|MISMATCH REPAIR DEFICIEN', 'dMMR'),
-        (r'HRD|HOMOLOGOUS RECOMBINATION DEFICIEN', 'HRD'),
-        (r'TMB-H|TUMOR MUTATIONAL BURDEN[- ]HIGH', 'TMB-H'),
+        (r"MSI-H|MICROSATELLITE INSTABILITY[- ]HIGH", "MSI-H"),
+        (r"DMMR|MISMATCH REPAIR DEFICIEN", "dMMR"),
+        (r"HRD|HOMOLOGOUS RECOMBINATION DEFICIEN", "HRD"),
+        (r"TMB-H|TUMOR MUTATIONAL BURDEN[- ]HIGH", "TMB-H"),
     ]
     phenotypes_found = []
     for pattern, phenotype in phenotype_patterns:
@@ -66,11 +66,10 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     # 2. Multi-gene patterns: "PIK3CA/AKT1/PTEN-alteration" or "PIK3CA/AKT1/PTEN -alteration"
     # Handle both with and without space before hyphen
     multi_gene_match = re.search(
-        r'([A-Z0-9]+(?:/[A-Z0-9]+)+)\s*-?\s*(?:ALTER|MUTAT)',
-        text_upper
+        r"([A-Z0-9]+(?:/[A-Z0-9]+)+)\s*-?\s*(?:ALTER|MUTAT)", text_upper
     )
     if multi_gene_match:
-        genes = multi_gene_match.group(1).split('/')
+        genes = multi_gene_match.group(1).split("/")
         return {"level": "gene", "target_genes": genes}
 
     # If no gene specified, can't continue with gene-specific parsing
@@ -93,7 +92,8 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     # Match both "EGFR exon 19" and "(EGFR) exon 19" formats
     egfr_combined_match = re.search(
         rf"(?:{gene}|\({gene}\))\s+exon\s+19\s+deletion.*?(?:or|and).*?(?:exon\s+21\s+)?L858R",
-        text, re.IGNORECASE
+        text,
+        re.IGNORECASE,
     )
     if egfr_combined_match:
         return {
@@ -104,7 +104,9 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
         }
 
     # 6. Exon-specific: "EGFR exon 19" or "(EGFR) exon 19" (before multi-variant)
-    exon_match = re.search(rf"(?:{gene}|\({gene}\))\s+exon\s+(\d+)", text, re.IGNORECASE)
+    exon_match = re.search(
+        rf"(?:{gene}|\({gene}\))\s+exon\s+(\d+)", text, re.IGNORECASE
+    )
     if exon_match:
         return {
             "level": "exon",
@@ -113,9 +115,7 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
         }
 
     # 7. Multiple variants: "BRAF V600E or V600K"
-    multi_variant_match = re.findall(
-        rf"{gene}\s+([A-Z]\d+[A-Z])", text, re.IGNORECASE
-    )
+    multi_variant_match = re.findall(rf"{gene}\s+([A-Z]\d+[A-Z])", text, re.IGNORECASE)
     if len(multi_variant_match) > 1:
         return {
             "level": "variant_list",
@@ -124,9 +124,7 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
         }
 
     # 8. Variant-specific: "KRAS G12C" - captures ref, position, alt
-    variant_match = re.search(
-        rf"{gene}\s+([A-Z])(\d+)([A-Z])", text, re.IGNORECASE
-    )
+    variant_match = re.search(rf"{gene}\s+([A-Z])(\d+)([A-Z])", text, re.IGNORECASE)
     if variant_match:
         ref, codon_num, alt = variant_match.groups()
         return {
@@ -164,7 +162,9 @@ def parse_biomarker_specificity(text: str, gene: str | None = None) -> dict | No
     return None
 
 
-def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str | None]:
+def is_variant_covered(
+    query_variant: str, specificity: dict
+) -> tuple[bool, str | None]:
     """Check if a query variant is covered by the parsed biomarker specificity.
 
     Args:
@@ -206,7 +206,9 @@ def is_variant_covered(query_variant: str, specificity: dict) -> tuple[bool, str
         return (False, None)
 
     if level == "variant_list":
-        if query_variant.upper() in [v.upper() for v in specificity.get("specified_variants", [])]:
+        if query_variant.upper() in [
+            v.upper() for v in specificity.get("specified_variants", [])
+        ]:
             return (True, "variant")
         query_codon = extract_variant_codon(query_variant)
         for v in specificity.get("specified_variants", []):

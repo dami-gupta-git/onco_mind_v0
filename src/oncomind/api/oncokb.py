@@ -39,8 +39,7 @@ async def fetch_cancer_gene_list() -> Set[str]:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                ONCOKB_CANCER_GENE_LIST_URL,
-                timeout=aiohttp.ClientTimeout(total=10)
+                ONCOKB_CANCER_GENE_LIST_URL, timeout=aiohttp.ClientTimeout(total=10)
             ) as response:
                 if response.status != 200:
                     logger.warning(f"OncoKB API returned status {response.status}")
@@ -51,8 +50,8 @@ async def fetch_cancer_gene_list() -> Set[str]:
                 # Extract hugoSymbol from each gene entry
                 genes = set()
                 for gene_entry in data:
-                    if isinstance(gene_entry, dict) and 'hugoSymbol' in gene_entry:
-                        genes.add(gene_entry['hugoSymbol'].upper())
+                    if isinstance(gene_entry, dict) and "hugoSymbol" in gene_entry:
+                        genes.add(gene_entry["hugoSymbol"].upper())
 
                 logger.info(f"Fetched {len(genes)} cancer genes from OncoKB")
                 _cancer_gene_cache = genes
@@ -93,5 +92,3 @@ def get_cached_cancer_genes() -> Set[str]:
         Set of gene symbols, or empty set if cache not populated.
     """
     return _cancer_gene_cache or set()
-
-

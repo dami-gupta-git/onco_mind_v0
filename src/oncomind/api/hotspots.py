@@ -27,7 +27,12 @@ from oncomind.config.debug import get_logger
 logger = get_logger(__name__)
 
 # Path to the hotspots data file
-HOTSPOTS_FILE = Path(__file__).parent.parent.parent.parent / "data" / "hotspots_msk" / "hotspots.txt"
+HOTSPOTS_FILE = (
+    Path(__file__).parent.parent.parent.parent
+    / "data"
+    / "hotspots_msk"
+    / "hotspots.txt"
+)
 
 # Regex to extract residue position and reference AA from variant notation
 # Matches patterns like: V600E, G12D, p.V600E, L858R
@@ -36,6 +41,7 @@ _VARIANT_PATTERN = re.compile(r"^p?\.?([A-Z])(\d+)([A-Z*]?)$", re.IGNORECASE)
 
 class HotspotsError(Exception):
     """Exception raised for Hotspots data errors."""
+
     pass
 
 
@@ -59,10 +65,12 @@ def _parse_variants_field(variants_str: str) -> list[HotspotVariant]:
             continue
         try:
             aa, count_str = part.split(":", 1)
-            result.append(HotspotVariant(
-                amino_acid=aa.strip(),
-                count=int(count_str.strip()),
-            ))
+            result.append(
+                HotspotVariant(
+                    amino_acid=aa.strip(),
+                    count=int(count_str.strip()),
+                )
+            )
         except (ValueError, IndexError):
             continue
 
@@ -89,10 +97,12 @@ def _parse_tumor_composition(composition_str: str) -> list[HotspotTumorType]:
             continue
         try:
             tumor, count_str = part.split(":", 1)
-            result.append(HotspotTumorType(
-                tumor_type=tumor.strip(),
-                count=int(count_str.strip()),
-            ))
+            result.append(
+                HotspotTumorType(
+                    tumor_type=tumor.strip(),
+                    count=int(count_str.strip()),
+                )
+            )
         except (ValueError, IndexError):
             continue
 
@@ -136,7 +146,9 @@ def _parse_hotspot_row(row: dict) -> HotspotEntry | None:
             q_value=q_value,
             total_samples=total_samples,
             variants=_parse_variants_field(row.get("Variants", "")),
-            tumor_type_composition=_parse_tumor_composition(row.get("Tumor Type Composition", "")),
+            tumor_type_composition=_parse_tumor_composition(
+                row.get("Tumor Type Composition", "")
+            ),
         )
     except Exception as e:
         logger.debug(f"Failed to parse hotspot row: {e}")
@@ -177,7 +189,9 @@ def _load_hotspots_data() -> dict[str, list[HotspotEntry]]:
                         hotspots_by_gene[gene] = []
                     hotspots_by_gene[gene].append(entry)
 
-        logger.info(f"Loaded {sum(len(v) for v in hotspots_by_gene.values())} hotspots for {len(hotspots_by_gene)} genes")
+        logger.info(
+            f"Loaded {sum(len(v) for v in hotspots_by_gene.values())} hotspots for {len(hotspots_by_gene)} genes"
+        )
         return hotspots_by_gene
 
     except Exception as e:

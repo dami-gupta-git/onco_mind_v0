@@ -34,7 +34,9 @@ class TestParseBiomarkerSpecificity:
 
     def test_variant_level_braf_v600e(self):
         """Test parsing variant-level specificity like BRAF V600E."""
-        text = "for the treatment of patients with BRAF V600E mutation-positive melanoma"
+        text = (
+            "for the treatment of patients with BRAF V600E mutation-positive melanoma"
+        )
         result = parse_biomarker_specificity(text, "BRAF")
 
         assert result is not None
@@ -285,7 +287,11 @@ class TestIsVariantCovered:
     def test_real_scenario_egfr_t790m_variant_level(self):
         """Test EGFR T790M with variant-level approval (Osimertinib)."""
         # Osimertinib is approved specifically for EGFR T790M
-        specificity = {"level": "variant", "codon": "T790", "specified_variant": "T790M"}
+        specificity = {
+            "level": "variant",
+            "codon": "T790",
+            "specified_variant": "T790M",
+        }
 
         covered, level = is_variant_covered("T790M", specificity)
         assert covered is True
@@ -310,5 +316,3 @@ class TestIsVariantCovered:
         covered, level = is_variant_covered("K601E", specificity)
         assert covered is False
         assert level is None
-
-

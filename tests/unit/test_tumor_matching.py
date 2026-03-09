@@ -47,7 +47,9 @@ class TestIsPanCancerTerm:
             "HER2-Negative Breast Cancer",
         ]
         for term in specific_cancers:
-            assert not is_pan_cancer_term(term), f"Expected '{term}' to NOT be pan-cancer"
+            assert not is_pan_cancer_term(
+                term
+            ), f"Expected '{term}' to NOT be pan-cancer"
 
     def test_none_is_not_pan_cancer(self):
         """None should not be considered pan-cancer."""
@@ -74,7 +76,9 @@ class TestIsPanCancerTerm:
             "TMB-H solid tumors",
         ]
         for indication in fda_pan_cancer_indications:
-            assert is_pan_cancer_term(indication), f"Expected '{indication}' to be pan-cancer"
+            assert is_pan_cancer_term(
+                indication
+            ), f"Expected '{indication}' to be pan-cancer"
 
     def test_fda_indication_with_specific_cancer_not_pan_cancer(self):
         """FDA indications for specific cancers should NOT be pan-cancer."""
@@ -86,7 +90,9 @@ class TestIsPanCancerTerm:
             "Unresectable hepatocellular carcinoma",
         ]
         for indication in specific_fda_indications:
-            assert not is_pan_cancer_term(indication), f"Expected '{indication}' to NOT be pan-cancer"
+            assert not is_pan_cancer_term(
+                indication
+            ), f"Expected '{indication}' to NOT be pan-cancer"
 
 
 class TestTumorTypesMatch:
@@ -149,7 +155,9 @@ class TestTumorTypesMatch:
         # via the mappings
 
         # Test with strings that are NOT in TUMOR_TYPE_MAPPINGS
-        assert not tumor_types_match("xy", "xyz cancer")  # Too short for substring, not in mappings
+        assert not tumor_types_match(
+            "xy", "xyz cancer"
+        )  # Too short for substring, not in mappings
 
         # Longer strings should work via substring
         assert tumor_types_match("mel", "melanoma")
@@ -168,12 +176,21 @@ class TestComputeCancerSpecificity:
         """Pan-cancer terms should return 'pan_cancer'."""
         assert compute_cancer_specificity("Cancer", "NSCLC") == "pan_cancer"
         assert compute_cancer_specificity("Solid Tumor", "Melanoma") == "pan_cancer"
-        assert compute_cancer_specificity("Malignant Neoplasm", "Breast Cancer") == "pan_cancer"
+        assert (
+            compute_cancer_specificity("Malignant Neoplasm", "Breast Cancer")
+            == "pan_cancer"
+        )
 
     def test_matching_tumor_returns_cancer_specific(self):
         """Matching tumor types should return 'cancer_specific'."""
-        assert compute_cancer_specificity("Non-Small Cell Lung Cancer", "NSCLC") == "cancer_specific"
-        assert compute_cancer_specificity("Lung Adenocarcinoma", "NSCLC") == "cancer_specific"
+        assert (
+            compute_cancer_specificity("Non-Small Cell Lung Cancer", "NSCLC")
+            == "cancer_specific"
+        )
+        assert (
+            compute_cancer_specificity("Lung Adenocarcinoma", "NSCLC")
+            == "cancer_specific"
+        )
         assert compute_cancer_specificity("Melanoma", "Melanoma") == "cancer_specific"
 
     def test_non_matching_returns_source_disease(self):

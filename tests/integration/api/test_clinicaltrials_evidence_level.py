@@ -36,27 +36,29 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         # Check that variant-specific trials exist
         variant_specific_count = sum(
-            1 for t in results
+            1
+            for t in results
             if t.locus_variant_match and t.locus_variant_match.level == "variant"
         )
         gene_only_count = sum(
-            1 for t in results
+            1
+            for t in results
             if t.locus_variant_match and t.locus_variant_match.level == "gene"
         )
 
         # At least one should be variant-specific for a well-known variant
-        assert variant_specific_count > 0 or gene_only_count > 0, (
-            "Expected at least one trial with locus_variant_match populated"
-        )
+        assert (
+            variant_specific_count > 0 or gene_only_count > 0
+        ), "Expected at least one trial with locus_variant_match populated"
 
         # All trials should have locus_variant_match set (biomarker search)
         for trial in results:
-            assert trial.locus_variant_match is not None, (
-                f"Trial {trial.nct_id} should have locus_variant_match set"
-            )
-            assert trial.locus_variant_match.origin == "trial", (
-                f"Trial {trial.nct_id} should have origin='trial'"
-            )
+            assert (
+                trial.locus_variant_match is not None
+            ), f"Trial {trial.nct_id} should have locus_variant_match set"
+            assert (
+                trial.locus_variant_match.origin == "trial"
+            ), f"Trial {trial.nct_id} should have origin='trial'"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -107,12 +109,16 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         for trial in results:
             # cancer_type_match should be set when tumor_type is provided
-            assert trial.cancer_type_match is not None, (
-                f"Trial {trial.nct_id} should have cancer_type_match when tumor_type provided"
-            )
+            assert (
+                trial.cancer_type_match is not None
+            ), f"Trial {trial.nct_id} should have cancer_type_match when tumor_type provided"
             # level can be "cancer_specific" if trial conditions match tumor_type,
             # or None if trial has the biomarker but doesn't match the tumor type
-            assert trial.cancer_type_match.level in ("cancer_specific", "pan_cancer", None)
+            assert trial.cancer_type_match.level in (
+                "cancer_specific",
+                "pan_cancer",
+                None,
+            )
             assert trial.cancer_type_match.origin == "trial"
 
     @pytest.mark.integration
@@ -131,9 +137,9 @@ class TestClinicalTrialsEvidenceLevelIntegration:
         # May or may not find trials for TP53 specifically
         for trial in results:
             # cancer_type_match should be None when tumor_type not provided
-            assert trial.cancer_type_match is None, (
-                f"Trial {trial.nct_id} should have cancer_type_match=None when no tumor_type"
-            )
+            assert (
+                trial.cancer_type_match is None
+            ), f"Trial {trial.nct_id} should have cancer_type_match=None when no tumor_type"
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -152,9 +158,9 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         for trial in results:
             # cancer_type_match should always be set for disease search
-            assert trial.cancer_type_match is not None, (
-                f"Trial {trial.nct_id} should have cancer_type_match for disease search"
-            )
+            assert (
+                trial.cancer_type_match is not None
+            ), f"Trial {trial.nct_id} should have cancer_type_match for disease search"
             assert trial.cancer_type_match.origin == "trial"
 
             # Most NSCLC trials should be cancer_specific
@@ -213,7 +219,9 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         # Check no duplicate NCT IDs
         nct_ids = [t.nct_id for t in results]
-        assert len(nct_ids) == len(set(nct_ids)), "Found duplicate NCT IDs in merged results"
+        assert len(nct_ids) == len(
+            set(nct_ids)
+        ), "Found duplicate NCT IDs in merged results"
 
         # All results should have properly populated fields
         for trial in results:
@@ -276,8 +284,8 @@ class TestClinicalTrialsEvidenceLevelIntegration:
 
         for trial in results:
             # Without gene context, locus_variant_match should be None
-            assert trial.locus_variant_match is None, (
-                f"Trial {trial.nct_id} should have locus_variant_match=None without gene context"
-            )
+            assert (
+                trial.locus_variant_match is None
+            ), f"Trial {trial.nct_id} should have locus_variant_match=None without gene context"
             # cancer_type_match should still be set
             assert trial.cancer_type_match is not None

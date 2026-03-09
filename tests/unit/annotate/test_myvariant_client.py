@@ -52,7 +52,9 @@ class TestAnnotatorMyVariantClient:
             ],
         }
 
-        with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
+        with patch.object(
+            client, "build_annotation", new_callable=AsyncMock
+        ) as mock_build:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("BRAF", "p.V600E")
 
@@ -74,7 +76,9 @@ class TestAnnotatorMyVariantClient:
         mock_clinvar = {
             "allele_id": 29000,
             "gene": {"symbol": "BRAF", "id": "673"},
-            "rcv": [{"accession": "RCV000012345", "clinical_significance": "Pathogenic"}],
+            "rcv": [
+                {"accession": "RCV000012345", "clinical_significance": "Pathogenic"}
+            ],
         }
         mock_cosmic = {"cosmic_id": "COSM476"}
         mock_dbnsfp = {"sift": {"pred": "D", "score": 0.0}}
@@ -97,7 +101,9 @@ class TestAnnotatorMyVariantClient:
             ],
         }
 
-        with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
+        with patch.object(
+            client, "build_annotation", new_callable=AsyncMock
+        ) as mock_build:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("BRAF", "p.V600E")
 
@@ -137,7 +143,9 @@ class TestAnnotatorMyVariantClient:
 
         mock_response = {"total": 0, "hits": []}
 
-        with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
+        with patch.object(
+            client, "build_annotation", new_callable=AsyncMock
+        ) as mock_build:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("FAKEGENE", "p.X999Z")
 
@@ -174,7 +182,9 @@ class TestAnnotatorMyVariantClient:
             ],
         }
 
-        with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
+        with patch.object(
+            client, "build_annotation", new_callable=AsyncMock
+        ) as mock_build:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("BRAF", "p.V600E")
 
@@ -199,7 +209,12 @@ class TestAnnotatorMyVariantClient:
         # First query "BRAF p.V600E" returns no hits, second "BRAF:p.V600E" returns hits
         mock_responses = [
             {"total": 0, "hits": []},
-            {"total": 1, "hits": [{"_id": "chr7:g.140453136A>T", "vcf": {"ref": "A", "alt": "T"}}]},
+            {
+                "total": 1,
+                "hits": [
+                    {"_id": "chr7:g.140453136A>T", "vcf": {"ref": "A", "alt": "T"}}
+                ],
+            },
         ]
 
         with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
@@ -230,7 +245,12 @@ class TestAnnotatorMyVariantClient:
         mock_responses = [
             {"total": 0, "hits": []},  # "EGFR p.L858R"
             {"total": 0, "hits": []},  # "EGFR:p.L858R"
-            {"total": 1, "hits": [{"_id": "chr7:g.55259515T>G", "vcf": {"ref": "T", "alt": "G"}}]},  # "EGFR p.Leu858Arg"
+            {
+                "total": 1,
+                "hits": [
+                    {"_id": "chr7:g.55259515T>G", "vcf": {"ref": "T", "alt": "G"}}
+                ],
+            },  # "EGFR p.Leu858Arg"
         ]
 
         with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
@@ -274,7 +294,9 @@ class TestAnnotatorMyVariantClient:
 
             # Verify three-letter query was used
             third_query = mock_query.call_args_list[2][0][0]
-            assert third_query == f"{gene} {three_letter}", f"Failed for {gene} {single_letter}"
+            assert (
+                third_query == f"{gene} {three_letter}"
+            ), f"Failed for {gene} {single_letter}"
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_cadd_contains_expected_fields(self):
@@ -328,7 +350,9 @@ class TestAnnotatorMyVariantClient:
             ],
         }
 
-        with patch.object(client, "build_annotation", new_callable=AsyncMock) as mock_build:
+        with patch.object(
+            client, "build_annotation", new_callable=AsyncMock
+        ) as mock_build:
             mock_build.return_value = mock_response
             result = await client.fetch_annotation("BRAF", "p.V600E")
 

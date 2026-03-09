@@ -19,6 +19,7 @@ from oncomind.models.evidence.base import EvidenceItemBase
 
 class BiomarkerRequirement(str, Enum):
     """Whether a biomarker is required present or absent for the indication."""
+
     REQUIRED_POSITIVE = "required_positive"  # Must HAVE the mutation
     REQUIRED_NEGATIVE = "required_negative"  # Must NOT have the mutation (wild-type)
     NOT_SPECIFIED = "not_specified"
@@ -26,6 +27,7 @@ class BiomarkerRequirement(str, Enum):
 
 class SpecificityLevel(str, Enum):
     """How specific the biomarker requirement is."""
+
     VARIANT = "variant"  # e.g., "EGFR L858R", "KRAS G12C"
     CODON = "codon"  # e.g., "EGFR exon 19 deletions"
     GENE = "gene"  # e.g., "EGFR mutation-positive"
@@ -47,7 +49,8 @@ MatchType = Literal[
 def _extract_codon(variant: str) -> str | None:
     """Extract codon number from variant notation. E.g., V600E -> 600"""
     import re
-    match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
+
+    match = re.search(r"[A-Z](\d+)[A-Z]?", variant.upper())
     return match.group(1) if match else None
 
 
@@ -86,6 +89,7 @@ def match_variant_to_indication(
     # Optionally normalize query variant to short form (e.g., "p.Leu858Arg" -> "L858R")
     if normalize_variant:
         from oncomind.utils.variant_normalization import to_short_form
+
         normalized = to_short_form(query_variant)
         query_variant = normalized.upper() if normalized else query_variant.upper()
     else:
@@ -99,7 +103,7 @@ def match_variant_to_indication(
         return {
             "matches": False,
             "match_type": "excluded",
-            "reason": f"This indication is for patients WITHOUT {indication_gene} mutations"
+            "reason": f"This indication is for patients WITHOUT {indication_gene} mutations",
         }
 
     # Check specificity levels
@@ -107,7 +111,7 @@ def match_variant_to_indication(
         return {
             "matches": True,
             "match_type": "gene",
-            "reason": f"Gene-level approval: any {indication_gene} mutation"
+            "reason": f"Gene-level approval: any {indication_gene} mutation",
         }
 
     if indication_specificity == SpecificityLevel.VARIANT:
@@ -116,7 +120,7 @@ def match_variant_to_indication(
             return {
                 "matches": True,
                 "match_type": "exact",
-                "reason": f"Exact variant match: {query_variant}"
+                "reason": f"Exact variant match: {query_variant}",
             }
 
         # Check for same codon
@@ -132,13 +136,13 @@ def match_variant_to_indication(
             return {
                 "matches": False,
                 "match_type": "same_codon_different_variant",
-                "reason": f"Same codon ({codon}) but different variant. Approved: {indication_specified_variants}, Query: {query_variant}"
+                "reason": f"Same codon ({codon}) but different variant. Approved: {indication_specified_variants}, Query: {query_variant}",
             }
 
         return {
             "matches": False,
             "match_type": "different_variant",
-            "reason": f"Different variant. Approved: {indication_specified_variants}, Query: {query_variant}"
+            "reason": f"Different variant. Approved: {indication_specified_variants}, Query: {query_variant}",
         }
 
     if indication_specificity == SpecificityLevel.CODON:
@@ -147,12 +151,12 @@ def match_variant_to_indication(
             return {
                 "matches": True,
                 "match_type": "codon",
-                "reason": f"Codon-level match: codon {indication_codon}"
+                "reason": f"Codon-level match: codon {indication_codon}",
             }
         return {
             "matches": False,
             "match_type": "different_codon",
-            "reason": f"Different codon. Approved: {indication_codon}, Query: {query_codon}"
+            "reason": f"Different codon. Approved: {indication_codon}, Query: {query_codon}",
         }
 
     return {"matches": False, "match_type": None, "reason": "Unknown specificity"}
@@ -183,68 +187,60 @@ class FDABiomarkerEvidence(EvidenceItemBase):
     # Biomarker details
     gene: str = Field(..., description="Gene symbol (e.g., EGFR, BRAF)")
     requirement: BiomarkerRequirement = Field(
-        ...,
-        description="Whether biomarker must be present or absent"
+        ..., description="Whether biomarker must be present or absent"
     )
     specificity: SpecificityLevel = Field(
-        ...,
-        description="Specificity level of the biomarker requirement"
+        ..., description="Specificity level of the biomarker requirement"
     )
 
     # Variant details (populated when specificity is VARIANT or CODON)
     specified_variants: list[str] = Field(
         default_factory=list,
-        description="Specific variants covered (e.g., ['L858R', 'exon 19 del'])"
+        description="Specific variants covered (e.g., ['L858R', 'exon 19 del'])",
     )
     codon: str | None = Field(
-        default=None,
-        description="Codon number if relevant (e.g., '600' for V600E)"
+        default=None, description="Codon number if relevant (e.g., '600' for V600E)"
     )
 
     # Tumor context
     tumor_types: list[str] = Field(
-        default_factory=list,
-        description="Tumor types covered by this indication"
+        default_factory=list, description="Tumor types covered by this indication"
     )
     tumor_stage: str | None = Field(
         default=None,
-        description="Tumor stage/setting (e.g., 'metastatic', 'locally advanced')"
+        description="Tumor stage/setting (e.g., 'metastatic', 'locally advanced')",
     )
 
     # Combination therapy
     combination_partners: list[str] = Field(
-        default_factory=list,
-        description="Partner drugs for combination therapy"
+        default_factory=list, description="Partner drugs for combination therapy"
     )
     is_monotherapy: bool = Field(
-        default=True,
-        description="True if drug is used as monotherapy"
+        default=True, description="True if drug is used as monotherapy"
     )
 
     # Line of therapy
     line_of_therapy: str | None = Field(
         default=None,
-        description="Line of therapy (e.g., 'first-line', 'post-progression')"
+        description="Line of therapy (e.g., 'first-line', 'post-progression')",
     )
 
     # Source text
     indication_text: str = Field(
-        default="",
-        description="Original indication text from FDA label (truncated)"
+        default="", description="Original indication text from FDA label (truncated)"
     )
     section: str = Field(
         default="indications_and_usage",
-        description="FDA label section this was parsed from"
+        description="FDA label section this was parsed from",
     )
 
     # Match result (populated when matching against a query variant)
     variant_match_result: MatchType | None = Field(
         default=None,
-        description="Result of matching query variant against this indication"
+        description="Result of matching query variant against this indication",
     )
     variant_match_reason: str | None = Field(
-        default=None,
-        description="Explanation of the match result"
+        default=None, description="Explanation of the match result"
     )
 
     def matches_variant(self, query_gene: str, query_variant: str) -> dict:
@@ -277,7 +273,8 @@ class FDABiomarkerEvidence(EvidenceItemBase):
     def _extract_codon(variant: str) -> str | None:
         """Extract codon number from variant notation. E.g., V600E -> 600"""
         import re
-        match = re.search(r'[A-Z](\d+)[A-Z]?', variant.upper())
+
+        match = re.search(r"[A-Z](\d+)[A-Z]?", variant.upper())
         return match.group(1) if match else None
 
     @property

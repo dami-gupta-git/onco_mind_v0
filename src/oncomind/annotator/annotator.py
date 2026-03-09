@@ -111,7 +111,9 @@ class Annotator:
 
         return AnnotationResult(variants=annotated_variants)
 
-    async def build_annotations(self, variant, tumor_type: str | None = None) -> dict[str, Any]:
+    async def build_annotations(
+        self, variant, tumor_type: str | None = None
+    ) -> dict[str, Any]:
         """Build annotations for a parsed variant.
 
         Args:
@@ -130,7 +132,9 @@ class Annotator:
 
         # Fetch evidence from MyVariant
         start = time.time()
-        myvariant_annotation = await self.myvariant_client.fetch_annotation(gene, protein)
+        myvariant_annotation = await self.myvariant_client.fetch_annotation(
+            gene, protein
+        )
         source_timings["myvariant"] = time.time() - start
 
         total_time = time.time() - total_start

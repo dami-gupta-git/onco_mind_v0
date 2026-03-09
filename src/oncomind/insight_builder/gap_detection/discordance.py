@@ -17,7 +17,9 @@ if TYPE_CHECKING:
 
 def check_discordant_evidence(evidence: "Evidence", ctx: "GapDetectionContext") -> None:
     """Check for conflicting evidence between sources."""
-    high_conflicts, significant_conflicts = detect_discordant_evidence_internal(evidence)
+    high_conflicts, significant_conflicts = detect_discordant_evidence_internal(
+        evidence
+    )
 
     # HIGH severity conflicts (cross-source drug response, ClinVar conflicts)
     for finding in high_conflicts:
@@ -26,7 +28,7 @@ def check_discordant_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
             severity=GapSeverity.HIGH,  # Conflicting data deserves high urgency
             description=finding,
             suggested_studies=["Meta-analysis", "Prospective validation study"],
-            addressable_with=["Literature review", "Expert consensus"]
+            addressable_with=["Literature review", "Expert consensus"],
         )
         ctx.add_poorly_characterized("conflicting evidence")
 
@@ -37,12 +39,14 @@ def check_discordant_evidence(evidence: "Evidence", ctx: "GapDetectionContext") 
             severity=GapSeverity.SIGNIFICANT,  # VICC is less reliable than FDA
             description=finding,
             suggested_studies=["Independent validation study", "Case series analysis"],
-            addressable_with=["Literature review", "Clinical correlative data"]
+            addressable_with=["Literature review", "Clinical correlative data"],
         )
         ctx.add_poorly_characterized("conflicting evidence")
 
 
-def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str], list[str]]:
+def detect_discordant_evidence_internal(
+    evidence: "Evidence",
+) -> tuple[list[str], list[str]]:
     """Detect conflicting evidence between different sources.
 
     Only flags TRUE cross-source conflicts (e.g., CGI says sensitive, CIViC says resistant).
@@ -71,6 +75,7 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
 
     # Check FDA biomarker evidence (only REQUIRED_POSITIVE, always sensitivity)
     from oncomind.models.evidence.fda_biomarker import BiomarkerRequirement
+
     for ev in evidence.fda_biomarker_evidence:
         if ev.requirement == BiomarkerRequirement.REQUIRED_NEGATIVE:
             continue
@@ -109,11 +114,15 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
             if "RESIST" in assoc_upper:
                 resistant_drugs.setdefault(drug, set()).add("CGI (preclinical)")
                 if cgi.locus_match == "variant":
-                    resistant_variant_level.setdefault(drug, set()).add("CGI (preclinical)")
+                    resistant_variant_level.setdefault(drug, set()).add(
+                        "CGI (preclinical)"
+                    )
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI (preclinical)")
                 if cgi.locus_match == "variant":
-                    sensitive_variant_level.setdefault(drug, set()).add("CGI (preclinical)")
+                    sensitive_variant_level.setdefault(drug, set()).add(
+                        "CGI (preclinical)"
+                    )
 
     # Check CGI early-phase biomarkers
     for cgi in evidence.early_phase_biomarkers:
@@ -125,11 +134,15 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
             if "RESIST" in assoc_upper:
                 resistant_drugs.setdefault(drug, set()).add("CGI (early phase)")
                 if cgi.locus_match == "variant":
-                    resistant_variant_level.setdefault(drug, set()).add("CGI (early phase)")
+                    resistant_variant_level.setdefault(drug, set()).add(
+                        "CGI (early phase)"
+                    )
             elif "SENS" in assoc_upper or "RESPON" in assoc_upper:
                 sensitive_drugs.setdefault(drug, set()).add("CGI (early phase)")
                 if cgi.locus_match == "variant":
-                    sensitive_variant_level.setdefault(drug, set()).add("CGI (early phase)")
+                    sensitive_variant_level.setdefault(drug, set()).add(
+                        "CGI (early phase)"
+                    )
 
     # Track VICC resistance at variant level for FDA vs VICC conflict detection
     vicc_resistant_variant_level: dict[str, bool] = {}
@@ -141,17 +154,23 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
         drug_lower = vicc.drugs[0].lower()
         if vicc.response_type:
             resp_upper = vicc.response_type.upper()
-            source_name = normalize_source(f"VICC/{vicc.source}" if vicc.source else "VICC")
+            source_name = normalize_source(
+                f"VICC/{vicc.source}" if vicc.source else "VICC"
+            )
             if "RESIST" in resp_upper:
                 resistant_drugs.setdefault(drug_lower, set()).add(source_name)
                 # Track if variant-level
                 if vicc.locus_match == "variant":
                     vicc_resistant_variant_level[drug_lower] = True
-                    resistant_variant_level.setdefault(drug_lower, set()).add(source_name)
+                    resistant_variant_level.setdefault(drug_lower, set()).add(
+                        source_name
+                    )
             elif "SENS" in resp_upper or "RESPON" in resp_upper:
                 sensitive_drugs.setdefault(drug_lower, set()).add(source_name)
                 if vicc.locus_match == "variant":
-                    sensitive_variant_level.setdefault(drug_lower, set()).add(source_name)
+                    sensitive_variant_level.setdefault(drug_lower, set()).add(
+                        source_name
+                    )
 
     # Check CIViC assertions
     for assertion in evidence.civic_assertions:
@@ -185,7 +204,9 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
 
     # Find drugs with TRUE CROSS-SOURCE conflicts at VARIANT LEVEL only
     # Gene/codon-level conflicts are not flagged as different variants can behave differently
-    for drug in set(sensitive_variant_level.keys()) & set(resistant_variant_level.keys()):
+    for drug in set(sensitive_variant_level.keys()) & set(
+        resistant_variant_level.keys()
+    ):
         sens_sources = sensitive_variant_level[drug]
         resist_sources = resistant_variant_level[drug]
 
@@ -221,8 +242,10 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
         if drug in vicc_resistant_variant_level:
             # Check if this is a known sensitizing variant for this drug
             # If so, VICC resistance is acquired (expected), not intrinsic (conflict)
-            if query_gene and query_variant and is_sensitizing_variant_for_drug(
-                query_gene, query_variant, drug
+            if (
+                query_gene
+                and query_variant
+                and is_sensitizing_variant_for_drug(query_gene, query_variant, drug)
             ):
                 # Skip - this is expected acquired resistance, not a true conflict
                 continue
@@ -251,11 +274,17 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
 
     # Check for conflicts at each locus level (most specific first)
     # Variant-level conflict is most concerning
-    if "pathogenic" in clinvar_by_locus["variant"] and "benign" in clinvar_by_locus["variant"]:
+    if (
+        "pathogenic" in clinvar_by_locus["variant"]
+        and "benign" in clinvar_by_locus["variant"]
+    ):
         high_conflicts.append(
             "ClinVar has conflicting interpretations at variant level: both pathogenic and benign submissions for this exact variant"
         )
-    elif "pathogenic" in clinvar_by_locus["codon"] and "benign" in clinvar_by_locus["codon"]:
+    elif (
+        "pathogenic" in clinvar_by_locus["codon"]
+        and "benign" in clinvar_by_locus["codon"]
+    ):
         high_conflicts.append(
             "ClinVar has conflicting interpretations at codon level: both pathogenic and benign submissions for variants at this position"
         )
@@ -264,7 +293,10 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
     # Check ClinVar vs CIViC pathogenicity conflicts (cross-source)
     # Only flag if BOTH are at variant level — gene-level ClinVar benign doesn't conflict with
     # variant-level CIViC actionable (different variants can have different significance)
-    clinvar_benign_at_variant = "benign" in clinvar_by_locus["variant"] and "pathogenic" not in clinvar_by_locus["variant"]
+    clinvar_benign_at_variant = (
+        "benign" in clinvar_by_locus["variant"]
+        and "pathogenic" not in clinvar_by_locus["variant"]
+    )
 
     if clinvar_benign_at_variant:
         civic_actionable_at_variant: list[str] = []
@@ -273,14 +305,20 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
         for assertion in evidence.civic_assertions:
             if assertion.locus_match != "variant":
                 continue
-            if assertion.assertion_type and assertion.assertion_type.upper() == "ONCOGENIC":
+            if (
+                assertion.assertion_type
+                and assertion.assertion_type.upper() == "ONCOGENIC"
+            ):
                 civic_actionable_at_variant.append("CIViC assertion (oncogenic)")
                 break
             if assertion.significance and "ONCOGENIC" in assertion.significance.upper():
                 civic_actionable_at_variant.append("CIViC assertion (oncogenic)")
                 break
             # Predictive assertions with therapies suggest actionability
-            if assertion.assertion_type and assertion.assertion_type.upper() == "PREDICTIVE":
+            if (
+                assertion.assertion_type
+                and assertion.assertion_type.upper() == "PREDICTIVE"
+            ):
                 if assertion.therapies:
                     civic_actionable_at_variant.append("CIViC assertion (predictive)")
                     break
@@ -292,7 +330,9 @@ def detect_discordant_evidence_internal(evidence: "Evidence") -> tuple[list[str]
             if evi.evidence_type:
                 etype = evi.evidence_type.upper()
                 if etype in ("PREDISPOSING", "ONCOGENIC"):
-                    civic_actionable_at_variant.append(f"CIViC evidence ({etype.lower()})")
+                    civic_actionable_at_variant.append(
+                        f"CIViC evidence ({etype.lower()})"
+                    )
                     break
             # Predictive evidence with drugs suggests actionability
             if evi.evidence_type and evi.evidence_type.upper() == "PREDICTIVE":
