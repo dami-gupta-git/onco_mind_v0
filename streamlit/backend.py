@@ -376,7 +376,7 @@ def _build_response(result) -> Dict[str, Any]:
             }
             for a in evidence.pubmed_articles
         ],
-        "literature_knowledge": evidence.literature_knowledge.summary if evidence.literature_knowledge else None,
+        "literature_knowledge": evidence.literature_knowledge.format_summary() if evidence.literature_knowledge else None,
         "preclinical_biomarkers": [
             {
                 "drug": b.drug,
