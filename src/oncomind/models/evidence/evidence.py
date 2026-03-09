@@ -312,7 +312,10 @@ class Evidence(BaseModel):
     # === Helper methods ===
 
     def compute_evidence_gaps(self) -> EvidenceGaps:
-        """Compute and cache evidence gaps."""
+        """Compute and cache evidence gaps. Returns cached result if already computed."""
+        if self.evidence_gaps is not None:
+            return self.evidence_gaps
+
         from oncomind.insight_builder.gap_detector import detect_evidence_gaps
 
         self.evidence_gaps = detect_evidence_gaps(self)
@@ -371,8 +374,10 @@ class Evidence(BaseModel):
                 continue
 
             # Tumor must match (if specified)
+            # Pan-cancer indications (e.g., "Solid Tumor", "MSI-H") always pass through
             if queried_tumor and not any(
-                tumor_types_match(t, queried_tumor) for t in e.tumor_types
+                tumor_types_match(t, queried_tumor) or is_pan_cancer_term(t)
+                for t in e.tumor_types
             ):
                 continue
 

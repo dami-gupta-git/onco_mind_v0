@@ -1078,8 +1078,7 @@ class EvidenceAggregator:
             logger.debug(
                 f"Skipping FDA matching for {gene} {normalized_variant}: {not_actionable_reason}"
             )
-
-        # Note: fda_approvals has been removed - using fda_biomarker_evidence exclusively
+            fda_biomarker_evidence = []
 
         # Get gene context
         gene_role, gene_class, pathway = self._get_gene_context_data(gene)
