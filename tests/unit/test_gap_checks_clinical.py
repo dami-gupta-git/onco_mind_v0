@@ -135,8 +135,8 @@ class TestCheckClinicalEvidence:
         ]
         assert len(actionability) == 1
         basis = actionability[0].basis
-        assert "1 approval" in basis and "CIViC assertions" in basis
-        assert "2 approvals" in basis and "CGI" in basis
+        assert "1 Level A assertion from CIViC" in basis
+        assert "2 CGI entries linked to approvals" in basis
 
 
 

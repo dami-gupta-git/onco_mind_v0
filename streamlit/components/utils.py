@@ -323,19 +323,44 @@ def result_to_markdown(result: dict) -> str:
         lines.append("")
 
     # CGI Biomarkers
-    cgi = result.get('cgi_biomarkers', [])
-    if cgi:
-        lines.append("## CGI Biomarkers\n")
-        lines.append("| Drug | Association | Evidence Level | Locus Match | Tumor Match |")
-        lines.append("|------|-------------|----------------|-------------|-------------|")
-        for item in cgi[:15]:
-            drug = item.get('drug', '')
-            assoc = item.get('association', '')
-            level = item.get('evidence_level', '')
-            locus = item.get('locus_match', '')
-            tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
-            lines.append(f"| {drug} | {assoc} | {level} | {locus} | {tumor} |")
-        lines.append("")
+    cgi_biomarkers = result.get('cgi_biomarkers', [])
+    early_phase = result.get('early_phase_biomarkers', [])
+    preclinical = result.get('preclinical_biomarkers', [])
+
+    def _cgi_rows(biomarkers: list, show_level: bool) -> list[str]:
+        locus_icons = {"variant": "Variant", "codon": "Codon", "gene": "Gene"}
+        if show_level:
+            out = ["| Drug | Locus Match | Association | Tumor Type | Level |",
+                   "|------|-------------|-------------|------------|-------|"]
+        else:
+            out = ["| Drug | Locus Match | Association | Tumor Type |",
+                   "|------|-------------|-------------|------------|"]
+        for b in biomarkers:
+            drug = b.get('drug', 'Unknown')
+            locus = locus_icons.get(b.get('locus_match', ''), '-')
+            assoc = b.get('association', '')
+            tumor = (b.get('tumor_type', '') or '')[:25]
+            if show_level:
+                level = b.get('evidence_level', '')
+                out.append(f"| {drug} | {locus} | {assoc} | {tumor} | {level} |")
+            else:
+                out.append(f"| {drug} | {locus} | {assoc} | {tumor} |")
+        return out
+
+    if cgi_biomarkers or early_phase or preclinical:
+        lines.append("## CGI Therapies\n")
+        if cgi_biomarkers:
+            lines.append("**FDA Approved (CGI)**")
+            lines.extend(_cgi_rows(cgi_biomarkers, show_level=False))
+            lines.append("")
+        if early_phase:
+            lines.append("**Clinical Evidence (CGI)**")
+            lines.extend(_cgi_rows(early_phase, show_level=True))
+            lines.append("")
+        if preclinical:
+            lines.append("**Preclinical (CGI)**")
+            lines.extend(_cgi_rows(preclinical, show_level=True))
+            lines.append("")
 
     # FDA Approvals (from fda_biomarker_evidence)
     # Always show this section - it's important to know if there are no FDA approvals
@@ -359,13 +384,12 @@ def result_to_markdown(result: dict) -> str:
             # Match type from variant_match_result
             match_type = item.get('variant_match_result', '')
             if match_type in ('exact', 'codon', 'gene'):
-                match = '✅ Yes'
+                match = 'Yes'
             else:
-                match = '❌ No'
+                match = 'No'
             # Label level from specificity
             specificity = item.get('specificity', '')
-            spec_icons = {'variant': '🎯 Variant', 'codon': '📍 Codon', 'gene': '🧬 Gene', 'pathway': '🔀 Pathway'}
-            specificity_display = spec_icons.get(specificity, specificity or '—')
+            specificity_display = specificity.capitalize() if specificity else '—'
             # Variants specified in the label
             specified_variants = item.get('specified_variants', [])
             if specified_variants:
@@ -419,18 +443,25 @@ def result_to_markdown(result: dict) -> str:
     trials = result.get('clinical_trials', [])
     if trials:
         lines.append("## Clinical Trials\n")
-        lines.append("| NCT ID | Phase | Title | Locus Match | Tumor Match |")
-        lines.append("|--------|-------|-------|-------------|-------------|")
-        for trial in trials[:15]:
+        lines.append("| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |")
+        lines.append("|-------------|-------------|--------|-------|--------|-------|")
+        for trial in trials:
             nct = trial.get('nct_id', '')
-            title = trial.get('title', '')
-            phase = trial.get('phase', '')
-            locus = trial.get('locus_match', '')
-            tumor = "Yes" if trial.get('tumor_match') else ("No" if trial.get('tumor_match') is False else "")
-            # Truncate long titles for table display
-            title_display = title[:60] + "..." if len(title) > 60 else title
+            title = trial.get('title', '') or ''
+            phase = trial.get('phase', 'N/A')
+            status = trial.get('status', '')
+            locus_match = trial.get('locus_match', '')
+            locus = {"variant": "Variant", "codon": "Codon", "gene": "Gene"}.get(locus_match, "Gene")
+            tumor_match = trial.get('tumor_match')
+            if tumor_match is True:
+                tumor = "Yes"
+            elif tumor_match is False:
+                tumor = "Other"
+            else:
+                tumor = "-"
+            title_display = title[:150] + "..." if len(title) > 150 else title
             nct_link = f"[{nct}](https://clinicaltrials.gov/study/{nct})"
-            lines.append(f"| {nct_link} | {phase} | {title_display} | {locus} | {tumor} |")
+            lines.append(f"| {locus} | {tumor} | {nct_link} | {phase} | {status} | {title_display} |")
         lines.append("")
 
     # cBioPortal Prevalence
@@ -458,17 +489,30 @@ def result_to_markdown(result: dict) -> str:
         if var_prev is not None:
             lines.append(f"| Exact Variant Prevalence | {var_prev:.1f}% ({var_samples:,} samples) |")
 
-        # Co-occurring mutations (first 3)
+        lines.append("")
+
+        # Co-occurring mutations
         co_occurring = cbio.get('co_occurring', [])
         if co_occurring:
-            co_str = ", ".join([f"{c.get('gene', '')} ({c.get('percentage', 0):.0f}%)" for c in co_occurring[:3]])
-            lines.append(f"| Co-occurring Mutations | {co_str} |")
+            lines.append(f"**Co-occurring ({len(co_occurring)}):** _Odds > 1 — possible functional interaction_\n")
+            lines.append("| Gene | Count | Freq | OR |")
+            lines.append("|------|-------|------|----|")
+            for c in co_occurring:
+                odds = c.get('odds_ratio')
+                odds_str = f"{odds:.2f}" if odds else "N/A"
+                lines.append(f"| {c.get('gene', '')} | {c.get('count', 0)} | {c.get('pct', 0):.1f}% | {odds_str} |")
+            lines.append("")
 
-        # Mutually exclusive (first 3)
+        # Mutually exclusive
         mutually_exclusive = cbio.get('mutually_exclusive', [])
         if mutually_exclusive:
-            me_str = ", ".join([f"{m.get('gene', '')}" for m in mutually_exclusive[:3]])
-            lines.append(f"| Mutually Exclusive | {me_str} |")
+            lines.append(f"**Mutually Exclusive ({len(mutually_exclusive)}):** _Odds < 1 — likely redundant drivers_\n")
+            lines.append("| Gene | Count | Freq | OR |")
+            lines.append("|------|-------|------|----|")
+            for m in mutually_exclusive:
+                odds = m.get('odds_ratio')
+                odds_str = f"{odds:.2f}" if odds else "N/A"
+                lines.append(f"| {m.get('gene', '')} | {m.get('count', 0)} | {m.get('pct', 0):.1f}% | {odds_str} |")
 
         lines.append("")
 
@@ -512,11 +556,11 @@ def result_to_markdown(result: dict) -> str:
                 hotspot_data = hotspots.get('hotspot', {})
                 if hotspot_data:
                     residue = hotspot_data.get('residue', '')
-                    total_count = hotspot_data.get('total_count', 0)
+                    total_samples = hotspot_data.get('total_samples', 0)
                     if residue:
                         lines.append(f"| Residue | {residue} |")
-                    if total_count > 0:
-                        lines.append(f"| Total Samples | {total_count:,} |")
+                    if total_samples > 0:
+                        lines.append(f"| Total Samples | {total_samples:,} |")
             elif is_adjacent:
                 adj_dist = hotspots.get('adjacent_distance')
                 lines.append(f"| Hotspot Status | Adjacent ({adj_dist} codons away) |")
@@ -526,11 +570,17 @@ def result_to_markdown(result: dict) -> str:
     articles = result.get('pubmed_articles', [])
     if articles:
         lines.append("## Literature\n")
-        for article in articles[:10]:
+        lines.append("| PMID | Year | Journal | Signal | Title |")
+        lines.append("|------|------|---------|--------|-------|")
+        for article in articles:
             pmid = article.get('pmid', '')
-            title = article.get('title', '')
+            url = article.get('url') or (f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else '')
+            pmid_link = f"[{pmid}]({url})" if pmid and url else pmid
             year = article.get('year', '')
-            lines.append(f"- [{title}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/) ({year})")
+            journal = (article.get('journal', '') or '')[:20]
+            signal = article.get('signal_type', '') or '-'
+            title = (article.get('title', '') or '')[:80] + "..."
+            lines.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")
         lines.append("")
 
     # Gap Analysis (just above LLM Synthesis)
