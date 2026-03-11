@@ -218,9 +218,30 @@ def result_to_markdown(result: dict) -> str:
     # CIViC Evidence - show all Level A entries, limit others to 15
     civic = result.get('civic_evidence', [])
     if civic:
+        _civic_sig_abbrev = {
+            'SENSITIVITY/RESPONSE': 'S',
+            'SENSITIVITYRESPONSE': 'S',
+            'RESISTANCE': 'R',
+            'NEGATIVE': 'N',
+            'BETTER_OUTCOME': 'B',
+            'BETTER OUTCOME': 'B',
+            'ADVERSE RESPONSE': 'A',
+            'PROGNOSTIC': 'P',
+            'PREDICTIVE': 'Pred',
+            'DIAGNOSTIC': 'Dx',
+            'FUNCTIONAL': 'F',
+        }
+
+        def _civic_sig(sig_raw: str, direction: str = '') -> str:
+            abbrev = _civic_sig_abbrev.get((sig_raw or '').upper(), sig_raw or '')
+            if direction.upper() == 'DOES_NOT_SUPPORT' and (sig_raw or '').upper() != 'N/A':
+                return f"NOT {abbrev}"
+            return abbrev
+
         lines.append("## CIViC Evidence\n")
-        lines.append("| EID | Drug | Disease | Evidence Level | Significance | Locus Match | Tumor Match |")
-        lines.append("|-----|------|---------|----------------|--------------|-------------|-------------|")
+        lines.append("*Sig: S=Sensitivity/Response, R=Resistance, N=Negative, B=Better Outcome, A=Adverse Response, P=Prognostic*\n")
+        lines.append("| EID | Locus Match | Tumor Match | Drug | Sig | Disease | Evidence Level |")
+        lines.append("|-----|-------------|-------------|------|-----|---------|----------------|")
         seen_entries = set()
         # Separate Level A from others
         level_a_items = [item for item in civic if (item.get('evidence_level') or '').upper() == 'A']
@@ -237,12 +258,12 @@ def result_to_markdown(result: dict) -> str:
             drugs_list = item.get('drugs', [])
             drug = ", ".join(drugs_list) if drugs_list else "N/A"
             disease = item.get('disease', '')
-            level = "A"
             sig_raw = item.get('clinical_significance', '')
-            sig = format_civic_significance(sig_raw)
+            direction = item.get('evidence_direction', '') or ''
+            sig = _civic_sig(sig_raw, direction)
             locus = item.get('locus_match', '')
             tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
-            lines.append(f"| {eid} | {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
+            lines.append(f"| {eid} | {locus} | {tumor} | {drug} | {sig} | {disease} | A |")
 
         # Process other items (limit to 15)
         other_count = 0
@@ -256,7 +277,8 @@ def result_to_markdown(result: dict) -> str:
             disease = item.get('disease', '')
             level = item.get('evidence_level', '')
             sig_raw = item.get('clinical_significance', '')
-            sig = format_civic_significance(sig_raw)
+            direction = item.get('evidence_direction', '') or ''
+            sig = _civic_sig(sig_raw, direction)
             locus = item.get('locus_match', '')
             tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
             # Deduplicate by drug+disease+significance+level
@@ -269,7 +291,7 @@ def result_to_markdown(result: dict) -> str:
             if entry_key in seen_entries:
                 continue
             seen_entries.add(entry_key)
-            lines.append(f"| {eid} | {drug} | {disease} | {level} | {sig} | {locus} | {tumor} |")
+            lines.append(f"| {eid} | {locus} | {tumor} | {drug} | {sig} | {disease} | {level} |")
             other_count += 1
         lines.append("")
 
@@ -277,18 +299,27 @@ def result_to_markdown(result: dict) -> str:
     vicc = result.get('vicc_evidence', [])
     if vicc:
         lines.append("## VICC MetaKB Evidence\n")
-        lines.append("| Source | Drug | Disease | Response | Locus Match | Tumor Match |")
-        lines.append("|--------|------|---------|----------|-------------|-------------|")
+        lines.append("| Source | Locus Match | Tumor Match | Drug | Response | Disease | Evidence Level |")
+        lines.append("|--------|-------------|-------------|------|----------|---------|----------------|")
         for item in vicc[:15]:
-            source = item.get('source', '')
-            # drugs is a list, join them
+            source = (item.get('source') or 'vicc').upper()
             drugs_list = item.get('drugs', [])
-            drug = ', '.join(drugs_list) if drugs_list else ''
-            disease = item.get('disease', '')
-            response = item.get('response_type', '')
-            locus = item.get('locus_match', '')
+            drug = ', '.join(drugs_list) if drugs_list else 'N/A'
+            disease = item.get('disease', '') or ''
+            # Normalize AMP tier codes to response labels (same logic as UI)
+            response = item.get('response_type', '') or ''
+            if response and re.match(r'^[1234][A-D]?$', response.upper()):
+                desc = (item.get('description') or '').lower()
+                if 'sensitivity' in desc or 'sensitive' in desc or 'response' in desc:
+                    response = 'sensitive'
+                elif 'resistance' in desc or 'resistant' in desc:
+                    response = 'resistant'
+                else:
+                    response = '-'
+            locus = item.get('locus_match', '') or ''
             tumor = "Yes" if item.get('tumor_match') else ("No" if item.get('tumor_match') is False else "")
-            lines.append(f"| {source} | {drug} | {disease} | {response} | {locus} | {tumor} |")
+            level = str(item.get('evidence_level', '') or '')
+            lines.append(f"| {source} | {locus} | {tumor} | {drug} | {response} | {disease} | {level} |")
         lines.append("")
 
     # CGI Biomarkers
@@ -327,23 +358,33 @@ def result_to_markdown(result: dict) -> str:
             gene = item.get('gene', '')
             # Match type from variant_match_result
             match_type = item.get('variant_match_result', '')
-            if match_type == 'exact':
-                match = '✅ exact'
-            elif match_type == 'codon':
-                match = '🔸 codon'
-            elif match_type == 'gene':
-                match = '🧬 gene'
+            if match_type in ('exact', 'codon', 'gene'):
+                match = '✅ Yes'
             else:
-                match = match_type or ''
+                match = '❌ No'
             # Label level from specificity
             specificity = item.get('specificity', '')
+            spec_icons = {'variant': '🎯 Variant', 'codon': '📍 Codon', 'gene': '🧬 Gene', 'pathway': '🔀 Pathway'}
+            specificity_display = spec_icons.get(specificity, specificity or '—')
             # Variants specified in the label
             specified_variants = item.get('specified_variants', [])
-            variants = ", ".join(specified_variants[:3]) if specified_variants else '-'
+            if specified_variants:
+                variants = ', '.join(specified_variants)[:40]
+            elif specificity == 'gene':
+                variants = 'Any mutation'
+            else:
+                variants = '—'
             # Tumor types
             tumor_types = item.get('tumor_types', [])
-            tumors = ", ".join(tumor_types[:2]) if tumor_types else ''
-            lines.append(f"| {drug} | {gene} | {match} | {specificity} | {variants} | {tumors} |")
+            tumor_stage = item.get('tumor_stage', '')
+            if tumor_stage and tumor_types:
+                tumors = f"{tumor_stage} {', '.join(tumor_types)}"
+            elif tumor_types:
+                tumors = ', '.join(tumor_types)
+            else:
+                tumors = '—'
+            tumors = tumors[:40]
+            lines.append(f"| {drug} | {gene} | {match} | {specificity_display} | {variants} | {tumors} |")
     else:
         lines.append("None")
     lines.append("")

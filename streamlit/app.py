@@ -326,7 +326,15 @@ with tab1:
             civic_evidence = result.get('civic_evidence', [])
             vicc = result.get('vicc_evidence', [])
             cgi_biomarkers = result.get('cgi_biomarkers', [])
-            clinvar_entries = result.get('clinvar_entries', [])
+            _clinvar_entries_raw = result.get('clinvar_entries', [])
+            clinvar_entries = [
+                e for e in _clinvar_entries_raw
+                if (e.get('review_status') or '').lower() not in (
+                    'no assertion criteria provided',
+                    'no classification provided',
+                    'no classification for the individual variant',
+                )
+            ]
             clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
             cosmic_id = ids.get('cosmic_id')
             trials = result.get('clinical_trials', [])
@@ -364,7 +372,7 @@ with tab1:
             if fda_biomarker_evidence:
                 tab_names.append(f"💊 FDA ({len(fda_biomarker_evidence)})")
             if clinvar_entries or clinvar_sig:
-                tab_names.append("ClinVar")
+                tab_names.append(f"ClinVar ({len(clinvar_entries)})")
             if cosmic_id:
                 tab_names.append("COSMIC")
             if trials:

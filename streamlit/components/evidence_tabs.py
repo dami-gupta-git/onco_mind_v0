@@ -706,12 +706,6 @@ def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None):
                 "|--------------|--------------|------------|---------------|"]
         for entry in clinvar_entries:
             review = entry.get('review_status', '')
-            if review.lower() in (
-                'no assertion criteria provided',
-                'no classification provided',
-                'no classification for the individual variant',
-            ):
-                continue
             var_id = entry.get('variation_id', '')
             var_url = f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{var_id}/" if var_id else ''
             var_link = f"[{var_id}]({var_url})" if var_id and var_url else (var_id or '-')
