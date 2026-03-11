@@ -169,7 +169,7 @@ The platform works in two layers:
 
 ```bash
 git clone https://github.com/dami-gupta-git/onco_mind_v0.git
-cd oncomind/onco_mind_v0
+cd onco_mind_v0
 
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -299,8 +299,6 @@ SEMANTIC_SCHOLAR_API_KEY=your-s2-key
 - `gemini/gemini-1.5-pro`
 - `claude-sonnet-4-20250514`
 - `claude-3-5-haiku-20241022`
-- `claude-sonnet-4-20250514` 
-- `claude-3-5-haiku-20241022` 
 - `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`
 
 ---
