@@ -542,13 +542,31 @@ def result_to_markdown(result: dict) -> str:
         lines.append("*AI-generated — may contain inaccuracies. Verify against primary sources.*\n")
         lines.append("*Locus Match: variant-level = evidence match at exact locus · codon-level = evidence match at other variants in this codon · gene-level = evidence match at other variants in this gene*\n")
         if functional_summary:
-            lines.append(f"### Functional Summary\n{functional_summary}\n")
+            lines.append(f"### 1. Functional Impact\n{functional_summary}\n")
         if biological_context:
-            lines.append(f"### Biological Context\n{biological_context}\n")
+            lines.append(f"### 2. Tumor Biology & Models\n{biological_context}\n")
         if therapeutic_summary:
-            lines.append(f"### Therapeutic Summary\n{therapeutic_summary}\n")
+            lines.append(f"### 3. Therapeutic Landscape\n{therapeutic_summary}\n")
         if research_implications:
-            lines.append(f"### Research Implications\n{research_implications}\n")
+            lines.append(f"### 4. Evidence Quality & Open Questions\n{research_implications}\n")
+        open_questions = insight.get('knowledge_gaps', [])
+        if open_questions:
+            lines.append("#### Open Questions\n")
+            for q in open_questions:
+                lines.append(f"- {q}\n")
+        research_program = insight.get('research_program', [])
+        if research_program:
+            lines.append("### 5. Emerging Research Program\n")
+            for aim in research_program:
+                aim_title = aim.get('aim_title', '')
+                rationale = aim.get('rationale', '')
+                approaches = aim.get('approaches', [])
+                if aim_title:
+                    lines.append(f"**{aim_title}**\n")
+                if rationale:
+                    lines.append(f"{rationale}\n")
+                for approach in approaches:
+                    lines.append(f"- {approach}\n")
         # Fallback to llm_narrative if no structured fields
         if not any([functional_summary, biological_context, therapeutic_summary]) and llm_narrative:
             lines.append(f"{llm_narrative}\n")

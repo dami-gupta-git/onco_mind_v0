@@ -19,24 +19,28 @@ class TestLLMService:
         with patch(
             "oncomind.llm.service.acompletion", new_callable=AsyncMock
         ) as mock_call:
-            # Create mock response object with new format (raw component fields)
+            # Create mock response object matching new research dossier schema
             response_json = {
-                "functional_summary": "BRAF V600E is a well-characterized oncogenic mutation.",
-                "biological_context": "Constitutive MAPK pathway activation.",
-                "research_implications": "Multiple FDA-approved BRAF inhibitors exist for melanoma.",
+                "functional_impact": "BRAF V600E is a well-characterized activating hotspot mutation.",
+                "tumor_biology": "V600E occurs in ~24% of melanoma samples per cBioPortal.",
+                "therapeutic_landscape_prose": "Multiple FDA-approved BRAF inhibitors exist for melanoma.",
                 "therapeutic_landscape": {
                     "fda_approved": ["Vemurafenib", "Dabrafenib"],
                     "clinical_evidence": [],
                     "preclinical": [],
                     "resistance_mechanisms": [],
                 },
-                "evidence_assessment": {
-                    "overall_quality": "comprehensive",
-                    "well_characterized": ["therapeutic response"],
-                    "knowledge_gaps": [],
-                    "conflicting_evidence": [],
-                },
+                "evidence_quality": "Well-characterized in melanoma with comprehensive clinical data.",
+                "open_questions": ["Does resistance emerge via MEK amplification?"],
+                "research_program": [
+                    {
+                        "aim_title": "Aim 1: Characterize resistance in BRAF V600E melanoma",
+                        "rationale": "Resistance to BRAF inhibitors is common.",
+                        "approaches": ["Model: A375. Perturbation: Vemurafenib. Readout: viability."],
+                    }
+                ],
                 "key_references": ["PMID:12345"],
+                "evidence_tags": ["direct clinical data"],
             }
             mock_response = AsyncMock()
             mock_response.choices = [AsyncMock()]
@@ -55,12 +59,14 @@ class TestLLMService:
             assert insight.clinical_trials_available is True
             assert (
                 insight.functional_summary
-                == "BRAF V600E is a well-characterized oncogenic mutation."
+                == "BRAF V600E is a well-characterized activating hotspot mutation."
             )
             assert insight.therapeutic_landscape["fda_approved"] == [
                 "Vemurafenib",
                 "Dabrafenib",
             ]
+            assert len(insight.research_program) == 1
+            assert "Aim 1" in insight.research_program[0]["aim_title"]
 
     @pytest.mark.asyncio
     async def test_get_llm_insight_with_markdown(self):
@@ -68,12 +74,15 @@ class TestLLMService:
         service = LLMService()
 
         response_json = {
-            "functional_summary": "Test summary for the variant.",
-            "biological_context": "",
-            "research_implications": "",
+            "functional_impact": "Test functional impact for the variant.",
+            "tumor_biology": "",
+            "therapeutic_landscape_prose": "",
             "therapeutic_landscape": {},
-            "evidence_assessment": {},
+            "evidence_quality": "",
+            "open_questions": [],
+            "research_program": [],
             "key_references": [],
+            "evidence_tags": [],
         }
 
         markdown_response = f"```json\n{json.dumps(response_json)}\n```"
@@ -93,8 +102,8 @@ class TestLLMService:
                 evidence_summary="Test evidence summary.",
             )
 
-            assert insight.llm_summary == "Test summary for the variant."
-            assert insight.functional_summary == "Test summary for the variant."
+            assert insight.llm_summary == "Test functional impact for the variant."
+            assert insight.functional_summary == "Test functional impact for the variant."
 
     @pytest.mark.asyncio
     async def test_llm_service_with_custom_temperature(self):
@@ -106,12 +115,15 @@ class TestLLMService:
         assert service.model == "gpt-4o-mini"
 
         response_json = {
-            "functional_summary": "Test summary for the variant.",
-            "biological_context": "",
-            "research_implications": "",
+            "functional_impact": "Test functional impact for the variant.",
+            "tumor_biology": "",
+            "therapeutic_landscape_prose": "",
             "therapeutic_landscape": {},
-            "evidence_assessment": {},
+            "evidence_quality": "",
+            "open_questions": [],
+            "research_program": [],
             "key_references": [],
+            "evidence_tags": [],
         }
 
         with patch(

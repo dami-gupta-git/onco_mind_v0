@@ -402,17 +402,20 @@ def insight(
         ):
             llm_lines = []
 
-            # Functional summary
+            # 1. Functional impact
             if result.llm.functional_summary:
                 wrapped = textwrap.fill(result.llm.functional_summary, width=70)
-                llm_lines.append(f"[bold]Functional Impact:[/bold]\n{wrapped}")
+                llm_lines.append(f"[bold]1. Functional Impact:[/bold]\n{wrapped}")
 
-            # Biological context
+            # 2. Tumor biology & models
             if result.llm.biological_context:
                 wrapped = textwrap.fill(result.llm.biological_context, width=70)
-                llm_lines.append(f"\n[bold]Biological Context:[/bold]\n{wrapped}")
+                llm_lines.append(f"\n[bold]2. Tumor Biology & Models:[/bold]\n{wrapped}")
 
-            # Therapeutic landscape
+            # 3. Therapeutic landscape (prose + structured)
+            if result.llm.therapeutic_summary:
+                wrapped = textwrap.fill(result.llm.therapeutic_summary, width=70)
+                llm_lines.append(f"\n[bold]3. Therapeutic Landscape:[/bold]\n{wrapped}")
             tl = result.llm.therapeutic_landscape
             if tl:
                 tl_parts = []
@@ -433,23 +436,33 @@ def insight(
                         f"[red]Resistance:[/red] {', '.join(tl['resistance_mechanisms'])}"
                     )
                 if tl_parts:
-                    llm_lines.append(
-                        f"\n[bold]Therapeutic Landscape:[/bold]\n" + "\n".join(tl_parts)
-                    )
+                    llm_lines.append("\n".join(tl_parts))
 
-            # Research implications
+            # 4. Evidence quality & open questions
             if result.llm.research_implications:
                 wrapped = textwrap.fill(result.llm.research_implications, width=70)
-                llm_lines.append(f"\n[bold]Research Implications:[/bold]\n{wrapped}")
+                llm_lines.append(f"\n[bold]4. Evidence Quality & Open Questions:[/bold]\n{wrapped}")
+            if result.llm.knowledge_gaps:
+                for q in result.llm.knowledge_gaps:
+                    llm_lines.append(f"  • {q}")
 
-            # Research hypotheses
-            if result.llm.research_hypotheses:
-                llm_lines.append(f"\n[bold]Research Hypotheses:[/bold]")
-                for hyp in result.llm.research_hypotheses[:3]:
-                    wrapped = textwrap.fill(
-                        f"• {hyp}", width=70, subsequent_indent="  "
-                    )
-                    llm_lines.append(wrapped)
+            # 5. Emerging research program
+            if result.llm.research_program:
+                llm_lines.append(f"\n[bold]5. Emerging Research Program:[/bold]")
+                for aim in result.llm.research_program[:3]:
+                    aim_title = aim.get("aim_title", "")
+                    rationale = aim.get("rationale", "")
+                    approaches = aim.get("approaches", [])
+                    if aim_title:
+                        llm_lines.append(f"\n[bold]{aim_title}[/bold]")
+                    if rationale:
+                        wrapped = textwrap.fill(rationale, width=68, subsequent_indent="  ")
+                        llm_lines.append(wrapped)
+                    for approach in approaches:
+                        wrapped = textwrap.fill(
+                            f"  • {approach}", width=70, subsequent_indent="    "
+                        )
+                        llm_lines.append(wrapped)
 
             # Conflicting evidence
             if result.llm.conflicting_evidence:

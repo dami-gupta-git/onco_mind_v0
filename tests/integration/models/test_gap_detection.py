@@ -783,3 +783,49 @@ class TestFDAApprovalGap:
             f"IDH1 R132H should NOT have 'No FDA-approved therapy' gap. "
             f"Got: {[g.description for g in fda_gap]}"
         )
+
+    @pytest.mark.asyncio
+    async def test_egfr_l858r_nsclc_clinical_actionability(self):
+        """EGFR L858R in NSCLC should have clinical actionability well-characterized.
+
+        EGFR L858R is FDA-approved for multiple EGFR inhibitors (erlotinib, gefitinib,
+        osimertinib) in NSCLC. Clinical actionability should be 'well-characterized'
+        and the gap analysis should NOT include a CRITICAL clinical gap.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("EGFR L858R", tumor_type="NSCLC")
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        # Clinical actionability should be in well_characterized
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "clinical actionability" in well_char_lower, (
+            f"EGFR L858R NSCLC should have 'clinical actionability' well-characterized. "
+            f"Got: {gaps.well_characterized}"
+        )
+
+        # Should NOT have a CRITICAL clinical gap
+        clinical_gaps = gaps.get_gaps_by_category(GapCategory.CLINICAL)
+        critical_clinical = [
+            g for g in clinical_gaps if g.severity == GapSeverity.CRITICAL
+        ]
+        assert len(critical_clinical) == 0, (
+            f"EGFR L858R NSCLC should not have CRITICAL clinical gaps. "
+            f"Got: {[g.description for g in critical_clinical]}"
+        )
+
+        # FDA biomarker evidence must include at least one EGFR TKI
+        fda_evidence = result.evidence.fda_biomarker_evidence
+        assert len(fda_evidence) >= 1, (
+            f"EGFR L858R NSCLC should have at least 1 FDA drug. Got {len(fda_evidence)}"
+        )
+        drug_names = [ev.drug_name.lower() for ev in fda_evidence if ev.drug_name]
+        egfr_tkis = ["erlotinib", "gefitinib", "osimertinib", "afatinib"]
+        found_tki = any(any(tki in d for tki in egfr_tkis) for d in drug_names)
+        assert found_tki, (
+            f"Expected at least one EGFR TKI (erlotinib/gefitinib/osimertinib/afatinib). "
+            f"Got: {drug_names}"
+        )

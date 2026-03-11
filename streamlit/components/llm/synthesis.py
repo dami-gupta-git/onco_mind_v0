@@ -36,18 +36,22 @@ def render_llm_synthesis(result: dict[str, Any]) -> None:
         functional_summary = result['insight'].get('functional_summary')
         biological_context = result['insight'].get('biological_context')
         therapeutic_summary = result['insight'].get('therapeutic_summary')
+        research_implications = result['insight'].get('research_implications')
 
         if functional_summary:
-            st.markdown(f"**Functional Impact:** {functional_summary}")
+            st.markdown(f"**1. Functional Impact:** {functional_summary}")
         if biological_context:
-            st.markdown(f"**Biological Context:** {biological_context}")
+            st.markdown(f"**2. Tumor Biology & Models:** {biological_context}")
         if therapeutic_summary:
-            st.markdown(f"**Therapeutic Landscape:** {therapeutic_summary}")
+            st.markdown(f"**3. Therapeutic Landscape:** {therapeutic_summary}")
+        if research_implications:
+            st.markdown(f"**4. Evidence Quality & Open Questions:** {research_implications}")
 
-        # NOTE: Therapeutic Landscape (structured dict) removed from LLM output
-        # This data is already shown in the Therapies tab with accurate source attribution
-        # LLM was adding context from training knowledge (hallucination risk)
-        # But we now show therapeutic_summary (prose) which is constrained to provided evidence
+        open_questions = result['insight'].get('knowledge_gaps', [])
+        if open_questions:
+            st.markdown("**Open Questions:**")
+            for q in open_questions:
+                st.markdown(f"  - {q}")
 
         if not any([functional_summary, biological_context, therapeutic_summary]):
             st.markdown(llm_narrative)
@@ -60,15 +64,18 @@ def render_llm_synthesis(result: dict[str, Any]) -> None:
         if evidence_tags:
             st.markdown(f"**🏷️ Evidence Types:** {' · '.join(evidence_tags)}")
 
-        research_implications = result['insight'].get('research_implications')
-        if research_implications and research_implications != result['insight'].get('rationale'):
-            st.markdown(f"**🔬 Research Implications:** {research_implications}")
-
-        research_hypotheses = result['insight'].get('research_hypotheses', [])
-        if research_hypotheses:
-            st.markdown("**💡 Emerging Research Hypotheses:**")
-            for i, hypothesis in enumerate(research_hypotheses[:UI_MAX_RESEARCH_HYPOTHESES], 1):
-                st.markdown(f"  {i}. {hypothesis}")
+        research_program = result['insight'].get('research_program', [])
+        if research_program:
+            st.markdown("**5. Emerging Research Program:**")
+            for i, aim in enumerate(research_program[:UI_MAX_RESEARCH_HYPOTHESES], 1):
+                aim_title = aim.get('aim_title', f'Aim {i}')
+                rationale = aim.get('rationale', '')
+                approaches = aim.get('approaches', [])
+                st.markdown(f"**{aim_title}**")
+                if rationale:
+                    st.markdown(rationale)
+                for approach in approaches:
+                    st.markdown(f"  - {approach}")
 
         references = result['insight'].get('references', [])
         if references:

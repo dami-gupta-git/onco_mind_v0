@@ -259,6 +259,7 @@ def _build_response(result) -> Dict[str, Any]:
             "references": llm.references if llm else [],
             "evidence_tags": llm.evidence_tags if llm else [],
             "research_hypotheses": llm.research_hypotheses if llm else [],
+            "research_program": llm.research_program if llm else [],
         },
         # Cross-source analysis (disabled)
         # "cross_source_analysis": result.cross_source_analysis,

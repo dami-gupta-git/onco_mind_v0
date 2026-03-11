@@ -1,8 +1,9 @@
 """LLM service for variant insight generation.
 
-Two-stage pipeline:
-1. Synthesis - integrates evidence into structured summary
-2. Hypothesis - generates testable research questions (optional, based on synthesis)
+Single-stage pipeline:
+1. Synthesis - integrates evidence into a five-section research dossier covering
+   functional impact, tumor biology, therapeutic landscape, evidence quality,
+   and an emerging research program with concrete aims.
 """
 
 import json
@@ -16,7 +17,6 @@ from oncomind.config.constants import (
     LLM_DEFAULT_MODEL,
     LLM_FAST_MODEL,
     LLM_MAX_PAPERS_FOR_EXTRACTION,
-    LLM_MAX_TOKENS_HYPOTHESIS,
     LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION,
     LLM_MAX_TOKENS_PAPER_SCORING,
     LLM_MAX_TOKENS_SYNTHESIS,
@@ -29,7 +29,6 @@ from oncomind.config.constants import (
 from oncomind.config.debug import get_logger
 from oncomind.llm.prompts import (
     create_cross_source_prompt,
-    create_hypothesis_prompt,
     create_synthesis_prompt,
 )
 from oncomind.llm.llm_insight import LLMInsight
@@ -53,7 +52,6 @@ class LLMInsightInput:
     resistance_summary: str = ""
     sensitivity_summary: str = ""
     locus_match_summary: dict | None = None
-    generate_hypotheses: bool = True
 
 
 def _empty_paper_scoring_result(key_finding: str = "", confidence: float = 0.0) -> dict:
@@ -71,12 +69,9 @@ def _empty_paper_scoring_result(key_finding: str = "", confidence: float = 0.0) 
 class LLMService:
     """LLM service for generating variant annotation narratives.
 
-    The LLM synthesizes evidence from multiple databases into a clear,
-    human-readable summary of the variant's clinical significance.
-
-    Uses a two-stage pipeline:
-    1. Synthesis: evidence → structured summary (functional, biological, therapeutic)
-    2. Hypothesis: synthesis + gaps → research hypotheses
+    The LLM synthesizes evidence from multiple databases into a research dossier
+    covering functional impact, tumor biology, therapeutic landscape, evidence
+    quality, and an emerging research program with concrete aims.
     """
 
     def __init__(self, model: str = LLM_DEFAULT_MODEL, temperature: float = 0.0):
@@ -198,12 +193,8 @@ class LLMService:
         sensitivity_summary: str = "",
         locus_match_summary: dict | None = None,
         tumor_match_summary: dict | None = None,
-        generate_hypotheses: bool = True,
     ) -> LLMInsight:
-        """Generate variant insight using two-stage LLM pipeline.
-
-        Stage 1: Synthesis - integrates evidence into structured summary
-        Stage 2: Hypothesis - generates research questions (if generate_hypotheses=True)
+        """Generate variant insight using single-stage research dossier pipeline.
 
         Args:
             gene: Gene symbol (e.g., BRAF)
@@ -211,8 +202,8 @@ class LLMService:
             tumor_type: Tumor type context
             evidence_summary: Compact text summary of evidence
             biological_context: cBioPortal prevalence/co-mutation data
-            evidence_assessment: Dict with keys: overall_quality, well_characterized,
-                knowledge_gaps, conflicting_evidence
+            evidence_assessment: Dict with keys: overall_quality, research_priority,
+                well_characterized, knowledge_gaps, significant_gaps, conflicting_evidence
             literature_summary: PubMed literature findings
             has_clinical_trials: Whether clinical trials are available
             data_availability: Dict with boolean flags for data presence
@@ -220,17 +211,18 @@ class LLMService:
             sensitivity_summary: Concise summary of sensitivity evidence
             locus_match_summary: Dict with locus match specificity info
             tumor_match_summary: Dict with tumor match specificity info
-            generate_hypotheses: Whether to run stage 2 (default True)
 
         Returns:
-            LLMInsight with synthesized narrative and research hypotheses
+            LLMInsight with five-section research dossier
         """
         # Default empty dicts if not provided
         if evidence_assessment is None:
             evidence_assessment = {
                 "overall_quality": "unknown",
+                "research_priority": "unknown",
                 "well_characterized": [],
                 "knowledge_gaps": [],
+                "significant_gaps": [],
                 "conflicting_evidence": [],
             }
 
@@ -243,9 +235,9 @@ class LLMService:
             }
 
         # =====================================================================
-        # STAGE 1: SYNTHESIS
+        # SYNTHESIS: research dossier (single stage)
         # =====================================================================
-        logger.info(f"Stage 1: Synthesizing evidence for {gene} {variant}")
+        logger.info(f"Synthesizing research dossier for {gene} {variant}")
 
         synthesis_messages = create_synthesis_prompt(
             gene=gene,
@@ -263,7 +255,7 @@ class LLMService:
         )
 
         print("\n" + "=" * 80)
-        print("LLM CALL: SYNTHESIS STAGE")
+        print("LLM CALL: RESEARCH DOSSIER SYNTHESIS")
         # print("=" * 80)
         # for msg in synthesis_messages:
         #     print(f"\n--- {msg['role'].upper()} ---")
@@ -275,7 +267,7 @@ class LLMService:
         )
 
         if synthesis_data is None:
-            logger.error("Stage 1 synthesis failed")
+            logger.error("Research dossier synthesis failed")
             return LLMInsight(
                 llm_summary=f"Evidence summary for {gene} {variant}. See database annotations below.",
                 rationale="LLM synthesis failed",
@@ -284,97 +276,41 @@ class LLMService:
                 references=[],
             )
 
-        # Extract synthesis components
-        functional_summary = synthesis_data.get("functional_summary", "")
-        biological_context_text = synthesis_data.get("biological_context", "")
-        therapeutic_summary = synthesis_data.get("therapeutic_summary", "")
+        # =====================================================================
+        # EXTRACT DOSSIER COMPONENTS
+        # =====================================================================
+        functional_impact = synthesis_data.get("functional_impact", "")
+        tumor_biology = synthesis_data.get("tumor_biology", "")
+        therapeutic_landscape_prose = synthesis_data.get("therapeutic_landscape_prose", "")
         therapeutic = synthesis_data.get("therapeutic_landscape", {})
-        evidence_assess = synthesis_data.get("evidence_assessment", {})
+        evidence_quality_text = synthesis_data.get("evidence_quality", "")
+        open_questions = synthesis_data.get("open_questions", [])
+        research_program = synthesis_data.get("research_program", [])
         evidence_tags = synthesis_data.get("evidence_tags", [])
         key_references = synthesis_data.get("key_references", [])
 
-        # =====================================================================
-        # STAGE 2: HYPOTHESIS GENERATION (optional)
-        # =====================================================================
-        research_hypotheses = []
-        research_implications = ""
-
-        if generate_hypotheses and evidence_assessment.get("knowledge_gaps"):
-            logger.info(f"Stage 2: Generating hypotheses for {gene} {variant}")
-
-            # Build therapeutic signals summary for hypothesis context
-            therapeutic_signals = (
-                f"Sensitivity: {sensitivity_summary}\nResistance: {resistance_summary}"
-            )
-
-            hypothesis_messages = create_hypothesis_prompt(
-                gene=gene,
-                variant=variant,
-                tumor_type=tumor_type,
-                synthesis_result=synthesis_data,
-                evidence_assessment=evidence_assessment,
-                therapeutic_signals=therapeutic_signals,
-            )
-
-            print("\n" + "=" * 80)
-            print("LLM CALL: HYPOTHESIS STAGE")
-            print("=" * 80)
-            # for msg in hypothesis_messages:
-            #     print(f"\n--- {msg['role'].upper()} ---")
-            #     print(msg["content"])
-            # print("=" * 80 + "\n")
-
-            hypothesis_data = await self._call_llm(
-                hypothesis_messages, max_tokens=LLM_MAX_TOKENS_HYPOTHESIS
-            )
-
-            if hypothesis_data:
-                research_hypotheses = hypothesis_data.get("research_hypotheses", [])
-                research_implications = hypothesis_data.get("research_implications", "")
-                logger.info(f"Generated {len(research_hypotheses)} hypotheses")
-            else:
-                logger.warning("Stage 2 hypothesis generation failed")
-        else:
-            logger.debug(
-                "Skipping hypothesis generation (no knowledge gaps or disabled)"
-            )
-
-        # =====================================================================
-        # BUILD FINAL INSIGHT
-        # =====================================================================
-
-        # Build plain text summary
-        summary_parts = []
-        if functional_summary:
-            summary_parts.append(functional_summary)
-        if biological_context_text:
-            summary_parts.append(biological_context_text)
-        if research_implications:
-            summary_parts.append(research_implications)
-
-        llm_summary = (
-            " ".join(summary_parts) if summary_parts else "No summary available"
-        )
+        # Build plain text summary from sections 1–3
+        summary_parts = [p for p in [functional_impact, tumor_biology, therapeutic_landscape_prose] if p]
+        llm_summary = " ".join(summary_parts) if summary_parts else "No summary available"
 
         return LLMInsight(
             llm_summary=llm_summary,
-            rationale=research_implications,
+            rationale="",
             clinical_trials_available=has_clinical_trials,
             therapeutic_evidence=[],
             references=key_references,
-            # Raw component data for UI formatting
-            functional_summary=functional_summary or None,
-            biological_context=biological_context_text or None,
-            therapeutic_summary=therapeutic_summary or None,
+            functional_summary=functional_impact or None,
+            biological_context=tumor_biology or None,
+            therapeutic_summary=therapeutic_landscape_prose or None,
             therapeutic_landscape=therapeutic or None,
-            # Research assessment fields
-            evidence_quality=evidence_assess.get("overall_quality"),
-            knowledge_gaps=evidence_assess.get("knowledge_gaps", []),
-            well_characterized=evidence_assess.get("well_characterized", []),
-            conflicting_evidence=evidence_assess.get("conflicting_evidence", []),
-            research_implications=research_implications,
+            evidence_quality=evidence_assessment.get("overall_quality"),
+            knowledge_gaps=open_questions,
+            well_characterized=evidence_assessment.get("well_characterized", []),
+            conflicting_evidence=evidence_assessment.get("conflicting_evidence", []),
+            research_implications=evidence_quality_text or None,
             evidence_tags=evidence_tags,
-            research_hypotheses=research_hypotheses,
+            research_hypotheses=[aim.get("aim_title", "") for aim in research_program if aim.get("aim_title")],
+            research_program=research_program,
         )
 
     async def get_cross_source_analysis(

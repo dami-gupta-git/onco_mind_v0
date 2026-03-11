@@ -1312,8 +1312,7 @@ LLM_TIMEOUT_DEFAULT = 60
 LLM_TIMEOUT_CLAUDE = 120
 
 # Token limits for different LLM tasks
-LLM_MAX_TOKENS_SYNTHESIS = 1500
-LLM_MAX_TOKENS_HYPOTHESIS = 800
+LLM_MAX_TOKENS_SYNTHESIS = 3000
 LLM_MAX_TOKENS_PAPER_SCORING = 500
 LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION = 1500
 
@@ -1349,7 +1348,7 @@ MAX_LITERATURE_RESULTS = 30
 # =============================================================================
 # Row limits for evidence display tables
 UI_MAX_CIVIC_EVIDENCE_ROWS = 50
-UI_MAX_RESEARCH_HYPOTHESES = 3
+UI_MAX_RESEARCH_HYPOTHESES = 4
 UI_MAX_REFERENCES = 5
 
 # Functional prediction thresholds

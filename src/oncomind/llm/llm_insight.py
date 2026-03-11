@@ -67,7 +67,11 @@ class LLMInsight(BaseModel):
     )
     research_hypotheses: list[str] = Field(
         default_factory=list,
-        description="Testable research hypotheses generated from evidence gaps",
+        description="Aim titles from the emerging research program (section 5)",
+    )
+    research_program: list[dict] = Field(
+        default_factory=list,
+        description="Structured research aims: each has aim_title, rationale, approaches",
     )
 
     # Backwards compatibility

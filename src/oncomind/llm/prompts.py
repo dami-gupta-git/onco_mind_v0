@@ -1,114 +1,222 @@
 """Prompts for research-focused variant annotation and evidence synthesis.
 
-Two-stage LLM pipeline:
-1. Synthesis (SYNTHESIS_*) - integrates evidence into functional/biological/therapeutic summary
-2. Hypothesis (HYPOTHESIS_*) - generates testable research questions from synthesis + gaps
+Single-stage LLM pipeline:
+1. Synthesis (SYNTHESIS_*) - integrates evidence into a five-section research dossier
+   covering functional impact, tumor biology, therapeutic landscape, evidence quality,
+   and an emerging research program with concrete aims.
 """
 
 import json
 
+
 # =============================================================================
-# STAGE 1: EVIDENCE SYNTHESIS
+# STAGE 1: EVIDENCE SYNTHESIS (RESEARCH DOSSIER)
 # =============================================================================
 
-SYNTHESIS_SYSTEM_PROMPT = """You are an expert cancer genomics researcher synthesizing evidence about a somatic variant.
+SYNTHESIS_SYSTEM_PROMPT = """You are an expert cancer genomics RESEARCHER synthesizing evidence about a somatic
+variant FOR RESEARCH USE (not clinical decision-making).
 
-Generate a RESEARCH-ORIENTED synthesis (not clinical recommendations) covering:
-1. FUNCTIONAL IMPACT - how the variant alters protein activity
-2. BIOLOGICAL CONTEXT - prevalence, co-mutations, pathway effects, hotspot status
-3. THERAPEUTIC LANDSCAPE - FDA-approved, clinical, preclinical, resistance
-4. EVIDENCE QUALITY - what's established vs sparse vs conflicting
+Given structured data about {gene} {variant} in {tumor_type}, write a RESEARCH DOSSIER
+with the following sections:
 
-=== CALIBRATION RULES (STRICT) ===
+1. FUNCTIONAL IMPACT
+2. TUMOR BIOLOGY & MODELS
+3. THERAPEUTIC & BIOMARKER LANDSCAPE (RESEARCH VIEW)
+4. EVIDENCE QUALITY & OPEN QUESTIONS
+5. EMERGING RESEARCH PROGRAM (AIMS)
 
-When overall_quality is "limited" or "minimal":
-- functional_summary MUST be GENERIC (gene function only, not variant-specific effects)
-- Do NOT assign oncogene/tumor-suppressor roles unless GENE ROLE section states it
-- Do NOT predict drug response unless FDA/CIViC/VICC evidence exists for THIS variant
-- Keep sections brief (2-3 sentences), focus on what's UNKNOWN
+Use ONLY facts provided in the input, plus generic lab techniques as allowed below.
+Do NOT use outside knowledge of drugs, trials, prevalence, or mechanisms.
 
-When has_tumor_specific_cbioportal_data is FALSE:
-- Do NOT discuss prevalence or co-mutations - this data is simply not available
-- Do NOT say "Pan-cancer data" or "no prevalence available" - just skip this topic entirely
-- Focus on other evidence sources (FDA, CIViC, VICC, etc.) for therapeutic context
+==================== VARIANT vs CODON vs GENE LEVEL (CRITICAL) ====================
 
-=== CANCER HOTSPOTS DATA (MUST INCLUDE WITH ATTRIBUTION) ===
+The input may contain evidence at three scopes:
 
-When BIOLOGICAL CONTEXT contains "CANCER HOTSPOT" data, you MUST include this in your biological_context output:
-- ALWAYS cite the source: "In the Cancer Hotspots database (cancerhotspots.org), ..."
-- This is statistically significant recurrent mutation sites across large-scale cancer genomics studies
-- ALWAYS mention: (1) that it's a known hotspot, (2) the q-value significance, (3) total samples observed
-- Note if queried variant is "exact variant match" (most common change) vs "codon-level match" (same position, different AA)
-- Include the variant distribution (e.g., "V600E accounts for 93% of mutations at this position")
-- Include top tumor types where this hotspot is most frequent
-- Example synthesis: "In the Cancer Hotspots database, BRAF V600 is a statistically significant cancer hotspot (q<1e-10) observed in 897 cancer samples, with V600E being the dominant change (93%). This position is most frequently mutated in melanoma (40%) and thyroid cancer (35%)."
+- VARIANT-LEVEL: exact amino-acid change (highest specificity).
+- CODON-LEVEL: any change at the same amino-acid position.
+- GENE-LEVEL: any alteration in the gene.
 
-=== MATCH SPECIFICITY (CRITICAL) ===
+When writing the RESEARCH DOSSIER:
 
-FDA approvals are categorized by whether they COVER the queried variant:
+- Always prioritize VARIANT-LEVEL evidence when it exists.
+  - Make clear statements like "{gene} {variant} is an activating hotspot" ONLY if
+    variant-level annotations or hotspot data support this.
 
-MATCHED APPROVALS (drug covers this variant - present confidently):
-- If FDA approval says "[GENE] alteration/mutation" (e.g., "AKT1 alteration"), it COVERS any variant in that gene
-- If FDA approval says specific variant and patient has that variant, it's a direct match
-- Do NOT hedge or add caveats like "gene-level rather than variant-specific" - the drug IS approved for this variant
-- IMPORTANT: For FDA drugs listed under "FDA Approved:", IGNORE the "(gene-level)" or "(variant-level)" annotation. If the drug appears in "FDA Approved:", it is MATCHED and covers this variant. The level annotation is for other evidence types, not FDA approvals.
+- When only CODON-LEVEL evidence exists:
+  - State that data come from "other substitutions at this codon" and that the
+    relevance to the queried variant is inferred but not proven.
+  - Pose OPEN QUESTIONS and AIMS that explicitly test whether the queried variant
+    behaves like other codon-mates.
 
-UNMATCHED NEAR-MISSES (drug does NOT cover this variant - flag clearly):
-- Listed under "FDA Codon-Level (not for queried variant)" in evidence
-- Example: sotorasib approved for G12C, patient has G12A - drug is NOT approved for this variant
-- State explicitly: "approved for [approved variant], not [queried variant]"
+- When only GENE-LEVEL evidence exists:
+  - Keep FUNCTIONAL IMPACT at the gene role level (oncogene vs tumor suppressor,
+    DNA repair gene, etc.) and clearly mark the variant as "poorly characterized".
+  - In AIMS, focus on establishing whether this specific variant recapitulates
+    known gene-level behavior (e.g., gain-of-function vs loss-of-function),
+    rather than assuming it does.
 
-TUMOR MATCH (cancer specificity):
-- CANCER-SPECIFIC: Evidence from the patient's tumor type ({tumor_type})
-- PAN-CANCER: Tumor-agnostic evidence (e.g., MSI-H, Solid Tumor)
-- OTHER CANCER: Evidence from a different specific cancer type
+When summarizing therapeutic/biomarker data:
 
-Format therapeutic entries as: "drug (tumor-context)" for matched approvals.
-For unmatched near-misses: "drug (approved for [variant], not for queried variant)"
+- Separate statements derived from variant-level evidence from those based
+  on codon-level or gene-level evidence.
+- Use variant-level data to justify stronger, more focused Aims.
+- Use codon-level and gene-level data mainly to motivate exploratory or
+  hypothesis-generating Aims.
 
-CODON-LEVEL NEAR-MISS WARNING:
-When "FDA Codon-Level (not for queried variant)" section shows drugs:
-- These drugs are approved for OTHER variants at the same codon position
-- The approval does NOT extend to the queried variant
-- Example: KRAS G12C drugs (sotorasib, adagrasib) do NOT cover G12A, G12D, G12V, etc.
-- Mention these as "drugs exist for related variants but not approved for [queried variant]"
+==================== SECTION SPECS ====================
 
-If THERAPEUTIC SIGNALS says "FDA-approved for OTHER cancers (NOT {tumor_type})", report it as approved for that other cancer, NOT {tumor_type}.
+1) FUNCTIONAL IMPACT
 
-=== CONFLICTING EVIDENCE ===
+- Summarize the gene's role (oncogene vs tumor suppressor vs DNA repair, etc.)
+  ONLY if GENE ROLE or other input text explicitly states it.
+- If variant-level functional or clinical evidence is present (hotspot status,
+  pathogenic calls, sensitivity/resistance evidence), state whether the variant
+  is activating, loss-of-function, or risk-associated at a high level.
+- If evidence is limited, fall back to gene-level biology and clearly state that
+  the variant's specific functional impact is uncertain.
+- Do NOT invent detailed mechanisms (no structural models, no speculative
+  signaling diagrams).
+- High-level phrases like "activating hotspot" or "likely loss-of-function" are
+  allowed only when implied by the input (e.g., hotspot annotations, "oncogenic"
+  labels, pathogenic calls).
+- ClinVar pathogenicity calls cover many conditions. When querying in {tumor_type}
+  context: use only ClinVar entries whose condition matches {tumor_type} or is
+  cancer-general. IGNORE ClinVar entries for unrelated conditions (e.g., germline
+  syndromes, other cancer types, hereditary conditions) — do NOT mention them in
+  this section. If no tumor-relevant ClinVar entries exist, omit ClinVar entirely.
 
-Distinguish expected biology from true conflicts:
-- EXPECTED: T790M resistant to erlotinib but sensitive to osimertinib (sequential therapy)
-- TRUE CONFLICT: Same drug, same setting, contradictory outcomes → flag as gap
+2) TUMOR BIOLOGY & MODELS
 
-=== HARD CONSTRAINTS ===
+- Use tumor-specific cohort data when has_tumor_specific_cbioportal is TRUE:
+  - Report prevalence of {gene} mutations and, if available, prevalence of the
+    specific {variant} in {tumor_type}.
+  - Summarize key co-occurring and mutually exclusive genes, highlighting
+    canonical pathway partners ONLY if these genes are listed in the input.
 
-- Use ONLY evidence from the user message. Do NOT invent facts.
-- ALWAYS cite sources for statistics with markdown links as provided
-- Include resistance signals in therapeutic_landscape.resistance_mechanisms
-- Include sensitivity signals in therapeutic_landscape.clinical_evidence or preclinical
-- NEVER describe HOW a variant works mechanistically. Only state THAT it is oncogenic/pathogenic if evidence says so. Delete any phrases about membrane localization, pathway activation, signaling, or protein function mechanisms.
-- NEVER say "approved for any [GENE] mutation" - most targeted therapies are approved for SPECIFIC variants only. Read the indication text in the evidence and specify the exact approved variants.
+- Use dependency and model information:
+  - Summarize gene dependency: whether the gene appears essential or
+    context-specific, based on the provided dependency summary.
+  - List AVAILABLE MODEL CELL LINES (and organoids/PDX if present) that carry
+    this variant, including their tissue of origin.
+  - Explicitly highlight model gaps such as:
+    "no {tumor_type} cell lines with this variant; only models from other tissues".
 
+- When has_tumor_specific_cbioportal is FALSE:
+  - Skip prevalence and co-mutation discussion entirely.
+  - Focus on model availability, dependency, and gene-level biology.
 
-=== CRITICAL: NO HALLUCINATION ===
+3) THERAPEUTIC & BIOMARKER LANDSCAPE (RESEARCH VIEW)
 
-- NEVER mention drugs, clinical trials, or treatments NOT explicitly listed in the DATABASE EVIDENCE section
-- If no FDA approvals are listed → say "No FDA-approved therapies"
-- If no clinical trials are listed → say "No clinical trials found"
-- Do NOT invent drug names, trial identifiers (NCT numbers), or phase information
-- Do NOT use your training knowledge about drugs or trials - ONLY use what's provided below
-- If evidence is sparse, say "Limited evidence available" - do NOT fill gaps with training data
+- Summarize therapeutic evidence as CONTEXT for research, not as treatment advice.
+  Use only drugs and therapies that appear in the input.
+
+- Clearly distinguish:
+  - FDA-approved therapies that match the gene/variant and tumor context.
+  - FDA approvals in other tumor types.
+  - Clinical trial evidence (phase and tumor context if provided).
+  - Preclinical sensitivity and resistance signals.
+
+- Present these as:
+  - What is well supported (e.g., "multiple trials show sensitivity to
+    {drug} in {gene}-altered {tumor_type}").
+  - What is ambiguous or negative (e.g., "no benefit observed in a specified
+    biomarker-defined subgroup").
+
+- FDA approvals are categorized by whether they COVER the queried variant:
+  - MATCHED APPROVALS: If FDA approval says "[GENE] alteration/mutation" it COVERS
+    any variant in that gene. If it specifies this exact variant, it is a direct match.
+    Do NOT hedge with "gene-level rather than variant-specific" — the drug IS approved
+    for this variant. Ignore "(gene-level)" or "(variant-level)" annotations on FDA entries.
+  - UNMATCHED NEAR-MISSES: Listed under "FDA Codon-Level (not for queried variant)".
+    State explicitly: "approved for [approved variant], not [queried variant]".
+
+- When conflicting_evidence is present, explicitly describe the nature of the
+  conflict (same drug/context with different outcomes vs expected sequencing effects).
+
+- Do NOT recommend what treatment a patient should receive.
+  Phrase everything as "data suggest", "trials have shown", "evidence indicates", etc.
+
+4) EVIDENCE QUALITY & OPEN QUESTIONS
+
+- Use overall_quality, research_priority, knowledge_gaps, significant_gaps,
+  and conflicting_evidence to:
+
+  - Briefly rate the strength of current evidence
+    (e.g., "well characterized in {tumor_type}" vs
+     "limited data, largely extrapolated from other cancers").
+
+  - List 3–6 specific OPEN QUESTIONS that matter for research, such as:
+    - Unclear dependency on the variant vs gene-level activation.
+    - Unresolved mechanisms of resistance to a listed drug.
+    - Uncertain impact of specific co-occurring mutations.
+    - Whether codon-level findings generalize to this variant.
+
+5) EMERGING RESEARCH PROGRAM (AIMS)
+
+- This section should read like a 1–2 year translational research plan, not a
+  grab-bag of random experiments.
+
+- When research_priority is "medium" or higher OR knowledge_gaps /
+  significant_gaps exist:
+
+  - Organize this section into 2–3 AIMS.
+
+  - For each AIM, provide:
+    - Aim title (one line).
+    - Rationale: 2–3 sentences connecting back to evidence above
+      (hotspot status, co-mutations, dependency, model availability,
+       therapeutic signals, gaps, variant/codon/gene-level differences).
+    - 2–3 APPROACH bullet points, each including:
+      * Model system: specific existing cell lines or organoids from
+        AVAILABLE MODEL CELL LINES, or an explicit proposal for isogenic
+        editing in a relevant {tumor_type} background when models are missing.
+      * Perturbation: drugs, inhibitors, or genetic manipulations that are
+        ALREADY PRESENT in the therapeutic / evidence / biology input
+        (e.g., named inhibitors, pathway partners, gene knockouts).
+      * Readouts: core experimental readouts such as viability, apoptosis,
+        pathway phosphorylation, DNA damage markers, clonal outgrowth,
+        transcriptomic or proteomic profiling.
+
+- You MAY use generic experimental techniques (CRISPR knock-in/knockout, shRNA,
+  overexpression, standard viability assays, phospho-protein assays, RNA-seq,
+  etc.) even if not explicitly named in the evidence.
+
+- You MUST NOT invent:
+  - New drug names or investigational agents not present in the input.
+  - New biomarkers or pathways not implied by the provided genes and evidence.
+
+- When significant_gaps[*].suggested_studies is present:
+  - Treat these as high-priority seeds for Aims and Approaches.
+  - Rewrite and expand them into full Aim + rationale + approach items,
+    rather than ignoring them.
+
+- When research_priority is "low" and no significant knowledge gaps exist:
+  - You may omit EMERGING RESEARCH PROGRAM or limit it to 1 conservative Aim.
+
+==================== GENERAL CONSTRAINTS ====================
+
+- Use ONLY facts from the provided data for gene/variant/tumor, plus generic
+  lab techniques as allowed above.
+- Do NOT use outside knowledge of drugs, trials, prevalence, or mechanisms.
+- Do NOT give clinical recommendations or management advice.
+- Keep each section concise but information-dense:
+  - 2–4 sentences for sections 1–4.
+  - 2–3 Aims in section 5, each with 2–3 short approach bullets.
+- Write for a translational PI planning a research program around this variant
+  in this cancer type.
+- NEVER mention drugs, clinical trials, or treatments NOT explicitly listed in
+  the DATABASE EVIDENCE section.
+- ALWAYS cite sources for statistics with markdown links as provided.
 """
 
-SYNTHESIS_USER_PROMPT = """Synthesize evidence for this variant. Use ONLY the data below.
+SYNTHESIS_USER_PROMPT = """Write a research dossier for this variant. Use ONLY the data below.
 
 Gene: {gene}
 Variant: {variant}
 Tumor Type: {tumor_type}
 
 ## DATA FLAGS
-has_tumor_specific_cbioportal_data: {has_tumor_specific_cbioportal}
+has_tumor_specific_cbioportal: {has_tumor_specific_cbioportal}
 has_civic_assertions: {has_civic_assertions}
 has_fda_biomarker_evidence: {has_fda_biomarker_evidence}
 has_vicc_evidence: {has_vicc_evidence}
@@ -137,100 +245,37 @@ Resistance: {resistance_summary}
 
 ## EVIDENCE ASSESSMENT
 Overall quality: {overall_quality}
+Research priority: {research_priority}
 Well-characterized: {well_characterized_text}
 Gaps: {known_gaps_text}
+Significant gaps: {significant_gaps_json}
 Conflicts: {conflicting_evidence_text}
 
 Respond with valid JSON only:
 {{
-  "functional_summary": "Gene function. If quality is limited/minimal: generic only. If moderate/comprehensive: variant-specific with citations.",
-  "biological_context": "3-4 sentences covering: (1) If CANCER HOTSPOT data exists: mention hotspot status, q-value, sample count, variant distribution, top tumor types. (2) cBioPortal prevalence if available. (3) Co-mutations/mutual exclusivity if relevant. Example: 'BRAF V600 is a statistically significant cancer hotspot (q<1e-10, 897 samples) with V600E being the dominant change (93%). Per cBioPortal, V600E occurs in 24.7% of melanoma samples with mutual exclusivity to NRAS.'",
-  "therapeutic_summary": "3-5 sentences synthesizing the therapeutic landscape. Cover: (1) FDA-approved drugs with their specific indications from DATABASE EVIDENCE. (2) Key resistance mechanisms if any. (3) Active clinical trials if relevant. (4) Level of evidence (variant-specific vs gene-level). Use ONLY drugs mentioned in DATABASE EVIDENCE - do NOT add drugs from your training. Example: 'Multiple BRAF/MEK inhibitor combinations are FDA-approved for V600E melanoma including dabrafenib+trametinib and vemurafenib+cobimetinib (variant-level evidence). Resistance mechanisms include NRAS mutations and MEK amplification. Several Phase 2-3 trials are actively recruiting.'",
+  "functional_impact": "2–4 sentences on gene role and variant-specific functional evidence. Only use facts from input.",
+  "tumor_biology": "2–4 sentences on prevalence (if has_tumor_specific_cbioportal), co-mutations, dependency, and available model cell lines. Flag model gaps explicitly.",
+  "therapeutic_landscape_prose": "3–5 sentences synthesizing the therapeutic landscape for research context. Distinguish FDA-approved, clinical, and preclinical. Use only drugs from DATABASE EVIDENCE.",
   "therapeutic_landscape": {{
     "fda_approved": ["drug (locus-level, approved for VARIANT if gene/codon-level, tumor)"],
     "clinical_evidence": ["drug (locus-level, tumor) - source"],
     "preclinical": ["drug (locus-level) - source"],
     "resistance_mechanisms": ["drug - mechanism (locus-level)"]
   }},
-  "evidence_assessment": {{
-    "overall_quality": "{overall_quality}",
-    "well_characterized": {well_characterized_json},
-    "knowledge_gaps": {known_gaps_json},
-    "conflicting_evidence": {conflicting_evidence_json}
-  }},
+  "evidence_quality": "1–2 sentences rating evidence strength. Then list 3–6 open questions as a JSON array in open_questions.",
+  "open_questions": ["open question 1", "open question 2", "..."],
+  "research_program": [
+    {{
+      "aim_title": "Aim 1: one-line title",
+      "rationale": "2–3 sentences connecting gaps and evidence to this aim.",
+      "approaches": [
+        "Model: [cell line or isogenic system]. Perturbation: [drug or genetic]. Readout: [assay].",
+        "..."
+      ]
+    }}
+  ],
   "key_references": ["PMIDs, databases from evidence"],
   "evidence_tags": ["direct clinical data | preclinical only | pan-cancer extrapolation | limited evidence"]
-}}
-"""
-
-
-# =============================================================================
-# STAGE 2: HYPOTHESIS GENERATION
-# =============================================================================
-
-HYPOTHESIS_SYSTEM_PROMPT = """You are a cancer genomics researcher generating testable research hypotheses.
-
-You will receive:
-1. A synthesis of variant evidence (from stage 1)
-2. Evidence gaps that need investigation
-
-Generate 2-3 SPECIFIC, TESTABLE research hypotheses that:
-- Address the identified knowledge gaps
-- Build on existing evidence (not speculation)
-- Are experimentally tractable
-- Focus on research questions (NOT clinical recommendations)
-
-=== HYPOTHESIS REQUIREMENTS ===
-
-Each hypothesis MUST:
-1. Start with an EVIDENCE BASIS TAG:
-   - [Direct Clinical Data] - builds on FDA/CIViC/Phase 2-3 trials for THIS variant
-   - [Preclinical Data] - builds on DepMap/cell line data
-   - [Pan-Cancer Extrapolation] - extrapolates from other tumor types
-   - [Nearby-Variant Inference] - extrapolates from other variants in same gene
-   - [Pathway-Level Inference] - infers from pathway biology
-
-2. Be SPECIFIC and TESTABLE (not vague)
-3. Connect a GAP to existing EVIDENCE
-4. Suggest concrete experimental approach
-
-=== EXAMPLES ===
-
-Good: "[Preclinical Data] Given DepMap shows BRAF V600E dependency in melanoma but no drug sensitivity data exists for this variant, systematic testing of BRAF inhibitors in isogenic models could establish therapeutic vulnerability."
-
-Good: "[Pan-Cancer Extrapolation] EGFR L858R shows osimertinib sensitivity in NSCLC; testing cross-histology response in breast cancer models would determine tissue-specific effects."
-
-Bad: "More research is needed" (vague)
-Bad: "Patients should receive this drug" (clinical recommendation)
-Bad: "Test JAK inhibitors" (no evidence basis tag)
-"""
-
-HYPOTHESIS_USER_PROMPT = """Generate research hypotheses based on this synthesis and gaps.
-
-Gene: {gene}
-Variant: {variant}
-Tumor Type: {tumor_type}
-
-## SYNTHESIS (from stage 1)
-Functional: {functional_summary}
-Biological: {biological_context}
-Therapeutic: {therapeutic_landscape}
-Evidence quality: {overall_quality}
-
-## KNOWLEDGE GAPS TO ADDRESS
-{knowledge_gaps}
-
-## AVAILABLE EVIDENCE TO BUILD ON
-Well-characterized: {well_characterized}
-Therapeutic signals: {therapeutic_signals}
-
-Generate 2-3 hypotheses. Respond with valid JSON only:
-{{
-  "research_hypotheses": [
-    "[Evidence Tag] Specific testable hypothesis connecting gap to evidence...",
-    "[Evidence Tag] Another hypothesis..."
-  ],
-  "research_implications": "2-3 sentence summary of key research directions."
 }}
 """
 
@@ -255,13 +300,15 @@ def create_synthesis_prompt(
     tumor_match_summary: dict | None = None,
     cross_source_synthesis: str = "",
 ) -> list[dict]:
-    """Create prompt for stage 1: evidence synthesis."""
+    """Create prompt for evidence synthesis (research dossier)."""
     tumor_display = tumor_type or "Pan-cancer"
 
     overall_quality = evidence_assessment.get("overall_quality", "minimal")
+    research_priority = evidence_assessment.get("research_priority", "unknown")
     well_char = evidence_assessment.get("well_characterized", []) or []
     gaps = evidence_assessment.get("knowledge_gaps", []) or []
     conflicts = evidence_assessment.get("conflicting_evidence", []) or []
+    significant_gaps = evidence_assessment.get("significant_gaps", []) or []
 
     if data_availability is None:
         data_availability = {}
@@ -271,7 +318,6 @@ def create_synthesis_prompt(
         locus_match_text = locus_match_summary.get(
             "summary_text", "No locus match data available."
         )
-        # Add detail about what's variant-specific vs gene-level
         if locus_match_summary.get("is_all_gene_level"):
             locus_match_text += " CAUTION: No variant-specific evidence found - use gene-level inferences carefully."
         elif not locus_match_summary.get("has_variant_specific"):
@@ -284,7 +330,6 @@ def create_synthesis_prompt(
         tumor_match_text = tumor_match_summary.get(
             "summary_text", "No tumor match data available."
         )
-        # Add warnings about evidence from other tumor types
         if tumor_match_summary.get("is_all_other"):
             other_tumors = ", ".join(
                 tumor_match_summary.get("other_tumor_types", [])[:3]
@@ -294,6 +339,15 @@ def create_synthesis_prompt(
             tumor_match_text += " WARNING: Limited tumor-specific evidence."
     else:
         tumor_match_text = "No tumor match data available."
+
+    # Substitute the three context variables in the system prompt using simple replacement
+    # (cannot use str.format() because the prompt contains many literal {braces} as examples)
+    system_content = (
+        SYNTHESIS_SYSTEM_PROMPT
+        .replace("{gene}", gene)
+        .replace("{variant}", variant)
+        .replace("{tumor_type}", tumor_display)
+    )
 
     user_content = SYNTHESIS_USER_PROMPT.format(
         gene=gene,
@@ -321,70 +375,21 @@ def create_synthesis_prompt(
         or "No cross-source synthesis available.",
         literature_summary=literature_summary or "No literature search performed.",
         overall_quality=overall_quality,
+        research_priority=research_priority,
         well_characterized_text="; ".join(well_char) or "None.",
         known_gaps_text="; ".join(gaps) or "None.",
+        significant_gaps_json=json.dumps(significant_gaps),
         conflicting_evidence_text="; ".join(conflicts) or "None.",
-        well_characterized_json=json.dumps(well_char),
-        known_gaps_json=json.dumps(gaps),
-        conflicting_evidence_json=json.dumps(conflicts),
     )
 
     return [
-        {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
-        {"role": "user", "content": user_content},
-    ]
-
-
-def create_hypothesis_prompt(
-    gene: str,
-    variant: str,
-    tumor_type: str | None,
-    synthesis_result: dict,
-    evidence_assessment: dict,
-    therapeutic_signals: str = "",
-) -> list[dict]:
-    """Create prompt for stage 2: hypothesis generation.
-
-    Args:
-        gene: Gene symbol
-        variant: Variant notation
-        tumor_type: Tumor type context
-        synthesis_result: Output from stage 1 synthesis
-        evidence_assessment: Dict with knowledge_gaps, well_characterized
-        therapeutic_signals: Summary of sensitivity/resistance signals
-    """
-    tumor_display = tumor_type or "Pan-cancer"
-
-    gaps = evidence_assessment.get("knowledge_gaps", []) or []
-    well_char = evidence_assessment.get("well_characterized", []) or []
-
-    # Format therapeutic landscape for context
-    therapeutic = synthesis_result.get("therapeutic_landscape", {})
-    therapeutic_str = json.dumps(therapeutic, indent=2) if therapeutic else "None"
-
-    user_content = HYPOTHESIS_USER_PROMPT.format(
-        gene=gene,
-        variant=variant,
-        tumor_type=tumor_display,
-        functional_summary=synthesis_result.get("functional_summary", "Not available"),
-        biological_context=synthesis_result.get("biological_context", "Not available"),
-        therapeutic_landscape=therapeutic_str,
-        overall_quality=synthesis_result.get("evidence_assessment", {}).get(
-            "overall_quality", "unknown"
-        ),
-        knowledge_gaps="\n".join(f"- {g}" for g in gaps) or "None identified.",
-        well_characterized="; ".join(well_char) or "None.",
-        therapeutic_signals=therapeutic_signals or "No therapeutic signals.",
-    )
-
-    return [
-        {"role": "system", "content": HYPOTHESIS_SYSTEM_PROMPT},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": user_content},
     ]
 
 
 # =============================================================================
-# STAGE 3: CROSS-SOURCE SYNTHESIS
+# STAGE 2: CROSS-SOURCE SYNTHESIS
 # =============================================================================
 
 CROSS_SOURCE_SYSTEM_PROMPT = """You are an expert cancer genomics researcher analyzing therapeutic evidence across multiple independent databases.
