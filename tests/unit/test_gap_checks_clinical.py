@@ -109,6 +109,36 @@ class TestCheckClinicalEvidence:
         assert len(clinical_gaps) >= 1
         assert any(g.severity == GapSeverity.CRITICAL for g in clinical_gaps)
 
+    def test_civic_level_a_and_cgi_fda_approved_combined_basis(
+        self, mock_evidence, base_context
+    ):
+        """CIViC Level A + CGI fda_approved together should produce combined actionability basis."""
+        civic_level_a = MagicMock()
+        civic_level_a.amp_level_letter = "A"
+        mock_evidence.civic_assertions = [civic_level_a]
+        mock_evidence.civic_evidence = []
+        mock_evidence.get_filtered_fda_evidence = MagicMock(return_value=[])
+
+        cgi_approved_1 = MagicMock()
+        cgi_approved_1.fda_approved = True
+        cgi_approved_2 = MagicMock()
+        cgi_approved_2.fda_approved = True
+        mock_evidence.cgi_biomarkers = [cgi_approved_1, cgi_approved_2]
+
+        _check_clinical_evidence(mock_evidence, base_context)
+
+        assert base_context.has_clinical is True
+        actionability = [
+            w
+            for w in base_context.well_characterized_detailed
+            if w.aspect.lower() == "clinical actionability"
+        ]
+        assert len(actionability) == 1
+        basis = actionability[0].basis
+        assert "1 approval" in basis and "CIViC assertions" in basis
+        assert "2 approvals" in basis and "CGI" in basis
+
+
 
 # =============================================================================
 # TEST _check_tumor_type_evidence

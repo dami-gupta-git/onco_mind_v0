@@ -785,6 +785,109 @@ class TestFDAApprovalGap:
         )
 
     @pytest.mark.asyncio
+    async def test_braf_v600e_colorectal_clinical_actionability(self):
+        """BRAF V600E in Colorectal: multi-source clinical actionability with no clinical gaps.
+
+        Expected (verified against live pipeline):
+        - 4 filtered FDA drugs (Trametinib, Encorafenib x2, Dabrafenib)
+        - 1 CIViC Level A assertion
+        - 1 CGI fda_approved biomarker
+        - overall_evidence_quality == 'moderate'
+        - 'Clinical Actionability' in well_characterized
+        - 0 clinical gaps
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("BRAF V600E", tumor_type="Colorectal")
+
+        ev = result.evidence
+        assert ev.identifiers.gene == "BRAF"
+        assert ev.identifiers.variant == "V600E"
+
+        # Raw FDA evidence: 24 entries across all tumor types
+        assert len(ev.fda_biomarker_evidence) >= 1
+
+        # Filtered FDA evidence: must include Colorectal-matched drugs
+        filtered_fda = ev.get_filtered_fda_evidence(
+            queried_gene="BRAF", queried_variant="V600E", queried_tumor="Colorectal"
+        )
+        assert len(filtered_fda) == 4
+        filtered_drug_names = {e.drug_name.upper() for e in filtered_fda if e.drug_name}
+        assert "ENCORAFENIB" in filtered_drug_names
+        assert "TRAMETINIB" in filtered_drug_names
+        assert "DABRAFENIB" in filtered_drug_names
+
+        # CIViC Level A and CGI fda_approved must be present
+        civic_level_a = [
+            a for a in ev.civic_assertions
+            if a.amp_level_letter and a.amp_level_letter.upper() == "A"
+        ]
+        assert len(civic_level_a) == 1
+
+        cgi_approved = [b for b in ev.cgi_biomarkers if b.fda_approved]
+        assert len(cgi_approved) == 1
+
+        # Gap detection
+        gaps = ev.evidence_gaps
+        if gaps is None:
+            gaps = ev.compute_evidence_gaps()
+
+        assert gaps.overall_evidence_quality == "moderate"
+
+        well_char_lower = [w.lower() for w in gaps.well_characterized]
+        assert "clinical actionability" in well_char_lower
+
+        clinical_gaps = gaps.get_gaps_by_category(GapCategory.CLINICAL)
+        assert len(clinical_gaps) == 0, (
+            f"BRAF V600E Colorectal should have no clinical gaps. "
+            f"Got: {[(g.severity.value, g.description) for g in clinical_gaps]}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_kras_g13d_nsclc_fda_gene_match_not_variant(self):
+        """KRAS G13D in NSCLC: FDA drugs exist for KRAS but don't match G13D — SIGNIFICANT gap.
+
+        KRAS has FDA-approved drugs (e.g. for G12C) but G13D is not covered.
+        The pipeline should produce a SIGNIFICANT clinical gap, not CRITICAL,
+        because FDA biomarker entries exist for the gene.
+        """
+        config = ConductorConfig(enable_llm=False, enable_literature=False)
+        async with Conductor(config) as conductor:
+            result = await conductor.run("KRAS G13D", tumor_type="NSCLC")
+
+        # Raw FDA evidence must exist for KRAS (G12C drugs, etc.)
+        fda_evidence = result.evidence.fda_biomarker_evidence
+        assert len(fda_evidence) >= 1, (
+            f"KRAS should have at least 1 raw FDA entry. Got {len(fda_evidence)}"
+        )
+
+        gaps = result.evidence.evidence_gaps
+        if gaps is None:
+            gaps = result.evidence.compute_evidence_gaps()
+
+        clinical_gaps = gaps.get_gaps_by_category(GapCategory.CLINICAL)
+        significant_gaps = [
+            g for g in clinical_gaps if g.severity == GapSeverity.SIGNIFICANT
+        ]
+        assert len(significant_gaps) >= 1, (
+            f"KRAS G13D should have a SIGNIFICANT clinical gap. "
+            f"Got: {[(g.severity.value, g.description) for g in clinical_gaps]}"
+        )
+        assert any("exist but don't match" in g.description for g in significant_gaps), (
+            f"Gap description should say FDA drugs exist but don't match. "
+            f"Got: {[g.description for g in significant_gaps]}"
+        )
+
+        # Must NOT be a CRITICAL gap (that would imply no FDA evidence exists at all)
+        critical_gaps = [
+            g for g in clinical_gaps if g.severity == GapSeverity.CRITICAL
+        ]
+        assert len(critical_gaps) == 0, (
+            f"KRAS G13D should NOT have CRITICAL clinical gaps. "
+            f"Got: {[g.description for g in critical_gaps]}"
+        )
+
+    @pytest.mark.asyncio
     async def test_egfr_l858r_nsclc_clinical_actionability(self):
         """EGFR L858R in NSCLC should have clinical actionability well-characterized.
 

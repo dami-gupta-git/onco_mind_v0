@@ -241,10 +241,12 @@ class CBioPortalClient:
             g for g in CANCER_GENES_CO_OCCURRENCE if g.upper() != gene.upper()
         ]
         cancer_entrez_ids = []
+        entrez_to_symbol: dict[int, str] = {}
         for g in cancer_genes[:20]:  # Limit to 20 for performance
             eid = await self._get_entrez_id(g)
             if eid:
                 cancer_entrez_ids.append(eid)
+                entrez_to_symbol[eid] = g
 
         # Fetch mutations for query gene
         try:
@@ -299,18 +301,13 @@ class CBioPortalClient:
                 from collections import defaultdict
 
                 gene_samples: dict[str, set] = defaultdict(set)
-                entrez_to_gene: dict[int, str] = {}
 
                 for m in cancer_mutations:
                     eid = m.get("entrezGeneId")
                     sample = m.get("sampleId")
-                    # We need gene symbol - fetch from cache or API would be slow
-                    # Use keyword field which contains gene name
-                    keyword = m.get("keyword", "")
-                    gene_name = keyword.split()[0] if keyword else ""
+                    gene_name = entrez_to_symbol.get(eid, "")
                     if gene_name and sample:
                         gene_samples[gene_name].add(sample)
-                        entrez_to_gene[eid] = gene_name
 
                 # Calculate co-occurrence statistics
                 for other_gene, other_samples in gene_samples.items():

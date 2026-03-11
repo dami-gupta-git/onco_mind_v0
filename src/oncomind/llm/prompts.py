@@ -159,7 +159,7 @@ When summarizing therapeutic/biomarker data:
 - When research_priority is "medium" or higher OR knowledge_gaps /
   significant_gaps exist:
 
-  - Organize this section into 2–3 AIMS.
+  - Organize this section into 2–4 AIMS.
 
   - For each AIM, provide:
     - Aim title (one line).
@@ -201,7 +201,7 @@ When summarizing therapeutic/biomarker data:
 - Do NOT give clinical recommendations or management advice.
 - Keep each section concise but information-dense:
   - 2–4 sentences for sections 1–4.
-  - 2–3 Aims in section 5, each with 2–3 short approach bullets.
+  - 2–4 Aims in section 5, each with 2–3 short approach bullets.
 - Write for a translational PI planning a research program around this variant
   in this cancer type.
 - NEVER mention drugs, clinical trials, or treatments NOT explicitly listed in
