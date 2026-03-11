@@ -8,6 +8,8 @@ from oncomind.config.constants import (
     format_civic_significance,
     CADD_DELETERIOUS_THRESHOLD,
     GNOMAD_RARE_THRESHOLD,
+    GNOMAD_UNCOMMON_THRESHOLD,
+    GNOMAD_LOW_FREQ_THRESHOLD,
 )
 
 
@@ -194,8 +196,15 @@ def result_to_markdown(result: dict) -> str:
         func_rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
     if annotations.get('gnomad_exome_af') is not None:
         af = annotations['gnomad_exome_af']
-        freq = f"{af:.2e}" if af < GNOMAD_RARE_THRESHOLD else f"{af:.4f}"
-        pred = 'Rare' if af < GNOMAD_RARE_THRESHOLD else 'Common'
+        freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"
+        if af < GNOMAD_RARE_THRESHOLD:
+            pred = 'Rare'
+        elif af < GNOMAD_UNCOMMON_THRESHOLD:
+            pred = 'Uncommon'
+        elif af < GNOMAD_LOW_FREQ_THRESHOLD:
+            pred = 'Low-frequency'
+        else:
+            pred = 'Common'
         func_rows.append(f"| gnomAD AF | {freq} | {pred} |")
     if annotations.get('snpeff_effect'):
         func_rows.append(f"| SnpEff | - | {annotations['snpeff_effect']} |")
@@ -345,16 +354,22 @@ def result_to_markdown(result: dict) -> str:
     if clinvar_entries or clinvar_sig:
         lines.append("## ClinVar\n")
         if clinvar_sig:
-            lines.append(f"**Clinical Significance:** {clinvar_sig}\n")
+            lines.append(f"**Clinical Significance**\n")
         if clinvar_entries:
             lines.append("| Variation ID | Clinical Significance | Conditions | Review Status |")
             lines.append("|--------------|----------------------|------------|---------------|")
             for entry in clinvar_entries[:15]:
+                review = entry.get('review_status', '')
+                if review.lower() in (
+                    'no assertion criteria provided',
+                    'no classification provided',
+                    'no classification for the individual variant',
+                ):
+                    continue
                 var_id = entry.get('variation_id', '')
                 sig = entry.get('clinical_significance', '')
                 conditions = entry.get('conditions', [])
                 conditions_str = ", ".join(conditions[:2]) if conditions else '-'
-                review = entry.get('review_status', '')
                 var_link = f"[{var_id}](https://www.ncbi.nlm.nih.gov/clinvar/variation/{var_id}/)" if var_id else '-'
                 lines.append(f"| {var_link} | {sig} | {conditions_str} | {review} |")
             lines.append("")

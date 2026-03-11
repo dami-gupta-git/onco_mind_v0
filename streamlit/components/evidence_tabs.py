@@ -8,6 +8,8 @@ from oncomind.config.constants import (
     UI_MAX_CIVIC_EVIDENCE_ROWS,
     CADD_DELETERIOUS_THRESHOLD,
     GNOMAD_RARE_THRESHOLD,
+    GNOMAD_UNCOMMON_THRESHOLD,
+    GNOMAD_LOW_FREQ_THRESHOLD,
 )
 from oncomind.api.fda_drugs import get_best_fda_url, get_cached_fda_label
 from .utils import scrollable_table
@@ -88,8 +90,16 @@ def render_functional_tab(
             rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
         if annotations.get('gnomad_exome_af') is not None:
             af = annotations['gnomad_exome_af']
-            freq = f"{af:.2e}" if af < GNOMAD_RARE_THRESHOLD else f"{af:.4f}"
-            rows.append(f"| gnomAD AF | {freq} | {'Rare' if af < GNOMAD_RARE_THRESHOLD else 'Common'} |")
+            freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"
+            if af < GNOMAD_RARE_THRESHOLD:
+                af_label = 'Rare'
+            elif af < GNOMAD_UNCOMMON_THRESHOLD:
+                af_label = 'Uncommon'
+            elif af < GNOMAD_LOW_FREQ_THRESHOLD:
+                af_label = 'Low-frequency'
+            else:
+                af_label = 'Common'
+            rows.append(f"| gnomAD AF | {freq} | {af_label} |")
         if annotations.get('snpeff_effect'):
             rows.append(f"| SnpEff | - | {annotations['snpeff_effect']} |")
         if rows:
@@ -690,18 +700,24 @@ def render_fda_tab(fda_biomarker_evidence: list):
 def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None):
     """Render the ClinVar tab."""
     if clinvar_sig:
-        st.markdown(f"**Clinical Significance:** {clinvar_sig}")
+        st.markdown(f"**Clinical Significance**")
     if clinvar_entries:
         rows = ["| Variation ID | Significance | Conditions | Review Status |",
                 "|--------------|--------------|------------|---------------|"]
         for entry in clinvar_entries:
+            review = entry.get('review_status', '')
+            if review.lower() in (
+                'no assertion criteria provided',
+                'no classification provided',
+                'no classification for the individual variant',
+            ):
+                continue
             var_id = entry.get('variation_id', '')
             var_url = f"https://www.ncbi.nlm.nih.gov/clinvar/variation/{var_id}/" if var_id else ''
             var_link = f"[{var_id}]({var_url})" if var_id and var_url else (var_id or '-')
             sig = entry.get('clinical_significance', 'Unknown')
             conds = entry.get('conditions', [])
             conds_str = ', '.join(conds)[:30] if conds else 'N/A'
-            review = entry.get('review_status', '')
             rows.append(f"| {var_link} | {sig} | {conds_str} | {review} |")
         scrollable_table("\n".join(rows))
     elif not clinvar_sig:

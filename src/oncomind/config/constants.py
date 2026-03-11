@@ -1353,7 +1353,10 @@ UI_MAX_REFERENCES = 5
 
 # Functional prediction thresholds
 CADD_DELETERIOUS_THRESHOLD = 20  # CADD score > 20 considered deleterious
-GNOMAD_RARE_THRESHOLD = 0.01  # gnomAD AF < 0.01 considered rare
+GNOMAD_RARE_THRESHOLD = 0.001        # gnomAD AF < 0.1% → Rare
+GNOMAD_UNCOMMON_THRESHOLD = 0.01     # gnomAD AF 0.1–1% → Uncommon
+GNOMAD_LOW_FREQ_THRESHOLD = 0.05     # gnomAD AF 1–5% → Low-frequency
+                                     # gnomAD AF ≥ 5% → Common
 
 
 # =============================================================================

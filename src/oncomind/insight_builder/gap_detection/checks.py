@@ -323,11 +323,11 @@ def check_clinical_evidence(evidence: "Evidence", ctx: "GapDetectionContext") ->
         )
     if civic_level_a_count > 0:
         actionability_parts.append(
-            f"{civic_level_a_count} approval{'s' if civic_level_a_count > 1 else ''} from CIViC assertions"
+            f"{civic_level_a_count} Level A assertion{'s' if civic_level_a_count > 1 else ''} from CIViC"
         )
     if cgi_approved_count > 0:
         actionability_parts.append(
-            f"{cgi_approved_count} approval{'s' if cgi_approved_count > 1 else ''} from CGI"
+            f"{cgi_approved_count} CGI {'entries' if cgi_approved_count > 1 else 'entry'} linked to approvals"
         )
 
     if actionability_parts:

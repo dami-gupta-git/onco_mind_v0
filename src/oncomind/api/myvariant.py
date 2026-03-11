@@ -215,16 +215,26 @@ class MyVariantClient:
             rcv_data = item.get("rcv", [])
             if rcv_data:
                 rcv_list = rcv_data if isinstance(rcv_data, list) else [rcv_data]
-                # Deduplicate by clinical significance to avoid showing 6x "Pathogenic"
-                seen_significances: set[str] = set()
+                seen_sig_condition_pairs: set[tuple[str, str]] = set()
                 for rcv in rcv_list:
                     if not isinstance(rcv, dict):
                         continue
                     clin_sig = rcv.get("clinical_significance")
                     sig_key = str(clin_sig).lower() if clin_sig else ""
-                    if sig_key in seen_significances:
-                        continue  # Skip duplicates
-                    seen_significances.add(sig_key)
+                    cond_data = rcv.get("conditions")
+                    if isinstance(cond_data, list):
+                        cond_key = ",".join(
+                            c.get("name", "") if isinstance(c, dict) else str(c)
+                            for c in cond_data
+                        ).lower()
+                    elif isinstance(cond_data, dict):
+                        cond_key = cond_data.get("name", "").lower()
+                    else:
+                        cond_key = ""
+                    pair = (sig_key, cond_key)
+                    if pair in seen_sig_condition_pairs:
+                        continue
+                    seen_sig_condition_pairs.add(pair)
 
                     conditions = []
                     # RCV entries may have conditions

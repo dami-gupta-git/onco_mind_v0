@@ -129,6 +129,64 @@ class TestMyVariantClient:
         assert "Pathogenic" in parsed[0].clinical_significance
         assert "Cancer" in parsed[0].conditions
 
+    def test_parse_clinvar_evidence_deduplicates_by_sig_and_condition(self):
+        """Multiple RCV entries with same significance but different conditions are all kept."""
+        client = MyVariantClient()
+
+        clinvar_data = {
+            "variant_id": 156444,
+            "rcv": [
+                {
+                    "clinical_significance": "Pathogenic",
+                    "review_status": "criteria provided, single submitter",
+                    "conditions": {"name": "Glioblastoma multiforme, somatic"},
+                },
+                {
+                    "clinical_significance": "Pathogenic",
+                    "review_status": "criteria provided, single submitter",
+                    "conditions": {"name": "Glioma susceptibility 1"},
+                },
+                {
+                    "clinical_significance": "Pathogenic",
+                    "review_status": "criteria provided, multiple submitters, no conflicts",
+                    "conditions": {"name": "not provided"},
+                },
+            ],
+        }
+
+        parsed = client._parse_clinvar_evidence(clinvar_data)
+
+        assert len(parsed) == 3
+        conditions = [p.conditions[0] for p in parsed]
+        assert "Glioblastoma multiforme, somatic" in conditions
+        assert "Glioma susceptibility 1" in conditions
+        assert "not provided" in conditions
+
+    def test_parse_clinvar_evidence_deduplicates_exact_duplicates(self):
+        """Exact duplicate (same significance AND same condition) is deduplicated."""
+        client = MyVariantClient()
+
+        clinvar_data = {
+            "variant_id": 156444,
+            "rcv": [
+                {
+                    "clinical_significance": "Pathogenic",
+                    "review_status": "criteria provided, single submitter",
+                    "conditions": {"name": "Glioma susceptibility 1"},
+                },
+                {
+                    "clinical_significance": "Pathogenic",
+                    "review_status": "criteria provided, single submitter",
+                    "conditions": {"name": "Glioma susceptibility 1"},
+                },
+            ],
+        }
+
+        parsed = client._parse_clinvar_evidence(clinvar_data)
+
+        assert len(parsed) == 1
+        assert parsed[0].conditions[0] == "Glioma susceptibility 1"
+
     @pytest.mark.asyncio
     async def test_api_error_handling(self):
         """Test API error handling."""
