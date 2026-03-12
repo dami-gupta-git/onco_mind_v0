@@ -183,8 +183,9 @@ class DepMapEvidence(EvidenceItemBase):
 
         # Drug sensitivities
         if self.drug_sensitivities:
+            mutant_label = f"{self.gene} {self.variant}" if self.variant else self.gene
             lines.append(
-                f"DRUG SENSITIVITIES in {self.gene}-mutant lines ({source_cite}):"
+                f"DRUG SENSITIVITIES in {mutant_label}-mutant lines ({source_cite}):"
             )
             for ds in self.get_top_sensitive_drugs(5):
                 parts = [f"  - {ds.drug_name}:"]

@@ -2038,15 +2038,14 @@ class Evidence(BaseModel):
                     ):
                         literature_drugs.add(drug_lower)
 
-        # DepMap/PRISM drug sensitivities (preclinical) - gene-level by nature
+        # DepMap/PRISM drug sensitivities (preclinical) - variant-level because cell lines
+        # are filtered to those carrying the exact queried variant
         depmap_preclinical_drugs: dict[str, str] = {}
         if self.depmap_evidence and self.depmap_evidence.drug_sensitivities:
             for ds in self.depmap_evidence.get_top_sensitive_drugs(5):
                 drug_lower = ds.drug_name.lower()
                 if drug_lower not in all_fda_drugs and drug_lower not in clinical_drugs:
-                    depmap_preclinical_drugs[drug_lower] = (
-                        "gene"  # DepMap is gene-level
-                    )
+                    depmap_preclinical_drugs[drug_lower] = "variant"
 
         # Combine all preclinical drugs (VICC level D, CIViC level D/E, CGI preclinical, DepMap)
         all_preclinical_drugs = {
