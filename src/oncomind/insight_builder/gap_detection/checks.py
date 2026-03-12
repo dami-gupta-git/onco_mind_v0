@@ -254,7 +254,8 @@ def check_gene_mechanism(evidence: "Evidence", ctx: "GapDetectionContext") -> No
             matches_on="gene",
         )
 
-    if not has_mechanism and not has_depmap_essentiality:
+    has_depmap_essential = has_depmap_essentiality and evidence.depmap_evidence.is_essential()
+    if not has_mechanism and not has_depmap_essential:
         ctx.add_gap(
             category=GapCategory.FUNCTIONAL,
             severity=GapSeverity.SIGNIFICANT,

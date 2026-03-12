@@ -224,8 +224,8 @@ def detect_discordant_evidence_internal(
 
             high_conflicts.append(
                 f"Conflicting drug response for {drug} at variant level: "
-                f"sensitive ({', '.join(sorted(sens_sources))}) vs "
-                f"resistant ({', '.join(sorted(resist_sources))})"
+                f"sensitive ({', '.join(sorted(sens_only))}) vs "
+                f"resistant ({', '.join(sorted(resist_only))})"
             )
 
     # Check FDA (sensitive) vs VICC (resistant) at variant level
