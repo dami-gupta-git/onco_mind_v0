@@ -1833,7 +1833,8 @@ class Evidence(BaseModel):
                 continue
 
             drug_lower = ev.drug_name.lower()
-            locus = match_result.get("match_type", "gene")
+            raw_locus = match_result.get("match_type", "gene")
+            locus = "variant" if raw_locus == "exact" else raw_locus
 
             # Determine cancer specificity from tumor types
             cancer_spec = None
@@ -2281,9 +2282,15 @@ class Evidence(BaseModel):
                 parts = []
                 # Add match type for context
                 if match_type == "exact":
-                    parts.append("exact variant match")
+                    # Include the full approved variant list so the LLM knows
+                    # whether the approval covers V600E alone or V600E+V600K etc.
+                    if ev.specified_variants and len(ev.specified_variants) > 1:
+                        variants_str = " or ".join(ev.specified_variants)
+                        parts.append(f"exact variant match, approved for {variants_str}")
+                    else:
+                        parts.append("exact variant match")
                 elif match_type == "codon":
-                    parts.append(f"codon-level")
+                    parts.append("codon-level")
                 elif match_type == "gene":
                     parts.append("any mutation")
 

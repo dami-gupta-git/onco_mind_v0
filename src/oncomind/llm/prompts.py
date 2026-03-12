@@ -122,11 +122,18 @@ When summarizing therapeutic/biomarker data:
   - What is ambiguous or negative (e.g., "no benefit observed in a specified
     biomarker-defined subgroup").
 
-- FDA approvals are categorized by whether they COVER the queried variant:
-  - MATCHED APPROVALS: If FDA approval says "[GENE] alteration/mutation" it COVERS
-    any variant in that gene. If it specifies this exact variant, it is a direct match.
-    Do NOT hedge with "gene-level rather than variant-specific" — the drug IS approved
-    for this variant. Ignore "(gene-level)" or "(variant-level)" annotations on FDA entries.
+- FDA approvals are categorized by how specifically they cover the queried variant:
+  - EXACT MATCH (annotated "exact variant match"): The approval covers this variant.
+    If the annotation says "approved for [list]" (e.g., "approved for V600E or V600K"),
+    state the full list: "FDA-approved for [tumor type] with [GENE] [list]".
+    If no list is given, state: "FDA-approved for [tumor type] with [GENE] [VARIANT]".
+  - CODON-LEVEL MATCH (annotated "codon-level"): The approval covers the codon position
+    (e.g., "BRAF V600") but NOT necessarily this specific substitution. State explicitly:
+    "FDA-approved for [tumor type] with BRAF V600 mutations (codon-level; covers V600E
+    and other V600 substitutions)". Do NOT present this as variant-specific approval.
+  - GENE-LEVEL MATCH (annotated "any mutation"): The approval covers any mutation in the
+    gene. State: "FDA-approved for [tumor type] with any [GENE] mutation". Do NOT hedge
+    further.
   - UNMATCHED NEAR-MISSES: Listed under "FDA Codon-Level (not for queried variant)".
     State explicitly: "approved for [approved variant], not [queried variant]".
 
@@ -255,9 +262,11 @@ Respond with valid JSON only:
 {{
   "functional_impact": "2–4 sentences on gene role and variant-specific functional evidence. Only use facts from input.",
   "tumor_biology": "2–4 sentences on prevalence (if has_tumor_specific_cbioportal), co-mutations, dependency, and available model cell lines. Flag model gaps explicitly.",
-  "therapeutic_landscape_prose": "3–5 sentences synthesizing the therapeutic landscape for research context. Distinguish FDA-approved, clinical, and preclinical. Use only drugs from DATABASE EVIDENCE.",
+  "therapeutic_landscape_prose": "3–5 sentences synthesizing the therapeutic landscape for research context. For each FDA approval, state its match level explicitly: exact variant match → 'FDA-approved for [tumor] with [GENE] [VARIANT]'; codon-level → 'FDA-approved for [tumor] with [GENE] [CODON] mutations (codon-level)'; gene-level → 'FDA-approved for [tumor] with any [GENE] mutation'. Distinguish clinical and preclinical evidence. Use only drugs from DATABASE EVIDENCE.",
   "therapeutic_landscape": {{
-    "fda_approved": ["drug (locus-level, approved for VARIANT if gene/codon-level, tumor)"],
+    "fda_approved_exact": ["drug (tumor) - approved specifically for this variant"],
+    "fda_approved_codon": ["drug (codon, tumor) - approved for codon position, covers this variant"],
+    "fda_approved_gene": ["drug (any mutation, tumor) - approved for any mutation in gene"],
     "clinical_evidence": ["drug (locus-level, tumor) - source"],
     "preclinical": ["drug (locus-level) - source"],
     "resistance_mechanisms": ["drug - mechanism (locus-level)"]

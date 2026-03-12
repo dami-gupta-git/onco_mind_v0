@@ -12,7 +12,7 @@ from FDA drug labels using FDALabelParser. It captures:
 from enum import Enum
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, computed_field
 
 from oncomind.models.evidence.base import EvidenceItemBase
 
@@ -242,6 +242,22 @@ class FDABiomarkerEvidence(EvidenceItemBase):
     variant_match_reason: str | None = Field(
         default=None, description="Explanation of the match result"
     )
+
+    @computed_field
+    @property
+    def locus_match(self) -> str:
+        """Derive locus match from variant_match_result, normalising 'exact' -> 'variant'.
+
+        Overrides the base-class property which reads from locus_variant_match.level —
+        a field that is never populated for FDA evidence. variant_match_result is the
+        authoritative match result for FDA items, set by get_filtered_fda_evidence().
+        Falls back to 'gene' when variant_match_result is not yet set.
+        """
+        if self.variant_match_result == "exact":
+            return "variant"
+        if self.variant_match_result in ("codon", "gene"):
+            return self.variant_match_result
+        return "gene"
 
     def matches_variant(self, query_gene: str, query_variant: str) -> dict:
         """Check if a user's variant query matches this indication.

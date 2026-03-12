@@ -61,22 +61,6 @@ def determine_locus_match(
     if queried_clean == source_clean:
         return "variant"
 
-    # Substring match - but only if BOTH have a specific amino acid change
-    # This prevents "V600" (codon-only) from matching "V600E" (specific variant)
-    # Pattern: [A-Z]\d+[A-Z] means ref AA + position + alt AA (e.g., V600E, L858R)
-    has_full_variant_pattern = re.compile(r"^[A-Z]\d+[A-Z]")
-    source_has_alt_aa = bool(has_full_variant_pattern.match(source_clean))
-    queried_has_alt_aa = bool(has_full_variant_pattern.match(queried_clean))
-
-    if source_has_alt_aa and queried_has_alt_aa:
-        # Both have specific amino acid changes - substring matching is valid
-        if queried_clean in source_clean or source_clean in queried_clean:
-            return "variant"
-    elif not source_has_alt_aa and queried_has_alt_aa:
-        # Source is codon-only (e.g., "V600"), query is specific (e.g., "V600E")
-        # This is a codon-level match, not variant-level
-        pass  # Fall through to codon check below
-
     # Check for codon-level match (same position, different amino acid change)
     queried_pos_match = _VARIANT_POSITION_PATTERN.search(queried_clean)
     source_pos_match = _VARIANT_POSITION_PATTERN.search(source_clean)
