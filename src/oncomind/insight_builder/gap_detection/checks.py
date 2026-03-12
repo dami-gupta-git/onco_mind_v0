@@ -765,19 +765,15 @@ def check_resistance_mechanisms(
         counts.add(count_with_levels(vicc_resistance, ctx.tumor_type))
 
     # 6. LLM-extracted literature knowledge with resistance signals
-    # Literature entries don't have tumor type info
+    # Literature entries are derived from the same PubMed articles already counted above,
+    # so they must NOT be added to counts (which drives matches_on_str) to avoid double-counting.
+    # They only contribute to resistance_sources for the source label.
     if evidence.literature_knowledge and evidence.literature_knowledge.resistant_to:
         drugs = evidence.literature_knowledge.get_resistance_drugs(predictive_only=True)
         if drugs:
             resistance_sources.append(
                 f"LLM literature ({len(drugs)} drug{'s' if len(drugs) != 1 else ''})"
             )
-            # Count without tumor matching (literature entries don't have tumor type)
-            lit_counts = count_with_levels(evidence.literature_knowledge.resistant_to)
-            counts.total += lit_counts.total
-            counts.variant += lit_counts.variant
-            counts.codon += lit_counts.codon
-            counts.gene += lit_counts.gene
 
     has_resistance_data = bool(resistance_sources)
 
