@@ -47,7 +47,6 @@ def sample_evidence():
         variant="V600E",
         civic=[civic_ev],
         clinvar=[],
-        cosmic=[],
     )
 
 

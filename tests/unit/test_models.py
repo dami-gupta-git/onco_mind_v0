@@ -314,7 +314,6 @@ class TestMyVariantData:
             variant_id="BRAF:V600E",
             gene="BRAF",
             variant="V600E",
-            cosmic_id="COSM476",
             ncbi_gene_id="673",
             dbsnp_id="rs113488022",
             clinvar_id="13961",
@@ -322,7 +321,6 @@ class TestMyVariantData:
             hgvs_protein="NP_004324.2:p.Val600Glu",
             hgvs_transcript="NM_004333.4:c.1799T>A",
         )
-        assert evidence.cosmic_id == "COSM476"
         assert evidence.ncbi_gene_id == "673"
         assert evidence.dbsnp_id == "rs113488022"
         assert evidence.clinvar_id == "13961"

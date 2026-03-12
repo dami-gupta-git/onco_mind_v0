@@ -11,7 +11,7 @@ ARCHITECTURE:
 
 Feature categories:
 1. Functional scores (AlphaMissense, CADD, PolyPhen2, SIFT, etc.)
-2. Evidence counts (CIViC, ClinVar, COSMIC, FDA, trials, papers)
+2. Evidence counts (CIViC, ClinVar, FDA, trials, papers)
 3. Clinical indicators (has_fda_approval, has_trials, gene_role)
 4. Population frequencies (gnomAD)
 
@@ -137,7 +137,6 @@ def _extract_count_features(panel: Evidence) -> dict[str, int]:
         "civic_evidence_count": len(panel.civic_evidence),
         "civic_assertion_count": len(panel.civic_assertions),
         "clinvar_count": len(panel.clinvar_entries),
-        "cosmic_count": len(panel.cosmic_entries),
         "cgi_biomarker_count": len(panel.cgi_biomarkers),
         "vicc_count": len(panel.vicc_evidence),
         "fda_approval_count": len(panel.fda_biomarker_evidence),
@@ -147,7 +146,6 @@ def _extract_count_features(panel: Evidence) -> dict[str, int]:
             len(panel.civic_evidence)
             + len(panel.civic_assertions)
             + len(panel.clinvar_entries)
-            + len(panel.cosmic_entries)
             + len(panel.cgi_biomarkers)
             + len(panel.vicc_evidence)
         ),

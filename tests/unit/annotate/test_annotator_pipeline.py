@@ -103,7 +103,6 @@ class TestAnnotatorPipeline:
                 "allele_id": 29000,
                 "gene": {"symbol": "BRAF", "id": "673"},
             },
-            cosmic={"cosmic_id": "COSM476"},
         )
 
         with patch(
@@ -120,7 +119,6 @@ class TestAnnotatorPipeline:
         assert variant["myvariant"]["vcf"]["alt"] == "A"
         assert variant["myvariant"]["cadd"]["phred"] == 32
         assert variant["myvariant"]["clinvar"]["allele_id"] == 29000
-        assert variant["myvariant"]["cosmic"]["cosmic_id"] == "COSM476"
 
     @pytest.mark.asyncio
     async def test_pipeline_annotation_contains_timings(self):

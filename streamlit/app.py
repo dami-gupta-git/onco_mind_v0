@@ -29,7 +29,6 @@ from components import (
     render_cgi_tab,
     render_fda_tab,
     render_clinvar_tab,
-    render_cosmic_tab,
     render_trials_tab,
     render_literature_tab,
     render_cbioportal_tab,
@@ -283,10 +282,6 @@ with tab1:
 
         # Compact linked identifiers row
         id_links = []
-        if ids.get('cosmic_id'):
-            cosmic_id = ids['cosmic_id']
-            cosmic_num = cosmic_id.replace('COSM', '').replace('COSV', '')
-            id_links.append(f"[COSMIC:{cosmic_id}](https://cancer.sanger.ac.uk/cosmic/mutation/overview?id={cosmic_num})")
         if ids.get('dbsnp_id'):
             id_links.append(f"[dbSNP:{ids['dbsnp_id']}](https://www.ncbi.nlm.nih.gov/snp/{ids['dbsnp_id']})")
         if ids.get('clinvar_id'):
@@ -336,7 +331,6 @@ with tab1:
                 )
             ]
             clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
-            cosmic_id = ids.get('cosmic_id')
             trials = result.get('clinical_trials', [])
             articles = result.get('pubmed_articles', [])
             preclinical = result.get('preclinical_biomarkers', [])
@@ -373,8 +367,6 @@ with tab1:
                 tab_names.append(f"💊 FDA ({len(fda_biomarker_evidence)})")
             if clinvar_entries or clinvar_sig:
                 tab_names.append(f"ClinVar ({len(clinvar_entries)})")
-            if cosmic_id:
-                tab_names.append("COSMIC")
             if trials:
                 tab_names.append(f"Trials ({len(trials)})")
             if articles:
@@ -439,12 +431,6 @@ with tab1:
                 if clinvar_entries or clinvar_sig:
                     with tabs[tab_idx]:
                         render_clinvar_tab(clinvar_entries=clinvar_entries, clinvar_sig=clinvar_sig)
-                    tab_idx += 1
-
-                # COSMIC tab
-                if cosmic_id:
-                    with tabs[tab_idx]:
-                        render_cosmic_tab(cosmic_id=cosmic_id)
                     tab_idx += 1
 
                 # Trials tab

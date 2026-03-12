@@ -95,14 +95,12 @@ class AnnotatorMyVariantClient:
         Returns:
             Aggregated evidence from all sources
         """
-        # Request specific fields from ClinVar, COSMIC, and other annotation sources
+        # Request specific fields from ClinVar and other annotation sources
         fields = [
             "clinvar",
-            "cosmic",
             "dbsnp",
             "cadd",
             "entrezgene",  # NCBI Gene ID
-            "cosmic.cosmic_id",  # COSMIC mutation ID
             "clinvar.variant_id",  # ClinVar variation ID
             "clinvar.rcv",  # ClinVar RCV records (contains clinical_significance and accession)
             "dbsnp.rsid",  # dbSNP rs number

@@ -593,7 +593,6 @@ class EvidenceAggregator:
 
         identifiers_data.update(
             {
-                "cosmic_id": getattr(evidence, "cosmic_id", None),
                 "ncbi_gene_id": getattr(evidence, "ncbi_gene_id", None),
                 "dbsnp_id": getattr(evidence, "dbsnp_rsid", None),
                 "clinvar_id": getattr(evidence, "clinvar_variation_id", None),
@@ -605,7 +604,6 @@ class EvidenceAggregator:
 
         clinvar_significance = getattr(evidence, "clinvar_clinical_significance", None)
         clinvar_entries = getattr(evidence, "clinvar", []) or []
-        cosmic_entries = getattr(evidence, "cosmic", []) or []
         civic_entries = getattr(evidence, "civic", []) or []
 
         return (
@@ -613,7 +611,6 @@ class EvidenceAggregator:
             identifiers_data,
             clinvar_significance,
             clinvar_entries,
-            cosmic_entries,
             civic_entries,
         )
 
@@ -1058,7 +1055,6 @@ class EvidenceAggregator:
             identifiers_data,
             clinvar_significance,
             clinvar_entries,
-            cosmic_entries,
             _civic_entries_unused,
         ) = self._extract_myvariant_data(
             myvariant_evidence, variant, normalized_variant
@@ -1102,7 +1098,6 @@ class EvidenceAggregator:
             cgi_biomarkers=cgi_biomarkers,
             clinvar_entries=clinvar_entries,
             clinvar_significance=clinvar_significance,
-            cosmic_entries=cosmic_entries,
             clinical_trials=clinical_trials,
             pubmed_articles=pubmed_articles,
             literature_knowledge=None,  # Set by LLM layer later

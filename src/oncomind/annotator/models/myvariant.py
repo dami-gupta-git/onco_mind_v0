@@ -92,16 +92,6 @@ class ClinvarData(BaseModel):
     rcv: ClinvarRcv | list[ClinvarRcv] | None = None
 
 
-class CosmicData(BaseModel):
-    """COSMIC (Catalogue Of Somatic Mutations In Cancer) data."""
-
-    cosmic_id: str = Field(pattern=r"^COSM\d+$")
-    mut_nt: str | None = None
-    chrom: str | None = None
-    ref: str | None = None
-    alt: str | None = None
-
-
 class Polyphen2Hdiv(BaseModel):
     """PolyPhen2 HDIV prediction."""
 
@@ -156,7 +146,6 @@ class MyVariantAnnotation(BaseModel):
     vcf: VcfData | None = None
     cadd: CaddData | None = None
     clinvar: ClinvarData | None = None
-    cosmic: CosmicData | None = None
     dbnsfp: DbnsfpData | None = None
     dbsnp: DbsnpData | None = None
     gnomad_exome: GnomadExomeData | None = None
@@ -178,7 +167,6 @@ class MyVariantAnnotation(BaseModel):
             vcf=hit.get("vcf"),
             cadd=hit.get("cadd"),
             clinvar=hit.get("clinvar"),
-            cosmic=hit.get("cosmic"),
             dbnsfp=hit.get("dbnsfp"),
             dbsnp=hit.get("dbsnp"),
             gnomad_exome=hit.get("gnomad_exome"),
@@ -196,7 +184,6 @@ __all__ = [
     "ClinvarData",
     "ClinvarGene",
     "ClinvarRcv",
-    "CosmicData",
     "DbnsfpData",
     "Polyphen2",
     "Polyphen2Hdiv",

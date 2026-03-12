@@ -22,7 +22,6 @@ def mock_evidence():
     evidence.identifiers.variant_id = "TESTGENE:V100E"
     evidence.identifiers.variant_normalized = "p.V100E"
     evidence.identifiers.variant_type = "missense_variant"
-    evidence.identifiers.cosmic_id = "COSM12345"
     evidence.identifiers.ncbi_gene_id = "1234"
     evidence.identifiers.dbsnp_id = "rs123456789"
     evidence.identifiers.clinvar_id = "98765"

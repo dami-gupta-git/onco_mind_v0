@@ -65,7 +65,7 @@ class TestAnnotatorMyVariantClient:
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_returns_all_fields(self):
-        """Test fetch_annotation returns vcf, cadd, clinvar, cosmic, dbnsfp, dbsnp, gnomad_exome."""
+        """Test fetch_annotation returns vcf, cadd, clinvar, dbnsfp, dbsnp, gnomad_exome."""
         client = AnnotatorMyVariantClient()
 
         mock_cadd = {
@@ -80,7 +80,6 @@ class TestAnnotatorMyVariantClient:
                 {"accession": "RCV000012345", "clinical_significance": "Pathogenic"}
             ],
         }
-        mock_cosmic = {"cosmic_id": "COSM476"}
         mock_dbnsfp = {"sift": {"pred": "D", "score": 0.0}}
         mock_dbsnp = {"rsid": "rs113488022"}
         mock_gnomad = {"af": {"af": 0.00001}}
@@ -93,7 +92,6 @@ class TestAnnotatorMyVariantClient:
                     "vcf": {"ref": "A", "alt": "T"},
                     "cadd": mock_cadd,
                     "clinvar": mock_clinvar,
-                    "cosmic": mock_cosmic,
                     "dbnsfp": mock_dbnsfp,
                     "dbsnp": mock_dbsnp,
                     "gnomad_exome": mock_gnomad,
@@ -124,10 +122,6 @@ class TestAnnotatorMyVariantClient:
         assert result.clinvar.rcv[0].accession == "RCV000012345"
         assert result.clinvar.rcv[0].clinical_significance == "Pathogenic"
 
-        # Test COSMIC fields
-        assert result.cosmic.cosmic_id == "COSM476"
-        assert result.cosmic.cosmic_id.startswith("COSM")  # COSMIC ID format
-
         # Test dbSNP fields
         assert result.dbsnp.rsid == "rs113488022"
         assert result.dbsnp.rsid.startswith("rs")  # rsID format
@@ -156,7 +150,6 @@ class TestAnnotatorMyVariantClient:
         assert result.vcf is None
         assert result.cadd is None
         assert result.clinvar is None
-        assert result.cosmic is None
         assert result.dbnsfp is None
         assert result.dbsnp is None
         assert result.gnomad_exome is None
@@ -196,7 +189,6 @@ class TestAnnotatorMyVariantClient:
         # Other fields should be None (not in API response)
         assert result.vcf is None
         assert result.cadd is None
-        assert result.cosmic is None
         assert result.dbnsfp is None
         assert result.dbsnp is None
         assert result.gnomad_exome is None

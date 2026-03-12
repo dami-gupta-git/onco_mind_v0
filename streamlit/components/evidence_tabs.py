@@ -719,17 +719,6 @@ def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None):
 
 
 # ==============================================
-# COSMIC TAB
-# ==============================================
-
-def render_cosmic_tab(cosmic_id: str):
-    """Render the COSMIC tab."""
-    cosmic_num = cosmic_id.replace('COSM', '').replace('COSV', '')
-    st.markdown(f"**COSMIC ID:** [{cosmic_id}](https://cancer.sanger.ac.uk/cosmic/mutation/overview?id={cosmic_num})")
-    st.caption("Click link to view mutation details in COSMIC database")
-
-
-# ==============================================
 # CLINICAL TRIALS TAB
 # ==============================================
 

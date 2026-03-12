@@ -28,7 +28,6 @@ from oncomind.models.evidence.depmap import (
 )
 from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
 from oncomind.models.evidence.pubmed import PubMedEvidence
 from oncomind.api.cgi import CGIBiomarker
@@ -353,7 +352,6 @@ class TestBackendEvidenceStructure:
             "vicc_evidence",
             "cgi_biomarkers",
             "clinvar_entries",
-            "cosmic_entries",
             "clinical_trials",
             "pubmed_articles",
             "preclinical_biomarkers",
@@ -900,28 +898,6 @@ class TestClinVarEvidenceFields:
 
         assert evidence.clinical_significance is None
         assert evidence.conditions == []
-
-
-class TestCOSMICEvidenceFields:
-    """Tests for COSMIC evidence model fields."""
-
-    def test_cosmic_evidence_creation(self):
-        """Test creating COSMICEvidence model."""
-        evidence = COSMICEvidence(
-            mutation_id="COSM476",
-            primary_site="skin",
-            sample_count=1500,
-        )
-
-        assert evidence.mutation_id == "COSM476"
-        assert evidence.sample_count == 1500
-
-    def test_cosmic_evidence_defaults(self):
-        """Test COSMICEvidence default values."""
-        evidence = COSMICEvidence()
-
-        assert evidence.mutation_id is None
-        assert evidence.sample_count is None
 
 
 class TestClinicalTrialEvidenceFields:

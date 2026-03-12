@@ -13,7 +13,6 @@ ARCHITECTURE (Flat Structure):
     - vicc_evidence: list[VICCEvidence]
     - cgi_biomarkers: list[CGIBiomarkerEvidence]
     - clinvar_entries: list[ClinVarEvidence]
-    - cosmic_entries: list[COSMICEvidence]
     - clinical_trials: list[ClinicalTrialEvidence]
     - pubmed_articles: list[PubMedEvidence]
     - preclinical_biomarkers: list[CGIBiomarkerEvidence]
@@ -35,7 +34,6 @@ from pydantic import BaseModel, Field
 from oncomind.models.evidence.cbioportal import CBioPortalEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import DepMapEvidence
 from oncomind.models.evidence.fda_biomarker import (
     FDABiomarkerEvidence,
@@ -76,7 +74,6 @@ class VariantIdentifiers(BaseModel):
     )
 
     # Database identifiers
-    cosmic_id: str | None = Field(None, description="COSMIC mutation ID")
     ncbi_gene_id: str | None = Field(None, description="NCBI Gene ID")
     dbsnp_id: str | None = Field(None, description="dbSNP rsID")
     clinvar_id: str | None = Field(None, description="ClinVar Variation ID")
@@ -258,11 +255,6 @@ class Evidence(BaseModel):
         None, description="Primary ClinVar clinical significance"
     )
 
-    # COSMIC
-    cosmic_entries: list[COSMICEvidence] = Field(
-        default_factory=list, description="COSMIC entries"
-    )
-
     # Clinical Trials
     clinical_trials: list[ClinicalTrialEvidence] = Field(
         default_factory=list, description="Matching clinical trials"
@@ -422,7 +414,6 @@ class Evidence(BaseModel):
             or self.cgi_biomarkers
             or self.clinvar_entries
             or self.clinvar_significance
-            or self.cosmic_entries
             or self.clinical_trials
             or self.pubmed_articles
             or self.preclinical_biomarkers
@@ -444,8 +435,6 @@ class Evidence(BaseModel):
             sources.append("CGI")
         if self.clinvar_entries or self.clinvar_significance:
             sources.append("ClinVar")
-        if self.cosmic_entries:
-            sources.append("COSMIC")
         if self.clinical_trials:
             sources.append("Clinical Trials")
         if self.pubmed_articles:
@@ -1463,7 +1452,6 @@ class Evidence(BaseModel):
             "variant": self.identifiers.variant,
             "variant_normalized": self.identifiers.variant_normalized,
             "variant_type": self.identifiers.variant_type,
-            "cosmic_id": self.identifiers.cosmic_id,
             "dbsnp_id": self.identifiers.dbsnp_id,
             "clinvar_id": self.identifiers.clinvar_id,
             "hgvs_protein": self.identifiers.hgvs_protein,

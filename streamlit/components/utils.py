@@ -172,8 +172,6 @@ def result_to_markdown(result: dict) -> str:
         lines.append("## Identifiers\n")
         if ids.get('dbsnp'):
             lines.append(f"- **dbSNP:** {ids['dbsnp']}")
-        if ids.get('cosmic'):
-            lines.append(f"- **COSMIC:** {ids['cosmic']}")
         if hgvs.get('genomic'):
             lines.append(f"- **HGVS Genomic:** {hgvs['genomic']}")
         if hgvs.get('coding'):

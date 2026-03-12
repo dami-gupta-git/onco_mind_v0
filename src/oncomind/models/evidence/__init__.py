@@ -15,7 +15,6 @@ from oncomind.models.evidence.cgi import CGIBiomarkerEvidence
 from oncomind.models.evidence.civic import CIViCEvidence, CIViCAssertionEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
 from oncomind.models.evidence.clinical_trials import ClinicalTrialEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.depmap import (
     DepMapEvidence,
     GeneDependency,
@@ -83,7 +82,6 @@ __all__ = [
     "CIViCAssertionEvidence",
     "ClinicalTrialEvidence",
     "ClinVarEvidence",
-    "COSMICEvidence",
     "DepMapEvidence",
     "GeneDependency",
     "DrugSensitivity",

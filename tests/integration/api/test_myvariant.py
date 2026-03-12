@@ -1,7 +1,7 @@
 """Integration tests for MyVariant.info API.
 
 Tests validate that the MyVariant API returns expected annotations including
-AlphaMissense, COSMIC, ClinVar, CADD, and CIViC evidence for well-characterized variants.
+AlphaMissense, ClinVar, CADD, and CIViC evidence for well-characterized variants.
 """
 
 import pytest
@@ -26,7 +26,6 @@ class TestMyVariantBasic:
             has_identifiers = any(
                 [
                     evidence.dbsnp_id,
-                    evidence.cosmic_id,
                     evidence.clinvar_id,
                 ]
             )
@@ -52,7 +51,6 @@ class TestMyVariantBasic:
             assert isinstance(evidence.variant, str)
             assert isinstance(evidence.civic, list)
             assert isinstance(evidence.clinvar, list)
-            assert isinstance(evidence.cosmic, list)
 
     @pytest.mark.integration
     @pytest.mark.asyncio
@@ -77,8 +75,6 @@ class TestMyVariantBasic:
             ):
                 annotation_count += 1
             if len(evidence.civic) > 0:
-                annotation_count += 1
-            if len(evidence.cosmic) > 0:
                 annotation_count += 1
 
             assert (
@@ -166,98 +162,6 @@ class TestAlphaMissense:
                 assert (
                     evidence.alphamissense_score > 0.4
                 ), f"PIK3CA H1047R expected higher score, got {evidence.alphamissense_score}"
-
-
-class TestCOSMIC:
-    """Tests for COSMIC (Catalogue of Somatic Mutations in Cancer) data."""
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_braf_v600e_cosmic_id(self):
-        """BRAF V600E should have COSMIC ID."""
-        async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("BRAF", "V600E")
-
-            assert evidence is not None
-            assert evidence.gene == "BRAF"
-
-            if evidence.cosmic_id:
-                assert (
-                    evidence.cosmic_id.startswith("COSM")
-                    or evidence.cosmic_id.startswith("COSV")
-                    or evidence.cosmic_id.isdigit()
-                ), f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_braf_v600e_cosmic_evidence(self):
-        """BRAF V600E should have COSMIC evidence entries."""
-        async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("BRAF", "V600E")
-
-            if evidence.cosmic:
-                assert len(evidence.cosmic) > 0
-
-                for entry in evidence.cosmic:
-                    if entry.mutation_id is not None:
-                        assert isinstance(entry.mutation_id, str)
-                    if entry.primary_site is not None:
-                        assert isinstance(entry.primary_site, str)
-                    if entry.sample_count is not None:
-                        assert isinstance(entry.sample_count, int)
-                        assert entry.sample_count >= 0
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_tp53_r175h_cosmic(self):
-        """TP53 R175H (major hotspot) should have COSMIC data."""
-        async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("TP53", "R175H")
-
-            assert evidence is not None
-            assert evidence.gene == "TP53"
-
-            if evidence.cosmic:
-                for entry in evidence.cosmic:
-                    if entry.primary_site:
-                        assert isinstance(entry.primary_site, str)
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_kras_g12c_cosmic(self):
-        """KRAS G12C should have COSMIC annotation."""
-        async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("KRAS", "G12C")
-
-            assert evidence is not None
-            assert evidence.gene == "KRAS"
-
-            if evidence.cosmic_id:
-                assert isinstance(evidence.cosmic_id, str)
-
-            if evidence.cosmic:
-                assert isinstance(evidence.cosmic, list)
-                for entry in evidence.cosmic:
-                    assert hasattr(entry, "mutation_id")
-                    assert hasattr(entry, "primary_site")
-                    assert hasattr(entry, "primary_histology")
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_cosmic_structure_integrity(self):
-        """COSMIC evidence entries should have valid structure."""
-        async with MyVariantClient() as client:
-            evidence = await client.fetch_evidence("BRAF", "V600E")
-
-            if evidence.cosmic:
-                for entry in evidence.cosmic:
-                    assert hasattr(entry, "mutation_id")
-                    assert hasattr(entry, "primary_site")
-                    assert hasattr(entry, "site_subtype")
-                    assert hasattr(entry, "primary_histology")
-                    assert hasattr(entry, "histology_subtype")
-                    assert hasattr(entry, "sample_count")
-                    assert hasattr(entry, "mutation_somatic_status")
 
 
 class TestCADD:
@@ -355,19 +259,11 @@ class TestClinVarConditionsList:
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_tp53_r273h_identifiers(self):
-        """TP53 R273H should have COSMIC and HGVS identifiers."""
+        """TP53 R273H should have HGVS identifiers."""
         async with MyVariantClient() as client:
             evidence = await client.fetch_evidence("TP53", "R273H")
 
             assert evidence is not None
-
-            # Should have COSMIC ID (this is a major hotspot)
-            assert evidence.cosmic_id is not None, "TP53 R273H should have COSMIC ID"
-            assert evidence.cosmic_id.startswith(
-                "COSM"
-            ) or evidence.cosmic_id.startswith(
-                "COSV"
-            ), f"Unexpected COSMIC ID format: {evidence.cosmic_id}"
 
             # Should have HGVS genomic notation
             assert (
@@ -432,7 +328,6 @@ class TestClinVarSingleRCV:
             has_identifiers = any(
                 [
                     evidence.dbsnp_id,
-                    evidence.cosmic_id,
                     evidence.clinvar_id,
                 ]
             )

@@ -264,7 +264,6 @@ def _build_response(result) -> Dict[str, Any]:
         # Cross-source analysis (disabled)
         # "cross_source_analysis": result.cross_source_analysis,
         "identifiers": {
-            "cosmic_id": result.identifiers.cosmic_id,
             "ncbi_gene_id": result.identifiers.ncbi_gene_id,
             "dbsnp_id": result.identifiers.dbsnp_id,
             "clinvar_id": result.identifiers.clinvar_id,
@@ -338,14 +337,6 @@ def _build_response(result) -> Dict[str, Any]:
                 "review_status": c.review_status,
             }
             for c in evidence.clinvar_entries
-        ],
-        "cosmic_entries": [
-            {
-                "mutation_id": c.mutation_id,
-                "primary_site": c.primary_site,
-                "sample_count": c.sample_count,
-            }
-            for c in evidence.cosmic_entries
         ],
         "clinical_trials": [
             {

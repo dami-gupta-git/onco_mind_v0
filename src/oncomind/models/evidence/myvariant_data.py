@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from oncomind.models.evidence.civic import CIViCEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 
 
 class MyVariantData(BaseModel):
@@ -27,7 +26,6 @@ class MyVariantData(BaseModel):
     variant: str
 
     # Database identifiers
-    cosmic_id: str | None = None
     ncbi_gene_id: str | None = None
     dbsnp_id: str | None = None
     clinvar_id: str | None = None
@@ -55,11 +53,10 @@ class MyVariantData(BaseModel):
     # Evidence lists from databases
     civic: list[CIViCEvidence] = Field(default_factory=list)
     clinvar: list[ClinVarEvidence] = Field(default_factory=list)
-    cosmic: list[COSMICEvidence] = Field(default_factory=list)
 
     # Raw data for debugging
     raw_data: dict[str, Any] = Field(default_factory=dict)
 
     def has_evidence(self) -> bool:
         """Check if any evidence was found."""
-        return bool(self.civic or self.clinvar or self.cosmic)
+        return bool(self.civic or self.clinvar)

@@ -6,7 +6,6 @@ from oncomind.models.result import Result
 from oncomind.models.evidence import Evidence
 from oncomind.models.evidence.civic import CIViCEvidence
 from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.variant import VariantInput
 
 __all__ = [
@@ -15,7 +14,6 @@ __all__ = [
     "VariantInput",
     "CIViCEvidence",
     "ClinVarEvidence",
-    "COSMICEvidence",
     "TherapeuticData",
     "LLMInsight",
 ]

@@ -1,7 +1,7 @@
 """MyVariant.info API client for fetching variant evidence.
 
 ARCHITECTURE:
-    Gene + Variant → MyVariant.info API → Evidence (ClinVar/COSMIC/AlphaMissense/CADD/gnomAD)
+    Gene + Variant → MyVariant.info API → Evidence (ClinVar/AlphaMissense/CADD/gnomAD)
 
 Aggregates variant information from multiple databases for LLM assessment.
 CIViC evidence is fetched separately via CIViCClient (GraphQL API).
@@ -27,7 +27,6 @@ from tenacity import (
 from oncomind.models.myvariant import MyVariantHit, MyVariantResponse
 
 from oncomind.models.evidence.clinvar import ClinVarEvidence
-from oncomind.models.evidence.cosmic import COSMICEvidence
 from oncomind.models.evidence.myvariant_data import MyVariantData
 from oncomind.config.debug import get_logger
 
@@ -288,40 +287,6 @@ class MyVariantClient:
 
         return evidence_list
 
-    def _parse_cosmic_evidence(
-        self, cosmic_data: dict[str, Any] | list[Any]
-    ) -> list[COSMICEvidence]:
-        """Parse COSMIC data into evidence objects.
-
-        Args:
-            cosmic_data: Raw COSMIC data from API
-
-        Returns:
-            List of COSMIC evidence objects
-        """
-        evidence_list: list[COSMICEvidence] = []
-
-        # Handle both single dict and list of dicts
-        items = cosmic_data if isinstance(cosmic_data, list) else [cosmic_data]
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-
-            evidence_list.append(
-                COSMICEvidence(
-                    mutation_id=item.get("mutation_id"),
-                    primary_site=item.get("primary_site"),
-                    site_subtype=item.get("site_subtype"),
-                    primary_histology=item.get("primary_histology"),
-                    histology_subtype=item.get("histology_subtype"),
-                    sample_count=item.get("sample_count"),
-                    mutation_somatic_status=item.get("mutation_somatic_status"),
-                )
-            )
-
-        return evidence_list
-
     def _extract_from_hit(
         self, hit: MyVariantHit, gene: str, variant: str
     ) -> MyVariantData:
@@ -339,12 +304,6 @@ class MyVariantClient:
             Evidence object with all extracted fields
         """
         # Extract database identifiers using Pydantic models
-        cosmic_id = None
-        if hit.cosmic:
-            cosmic_data = hit.cosmic if isinstance(hit.cosmic, list) else [hit.cosmic]
-            if cosmic_data and cosmic_data[0].cosmic_id:
-                cosmic_id = cosmic_data[0].cosmic_id
-
         ncbi_gene_id = None
         if hit.entrezgene:
             ncbi_gene_id = str(hit.entrezgene)
@@ -505,7 +464,7 @@ class MyVariantClient:
                 else:
                     alphamissense_prediction = am.pred
 
-        # Parse evidence using existing parsers (ClinVar, COSMIC)
+        # Parse evidence using existing parsers (ClinVar)
         # Note: CIViC evidence is fetched separately via CIViCClient (GraphQL API)
         clinvar_evidence = []
         if hit.clinvar:
@@ -520,22 +479,10 @@ class MyVariantClient:
                     clinvar_data.model_dump()
                 )
 
-        cosmic_evidence = []
-        if hit.cosmic:
-            # Convert back to dict for existing parser
-            cosmic_data = hit.cosmic
-            if isinstance(cosmic_data, list):
-                cosmic_evidence = self._parse_cosmic_evidence(
-                    [c.model_dump() for c in cosmic_data]
-                )
-            else:
-                cosmic_evidence = self._parse_cosmic_evidence(cosmic_data.model_dump())
-
         return MyVariantData(
             variant_id=hit.id,
             gene=gene,
             variant=variant,
-            cosmic_id=cosmic_id,
             ncbi_gene_id=ncbi_gene_id,
             dbsnp_id=dbsnp_id,
             clinvar_id=clinvar_id,
@@ -557,7 +504,6 @@ class MyVariantClient:
             transcript_consequence=transcript_consequence,
             civic=[],  # CIViC evidence is fetched separately via CIViCClient
             clinvar=clinvar_evidence,
-            cosmic=cosmic_evidence,
             raw_data=hit.model_dump(by_alias=True),
         )
 
@@ -740,11 +686,9 @@ class MyVariantClient:
         # Note: CIViC evidence is fetched separately via CIViCClient (GraphQL API)
         fields = [
             "clinvar",
-            "cosmic",
             "dbsnp",
             "cadd",
             "entrezgene",  # NCBI Gene ID
-            "cosmic.cosmic_id",  # COSMIC mutation ID
             "clinvar.variant_id",  # ClinVar variation ID
             "clinvar.rcv",  # ClinVar RCV records (contains clinical_significance and accession)
             "dbsnp.rsid",  # dbSNP rs number
@@ -851,7 +795,6 @@ class MyVariantClient:
                     variant_id=f"{gene}:{variant}",
                     gene=gene,
                     variant=variant,
-                    cosmic_id=None,
                     ncbi_gene_id=None,
                     dbsnp_id=None,
                     clinvar_id=clinvar_id,
@@ -870,7 +813,6 @@ class MyVariantClient:
                     transcript_consequence=None,
                     civic=[],  # CIViC evidence is fetched separately via CIViCClient
                     clinvar=[],
-                    cosmic=[],
                     raw_data=result,
                 )
 

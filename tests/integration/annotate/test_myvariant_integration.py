@@ -48,7 +48,6 @@ class TestMyVariantIntegration:
         assert result.vcf is None
         assert result.cadd is None
         assert result.clinvar is None
-        assert result.cosmic is None
         assert result.dbnsfp is None
         assert result.dbsnp is None
         assert result.gnomad_exome is None
@@ -118,22 +117,6 @@ class TestMyVariantIntegration:
             "Likely pathogenic",
             "Pathogenic/Likely pathogenic",
         )
-
-    @pytest.mark.asyncio
-    async def test_fetch_annotation_braf_v600e_cosmic_fields(self):
-        """Test that BRAF V600E returns expected COSMIC structure from real API."""
-        async with AnnotatorMyVariantClient() as client:
-            result = await client.fetch_annotation("BRAF", "p.V600E")
-
-        cosmic = result.cosmic
-
-        # Test COSMIC ID format (IDs may be updated over time)
-        assert cosmic.cosmic_id.startswith("COSM")
-        # Nucleotide change for V600E
-        assert ">" in cosmic.mut_nt  # Format like "T>A"
-        assert cosmic.chrom == "7"
-        assert cosmic.ref in ("A", "C", "G", "T")
-        assert cosmic.alt in ("A", "C", "G", "T")
 
     @pytest.mark.asyncio
     async def test_fetch_annotation_braf_v600e_dbnsfp_fields(self):
@@ -259,21 +242,6 @@ class TestMyVariantIntegration:
         assert clinvar.rcv[0].clinical_significance == "Pathogenic"
 
     @pytest.mark.asyncio
-    async def test_fetch_annotation_pik3ca_h1047r_cosmic_fields(self):
-        """Test that PIK3CA H1047R returns expected COSMIC fields from real API."""
-        async with AnnotatorMyVariantClient() as client:
-            result = await client.fetch_annotation("PIK3CA", "p.H1047R")
-
-        cosmic = result.cosmic
-
-        # Test COSMIC structure
-        assert cosmic.cosmic_id == "COSM775"
-        assert cosmic.mut_nt == "A>G"
-        assert cosmic.chrom == "3"
-        assert cosmic.ref == "A"
-        assert cosmic.alt == "G"
-
-    @pytest.mark.asyncio
     async def test_fetch_annotation_pik3ca_h1047r_gnomad_fields(self):
         """Test that PIK3CA H1047R returns expected gnomAD fields from real API."""
         async with AnnotatorMyVariantClient() as client:
@@ -342,17 +310,3 @@ class TestMyVariantIntegration:
         assert rcv.accession == "RCV000018084"
         assert rcv.clinical_significance == "drug response"
 
-    @pytest.mark.asyncio
-    async def test_fetch_annotation_egfr_l858r_cosmic_fields(self):
-        """Test that EGFR L858R returns expected COSMIC fields from real API."""
-        async with AnnotatorMyVariantClient() as client:
-            result = await client.fetch_annotation("EGFR", "p.L858R")
-
-        cosmic = result.cosmic
-
-        # Test COSMIC structure
-        assert cosmic.cosmic_id == "COSM6224"
-        assert cosmic.mut_nt == "T>G"
-        assert cosmic.chrom == "7"
-        assert cosmic.ref == "T"
-        assert cosmic.alt == "G"

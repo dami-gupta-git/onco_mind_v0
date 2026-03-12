@@ -215,8 +215,6 @@ def insight(
         ids_lines = []
 
         # Database Identifiers
-        if result.identifiers.cosmic_id:
-            ids_lines.append(f"[dim]COSMIC:[/dim]       {result.identifiers.cosmic_id}")
         if result.identifiers.dbsnp_id:
             ids_lines.append(f"[dim]dbSNP:[/dim]        {result.identifiers.dbsnp_id}")
         if result.identifiers.clinvar_id:

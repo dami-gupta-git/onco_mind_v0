@@ -40,7 +40,7 @@ class TestMyVariantClient:
         """Test fetching evidence with ClinVar data.
 
         Note: CIViC evidence is now fetched separately via CIViCClient.
-        MyVariant is used for ClinVar, COSMIC, AlphaMissense, CADD, gnomAD.
+        MyVariant is used for ClinVar, AlphaMissense, CADD, gnomAD.
         """
         client = MyVariantClient()
 
@@ -209,7 +209,6 @@ class TestMyVariantClient:
             "hits": [
                 {
                     "_id": "chr7:g.140453136A>T",
-                    "cosmic": {"cosmic_id": "COSM476"},
                     "dbsnp": {
                         "rsid": "rs113488022",
                         "gene": {"geneid": 673},
@@ -226,7 +225,6 @@ class TestMyVariantClient:
             evidence = await client.fetch_evidence("BRAF", "V600E")
 
             # Verify identifiers were extracted
-            assert evidence.cosmic_id == "COSM476"
             assert evidence.ncbi_gene_id == "673"
             assert evidence.dbsnp_id == "rs113488022"
             assert evidence.clinvar_id == "13961"
@@ -242,7 +240,7 @@ class TestMyVariantClient:
         with patch.object(client, "_query", new_callable=AsyncMock) as mock_query:
             # First call returns results (protein notation query succeeds)
             mock_query.return_value = {
-                "hits": [{"_id": "test", "civic": {}, "clinvar": {}, "cosmic": {}}]
+                "hits": [{"_id": "test", "civic": {}, "clinvar": {}}]
             }
 
             await client.fetch_evidence("BRAF", "V600E")

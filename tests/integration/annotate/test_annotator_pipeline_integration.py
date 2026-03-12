@@ -55,11 +55,6 @@ class TestAnnotatorPipelineIntegration:
         assert myvariant["clinvar"]["rcv"][0]["accession"].startswith("RCV")
         assert myvariant["clinvar"]["rcv"][0]["clinical_significance"] == "Pathogenic"
 
-        # Test COSMIC data with pattern validation
-        assert myvariant["cosmic"] is not None
-        assert myvariant["cosmic"]["cosmic_id"] == "COSM476"
-        assert myvariant["cosmic"]["cosmic_id"].startswith("COSM")
-
         # Test gnomAD data with range validation
         assert myvariant["gnomad_exome"] is not None
         assert 0 <= myvariant["gnomad_exome"]["af"]["af"] <= 1
@@ -131,10 +126,6 @@ class TestAnnotatorPipelineIntegration:
         assert myvariant["clinvar"]["gene"]["symbol"] == "EGFR"
         assert len(myvariant["clinvar"]["rcv"]) > 0
         assert myvariant["clinvar"]["rcv"][0]["accession"].startswith("RCV")
-
-        # Test COSMIC data with pattern validation
-        assert myvariant["cosmic"] is not None
-        assert myvariant["cosmic"]["cosmic_id"].startswith("COSM")
 
         # Test timing data
         assert "timings" in variant
