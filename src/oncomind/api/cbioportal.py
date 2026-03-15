@@ -228,15 +228,12 @@ class CBioPortalClient:
         if not study_ids:
             return None
 
-        study_id = study_ids[0]  # Use primary study
-        molecular_profile_id = f"{study_id}_mutations"
-
-        # Get Entrez ID for query gene
+        # Get Entrez ID for query gene (once, shared across all study attempts)
         query_entrez = await self._get_entrez_id(gene.upper())
         if not query_entrez:
             return None
 
-        # Get Entrez IDs for cancer genes (excluding query gene)
+        # Get Entrez IDs for cancer genes (once, shared across all study attempts)
         cancer_genes = [
             g for g in CANCER_GENES_CO_OCCURRENCE if g.upper() != gene.upper()
         ]
@@ -248,16 +245,28 @@ class CBioPortalClient:
                 cancer_entrez_ids.append(eid)
                 entrez_to_symbol[eid] = g
 
-        # Fetch mutations for query gene
-        try:
-            query_mutations = await self._get_mutations(
-                [query_entrez], molecular_profile_id
-            )
-        except CBioPortalError:
+        # Try each study in priority order, falling back on failure or missing data
+        study_id = None
+        query_mutations = None
+        for candidate_study in study_ids:
+            molecular_profile_id = f"{candidate_study}_mutations"
+            try:
+                mutations = await self._get_mutations(
+                    [query_entrez], molecular_profile_id
+                )
+            except CBioPortalError:
+                logger.debug(f"Study {candidate_study} unavailable, trying next")
+                continue
+            if mutations:
+                study_id = candidate_study
+                query_mutations = mutations
+                break
+            logger.debug(f"No mutations in {candidate_study}, trying next")
+
+        if not study_id or not query_mutations:
             return None
 
-        if not query_mutations:
-            return None
+        molecular_profile_id = f"{study_id}_mutations"
 
         # Get study metadata (sample count and name)
         total_samples = await self._get_sample_count(study_id)

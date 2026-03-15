@@ -410,6 +410,7 @@ class TestDiscordantEvidenceDetection:
                     specificity=SpecificityLevel.VARIANT,
                     requirement=BiomarkerRequirement.REQUIRED_POSITIVE,
                     locus_variant_match=EvidenceLevel(level="variant"),
+                    variant_match_result="exact",  # Required so locus_match property returns "variant"
                 ),
             ],
             vicc_evidence=[

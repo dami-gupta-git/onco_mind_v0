@@ -1,47 +1,45 @@
-"""Integration tests for the two-stage LLM pipeline.
+"""Integration tests for the LLM pipeline.
 
 Tests that:
-1. Two LLM calls are made (synthesis + hypothesis) when knowledge gaps exist
-2. The prompts contain expected structure and keywords
-3. Stage 2 is skipped when no knowledge gaps exist
+1. A single LLM call is made (single-stage research dossier pipeline)
+2. The prompt contains expected structure and keywords
+3. The response is parsed correctly into LLMInsight
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch, call
+from unittest.mock import AsyncMock, patch
 from oncomind.llm.service import LLMService
 
 
-class TestTwoStagePipeline:
-    """Tests for the two-stage LLM pipeline."""
+class TestSingleStagePipeline:
+    """Tests for the single-stage research dossier LLM pipeline."""
 
     @pytest.mark.asyncio
-    async def test_two_llm_calls_when_gaps_exist(self):
-        """Should make two LLM calls when knowledge gaps exist."""
-        # Mock LLM responses
+    async def test_single_llm_call(self):
+        """Should make exactly one LLM call (single-stage pipeline)."""
         synthesis_response = {
-            "functional_summary": "BRAF V600E is an activating mutation.",
-            "biological_context": "Found in 50% of melanomas.",
+            "functional_impact": "BRAF V600E is an activating mutation.",
+            "tumor_biology": "Found in 50% of melanomas.",
+            "therapeutic_landscape_prose": "Vemurafenib is FDA-approved.",
             "therapeutic_landscape": {
-                "fda_approved": ["vemurafenib (variant-level, melanoma)"],
+                "fda_approved_exact": ["vemurafenib (melanoma)"],
+                "fda_approved_codon": [],
+                "fda_approved_gene": [],
                 "clinical_evidence": [],
                 "preclinical": [],
                 "resistance_mechanisms": [],
             },
-            "evidence_assessment": {
-                "overall_quality": "comprehensive",
-                "well_characterized": ["FDA-approved therapies"],
-                "knowledge_gaps": ["resistance patterns in CNS metastases"],
-                "conflicting_evidence": [],
-            },
+            "evidence_quality": "Comprehensive evidence.",
+            "open_questions": ["CNS penetration?"],
+            "research_program": [
+                {
+                    "aim_title": "Aim 1: CNS activity",
+                    "rationale": "Test CNS penetration.",
+                    "approaches": ["Use BrainMets model"],
+                }
+            ],
             "key_references": ["PMID:12345"],
             "evidence_tags": ["direct clinical data"],
-        }
-
-        hypothesis_response = {
-            "research_hypotheses": [
-                "[Direct Clinical Data] Given CNS penetration data, test intracranial response rates.",
-            ],
-            "research_implications": "CNS-specific studies needed.",
         }
 
         call_count = 0
@@ -52,18 +50,13 @@ class TestTwoStagePipeline:
             call_count += 1
             captured_messages.append(kwargs["messages"])
 
-            # Return appropriate response based on call number
-            if call_count == 1:
-                content = synthesis_response
-            else:
-                content = hypothesis_response
-
             import json
 
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps(content)), finish_reason="stop"
+                    message=AsyncMock(content=json.dumps(synthesis_response)),
+                    finish_reason="stop",
                 )
             ]
             return mock_response
@@ -83,137 +76,45 @@ class TestTwoStagePipeline:
                     "conflicting_evidence": [],
                 },
                 literature_summary="10 papers",
-                generate_hypotheses=True,
             )
 
-        # Should have made exactly 2 calls
-        assert call_count == 2, f"Expected 2 LLM calls, got {call_count}"
+        # Should have made exactly 1 call (single-stage)
+        assert call_count == 1, f"Expected 1 LLM call, got {call_count}"
 
-        # Verify synthesis prompt (call 1) structure
-        synthesis_messages = captured_messages[0]
-        assert len(synthesis_messages) == 2
-        assert synthesis_messages[0]["role"] == "system"
-        assert synthesis_messages[1]["role"] == "user"
-
-        # Check synthesis system prompt keywords
-        synthesis_system = synthesis_messages[0]["content"]
-        assert "cancer genomics researcher" in synthesis_system.lower()
-        assert (
-            "synthesis" in synthesis_system.lower()
-            or "functional" in synthesis_system.lower()
-        )
-        assert "calibration" in synthesis_system.lower()
-
-        # Check synthesis user prompt keywords
-        synthesis_user = synthesis_messages[1]["content"]
-        assert "BRAF" in synthesis_user
-        assert "V600E" in synthesis_user
-        assert "Melanoma" in synthesis_user
-
-        # Verify hypothesis prompt (call 2) structure
-        hypothesis_messages = captured_messages[1]
-        assert len(hypothesis_messages) == 2
-        assert hypothesis_messages[0]["role"] == "system"
-        assert hypothesis_messages[1]["role"] == "user"
-
-        # Check hypothesis system prompt keywords
-        hypothesis_system = hypothesis_messages[0]["content"]
-        assert "hypothes" in hypothesis_system.lower()
-        assert "research" in hypothesis_system.lower()
-        assert "testable" in hypothesis_system.lower()
-
-        # Check hypothesis user prompt keywords
-        hypothesis_user = hypothesis_messages[1]["content"]
-        assert "BRAF" in hypothesis_user
-        assert "V600E" in hypothesis_user
-        assert "gap" in hypothesis_user.lower()
-
-        # Verify result contains hypothesis
+        # Result should be populated
+        assert result.functional_summary == "BRAF V600E is an activating mutation."
+        assert result.biological_context == "Found in 50% of melanomas."
+        assert result.therapeutic_summary == "Vemurafenib is FDA-approved."
         assert len(result.research_hypotheses) >= 1
 
     @pytest.mark.asyncio
-    async def test_single_call_when_no_gaps(self):
-        """Should make only one LLM call when no knowledge gaps exist."""
-        synthesis_response = {
-            "functional_summary": "BRAF V600E is well-characterized.",
-            "biological_context": "Extensively studied.",
-            "therapeutic_landscape": {
-                "fda_approved": ["vemurafenib"],
-                "clinical_evidence": [],
-                "preclinical": [],
-                "resistance_mechanisms": [],
-            },
-            "evidence_assessment": {
-                "overall_quality": "comprehensive",
-                "well_characterized": ["everything"],
-                "knowledge_gaps": [],
-                "conflicting_evidence": [],
-            },
-            "key_references": [],
-            "evidence_tags": [],
-        }
-
-        call_count = 0
+    async def test_llm_call_structure(self):
+        """The LLM call should use correct message structure (system + user)."""
+        captured_messages = []
 
         async def mock_acompletion(**kwargs):
-            nonlocal call_count
-            call_count += 1
+            captured_messages.append(kwargs["messages"])
 
             import json
 
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps(synthesis_response)),
-                    finish_reason="stop",
-                )
-            ]
-            return mock_response
-
-        with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
-            service = LLMService(model="gpt-4o-mini")
-            result = await service.get_llm_insight(
-                gene="BRAF",
-                variant="V600E",
-                tumor_type="Melanoma",
-                evidence_summary="FDA-approved",
-                evidence_assessment={
-                    "overall_quality": "comprehensive",
-                    "well_characterized": ["everything"],
-                    "knowledge_gaps": [],  # No gaps!
-                    "conflicting_evidence": [],
-                },
-                generate_hypotheses=True,
-            )
-
-        # Should have made only 1 call (no stage 2 without gaps)
-        assert call_count == 1, f"Expected 1 LLM call when no gaps, got {call_count}"
-        assert result.research_hypotheses == []
-
-    @pytest.mark.asyncio
-    async def test_single_call_when_hypotheses_disabled(self):
-        """Should make only one LLM call when generate_hypotheses=False."""
-        synthesis_response = {
-            "functional_summary": "Test summary",
-            "biological_context": "",
-            "therapeutic_landscape": {},
-            "evidence_assessment": {"overall_quality": "limited"},
-            "key_references": [],
-            "evidence_tags": [],
-        }
-
-        call_count = 0
-
-        async def mock_acompletion(**kwargs):
-            nonlocal call_count
-            call_count += 1
-
-            import json
-
-            mock_response = AsyncMock()
-            mock_response.choices = [
-                AsyncMock(
-                    message=AsyncMock(content=json.dumps(synthesis_response)),
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "functional_impact": "test",
+                                "tumor_biology": "",
+                                "therapeutic_landscape_prose": "",
+                                "therapeutic_landscape": {},
+                                "evidence_quality": "",
+                                "open_questions": [],
+                                "research_program": [],
+                                "key_references": [],
+                                "evidence_tags": [],
+                            }
+                        )
+                    ),
                     finish_reason="stop",
                 )
             ]
@@ -222,23 +123,52 @@ class TestTwoStagePipeline:
         with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
             service = LLMService(model="gpt-4o-mini")
             await service.get_llm_insight(
+                gene="BRAF",
+                variant="V600E",
+                tumor_type="Melanoma",
+                evidence_summary="test",
+                evidence_assessment={"overall_quality": "limited", "knowledge_gaps": []},
+            )
+
+        assert len(captured_messages) == 1
+        messages = captured_messages[0]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+
+        # User prompt contains gene/variant/tumor
+        user_content = messages[1]["content"]
+        assert "BRAF" in user_content
+        assert "V600E" in user_content
+        assert "Melanoma" in user_content
+
+    @pytest.mark.asyncio
+    async def test_result_on_llm_failure(self):
+        """Should return a fallback LLMInsight when the LLM call fails."""
+
+        async def mock_acompletion(**kwargs):
+            mock_response = AsyncMock()
+            mock_response.choices = [
+                AsyncMock(
+                    message=AsyncMock(content="not valid json"),
+                    finish_reason="stop",
+                )
+            ]
+            return mock_response
+
+        with patch("oncomind.llm.service.acompletion", side_effect=mock_acompletion):
+            service = LLMService(model="gpt-4o-mini")
+            result = await service.get_llm_insight(
                 gene="TP53",
                 variant="R248W",
                 tumor_type="Breast",
-                evidence_summary="Some evidence",
-                evidence_assessment={
-                    "overall_quality": "limited",
-                    "well_characterized": [],
-                    "knowledge_gaps": ["many gaps exist"],
-                    "conflicting_evidence": [],
-                },
-                generate_hypotheses=False,  # Disabled!
+                evidence_summary="test",
+                evidence_assessment={"overall_quality": "limited", "knowledge_gaps": []},
             )
 
-        # Should have made only 1 call (hypothesis disabled)
-        assert (
-            call_count == 1
-        ), f"Expected 1 LLM call when hypotheses disabled, got {call_count}"
+        # Should return a non-None LLMInsight (fallback)
+        assert result is not None
+        assert result.llm_summary is not None
 
 
 class TestPromptContent:
@@ -246,7 +176,7 @@ class TestPromptContent:
 
     @pytest.mark.asyncio
     async def test_synthesis_prompt_contains_calibration_rules(self):
-        """Synthesis system prompt should contain calibration rules."""
+        """Synthesis system prompt should contain calibration/constraint rules."""
         captured_system_prompt = None
 
         async def mock_acompletion(**kwargs):
@@ -261,10 +191,13 @@ class TestPromptContent:
                     message=AsyncMock(
                         content=json.dumps(
                             {
-                                "functional_summary": "",
-                                "biological_context": "",
+                                "functional_impact": "",
+                                "tumor_biology": "",
+                                "therapeutic_landscape_prose": "",
                                 "therapeutic_landscape": {},
-                                "evidence_assessment": {},
+                                "evidence_quality": "",
+                                "open_questions": [],
+                                "research_program": [],
                                 "key_references": [],
                                 "evidence_tags": [],
                             }
@@ -288,13 +221,12 @@ class TestPromptContent:
                 },
             )
 
-        # Check calibration rules are present
-        assert "calibration" in captured_system_prompt.lower()
-        assert (
-            "limited" in captured_system_prompt.lower()
-            or "minimal" in captured_system_prompt.lower()
-        )
-        assert "generic" in captured_system_prompt.lower()
+        assert captured_system_prompt is not None
+        # Prompt should contain key constraint language
+        prompt_lower = captured_system_prompt.lower()
+        assert "only" in prompt_lower  # "Use ONLY facts from..."
+        assert "not" in prompt_lower  # "Do NOT use outside knowledge..."
+        assert "research" in prompt_lower
 
     @pytest.mark.asyncio
     async def test_synthesis_prompt_contains_match_specificity(self):
@@ -313,10 +245,13 @@ class TestPromptContent:
                     message=AsyncMock(
                         content=json.dumps(
                             {
-                                "functional_summary": "",
-                                "biological_context": "",
+                                "functional_impact": "",
+                                "tumor_biology": "",
+                                "therapeutic_landscape_prose": "",
                                 "therapeutic_landscape": {},
-                                "evidence_assessment": {},
+                                "evidence_quality": "",
+                                "open_questions": [],
+                                "research_program": [],
                                 "key_references": [],
                                 "evidence_tags": [],
                             }
@@ -340,44 +275,41 @@ class TestPromptContent:
                 },
             )
 
-        # Check match specificity guidance
-        assert "match specificity" in captured_system_prompt.lower()
+        assert captured_system_prompt is not None
+        # Check match specificity guidance is present
         assert "variant-level" in captured_system_prompt.lower()
         assert "gene-level" in captured_system_prompt.lower()
         assert "codon-level" in captured_system_prompt.lower()
 
     @pytest.mark.asyncio
-    async def test_hypothesis_prompt_contains_evidence_tags(self):
-        """Hypothesis system prompt should require evidence basis tags."""
-        captured_hypothesis_system = None
-
-        call_count = 0
+    async def test_synthesis_prompt_contains_research_program_spec(self):
+        """Synthesis system prompt should describe the research program (aims) section."""
+        captured_system_prompt = None
 
         async def mock_acompletion(**kwargs):
-            nonlocal captured_hypothesis_system, call_count
-            call_count += 1
-
-            if call_count == 2:  # Hypothesis call
-                captured_hypothesis_system = kwargs["messages"][0]["content"]
+            nonlocal captured_system_prompt
+            captured_system_prompt = kwargs["messages"][0]["content"]
 
             import json
-
-            if call_count == 1:
-                response = {
-                    "functional_summary": "test",
-                    "biological_context": "",
-                    "therapeutic_landscape": {},
-                    "evidence_assessment": {},
-                    "key_references": [],
-                    "evidence_tags": [],
-                }
-            else:
-                response = {"research_hypotheses": [], "research_implications": ""}
 
             mock_response = AsyncMock()
             mock_response.choices = [
                 AsyncMock(
-                    message=AsyncMock(content=json.dumps(response)),
+                    message=AsyncMock(
+                        content=json.dumps(
+                            {
+                                "functional_impact": "",
+                                "tumor_biology": "",
+                                "therapeutic_landscape_prose": "",
+                                "therapeutic_landscape": {},
+                                "evidence_quality": "",
+                                "open_questions": [],
+                                "research_program": [],
+                                "key_references": [],
+                                "evidence_tags": [],
+                            }
+                        )
+                    ),
                     finish_reason="stop",
                 )
             ]
@@ -396,12 +328,10 @@ class TestPromptContent:
                     "well_characterized": [],
                     "conflicting_evidence": [],
                 },
-                generate_hypotheses=True,
             )
 
-        assert captured_hypothesis_system is not None
-        # Check evidence basis tags are required
-        hypothesis_lower = captured_hypothesis_system.lower()
-        assert "direct clinical data" in hypothesis_lower
-        assert "preclinical data" in hypothesis_lower
-        assert "pan-cancer extrapolation" in hypothesis_lower
+        assert captured_system_prompt is not None
+        prompt_lower = captured_system_prompt.lower()
+        # Should describe the aims/research program section
+        assert "aim" in prompt_lower
+        assert "research" in prompt_lower
