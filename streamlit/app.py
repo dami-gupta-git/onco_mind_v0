@@ -202,8 +202,8 @@ with tab1:
     # PROCESS REQUEST
     # ==============================================
     if insight_btn:
-        if not gene or not variant:
-            st.error("Gene and variant are required")
+        if not gene or not variant or not tumor:
+            st.error("Gene, variant, and tumor type are required")
         else:
             from oncomind.utils.variant_normalization import normalize_variant, VariantNormalizer
             normalized = normalize_variant(gene, variant)
@@ -430,7 +430,7 @@ with tab1:
                 # ClinVar tab
                 if clinvar_entries or clinvar_sig:
                     with tabs[tab_idx]:
-                        render_clinvar_tab(clinvar_entries=clinvar_entries, clinvar_sig=clinvar_sig)
+                        render_clinvar_tab(clinvar_entries=clinvar_entries, clinvar_sig=clinvar_sig, tumor_display=tumor_display)
                     tab_idx += 1
 
                 # Trials tab

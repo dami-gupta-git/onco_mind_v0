@@ -66,7 +66,7 @@ from oncomind.models.evidence import (
     VICCEvidence,
 )
 from oncomind.models.evidence.depmap import DepMapEvidence, CellLineModel
-from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term
+from oncomind.models.evidence.base import EvidenceLevel, is_pan_cancer_term, compute_cancer_specificity
 
 from oncomind.normalization import ParsedVariant
 from oncomind.models.gene_context import get_gene_context, is_variant_not_actionable
@@ -1059,6 +1059,22 @@ class EvidenceAggregator:
         ) = self._extract_myvariant_data(
             myvariant_evidence, variant, normalized_variant
         )
+
+        # Annotate ClinVar entries with tumor type match
+        for entry in clinvar_entries:
+            if entry.conditions:
+                best: str | None = None
+                for condition in entry.conditions:
+                    specificity = compute_cancer_specificity(condition, resolved_tumor)
+                    if specificity == "cancer_specific":
+                        best = "cancer_specific"
+                        break
+                    if specificity == "pan_cancer" and best != "cancer_specific":
+                        best = "pan_cancer"
+                    elif best is None:
+                        best = specificity
+                if best is not None:
+                    entry.cancer_type_match = EvidenceLevel(level=best)
 
         # Check if variant is not actionable (benign polymorphism)
         # If so, skip FDA trial matching to avoid false positives

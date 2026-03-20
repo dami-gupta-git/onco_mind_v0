@@ -697,13 +697,15 @@ def render_fda_tab(fda_biomarker_evidence: list):
 # CLINVAR TAB
 # ==============================================
 
-def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None):
+def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None, tumor_display: str | None = None):
     """Render the ClinVar tab."""
     if clinvar_sig:
         st.markdown(f"**Clinical Significance**")
+    if tumor_display:
+        st.caption(f"Queried tumor type: **{tumor_display}**")
     if clinvar_entries:
-        rows = ["| Variation ID | Significance | Conditions | Review Status |",
-                "|--------------|--------------|------------|---------------|"]
+        rows = ["| Variation ID | Significance | Conditions | Tumor Type | Review Status |",
+                "|--------------|--------------|------------|------------|---------------|"]
         for entry in clinvar_entries:
             review = entry.get('review_status', '')
             var_id = entry.get('variation_id', '')
@@ -711,8 +713,17 @@ def render_clinvar_tab(clinvar_entries: list, clinvar_sig: str | None):
             var_link = f"[{var_id}]({var_url})" if var_id and var_url else (var_id or '-')
             sig = entry.get('clinical_significance', 'Unknown')
             conds = entry.get('conditions', [])
-            conds_str = ', '.join(conds)[:30] if conds else 'N/A'
-            rows.append(f"| {var_link} | {sig} | {conds_str} | {review} |")
+            conds_str = ', '.join(conds)[:50] if conds else 'N/A'
+
+            tumor_match = entry.get('tumor_match')
+            if tumor_match is True:
+                tumor_cell = "✅ Yes"
+            elif tumor_match is False:
+                tumor_cell = "🔸 Other"
+            else:
+                tumor_cell = "-"
+
+            rows.append(f"| {var_link} | {sig} | {conds_str} | {tumor_cell} | {review} |")
         scrollable_table("\n".join(rows))
     elif not clinvar_sig:
         st.info("No ClinVar entries found")

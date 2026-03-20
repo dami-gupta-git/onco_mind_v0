@@ -335,6 +335,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "clinical_significance": c.clinical_significance,
                 "conditions": c.conditions,
                 "review_status": c.review_status,
+                "tumor_match": c.tumor_match,
             }
             for c in evidence.clinvar_entries
         ],

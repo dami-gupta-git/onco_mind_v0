@@ -263,6 +263,9 @@ def detect_discordant_evidence_internal(
         "gene": set(),
     }
     for entry in evidence.clinvar_entries:
+        # Only consider entries relevant to the queried tumor type (or with no condition info)
+        if entry.tumor_match is False:
+            continue
         if entry.clinical_significance:
             sig = entry.clinical_significance.lower()
             locus = entry.locus_match  # "variant", "codon", or "gene"
