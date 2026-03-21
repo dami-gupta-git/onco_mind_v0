@@ -42,10 +42,6 @@ LOCUS_TUMOR_LEGEND_TALL = """<div style='font-size: 0.85rem; line-height: 1.8; p
 </div>"""
 
 TRIALS_LEGEND = """<div style='font-size: 0.85rem; line-height: 1.8; padding-top: 85px;'>
-<b>Locus Match:</b><br/>
-🎯 Variant (exact locus match)<br/>
-📌 Broad (match on related variants)<br/>
-🧬 Gene (other variants in this gene)<br/><br/>
 <b>Tumor Match:</b><br/>
 ✅ Yes (match on specified tumor)<br/>
 🔸 Other (match on other tumor)<br/>
@@ -744,12 +740,9 @@ def render_trials_tab(trials: list):
     legend_col.markdown(TRIALS_LEGEND, unsafe_allow_html=True)
 
     with table_col:
-        rows = ["| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |",
-                "|-------------|-------------|--------|-------|--------|-------|"]
+        rows = ["| Tumor Match | NCT ID | Phase | Status | Title |",
+                "|-------------|--------|-------|--------|-------|"]
         for t in trials:
-            locus_match = t.get('locus_match', '')
-            match_display = {"variant": "🎯 Variant", "codon": "📍 Codon", "gene": "🧬 Gene"}.get(locus_match, "🧬 Gene")
-
             tumor_match = t.get('tumor_match')
             if tumor_match is True:
                 tumor_match_display = "✅ Yes"
@@ -765,7 +758,7 @@ def render_trials_tab(trials: list):
             status = t.get('status', '')
             title = t.get('title', '') or ''
             title_display = title[:150] + "..." if len(title) > 150 else title
-            rows.append(f"| {match_display} | {tumor_match_display} | {nct_link} | {phase} | {status} | {title_display} |")
+            rows.append(f"| {tumor_match_display} | {nct_link} | {phase} | {status} | {title_display} |")
         scrollable_table("\n".join(rows))
 
 
@@ -784,7 +777,7 @@ def render_literature_tab(articles: list):
         year = a.get('year', '')
         journal = (a.get('journal', '') or '')
         signal = a.get('signal_type', '') or '-'
-        title = (a.get('title', '') or '')[:80] + "..."
+        title = (a.get('title', '') or '')[:1500] + "..."
         rows.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")
     scrollable_table("\n".join(rows))
 

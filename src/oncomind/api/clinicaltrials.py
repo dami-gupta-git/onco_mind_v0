@@ -74,117 +74,6 @@ class ClinicalTrial:
             "NOT_YET_RECRUITING",
         ]
 
-    def mentions_variant(
-        self, variant: str | None, gene: str | None = None
-    ) -> tuple[str, str | None]:
-        """Check if trial mentions the gene and/or variant with codon-level matching.
-
-        Uses parse_biomarker_specificity() to extract what variant the trial describes,
-        then is_variant_covered() to compare against the query. This enables proper
-        codon-level matching (e.g., G12C trial matches G12D query at codon level).
-
-        Args:
-            variant: Variant notation (e.g., "G12D", "V600E"). Can be None to check gene only.
-            gene: Gene symbol (e.g., "NRAS", "BRAF"). If provided, ensures
-                  the variant is mentioned in context of this gene to avoid
-                  false positives (e.g., KRAS G12D trial matching NRAS G12D query).
-
-        Returns:
-            Tuple of (match_type, matched_biomarker):
-            - ("variant", "KRAS G12C") - exact variant match
-            - ("codon", "KRAS G12") - same codon, different variant (e.g., G12C trial, G12D query)
-            - ("ambiguous", "KRAS G12") - gene found and ambiguous variant in BROAD_VARIANTS
-            - ("gene", "KRAS") - only gene found in text
-            - ("none", None) - no match found
-        """
-        from oncomind.config.constants import BROAD_VARIANTS
-        from oncomind.insight_builder.fda_processor import (
-            parse_biomarker_specificity,
-            is_variant_covered,
-        )
-
-        import re
-
-        gene_upper = gene.upper() if gene else None
-
-        # Build gene pattern for word boundary matching
-        gene_pattern = rf"\b{re.escape(gene_upper)}\b" if gene_upper else None
-
-        # Priority check: gene must appear in title OR eligibility criteria
-        # If gene only appears in summary (background info), it's not a real match
-        # e.g., a trial for "IDH1-Mutated AML" may mention "IDH1 or IDH2" in background
-        # but is only actually studying IDH1
-        title_upper = self.title.upper() if self.title else ""
-        eligibility_upper = (
-            self.eligibility_criteria.upper() if self.eligibility_criteria else ""
-        )
-        primary_text = f"{title_upper} {eligibility_upper}"
-
-        gene_in_primary = bool(gene_pattern and re.search(gene_pattern, primary_text))
-
-        if not gene_in_primary:
-            return ("none", None)
-
-        # Combine all text for deeper analysis (variant matching, etc.)
-        search_texts = [self.title]
-        if self.eligibility_criteria:
-            search_texts.append(self.eligibility_criteria)
-        if self.brief_summary:
-            search_texts.append(self.brief_summary)
-
-        full_text = " ".join(search_texts)
-
-        # Use parse_biomarker_specificity to extract what the trial describes
-        biomarker_spec = parse_biomarker_specificity(full_text, gene)
-
-        if biomarker_spec and variant:
-            # Use is_variant_covered for proper codon-level matching
-            covered, match_level = is_variant_covered(variant, biomarker_spec)
-
-            if match_level == "variant":
-                # Extract the matched variant from the spec
-                matched_var = biomarker_spec.get("specified_variant")
-                if not matched_var and biomarker_spec.get("specified_variants"):
-                    # For variant_list, find the matching one
-                    matched_var = next(
-                        (
-                            v
-                            for v in biomarker_spec["specified_variants"]
-                            if v.upper() == variant.upper()
-                        ),
-                        biomarker_spec["specified_variants"][0],
-                    )
-                biomarker = (
-                    f"{gene} {matched_var}" if matched_var else f"{gene} {variant}"
-                )
-                return ("variant", biomarker)
-
-            elif match_level == "codon":
-                # Codon-level match (e.g., trial has G12C, query is G12D)
-                codon = biomarker_spec.get("codon")
-                biomarker = f"{gene} {codon}" if codon else gene
-                return ("codon", biomarker)
-
-            elif match_level == "gene":
-                return ("gene", gene)
-
-        # Fallback: check for ambiguous variants (BROAD_VARIANTS like G12, V600)
-        # Use primary_text (title + eligibility) for consistency
-        ambig_variants = [
-            (g, v)
-            for (g, v) in BROAD_VARIANTS
-            if g.upper() in primary_text and v.upper() in primary_text
-        ]
-        matched_ambig = next(
-            ((g, v) for (g, v) in ambig_variants if g.upper() == gene_upper), None
-        )
-        if matched_ambig:
-            g, v = matched_ambig
-            return ("ambiguous", f"{g} {v}")
-
-        # Gene-level only (we already verified gene_in_primary above)
-        return ("gene", gene)
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -503,14 +392,16 @@ class ClinicalTrialsClient:
             if trial is None:
                 continue
 
-            # Filter by variant mention if variant specified
-            # Pass gene to avoid false positives (e.g., KRAS G12D matching NRAS G12D query)
-            if variant:
-                match_type, _ = trial.mentions_variant(variant, gene=gene)
-                if match_type == "none":
-                    # Still include if it mentions the gene prominently
-                    if gene.upper() not in trial.title.upper():
-                        continue
+            # Keep only trials where gene appears in title or eligibility criteria.
+            # The API keyword search can return loosely related results; this ensures
+            # the gene is actually mentioned in the trial's primary text.
+            if gene:
+                import re
+                gene_pattern = rf"\b{re.escape(gene.upper())}\b"
+                title_upper = (trial.title or "").upper()
+                eligibility_upper = (trial.eligibility_criteria or "").upper()
+                if not re.search(gene_pattern, f"{title_upper} {eligibility_upper}"):
+                    continue
 
             trials.append(trial)
 
@@ -619,36 +510,15 @@ class ClinicalTrialsClient:
         evidence_list = []
 
         for trial in trials:
-            # mentions_variant returns: (match_type, matched_biomarker)
-            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
-            match_type, matched_biomarker = trial.mentions_variant(variant, gene=gene)
-
-            # Determine level and scope based on match type
-            if match_type == "variant":
-                level = "variant"
-                scope = "specific"
-            elif match_type == "codon":
-                level = "codon"
-                scope = "specific"
-            elif match_type == "ambiguous":
-                level = "variant"
-                scope = "ambiguous"
-            elif match_type == "gene":
-                level = "gene"
-                scope = "unspecified"
-            else:  # "none"
-                level = "gene"
-                scope = "unspecified"
-
-            # Build locus_variant_match based on match type
+            # Clinical trials are always treated as gene-level: free-text variant
+            # matching in eligibility criteria is too brittle to be reliable.
             locus_variant_match = EvidenceLevel(
-                level=level,
-                scope=scope,
+                level="gene",
+                scope="unspecified",
                 origin="trial",
             )
 
             # Build cancer_type_match based on whether trial targets specific tumor type
-            # We still fetch trials broadly, but track whether each matches the queried tumor
             cancer_type_match = None
             if tumor_type:
                 cancer_matches = any(
@@ -673,7 +543,6 @@ class ClinicalTrialsClient:
                     url=trial.url,
                     locus_variant_match=locus_variant_match,
                     cancer_type_match=cancer_type_match,
-                    matched_biomarker=matched_biomarker,
                 )
             )
 
@@ -714,43 +583,16 @@ class ClinicalTrialsClient:
         evidence_list = []
 
         for trial in trials:
-            # Determine locus_variant_match using mentions_variant
-            # mentions_variant returns: (match_type, matched_biomarker)
-            # match_type: "variant", "codon", "ambiguous", "gene", or "none"
+            # Clinical trials are always treated as gene-level.
             locus_variant_match = None
-            matched_biomarker = None
             if gene:
-                match_type, matched_biomarker = trial.mentions_variant(
-                    variant, gene=gene
+                locus_variant_match = EvidenceLevel(
+                    level="gene",
+                    scope="unspecified",
+                    origin="trial",
                 )
-                if match_type == "variant":
-                    locus_variant_match = EvidenceLevel(
-                        level="variant",
-                        scope="specific",
-                        origin="trial",
-                    )
-                elif match_type == "codon":
-                    locus_variant_match = EvidenceLevel(
-                        level="codon",
-                        scope="specific",
-                        origin="trial",
-                    )
-                elif match_type == "ambiguous":
-                    locus_variant_match = EvidenceLevel(
-                        level="variant",
-                        scope="ambiguous",
-                        origin="trial",
-                    )
-                elif match_type == "gene":
-                    locus_variant_match = EvidenceLevel(
-                        level="gene",
-                        scope="unspecified",
-                        origin="trial",
-                    )
-                # else: match_type == "none", locus_variant_match stays None
 
             # cancer_type_match - we searched by disease so it should match
-            # Args: source_disease (condition from trial), queried_tumor (user's query)
             cancer_matches = any(
                 tumor_types_match(condition, tumor_type)
                 for condition in (trial.conditions or [])
@@ -774,7 +616,6 @@ class ClinicalTrialsClient:
                     url=trial.url,
                     locus_variant_match=locus_variant_match,
                     cancer_type_match=cancer_type_match,
-                    matched_biomarker=matched_biomarker,
                 )
             )
 

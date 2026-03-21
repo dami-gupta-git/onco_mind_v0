@@ -515,19 +515,16 @@ with tab1:
 
                 well_characterized_detailed = evidence_gaps.get('well_characterized_detailed', [])
 
-                # Compute trial match breakdown once using match_scope
-                specific_count = len([t for t in trials if t.get('match_scope') == 'specific']) if trials else 0
-                ambiguous_count = len([t for t in trials if t.get('match_scope') == 'ambiguous']) if trials else 0
-                gene_only_count = len([t for t in trials if t.get('match_scope') not in ('specific', 'ambiguous')]) if trials else 0
+                # Compute trial match breakdown by tumor match
+                tumor_match_count = len([t for t in trials if t.get('tumor_match') is True]) if trials else 0
+                other_match_count = len([t for t in trials if t.get('tumor_match') is not True]) if trials else 0
 
-                # Build match string for trials
+                # Build match string for trials (gene-level only, show tumor specificity)
                 match_parts = []
-                if specific_count > 0:
-                    match_parts.append(f"🎯 {specific_count} variant")
-                if ambiguous_count > 0:
-                    match_parts.append(f"⚠️ {ambiguous_count} broad")
-                if gene_only_count > 0:
-                    match_parts.append(f"🧬 {gene_only_count} gene")
+                if tumor_match_count > 0:
+                    match_parts.append(f"✅ {tumor_match_count} tumor-specific")
+                if other_match_count > 0:
+                    match_parts.append(f"🔸 {other_match_count} other tumor")
                 trial_match_str = ", ".join(match_parts) if match_parts else ""
 
                 # Compute drug response match breakdown from VICC and CGI
@@ -631,13 +628,14 @@ with tab1:
                         locus_str = item.get('matches_on', '') or ''
 
                         # Fall back to computed match string for backwards compatibility
+                        # Clinical trials are always gene-level so we don't show locus match for them
                         if not locus_str:
                             is_trial_row = 'trial' in aspect.lower()
                             is_drug_row = any(term in aspect.lower() for term in ['drug', 'therapy', 'therapeutic', 'treatment', 'response', 'resistance'])
                             is_fda_row = 'fda' in basis or 'actionability' in aspect.lower()
 
                             if is_trial_row:
-                                locus_str = trial_match_str
+                                locus_str = ""
                             elif is_fda_row:
                                 locus_str = fda_match_str
                             elif is_drug_row:
@@ -707,8 +705,8 @@ with tab1:
 
                 # Legend below the table
                 st.markdown("""<div style='font-size: 0.85rem; margin-top: 0.5rem;'>
-<b>Locus Match:</b> 🎯 Variant (exact locus match) · 📍 Codon (other variants in this codon) · 🧬 Gene (other variants in this gene)<br/>
-<b>Tumor Match:</b> ✅ Yes (match on specified tumor) · 🔸 Other (match on other tumor) · 🌐 Pan-cancer
+<b>Tumor Match:</b> ✅ Yes (match on specified tumor) · 🔸 Other (match on other tumor) · 🌐 Pan-cancer<br/>
+<b>Locus Match:</b> 🎯 Variant (exact locus match) · 📍 Codon (other variants in this codon) · 🧬 Gene (other variants in this gene)
 </div>""", unsafe_allow_html=True)
 
             with table_cols[1]:

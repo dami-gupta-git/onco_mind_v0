@@ -166,18 +166,11 @@ def _extract_clinical_features(panel: Evidence) -> dict[str, float | bool]:
     }
     gene_role_value = gene_role_encoding.get(context.gene_role or "", 0.0)
 
-    # Count variant-specific trials
-    variant_specific_trials = sum(
-        1
-        for t in panel.clinical_trials
-        if t.locus_match and t.locus_match.level == "variant"
-    )
-
     return {
         "has_fda_approval": bool(panel.fda_biomarker_evidence),
         "has_clinical_trials": bool(panel.clinical_trials),
-        "has_variant_specific_trials": variant_specific_trials > 0,
-        "variant_specific_trial_count": variant_specific_trials,
+        "has_variant_specific_trials": False,
+        "variant_specific_trial_count": 0,
         "gene_role_value": gene_role_value,
         "is_oncogene": context.gene_role == "oncogene",
         "is_tsg": context.gene_role in ("TSG", "tumor_suppressor"),

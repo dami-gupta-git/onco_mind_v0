@@ -20,10 +20,6 @@ class ClinicalTrialEvidence(EvidenceItemBase):
     )
     sponsor: str | None = Field(None, description="Lead sponsor")
     url: str = Field(..., description="ClinicalTrials.gov URL")
-    matched_biomarker: str | None = Field(
-        None,
-        description="Biomarker that matched (e.g., 'KRAS G12D', 'KRAS G12', 'KRAS')",
-    )
 
     def is_phase2_or_later(self) -> bool:
         """Check if trial is Phase 2 or later."""
@@ -66,12 +62,3 @@ class ClinicalTrialEvidence(EvidenceItemBase):
             drugs.append(intervention)
         return drugs
 
-    @property
-    def match_scope(self) -> str | None:
-        """Get the match scope: 'specific', 'ambiguous', or 'unspecified'.
-
-        Uses locus_variant_match.scope from EvidenceItemBase.
-        """
-        if self.locus_variant_match:
-            return self.locus_variant_match.scope
-        return None

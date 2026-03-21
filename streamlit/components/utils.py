@@ -53,6 +53,10 @@ def scrollable_table(markdown_content: str) -> None:
         'nct id': 'col-nct',
         'phase': 'col-phase',
         'title': 'col-title',
+        'year': 'col-year',
+        'pmid': 'col-pmid',
+        'signal': 'col-signal',
+        'journal': 'col-journal',
     }
 
     # Skip separator line (line with dashes)
@@ -443,15 +447,13 @@ def result_to_markdown(result: dict) -> str:
     trials = result.get('clinical_trials', [])
     if trials:
         lines.append("## Clinical Trials\n")
-        lines.append("| Locus Match | Tumor Match | NCT ID | Phase | Status | Title |")
-        lines.append("|-------------|-------------|--------|-------|--------|-------|")
+        lines.append("| Tumor Match | NCT ID | Phase | Status | Title |")
+        lines.append("|-------------|--------|-------|--------|-------|")
         for trial in trials:
             nct = trial.get('nct_id', '')
             title = trial.get('title', '') or ''
             phase = trial.get('phase', 'N/A')
             status = trial.get('status', '')
-            locus_match = trial.get('locus_match', '')
-            locus = {"variant": "Variant", "codon": "Codon", "gene": "Gene"}.get(locus_match, "Gene")
             tumor_match = trial.get('tumor_match')
             if tumor_match is True:
                 tumor = "Yes"
@@ -461,7 +463,7 @@ def result_to_markdown(result: dict) -> str:
                 tumor = "-"
             title_display = title[:150] + "..." if len(title) > 150 else title
             nct_link = f"[{nct}](https://clinicaltrials.gov/study/{nct})"
-            lines.append(f"| {locus} | {tumor} | {nct_link} | {phase} | {status} | {title_display} |")
+            lines.append(f"| {tumor} | {nct_link} | {phase} | {status} | {title_display} |")
         lines.append("")
 
     # cBioPortal Prevalence
@@ -577,9 +579,9 @@ def result_to_markdown(result: dict) -> str:
             url = article.get('url') or (f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else '')
             pmid_link = f"[{pmid}]({url})" if pmid and url else pmid
             year = article.get('year', '')
-            journal = (article.get('journal', '') or '')[:20]
+            journal = (article.get('journal', '') or '')
             signal = article.get('signal_type', '') or '-'
-            title = (article.get('title', '') or '')[:80] + "..."
+            title = (article.get('title', '') or '')[:1500] + "..."
             lines.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")
         lines.append("")
 

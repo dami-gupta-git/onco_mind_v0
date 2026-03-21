@@ -862,7 +862,7 @@ class Evidence(BaseModel):
                                 source=f"ClinicalTrials.gov ({trial.nct_id})",
                                 source_url=trial.url,
                                 confidence="low",  # Trial data, not yet published results
-                                locus_match=getattr(trial, "match_scope", None),
+                                locus_match="gene",
                                 cancer_specificity=cancer_specificity,
                             )
                         )
@@ -3070,15 +3070,9 @@ class Evidence(BaseModel):
         codon_count += cgi_counts["codon"]
         gene_count += cgi_counts["gene"]
 
-        # Clinical trials (use match_scope attribute)
-        for trial in self.clinical_trials:
-            scope = getattr(trial, "match_scope", None)
-            if scope == "specific":
-                variant_count += 1
-            elif scope == "ambiguous":
-                codon_count += 1
-            else:
-                gene_count += 1
+        # Clinical trials are excluded from locus match summary.
+        # This summary reflects therapeutic evidence quality (KB sources),
+        # not trial availability — trials don't indicate variant-level drug response.
 
         # Literature knowledge - resistance and sensitivity signals
         if self.literature_knowledge:

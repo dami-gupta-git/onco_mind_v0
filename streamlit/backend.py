@@ -349,11 +349,7 @@ def _build_response(result) -> Dict[str, Any]:
                 "drugs": t.interventions,
                 "conditions": t.conditions,
                 "url": t.url,
-                "variant_specific": t.locus_match == "variant",
-                "matched_biomarker": t.matched_biomarker,
-                "match_scope": t.match_scope,
                 "tumor_match": t.tumor_match,
-                "locus_match": t.locus_match,
             }
             for t in evidence.clinical_trials
         ],
