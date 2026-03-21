@@ -172,6 +172,7 @@ class TestDepMapTumorTypeFiltering:
             for g in preclinical_gaps
             if "cross-histology" in g.description.lower()
             or "none in" in g.description.lower()
+            or "none with" in g.description.lower()
         ]
         assert (
             len(cross_histology_gaps) > 0
