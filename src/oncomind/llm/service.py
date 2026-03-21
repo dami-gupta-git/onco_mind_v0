@@ -254,13 +254,13 @@ class LLMService:
             tumor_match_summary=tumor_match_summary,
         )
 
-        print("\n" + "=" * 80)
-        print("LLM CALL: RESEARCH DOSSIER SYNTHESIS")
-        print("=" * 80)
-        for msg in synthesis_messages:
-            print(f"\n--- {msg['role'].upper()} ---")
-            print(msg["content"])
-        print("=" * 80 + "\n")
+        # print("\n" + "=" * 80)
+        # print("LLM CALL: RESEARCH DOSSIER SYNTHESIS")
+        # print("=" * 80)
+        # for msg in synthesis_messages:
+        #     print(f"\n--- {msg['role'].upper()} ---")
+        #     print(msg["content"])
+        # print("=" * 80 + "\n")
 
         synthesis_data = await self._call_llm(
             synthesis_messages, max_tokens=LLM_MAX_TOKENS_SYNTHESIS

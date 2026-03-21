@@ -773,15 +773,15 @@ with tab1:
             st.markdown("<hr style='margin: 1rem 0; border: none; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
 
             # Suggested studies (collapsible) - full width below tables
-            gaps = evidence_gaps.get('gaps', [])
-            if gaps:
-                all_suggested = []
-                for gap in gaps:
-                    all_suggested.extend(gap.get('suggested_studies', []))
-                if all_suggested:
-                    with st.expander("📋 Suggested Studies"):
-                        for study in list(set(all_suggested)):
-                            st.markdown(f"- {study}")
+            # gaps = evidence_gaps.get('gaps', [])
+            # if gaps:
+            #     all_suggested = []
+            #     for gap in gaps:
+            #         all_suggested.extend(gap.get('suggested_studies', []))
+            #     if all_suggested:
+            #         with st.expander("📋 Suggested Studies"):
+            #             for study in list(set(all_suggested)):
+            #                 st.markdown(f"- {study}")
 
         # ==============================================
         # LLM RESEARCH SYNTHESIS (at bottom, if enabled) - in bordered card
