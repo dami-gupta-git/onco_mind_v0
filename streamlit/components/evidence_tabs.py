@@ -87,7 +87,9 @@ def render_functional_tab(
         if annotations.get('cadd_score') is not None:
             rows.append(f"| CADD | {annotations['cadd_score']:.1f} | {'Deleterious' if annotations['cadd_score'] > CADD_DELETERIOUS_THRESHOLD else 'Benign'} |")
         if annotations.get('polyphen2_prediction'):
-            rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
+            pp2_score = annotations.get('polyphen2_score')
+            pp2_score_str = f"{pp2_score:.3f}" if pp2_score is not None else "-"
+            rows.append(f"| PolyPhen2 | {pp2_score_str} | {annotations['polyphen2_prediction']} |")
         if annotations.get('gnomad_exome_af') is not None:
             af = annotations['gnomad_exome_af']
             freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"
@@ -780,7 +782,7 @@ def render_literature_tab(articles: list):
         url = a.get('url') or f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/" if pmid else ''
         pmid_link = f"[{pmid}]({url})" if pmid and url else pmid
         year = a.get('year', '')
-        journal = (a.get('journal', '') or '')[:20]
+        journal = (a.get('journal', '') or '')
         signal = a.get('signal_type', '') or '-'
         title = (a.get('title', '') or '')[:80] + "..."
         rows.append(f"| {pmid_link} | {year} | {journal} | {signal} | {title} |")

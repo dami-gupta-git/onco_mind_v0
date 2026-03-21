@@ -191,7 +191,9 @@ def result_to_markdown(result: dict) -> str:
         pred = 'Deleterious' if cadd > CADD_DELETERIOUS_THRESHOLD else 'Benign'
         func_rows.append(f"| CADD | {cadd:.1f} | {pred} |")
     if annotations.get('polyphen2_prediction'):
-        func_rows.append(f"| PolyPhen2 | - | {annotations['polyphen2_prediction']} |")
+        pp2_score = annotations.get('polyphen2_score')
+        pp2_score_str = f"{pp2_score:.3f}" if pp2_score is not None else "-"
+        func_rows.append(f"| PolyPhen2 | {pp2_score_str} | {annotations['polyphen2_prediction']} |")
     if annotations.get('gnomad_exome_af') is not None:
         af = annotations['gnomad_exome_af']
         freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"

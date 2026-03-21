@@ -279,6 +279,7 @@ def _build_response(result) -> Dict[str, Any]:
         "annotations": {
             "snpeff_effect": result.functional.snpeff_effect,
             "polyphen2_prediction": result.functional.polyphen2_prediction,
+            "polyphen2_score": result.functional.polyphen2_score,
             "cadd_score": result.functional.cadd_score,
             "gnomad_exome_af": result.functional.gnomad_exome_af,
             "alphamissense_score": result.functional.alphamissense_score,
