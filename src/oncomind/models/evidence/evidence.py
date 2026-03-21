@@ -2170,52 +2170,9 @@ class Evidence(BaseModel):
             components = re.split(r"\s*[+,]\s*|\s+and\s+", drug_lower)
             return any(comp.strip() in excluded_drugs for comp in components)
 
-        # FDA Approvals - use get_fda_approved_therapies() which computes response_type from VICC
-        # Filter out:
-        # 1. Biomarker selection drugs (e.g., DATROWAY for EGFR - targets TROP2, not EGFR)
-        # 2. Drugs approved for OTHER tumor types (e.g., RYDAPT approved for AML, not GIST)
-        #    - cancer_specific = matches queried tumor type
-        #    - pan_cancer = applies to all tumors
-        #    - Other values (e.g., "AML") = approved for different tumor type, EXCLUDE
-        # 3. Drugs with REQUIRED_NEGATIVE for the queried gene (e.g., IMJUDO for EGFR-negative)
-        fda_therapies = self.get_fda_approved_therapies()
-        fda_from_fda = [
-            t
-            for t in fda_therapies
-            if t.source == "FDA"
-            and not is_biomarker_selection_drug(t.drug_name, gene)
-            and t.cancer_specificity in ("cancer_specific", "pan_cancer")
-            and not _drug_is_excluded(t.drug_name)
-        ]
-        if fda_from_fda:
-            fda_drugs = []
-            for therapy in fda_from_fda[:4]:
-                drug = therapy.drug_name
-
-                # Build annotation parts
-                # NOTE: Do NOT include locus_match level for matched drugs - it causes LLM to hedge
-                # If the drug is in fda_from_fda, it's already matched (biomarker_matched=True)
-                parts = []
-
-                # Add response type (Sensitivity/Resistance) - critical for LLM
-                if therapy.response_type:
-                    parts.append(therapy.response_type.lower())
-
-                # Add clinical context if available
-                if therapy.clinical_context:
-                    parts.append(therapy.clinical_context)
-
-                # Add tumor match info
-                if therapy.cancer_specificity == "cancer_specific":
-                    parts.append(tumor_type)
-                elif therapy.cancer_specificity and therapy.cancer_specificity not in (
-                    "pan_cancer",
-                    "cancer_specific",
-                ):
-                    parts.append(f"approved for {therapy.cancer_specificity}")
-
-                fda_drugs.append(f"{drug} ({', '.join(parts)})" if parts else drug)
-            lines.append(f"FDA Approved: {', '.join(fda_drugs)}")
+        # FDA Label Indications are handled below with full match semantics.
+        # The coarser TherapeuticData-based block was removed because it lacked
+        # approved-variant lists, causing the LLM to over-attribute approvals.
 
         # FDA Codon-Level Near-Misses - drugs approved for OTHER variants at same codon
         # e.g., KRAS G12C drugs (sotorasib, adagrasib) when patient has G12A

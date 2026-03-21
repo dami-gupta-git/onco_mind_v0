@@ -196,7 +196,7 @@ def apply_styles() -> None:
     .scrollable-table .col-phase { width: 100px; }
     .scrollable-table .col-title { width: 450px; min-width: 450px; max-width: 450px; }
     .scrollable-table .col-year { width: 50px !important; max-width: 50px !important; min-width: 50px !important; }
-    .scrollable-table .col-pmid { width: 80px !important; max-width: 80px !important; min-width: 80px !important; }
+    .scrollable-table .col-pmid { width: 160px !important; max-width: 160px !important; min-width: 160px !important; }
     .scrollable-table .col-signal { width: 80px !important; max-width: 80px !important; min-width: 80px !important; }
     .scrollable-table .col-journal { width: 250px !important; max-width: 250px !important; min-width: 250px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Drug column - allow horizontal scroll for long drug names */

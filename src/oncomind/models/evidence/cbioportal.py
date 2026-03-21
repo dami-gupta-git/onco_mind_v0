@@ -13,6 +13,7 @@ class CoMutationEntry(BaseModel):
     count: int = 0
     pct: float = 0.0
     odds_ratio: float | None = None
+    p_value: float | None = None
 
 
 class CBioPortalEvidence(EvidenceItemBase):

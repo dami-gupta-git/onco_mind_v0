@@ -960,7 +960,7 @@ def check_preclinical_models(evidence: "Evidence", ctx: "GapDetectionContext") -
                     ctx.add_gap(
                         category=GapCategory.PRECLINICAL,
                         severity=GapSeverity.SIGNIFICANT,
-                        description=f"Cell line models with {ctx.variant} exist in DepMap but none in {ctx.tumor_type} — cross-histology testing possible",
+                        description=f"Endogenous {ctx.variant} cell lines exist in DepMap CCLE but none with primary_disease={ctx.tumor_type} — {ctx.tumor_type}-specific models may exist outside CCLE",
                         suggested_studies=[
                             f"Test in {ctx.tumor_type}-derived organoids",
                             "Compare drug response vs other histologies",

@@ -41,9 +41,9 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 ┌───────────────────────────────────────────────────────────────────┐
 │                   Evidence Aggregation Layer                      │
 │  ┌─────────────────────────────────────────────────────────────┐  │
-│  │  insight_builder/builder.py                                 │  │
-│  │  - InsightBuilder (async context manager)                   │  │
-│  │  - build_insight(parsed_variant, tumor_type) → Evidence     │  │
+│  │  insight_builder/evidence_aggregator.py                      │  │
+│  │  - EvidenceAggregator (async context manager)               │  │
+│  │  - build_evidence(parsed_variant, tumor_type) → Evidence    │  │
 │  │  - Parallel API fetching with asyncio.gather()              │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────┘
@@ -56,7 +56,9 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  │ api/myvariant.py      │  │  │  │ llm/service.py            │  │
 │  │ api/civic.py          │  │  │  │ - get_llm_insight()       │  │
 │  │ api/vicc.py           │  │  │  │ - score_paper_relevance   │  │
-│  │ api/fda.py            │  │  │  │ - extract_variant_knowledge│ │
+│  │ api/fda_drugs.py      │  │
+│  │ api/fda_label_parser.py│ │
+│  │ api/hotspots.py       │  │  │  │ - extract_variant_knowledge│ │
 │  │ api/cgi.py            │  │  │  └───────────────────────────┘  │
 │  │ api/pubmed.py         │  │  └─────────────────────────────────┘
 │  │ api/semantic_scholar.py│ │
@@ -75,7 +77,7 @@ OncoMind follows a layered architecture that separates concerns into distinct mo
 │  │    │   ├── identifiers: VariantIdentifiers                  │  │
 │  │    │   ├── functional: FunctionalScores                     │  │
 │  │    │   ├── context: VariantContext                          │  │
-│  │    │   ├── fda_approvals, civic_*, vicc_*, cgi_*            │  │
+│  │    │   ├── fda_biomarker_evidence, civic_*, vicc_*, cgi_*   │  │
 │  │    │   ├── cbioportal_evidence, depmap_evidence             │  │
 │  │    │   └── evidence_gaps: EvidenceGaps                      │  │
 │  │    ├── llm: LLMInsight | None  ← Optional LLM narrative     │  │
@@ -118,19 +120,26 @@ class Evidence(BaseModel):
     functional: FunctionalScores            # AlphaMissense, CADD, etc.
     context: VariantContext                 # tumor_type, gene_role, pathway
 
-    # Evidence lists (flattened, one per source)
-    fda_approvals: list[FDAApproval]
+    # Evidence lists (flat, one per source)
+    fda_biomarker_evidence: list[FDABiomarkerEvidence]
     civic_assertions: list[CIViCAssertionEvidence]
     civic_evidence: list[CIViCEvidence]
     vicc_evidence: list[VICCEvidence]
     cgi_biomarkers: list[CGIBiomarkerEvidence]
+    clinvar_entries: list[ClinVarEvidence]
     clinical_trials: list[ClinicalTrialEvidence]
     pubmed_articles: list[PubMedEvidence]
+    preclinical_biomarkers: list[CGIBiomarkerEvidence]
+    early_phase_biomarkers: list[CGIBiomarkerEvidence]
 
     # Rich context sources
     cbioportal_evidence: CBioPortalEvidence | None
     depmap_evidence: DepMapEvidence | None
+    hotspots_evidence: HotspotsEvidence | None
     literature_knowledge: LiteratureKnowledge | None
+
+    # Metadata
+    clinvar_significance: str | None
 
     # Computed analysis
     evidence_gaps: EvidenceGaps | None
@@ -297,12 +306,12 @@ class ParsedVariant:
 - Tumor type extraction from free text
 - Variant type classification
 
-### Insight Builder (`insight_builder/builder.py`)
+### Evidence Aggregator (`insight_builder/evidence_aggregator.py`)
 
 Orchestrates parallel API calls and assembles results:
 
 ```python
-class InsightBuilder:
+class EvidenceAggregator:
     """Async context manager for evidence aggregation."""
 
     async def __aenter__(self):
@@ -312,7 +321,7 @@ class InsightBuilder:
         # ...
         return self
 
-    async def build_insight(
+    async def build_evidence(
         self,
         variant: ParsedVariant,
         tumor_type: str | None,
@@ -320,7 +329,7 @@ class InsightBuilder:
         # Parallel fetch from all sources
         results = await asyncio.gather(
             self.myvariant_client.fetch_evidence(...),
-            self.fda_client.fetch_drug_approvals(...),
+            fetch_fda_evidence(),     # local async function
             asyncio.to_thread(self.cgi_client.fetch_biomarkers, ...),
             fetch_vicc(),            # local async function
             fetch_civic_assertions(), # local async function
@@ -329,15 +338,25 @@ class InsightBuilder:
             return_exceptions=True,
         )
 
-        # Assemble into Evidence
+        # Assemble into Evidence (flat structure)
         return Evidence(
             identifiers=...,
-            kb=...,
             functional=...,
-            clinical=...,
-            literature=...,
+            context=...,
+            fda_biomarker_evidence=...,
+            civic_assertions=...,
+            # ... one field per source
         )
 ```
+
+### Gap Detection (`insight_builder/gap_detection/`)
+
+Rule-based evidence gap analysis subpackage. Analyzes evidence to identify what is well-characterized vs under-studied for a variant:
+
+- `detector.py` -- Main entry point (`detect_evidence_gaps()`)
+- `context.py` -- `GapDetectionContext` dataclass for accumulating results
+- `checks.py` -- Individual gap detection check functions (one per evidence category)
+- `helpers.py` -- Shared helper classes and utility functions
 
 ### API Clients (`api/`)
 
@@ -376,8 +395,9 @@ class VICCClient:
 | `MyVariantClient` | myvariant.info | ClinVar, COSMIC, gnomAD, CADD |
 | `CIViCClient` | CIViC GraphQL | Curated variant-drug evidence |
 | `VICCClient` | VICC MetaKB | Aggregated knowledgebases |
-| `FDAClient` | OpenFDA | Drug approvals |
+| `FDADrugLookup` / `FDALabelParser` | FDA labels | Biomarker-drug indications from drug labels |
 | `CGIClient` | Local TSV | Cancer biomarkers |
+| `HotspotsClient` | Local TSV | Cancer hotspot positions (MSK) |
 | `PubMedClient` | NCBI E-utils | Literature search |
 | `SemanticScholarClient` | S2 API | Literature with citations |
 | `ClinicalTrialsClient` | ClinicalTrials.gov | Active trials |
@@ -410,13 +430,33 @@ class Result(BaseModel):
         ...
 
 class Evidence(BaseModel):
-    """Structured evidence from databases (no LLM field)."""
+    """Structured evidence from databases (flat structure, no LLM field)."""
 
     identifiers: VariantIdentifiers    # Gene, variant, IDs
-    kb: KnowledgebaseEvidence          # CIViC, ClinVar, VICC, etc.
     functional: FunctionalScores       # AlphaMissense, CADD, etc.
-    clinical: ClinicalContext          # FDA, trials, gene role
-    literature: LiteratureEvidence     # PubMed, extracted knowledge
+    context: VariantContext             # tumor_type, gene_role, pathway
+
+    # Evidence lists (flat, one per source)
+    fda_biomarker_evidence: list[FDABiomarkerEvidence]
+    civic_assertions: list[CIViCAssertionEvidence]
+    civic_evidence: list[CIViCEvidence]
+    vicc_evidence: list[VICCEvidence]
+    cgi_biomarkers: list[CGIBiomarkerEvidence]
+    clinvar_entries: list[ClinVarEvidence]
+    clinical_trials: list[ClinicalTrialEvidence]
+    pubmed_articles: list[PubMedEvidence]
+    preclinical_biomarkers: list[CGIBiomarkerEvidence]
+    early_phase_biomarkers: list[CGIBiomarkerEvidence]
+
+    # Rich context sources
+    cbioportal_evidence: CBioPortalEvidence | None
+    depmap_evidence: DepMapEvidence | None
+    hotspots_evidence: HotspotsEvidence | None
+    literature_knowledge: LiteratureKnowledge | None
+    clinvar_significance: str | None
+
+    # Computed analysis
+    evidence_gaps: EvidenceGaps | None
 
     def get_evidence_summary_for_llm(self) -> str:
         """Generate compact evidence summary for LLM prompt."""
@@ -430,26 +470,25 @@ Result
 ├── evidence: Evidence
 │   ├── VariantIdentifiers
 │   │   ├── gene, variant, variant_type
-│   │   ├── cosmic_id, clinvar_id, dbsnp_id
+│   │   ├── clinvar_id, dbsnp_id
 │   │   └── hgvs_protein, hgvs_genomic
-│   ├── KnowledgebaseEvidence
-│   │   ├── civic: list[CIViCEvidence]
-│   │   ├── civic_assertions: list[CIViCAssertionEvidence]
-│   │   ├── clinvar: list[ClinVarEvidence]
-│   │   ├── vicc: list[VICCEvidence]
-│   │   └── cgi_biomarkers: list[CGIBiomarkerEvidence]
 │   ├── FunctionalScores
 │   │   ├── alphamissense_score, alphamissense_prediction
 │   │   ├── cadd_score, polyphen2_prediction, sift_prediction
 │   │   └── gnomad_exome_af, gnomad_genome_af
-│   ├── ClinicalContext
+│   ├── VariantContext
 │   │   ├── tumor_type, tumor_type_resolved
-│   │   ├── fda_approvals: list[FDAApproval]
-│   │   ├── clinical_trials: list[ClinicalTrialEvidence]
-│   │   └── gene_role, gene_class, pathway
-│   ├── LiteratureEvidence
-│   │   ├── pubmed_articles: list[PubMedEvidence]
-│   │   └── literature_knowledge: LiteratureKnowledge | None
+│   │   └── gene_role, gene_class, mutation_class, pathway
+│   ├── fda_biomarker_evidence: list[FDABiomarkerEvidence]
+│   ├── civic_assertions: list[CIViCAssertionEvidence]
+│   ├── civic_evidence: list[CIViCEvidence]
+│   ├── vicc_evidence: list[VICCEvidence]
+│   ├── cgi_biomarkers: list[CGIBiomarkerEvidence]
+│   ├── clinvar_entries: list[ClinVarEvidence]
+│   ├── clinical_trials: list[ClinicalTrialEvidence]
+│   ├── pubmed_articles: list[PubMedEvidence]
+│   ├── preclinical_biomarkers: list[CGIBiomarkerEvidence]
+│   ├── early_phase_biomarkers: list[CGIBiomarkerEvidence]
 │   ├── cbioportal_evidence: CBioPortalEvidence | None
 │   │   ├── co_occurring, mutually_exclusive
 │   │   └── gene_prevalence_pct, variant_prevalence_pct
@@ -457,20 +496,24 @@ Result
 │   │   ├── gene_dependency: GeneDependency (CERES score)
 │   │   ├── drug_sensitivities: list[DrugSensitivity] (IC50s)
 │   │   └── cell_line_models: list[CellLineModel]
-│   └── evidence_gaps: EvidenceGaps | None  ← Deterministic gap analysis
+│   ├── hotspots_evidence: HotspotsEvidence | None
+│   ├── literature_knowledge: LiteratureKnowledge | None
+│   ├── clinvar_significance: str | None
+│   └── evidence_gaps: EvidenceGaps | None  -- Deterministic gap analysis
 │       ├── overall_evidence_quality: str
 │       ├── well_characterized: list[str]
 │       ├── poorly_characterized: list[str]
 │       └── gaps: list[EvidenceGap]
-└── llm: LLMInsight | None  ← Optional, when LLM mode enabled
-    ├── llm_summary: str
-    ├── rationale: str
-    ├── evidence_quality: str
-    ├── knowledge_gaps: list[str]
-    ├── well_characterized: list[str]
-    ├── research_implications: str
-    ├── research_hypotheses: list[str]
-    └── references: list[str]
+├── llm: LLMInsight | None  -- Optional, when LLM mode enabled
+│   ├── llm_summary: str
+│   ├── rationale: str
+│   ├── evidence_quality: str
+│   ├── knowledge_gaps: list[str]
+│   ├── well_characterized: list[str]
+│   ├── research_implications: str
+│   ├── research_hypotheses: list[str]
+│   └── references: list[str]
+└── cross_source_analysis: dict | None  -- Cross-source drug synthesis
 ```
 
 ### LLM Service (`llm/service.py`)
@@ -515,7 +558,7 @@ class LLMService:
 **LLM Integration Flow:**
 
 ```
-                EvidenceBuilder
+                EvidenceAggregator
                       │
                       ▼
                    Evidence (structured data)
@@ -564,7 +607,7 @@ User Input: "BRAF V600E in Melanoma"
                 ▼
 ┌─────────────────────────────────┐
 │ 3. Build Evidence               │
-│    EvidenceBuilder              │
+│    EvidenceAggregator              │
 │    ┌────────────────────────┐   │
 │    │ Parallel API Calls:    │   │
 │    │ • MyVariant.info       │   │
@@ -649,7 +692,7 @@ class ConductorConfig:
 
     # LLM
     enable_llm: bool = False
-    llm_model: str = "claude-sonnet-4-20250514"  # Default: Claude Sonnet 4
+    llm_model: str = "gpt-4o-mini"
     llm_temperature: float = 0.1
 
     # Limits (from config/constants.py)
@@ -659,7 +702,10 @@ class ConductorConfig:
     max_literature_results: int = 30
 
     # Literature source: "none", "pubmed", or "semantic_scholar"
-    literature_source: str = "pubmed"
+    literature_source: str = "semantic_scholar"
+
+    # Semantic Scholar: filter to recent papers (last N years, 0 = no filter)
+    semantic_scholar_recent_years: int = 5
 
     # Performance options
     enable_timing: bool = False
@@ -677,14 +723,17 @@ class EvidenceAggregatorConfig:
     enable_clinical_trials: bool = True
     enable_literature: bool = True
 
+    # Literature source: "none", "pubmed", or "semantic_scholar"
+    literature_source: str = "semantic_scholar"
+
+    # Semantic Scholar: filter to recent papers (last N years, 0 = no filter)
+    semantic_scholar_recent_years: int = 5
+
     # Result limits (from config/constants.py)
     max_vicc_results: int = 500
     max_civic_assertions: int = 500
     max_clinical_trials: int = 500
     max_literature_results: int = 30
-
-    # API keys
-    semantic_scholar_api_key: str | None = None
 ```
 
 ## Error Handling

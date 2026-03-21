@@ -86,6 +86,10 @@ def render_functional_tab(
             pp2_score = annotations.get('polyphen2_score')
             pp2_score_str = f"{pp2_score:.3f}" if pp2_score is not None else "-"
             rows.append(f"| PolyPhen2 | {pp2_score_str} | {annotations['polyphen2_prediction']} |")
+        if annotations.get('sift_prediction'):
+            sift_score = annotations.get('sift_score')
+            sift_score_str = f"{sift_score:.3f}" if sift_score is not None else "-"
+            rows.append(f"| SIFT | {sift_score_str} | {annotations['sift_prediction']} |")
         if annotations.get('gnomad_exome_af') is not None:
             af = annotations['gnomad_exome_af']
             freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"
@@ -823,32 +827,42 @@ def render_cbioportal_tab(cbioportal: dict):
         with co_col:
             if co_occurring:
                 st.markdown(f"**Co-occurring ({len(co_occurring)}):**")
-                st.caption("_Odds > 1 — possible functional interaction_")
+                carrier_n = cbioportal.get('samples_with_gene_mutation')
+                n_str = f" (n = {carrier_n})" if carrier_n else ""
+                st.caption(f"_Odds > 1 — possible functional interaction. Freq = % of variant-carriers{n_str} also mutated in that gene._")
                 co_rows = []
                 for c in co_occurring:
                     odds = c.get('odds_ratio')
                     odds_str = f"{odds:.2f}" if odds else "N/A"
+                    p_val = c.get('p_value')
+                    p_str = f"{p_val:.4f}" if p_val is not None else "N/A"
                     co_rows.append({
                         "Gene": c.get('gene', ''),
                         "Count": c.get('count', 0),
-                        "Freq": f"{c.get('pct', 0):.1f}%",
+                        "Freq (of carriers)": f"{c.get('pct', 0):.1f}%",
                         "OR": odds_str,
+                        "p-value": p_str,
                     })
                 st.dataframe(pd.DataFrame(co_rows), hide_index=True, width="stretch", height=min(300, 35 * (len(co_rows) + 1)))
 
         with me_col:
             if mutually_exclusive:
                 st.markdown(f"**Mutually Exclusive ({len(mutually_exclusive)}):**")
-                st.caption("_Odds < 1 — likely redundant drivers_")
+                carrier_n = cbioportal.get('samples_with_gene_mutation')
+                n_str = f" (n = {carrier_n})" if carrier_n else ""
+                st.caption(f"_Odds < 1 — likely redundant drivers. Freq = % of variant-carriers{n_str} also mutated in that gene._")
                 me_rows = []
                 for m in mutually_exclusive:
                     odds = m.get('odds_ratio')
                     odds_str = f"{odds:.2f}" if odds else "N/A"
+                    p_val = m.get('p_value')
+                    p_str = f"{p_val:.4f}" if p_val is not None else "N/A"
                     me_rows.append({
                         "Gene": m.get('gene', ''),
                         "Count": m.get('count', 0),
-                        "Freq": f"{m.get('pct', 0):.1f}%",
+                        "Freq (of carriers)": f"{m.get('pct', 0):.1f}%",
                         "OR": odds_str,
+                        "p-value": p_str,
                     })
                 st.dataframe(pd.DataFrame(me_rows), hide_index=True, width="stretch", height=min(300, 35 * (len(me_rows) + 1)))
 

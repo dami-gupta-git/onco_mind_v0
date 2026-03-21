@@ -321,15 +321,7 @@ with tab1:
             civic_evidence = result.get('civic_evidence', [])
             vicc = result.get('vicc_evidence', [])
             cgi_biomarkers = result.get('cgi_biomarkers', [])
-            _clinvar_entries_raw = result.get('clinvar_entries', [])
-            clinvar_entries = [
-                e for e in _clinvar_entries_raw
-                if (e.get('review_status') or '').lower() not in (
-                    'no assertion criteria provided',
-                    'no classification provided',
-                    'no classification for the individual variant',
-                )
-            ]
+            clinvar_entries = result.get('clinvar_entries', [])
             clinvar_sig = result.get('clinvar', {}).get('clinical_significance')
             trials = result.get('clinical_trials', [])
             articles = result.get('pubmed_articles', [])
@@ -497,6 +489,7 @@ with tab1:
 
             # Description above title, then title with badges on the right
             st.caption("What's known vs. unknown about this variant — identifying opportunities for further research.")
+            st.caption("*Evidence counts are aggregated totals across all tumor types and evidence tiers, not filtered to the queried tumor type.*")
             st.markdown(
                 f"<div class='gap-analysis-header'>"
                 f"<h2 style='margin: 0; font-size: 1.75rem !important;'>🔍 Gap Analysis</h2>"

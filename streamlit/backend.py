@@ -28,7 +28,7 @@ from oncomind.config.constants import (
     is_biomarker_selection_drug,
 )
 from oncomind.models.evidence.base import tumor_types_match, extract_variant_position
-from oncomind.utils import dedupe_civic_evidence, dedupe_vicc_evidence
+from oncomind.utils import dedupe_civic_evidence, dedupe_vicc_evidence, dedupe_cgi_evidence
 
 logger = get_logger(__name__)
 
@@ -284,6 +284,8 @@ def _build_response(result) -> Dict[str, Any]:
             "gnomad_exome_af": result.functional.gnomad_exome_af,
             "alphamissense_score": result.functional.alphamissense_score,
             "alphamissense_prediction": result.functional.alphamissense_prediction,
+            "sift_prediction": result.functional.sift_prediction,
+            "sift_score": result.functional.sift_score,
         },
         "transcript": {
             "id": result.identifiers.transcript_id,
@@ -315,21 +317,7 @@ def _build_response(result) -> Dict[str, Any]:
         # Use get_vicc_unique() to exclude CIViC/CGI sources (avoid double-counting)
         # Then deduplicate by (drugs, disease, response_type) to avoid repeated entries
         "vicc_evidence": dedupe_vicc_evidence(evidence.get_vicc_unique()),
-        "cgi_biomarkers": [
-            {
-                "drug": b.drug,
-                "association": b.association,
-                "tumor_type": b.tumor_type,
-                "evidence_level": b.evidence_level,
-                "fda_approved": b.fda_approved,
-                "fda_url": b.fda_url,
-                # Match specificity tracking
-                "locus_match": b.locus_match,
-                "matched_alteration": b.matched_alteration,
-                "tumor_match": b.tumor_match,
-            }
-            for b in evidence.cgi_biomarkers
-        ],
+        "cgi_biomarkers": dedupe_cgi_evidence(evidence.cgi_biomarkers, include_fda_fields=True),
         "clinvar_entries": [
             {
                 "variation_id": c.variation_id,
@@ -367,26 +355,8 @@ def _build_response(result) -> Dict[str, Any]:
             for a in evidence.pubmed_articles
         ],
         "literature_knowledge": evidence.literature_knowledge.format_summary() if evidence.literature_knowledge else None,
-        "preclinical_biomarkers": [
-            {
-                "drug": b.drug,
-                "association": b.association,
-                "evidence_level": b.evidence_level,
-                "tumor_type": b.tumor_type,
-                "locus_match": b.locus_match,
-            }
-            for b in evidence.preclinical_biomarkers
-        ],
-        "early_phase_biomarkers": [
-            {
-                "drug": b.drug,
-                "association": b.association,
-                "evidence_level": b.evidence_level,
-                "tumor_type": b.tumor_type,
-                "locus_match": b.locus_match,
-            }
-            for b in evidence.early_phase_biomarkers
-        ],
+        "preclinical_biomarkers": dedupe_cgi_evidence(evidence.preclinical_biomarkers),
+        "early_phase_biomarkers": dedupe_cgi_evidence(evidence.early_phase_biomarkers),
         "cbioportal_evidence": {
             "gene": evidence.cbioportal_evidence.gene,
             "variant": evidence.cbioportal_evidence.variant,

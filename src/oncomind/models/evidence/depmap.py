@@ -155,12 +155,12 @@ class DepMapEvidence(EvidenceItemBase):
             score = gd.mean_dependency_score
             if score is not None:
                 essential_str = "ESSENTIAL" if score < -0.5 else "not essential"
-                lines.append(f"GENE DEPENDENCY ({source_cite}):")
+                lines.append(f"GENE DEPENDENCY — pan-cancer, gene-level, not variant-specific ({source_cite}):")
                 lines.append(
                     f"  {self.gene} is {essential_str} (CERES score: {score:.2f})"
                 )
                 lines.append(
-                    f"  Dependent in {gd.n_dependent_lines}/{gd.n_total_lines} cell lines ({gd.dependency_pct:.1f}%)"
+                    f"  Dependent in {gd.n_dependent_lines}/{gd.n_total_lines} pan-cancer cell lines ({gd.dependency_pct:.1f}%) — not specific to this variant or tumor type"
                 )
                 if gd.top_dependent_lines:
                     lines.append(

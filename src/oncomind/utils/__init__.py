@@ -4,6 +4,7 @@ from oncomind.utils.utils import (
     normalize_drug_name,
     is_kit_false_positive,
     dedupe_civic_evidence,
+    dedupe_cgi_evidence,
     dedupe_vicc_evidence,
 )
 from oncomind.utils.variant_normalization import (
@@ -20,6 +21,7 @@ __all__ = [
     "normalize_drug_name",
     "is_kit_false_positive",
     "dedupe_civic_evidence",
+    "dedupe_cgi_evidence",
     "dedupe_vicc_evidence",
     "VariantNormalizer",
     "normalize_variant",

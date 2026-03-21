@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from scipy.stats import fisher_exact
 
 from oncomind.config.constants import (
     TUMOR_TYPE_MAPPINGS,
@@ -337,6 +338,12 @@ class CBioPortalClient:
                     else:
                         odds_ratio = 0
 
+                    # Fisher's exact test on the 2x2 contingency table:
+                    # [[both, only_query], [only_other, neither]]
+                    contingency_table = [[both, only_query], [only_other, neither]]
+                    _, p_co = fisher_exact(contingency_table, alternative="greater")
+                    _, p_me = fisher_exact(contingency_table, alternative="less")
+
                     co_pct = 100 * both / len(target_samples) if target_samples else 0
 
                     entry = {
@@ -344,12 +351,14 @@ class CBioPortalClient:
                         "count": both,
                         "pct": round(co_pct, 1),
                         "odds_ratio": round(odds_ratio, 2) if odds_ratio else None,
+                        "p_value": round(p_co, 4),
                     }
 
-                    # Categorize: OR > 1 = co-occurring, OR < 1 = mutually exclusive
-                    if odds_ratio > 1.5 and both >= 3:
+                    # Gate on Fisher's exact p < 0.05 and minimum observed co-occurrences
+                    if p_co < 0.05 and both >= 3:
                         co_occurring.append(entry)
-                    elif odds_ratio < 0.5 and both <= 2:
+                    elif p_me < 0.05 and both >= 1:
+                        entry["p_value"] = round(p_me, 4)
                         mutually_exclusive.append(entry)
 
                 # Sort by count/significance

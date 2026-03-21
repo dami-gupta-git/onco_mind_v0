@@ -144,6 +144,50 @@ def dedupe_civic_evidence(civic_evidence_list) -> List[Dict[str, Any]]:
     return deduped
 
 
+def dedupe_cgi_evidence(cgi_evidence_list, include_fda_fields: bool = False) -> List[Dict[str, Any]]:
+    """Deduplicate CGI evidence items by (drug, association, tumor_type).
+
+    The CGI TSV can have multiple rows for the same drug+disease+response
+    combination with different evidence_level or alteration patterns (e.g.
+    one row for FDA guidelines and one for NCCN guidelines). We keep the
+    first-seen entry, which preserves the highest-specificity locus match
+    since fetch_biomarker_evidence returns exact matches before wildcard ones.
+
+    Args:
+        cgi_evidence_list: List of CGIBiomarkerEvidence objects
+        include_fda_fields: Whether to include fda_approved/fda_url fields
+
+    Returns:
+        List of deduplicated evidence dicts ready for display
+    """
+    seen_keys = set()
+    deduped = []
+    for b in cgi_evidence_list:
+        drug_key = (b.drug or "").upper().strip()
+        assoc_key = (b.association or "").lower().strip()
+        tumor_key = (b.tumor_type or "").lower().strip()
+        dedup_key = (drug_key, assoc_key, tumor_key)
+
+        if dedup_key in seen_keys:
+            continue
+        seen_keys.add(dedup_key)
+
+        entry: Dict[str, Any] = {
+            "drug": b.drug,
+            "association": b.association,
+            "tumor_type": b.tumor_type,
+            "evidence_level": b.evidence_level,
+            "locus_match": b.locus_match,
+            "matched_alteration": b.matched_alteration,
+            "tumor_match": b.tumor_match,
+        }
+        if include_fda_fields:
+            entry["fda_approved"] = b.fda_approved
+            entry["fda_url"] = b.fda_url
+        deduped.append(entry)
+    return deduped
+
+
 def dedupe_vicc_evidence(vicc_evidence_list) -> List[Dict[str, Any]]:
     """Deduplicate VICC evidence items by (drugs, disease, response_type).
 

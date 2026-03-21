@@ -293,6 +293,8 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "mpn": ["myeloproliferative neoplasm", "mpn", "myeloproliferative"],
     "mf": ["myelofibrosis", "mf", "primary myelofibrosis"],
     "pv": ["polycythemia vera", "pv"],
+    # Pediatric / Neural Crest
+    "neuroblastoma": ["neuroblastoma", "autonomic", "peripheral nervous system", "nbl"],
     # Other / Rare
     "acc": ["adrenocortical carcinoma", "acc"],
     "meso": ["mesothelioma", "meso"],
@@ -937,6 +939,9 @@ CBIOPORTAL_STUDY_MAPPINGS: dict[str, list[str]] = {
     # Adrenocortical
     "adrenocortical": ["acc_tcga_pan_can_atlas_2018"],
     "acc": ["acc_tcga_pan_can_atlas_2018"],
+    # Neuroblastoma
+    "neuroblastoma": ["nbl_msk_2023", "nbl_amc_2012"],
+    "nbl": ["nbl_msk_2023", "nbl_amc_2012"],
     # Pheochromocytoma
     "pheochromocytoma": ["pcpg_tcga_pan_can_atlas_2018"],
     "pcpg": ["pcpg_tcga_pan_can_atlas_2018"],

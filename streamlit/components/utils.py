@@ -198,6 +198,10 @@ def result_to_markdown(result: dict) -> str:
         pp2_score = annotations.get('polyphen2_score')
         pp2_score_str = f"{pp2_score:.3f}" if pp2_score is not None else "-"
         func_rows.append(f"| PolyPhen2 | {pp2_score_str} | {annotations['polyphen2_prediction']} |")
+    if annotations.get('sift_prediction'):
+        sift_score = annotations.get('sift_score')
+        sift_score_str = f"{sift_score:.3f}" if sift_score is not None else "-"
+        func_rows.append(f"| SIFT | {sift_score_str} | {annotations['sift_prediction']} |")
     if annotations.get('gnomad_exome_af') is not None:
         af = annotations['gnomad_exome_af']
         freq = f"{af:.2e}" if af < GNOMAD_UNCOMMON_THRESHOLD else f"{af:.4f}"
@@ -429,12 +433,6 @@ def result_to_markdown(result: dict) -> str:
             lines.append("|--------------|----------------------|------------|---------------|")
             for entry in clinvar_entries[:15]:
                 review = entry.get('review_status', '')
-                if review.lower() in (
-                    'no assertion criteria provided',
-                    'no classification provided',
-                    'no classification for the individual variant',
-                ):
-                    continue
                 var_id = entry.get('variation_id', '')
                 sig = entry.get('clinical_significance', '')
                 conditions = entry.get('conditions', [])
@@ -496,25 +494,33 @@ def result_to_markdown(result: dict) -> str:
         # Co-occurring mutations
         co_occurring = cbio.get('co_occurring', [])
         if co_occurring:
-            lines.append(f"**Co-occurring ({len(co_occurring)}):** _Odds > 1 — possible functional interaction_\n")
-            lines.append("| Gene | Count | Freq | OR |")
-            lines.append("|------|-------|------|----|")
+            carrier_n = cbio.get('samples_with_gene_mutation')
+            n_str = f" (n = {carrier_n})" if carrier_n else ""
+            lines.append(f"**Co-occurring ({len(co_occurring)}):** _Odds > 1 — possible functional interaction. Freq = % of variant-carriers{n_str} also mutated in that gene._\n")
+            lines.append("| Gene | Count | Freq (of carriers) | OR | p-value |")
+            lines.append("|------|-------|--------------------|-----|---------|")
             for c in co_occurring:
                 odds = c.get('odds_ratio')
                 odds_str = f"{odds:.2f}" if odds else "N/A"
-                lines.append(f"| {c.get('gene', '')} | {c.get('count', 0)} | {c.get('pct', 0):.1f}% | {odds_str} |")
+                p_val = c.get('p_value')
+                p_str = f"{p_val:.4f}" if p_val is not None else "N/A"
+                lines.append(f"| {c.get('gene', '')} | {c.get('count', 0)} | {c.get('pct', 0):.1f}% | {odds_str} | {p_str} |")
             lines.append("")
 
         # Mutually exclusive
         mutually_exclusive = cbio.get('mutually_exclusive', [])
         if mutually_exclusive:
-            lines.append(f"**Mutually Exclusive ({len(mutually_exclusive)}):** _Odds < 1 — likely redundant drivers_\n")
-            lines.append("| Gene | Count | Freq | OR |")
-            lines.append("|------|-------|------|----|")
+            carrier_n = cbio.get('samples_with_gene_mutation')
+            n_str = f" (n = {carrier_n})" if carrier_n else ""
+            lines.append(f"**Mutually Exclusive ({len(mutually_exclusive)}):** _Odds < 1 — likely redundant drivers. Freq = % of variant-carriers{n_str} also mutated in that gene._\n")
+            lines.append("| Gene | Count | Freq (of carriers) | OR | p-value |")
+            lines.append("|------|-------|--------------------|-----|---------|")
             for m in mutually_exclusive:
                 odds = m.get('odds_ratio')
                 odds_str = f"{odds:.2f}" if odds else "N/A"
-                lines.append(f"| {m.get('gene', '')} | {m.get('count', 0)} | {m.get('pct', 0):.1f}% | {odds_str} |")
+                p_val = m.get('p_value')
+                p_str = f"{p_val:.4f}" if p_val is not None else "N/A"
+                lines.append(f"| {m.get('gene', '')} | {m.get('count', 0)} | {m.get('pct', 0):.1f}% | {odds_str} | {p_str} |")
 
         lines.append("")
 
@@ -522,16 +528,18 @@ def result_to_markdown(result: dict) -> str:
     depmap = result.get('depmap_evidence')
     if depmap:
         lines.append("## DepMap\n")
+        lines.append("_Gene-level pan-cancer CRISPR dependency (all cell lines, not variant- or tumor-type-specific)_\n")
         lines.append("| Metric | Value |")
         lines.append("|--------|-------|")
         gene_dep = depmap.get('gene_dependency')
         if gene_dep:
             mean_score = gene_dep.get('mean_dependency_score')
             if mean_score is not None:
-                lines.append(f"| Mean Dependency Score | {mean_score:.3f} |")
+                label = "essential" if mean_score < -0.5 else "not essential"
+                lines.append(f"| Mean Dependency Score (CERES) | {mean_score:.3f} ({label}) |")
             dep_pct = gene_dep.get('dependency_pct')
             if dep_pct is not None:
-                lines.append(f"| Dependency % | {dep_pct:.1f}% |")
+                lines.append(f"| Dependency % (pan-cancer) | {dep_pct:.1f}% |")
             n_dep = gene_dep.get('n_dependent_lines', 0)
             n_total = gene_dep.get('n_total_lines', 0)
             if n_total > 0:
@@ -551,6 +559,7 @@ def result_to_markdown(result: dict) -> str:
         is_adjacent = hotspots.get('is_adjacent_to_hotspot', False)
         if is_hotspot or is_adjacent:
             lines.append("## Cancer Hotspots\n")
+            lines.append("_Source: [cancerhotspots.org](https://www.cancerhotspots.org/) — pan-cancer sample counts, independent of the cBioPortal study above_\n")
             lines.append("| Metric | Value |")
             lines.append("|--------|-------|")
             if is_hotspot:
@@ -562,7 +571,7 @@ def result_to_markdown(result: dict) -> str:
                     if residue:
                         lines.append(f"| Residue | {residue} |")
                     if total_samples > 0:
-                        lines.append(f"| Total Samples | {total_samples:,} |")
+                        lines.append(f"| Samples (cancerhotspots.org) | {total_samples:,} |")
             elif is_adjacent:
                 adj_dist = hotspots.get('adjacent_distance')
                 lines.append(f"| Hotspot Status | Adjacent ({adj_dist} codons away) |")
@@ -590,6 +599,7 @@ def result_to_markdown(result: dict) -> str:
     if evidence_gaps:
         lines.append("## Evidence Gap Analysis\n")
         lines.append("*What's known vs. unknown about this variant — identifying opportunities for further research.*\n")
+        lines.append("*Evidence counts are aggregated totals across all tumor types and evidence tiers, not filtered to the queried tumor type.*\n")
 
         overall_quality = evidence_gaps.get('overall_quality', 'unknown')
         research_priority = evidence_gaps.get('research_priority', 'unknown')
