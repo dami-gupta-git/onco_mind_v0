@@ -30,6 +30,15 @@ from oncomind.config.constants import (
 
 logger = logging.getLogger(__name__)
 
+# CCLE sample IDs use the format CELLLINENAME_TISSUE where TISSUE can be
+# multi-word (e.g., KELLY_AUTONOMIC_GANGLIA, A1207_CENTRAL_NERVOUS_SYSTEM).
+# rsplit("_", 1) only captures the last token, losing the full tissue label.
+# Map known multi-word CCLE tissue suffixes to their canonical primary_disease.
+_CCLE_MULTIWORD_TISSUE_SUFFIXES: dict[str, str] = {
+    "AUTONOMIC_GANGLIA": "Neuroblastoma",
+    "CENTRAL_NERVOUS_SYSTEM": "Brain Cancer",
+}
+
 
 class CBioPortalError(Exception):
     """Exception raised for cBioPortal API errors."""
@@ -456,13 +465,20 @@ class CBioPortalClient:
             if clean_variant and protein_change.upper() != clean_variant:
                 continue
 
-            # Parse sample ID format: CELLLINE_TISSUE (e.g., MDAMB468_BREAST)
-            parts = sample_id.rsplit("_", 1)
-            if len(parts) == 2:
-                cell_name, tissue = parts
+            # Parse sample ID format: CELLLINE_TISSUE (e.g., MDAMB468_BREAST).
+            # Some tissue labels are multi-word (e.g., KELLY_AUTONOMIC_GANGLIA).
+            # Check known multi-word suffixes first before falling back to rsplit.
+            tissue = "UNKNOWN"
+            cell_name = sample_id
+            for suffix, disease in _CCLE_MULTIWORD_TISSUE_SUFFIXES.items():
+                if sample_id.endswith(f"_{suffix}"):
+                    cell_name = sample_id[: -(len(suffix) + 1)]
+                    tissue = disease
+                    break
             else:
-                cell_name = sample_id
-                tissue = "UNKNOWN"
+                parts = sample_id.rsplit("_", 1)
+                if len(parts) == 2:
+                    cell_name, tissue = parts
 
             # Apply tissue filter if specified
             if tissue_filter and tissue_filter.upper() not in tissue.upper():

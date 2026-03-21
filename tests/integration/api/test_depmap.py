@@ -3,6 +3,7 @@
 import pytest
 
 from oncomind.api.depmap import DepMapClient
+from oncomind.api.cbioportal import CBioPortalClient
 
 
 class TestDepMapClientIntegration:
@@ -324,3 +325,78 @@ class TestDepMapClientIntegration:
         print(f"Top 5 drugs by sensitivity:")
         for ds in result.drug_sensitivities[:5]:
             print(f"  {ds.drug_name}: log2fc={ds.mean_log2fc:.2f}, n={ds.n_cell_lines}")
+
+
+class TestCCLETissueParsing:
+    """Regression tests for CCLE sample ID tissue parsing.
+
+    Root cause: rsplit("_", 1) on multi-word tissue suffixes like
+    AUTONOMIC_GANGLIA or CENTRAL_NERVOUS_SYSTEM only captured the last
+    token ("GANGLIA", "SYSTEM"), causing tumor_types_match to fail and
+    producing false "no cell lines in tumor type" gaps.
+
+    Fix: _CCLE_MULTIWORD_TISSUE_SUFFIXES lookup table checked before rsplit.
+    """
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_alk_f1174l_neuroblastoma_cell_lines_have_correct_tissue(self):
+        """KELLY and SK-N-SH are neuroblastoma lines; their tissue must be
+        'Neuroblastoma', not 'GANGLIA' (truncated from AUTONOMIC_GANGLIA)."""
+        async with CBioPortalClient() as client:
+            cell_lines = await client.fetch_cell_lines_with_mutation("ALK", "F1174L")
+
+        if not cell_lines:
+            pytest.skip("No ALK F1174L cell lines found in CCLE")
+
+        autonomic_lines = [
+            cl for cl in cell_lines if "AUTONOMIC" in cl.get("sample_id", "").upper()
+        ]
+        assert len(autonomic_lines) > 0, (
+            "Expected at least one AUTONOMIC_GANGLIA cell line for ALK F1174L "
+            f"(e.g. KELLY). Got: {[cl['sample_id'] for cl in cell_lines]}"
+        )
+
+        for cl in autonomic_lines:
+            assert cl["tissue"] == "Neuroblastoma", (
+                f"Cell line {cl['sample_id']} should have tissue='Neuroblastoma', "
+                f"got '{cl['tissue']}'. "
+                "AUTONOMIC_GANGLIA suffix was not mapped correctly."
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_central_nervous_system_suffix_mapped_correctly(self):
+        """Cell lines with CENTRAL_NERVOUS_SYSTEM suffix must have tissue='Brain Cancer',
+        not 'SYSTEM'."""
+        async with CBioPortalClient() as client:
+            cell_lines = await client.fetch_cell_lines_with_mutation("BRAF", "V600E")
+
+        cns_lines = [
+            cl for cl in cell_lines
+            if "CENTRAL_NERVOUS_SYSTEM" in cl.get("sample_id", "").upper()
+        ]
+        if not cns_lines:
+            pytest.skip("No CENTRAL_NERVOUS_SYSTEM cell lines found for BRAF V600E")
+
+        for cl in cns_lines:
+            assert cl["tissue"] == "Brain Cancer", (
+                f"Cell line {cl['sample_id']} should have tissue='Brain Cancer', "
+                f"got '{cl['tissue']}'. "
+                "CENTRAL_NERVOUS_SYSTEM suffix was not mapped correctly."
+            )
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    async def test_single_word_tissue_suffixes_unchanged(self):
+        """Single-word suffixes like LUNG, SKIN, BREAST must still parse correctly."""
+        async with CBioPortalClient() as client:
+            cell_lines = await client.fetch_cell_lines_with_mutation("BRAF", "V600E")
+
+        single_word_expected = {"LUNG", "SKIN", "BREAST", "BONE", "INTESTINE"}
+        found_tissues = {cl["tissue"] for cl in cell_lines}
+        overlap = found_tissues & single_word_expected
+        assert len(overlap) > 0, (
+            f"Expected some single-word tissue labels (e.g. LUNG, SKIN), "
+            f"got: {found_tissues}"
+        )
