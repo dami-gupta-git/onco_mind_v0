@@ -42,45 +42,45 @@ Path constants are defined in `src/oncomind/config/constants.py`:
 
 ## Data Source Details
 
-### CGI Biomarkers (`data/cgi/cgi_biomarkers.tsv`)
-Contains FDA-approved and clinical-stage biomarkers linking gene alterations to drug response.
+### CGI Biomarkers (`data/cgi/cgi_biomarkers.tsv`)  
+Contains FDA-approved and clinical-stage biomarkers linking gene alterations to drug response.  
 
-**Source:** Cancer Genome Interpreter
-**URL:** https://www.cancergenomeinterpreter.org/biomarkers
-**Format:** TSV with columns: gene, alteration, drug, association, evidence_level, source, tumor_type
-**Refresh:** Auto-downloaded if missing or >7 days old
+**Source:** Cancer Genome Interpreter  
+**URL:** https://www.cancergenomeinterpreter.org/biomarkers  
+**Format:** TSV with columns: gene, alteration, drug, association, evidence_level, source, tumor_type  
+**Refresh:** Auto-downloaded if missing or >7 days old  
 
-### FDA
-#### Biomarkers (`data/fda/Table of Pharmacogenomic Biomarkers in Drug Labeling  FDA.xlsx`)
-Raw data file -  FDA biomarker table (original download from FDA).
-**URL:** https://www.fda.gov/drugs/science-and-research-drugs/table-pharmacogenomic-biomarkers-drug-labeling
+### FDA  
+#### Biomarkers (`data/fda/Table of Pharmacogenomic Biomarkers in Drug Labeling  FDA.xlsx`)  
+Raw data file -  FDA biomarker table (original download from FDA).  
+**URL:** https://www.fda.gov/drugs/science-and-research-drugs/table-pharmacogenomic-biomarkers-drug-labeling  
 **Refresh:** Manual: Should update quarterly. It should be filtered manually to generate
 fda_oncology_biomarkers.xlsx
 
-#### Drug Labels (`data/processing/labels/fda_labels.json`)
-FDA drug label indications from OpenFDA API. Initial approval dates are fetched from the drugsfda endpoint.
-**Source:** OpenFDA Drug Labels API + DrugsFDA API
-**URLs:**
-- https://api.fda.gov/drug/label.json (label content)
-- https://api.fda.gov/drug/drugsfda.json (approval dates)
-**Refresh:** Populated on-demand during queries, or manually by prefetch script every quarter
+#### Drug Labels (`data/processing/labels/fda_labels.json`)  
+FDA drug label indications from OpenFDA API. Initial approval dates are fetched from the drugsfda endpoint.  
+**Source:** OpenFDA Drug Labels API + DrugsFDA API    
+**URLs:**  
+- https://api.fda.gov/drug/label.json (label content)  
+- https://api.fda.gov/drug/drugsfda.json (approval dates)  
+**Refresh:** Populated on-demand during queries, or manually by prefetch script every quarter  
 
-### MSK Hotspots (`data/hotspots_msk/hotspots.txt`)
-Curated list of statistically significant mutation hotspots in cancer.
+### MSK Hotspots (`data/hotspots_msk/hotspots.txt`)  
+Curated list of statistically significant mutation hotspots in cancer.  
 
-**Source:** Cancer Hotspots (cancerhotspots.org)
-**Refresh:** Static file, TBD if update is needed
+**Source:** Cancer Hotspots (cancerhotspots.org)  
+**Refresh:** Static file, TBD if update is needed  
 
-### DepMap (`data/depmap/`)
-Cell line dependency and drug sensitivity data.
-**Source:** DepMap Portal (Broad Institute)
-**URL:** https://depmap.org/portal/
-**Files:**
-- `OmicsSomaticMutations.csv` - Cell line mutation profiles
-- `primary-screen-replicate-collapsed-logfold-change.csv` - PRISM drug sensitivity data
-- `primary-screen-replicate-collapsed-treatment-info.csv` - PRISM treatment info
-- `sample_info.csv` - Cell line metadata
-**Refresh:** Manual: should download quarterly
+### DepMap (`data/depmap/`)  
+Cell line dependency and drug sensitivity data.  
+**Source:** DepMap Portal (Broad Institute)  
+**URL:** https://depmap.org/portal/  
+**Files:**  
+- `OmicsSomaticMutations.csv` - Cell line mutation profiles  
+- `primary-screen-replicate-collapsed-logfold-change.csv` - PRISM drug sensitivity data  
+- `primary-screen-replicate-collapsed-treatment-info.csv` - PRISM treatment info  
+- `sample_info.csv` - Cell line metadata  
+**Refresh:** Manual: should download quarterly  
 
 
 ## FDA Labels Setup

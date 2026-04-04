@@ -1557,10 +1557,32 @@ class FDALabelCache:
             try:
                 with open(self.cache_path, "r") as f:
                     data = json.load(f)
-                    self._cache = data.get("drugs", {})
+                    raw = data.get("drugs", {})
                     self._last_updated = data.get("last_updated")
+
+                    # Cache may be keyed by UUID set IDs (e.g. "abc123_7") or by drug name.
+                    # Build a drug-name index so get() lookups work regardless of key format.
+                    self._cache = {}
+                    for entry in raw.values():
+                        if not isinstance(entry, dict):
+                            continue
+                        names = []
+                        drug_name = entry.get("drug_name")
+                        if drug_name:
+                            names.append(drug_name)
+                        for field in ("brand_name", "generic_name"):
+                            val = entry.get(field)
+                            if isinstance(val, list):
+                                names.extend(val)
+                            elif isinstance(val, str):
+                                names.append(val)
+                        for name in names:
+                            key = name.lower().strip()
+                            if key and key not in self._cache:
+                                self._cache[key] = entry
+
                     logger.info(
-                        f"Loaded FDA label cache: {len(self._cache)} drugs, updated {self._last_updated}"
+                        f"Loaded FDA label cache: {len(self._cache)} drug name entries, updated {self._last_updated}"
                     )
             except Exception as e:
                 logger.warning(f"Failed to load FDA label cache: {e}")
@@ -1603,8 +1625,16 @@ class FDALabelCache:
         if cached_data is None:
             return None
 
+        # Normalize list fields to strings — the prefetch script stores some fields
+        # (brand_name, generic_name, indications_and_usage) as lists from the raw OpenFDA response.
+        normalized_data = dict(cached_data)
+        for field in ("brand_name", "generic_name", "indications_and_usage"):
+            val = normalized_data.get(field)
+            if isinstance(val, list):
+                normalized_data[field] = val[0] if val else None
+
         # Create FDALabelInfo from cached data
-        info = FDALabelInfo(**cached_data)
+        info = FDALabelInfo(**normalized_data)
 
         # Generate PubMed URL if not present (for backwards compatibility with old cache)
         if not info.pubmed_url:

@@ -111,6 +111,11 @@ class FDALabelParser:
         "MSI": r"(?:microsatellite\s+instability|MSI[- ]?(?:H|high)?)",
         "TMB": r"(?:tumor\s+mutational\s+burden|TMB[- ]?(?:H|high)?)",
         "PD-L1": r"(?:PD[- ]?L1|CD274)",
+        "JAK2": r"(?:janus\s+kinase\s+2|JAK2)",
+        "FLT3": r"(?:fms[- ]?(?:like|related)\s+tyrosine\s+kinase\s+3|FLT3)",
+        "CALR": r"(?:calreticulin|CALR)",
+        "MPL": r"\bMPL\b",
+        "NPM1": r"\bNPM1\b",
     }
 
     # Variant patterns (gene-specific)
@@ -142,6 +147,15 @@ class FDALabelParser:
             (r"R172K", "R172K", SpecificityLevel.VARIANT),
             (r"R140Q", "R140Q", SpecificityLevel.VARIANT),
         ],
+        "JAK2": [
+            (r"V617F", "V617F", SpecificityLevel.VARIANT),
+        ],
+        "FLT3": [
+            (r"internal\s+tandem\s+duplication|ITD", "ITD", SpecificityLevel.VARIANT),
+            (r"FLT3[- ]ITD", "ITD", SpecificityLevel.VARIANT),
+            (r"TKD", "TKD", SpecificityLevel.VARIANT),
+            (r"D835", "D835", SpecificityLevel.CODON),
+        ],
     }
 
     # Tumor type patterns (order matters - more specific first)
@@ -166,6 +180,10 @@ class FDALabelParser:
         "pancreatic cancer": r"(?:pancreatic\s+(?:cancer|carcinoma|adenocarcinoma))",
         "AML": r"(?:acute\s+myeloid\s+leukemia|AML)",
         "MDS": r"(?:myelodysplastic\s+syndrome|MDS)",
+        "myelofibrosis": r"(?:myelofibrosis|MF\b)",
+        "polycythemia vera": r"(?:polycythemia\s+vera|PV\b)",
+        "essential thrombocythemia": r"(?:essential\s+thrombocyth?emia|ET\b)",
+        "myeloproliferative neoplasm": r"(?:myeloproliferative\s+neoplasm|MPN\b)",
         "solid tumor": r"(?:solid\s+tumor|solid\s+malignancies)",
     }
 

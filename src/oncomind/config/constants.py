@@ -290,9 +290,16 @@ TUMOR_TYPE_MAPPINGS: dict[str, list[str]] = {
     "fl": ["follicular lymphoma", "fl"],
     "mm": ["multiple myeloma", "mm", "plasma cell myeloma", "myeloma"],
     # Myeloproliferative neoplasms
-    "mpn": ["myeloproliferative neoplasm", "mpn", "myeloproliferative"],
-    "mf": ["myelofibrosis", "mf", "primary myelofibrosis"],
-    "pv": ["polycythemia vera", "pv"],
+    # mpn is the parent category — includes all subtypes so querying "Myeloproliferative Neoplasms"
+    # matches CIViC/VICC entries filed under PV, MF, ET (JAK2 V617F pattern)
+    "mpn": [
+        "myeloproliferative neoplasm", "mpn", "myeloproliferative", "myeloproliferative neoplasms",
+        "polycythemia vera", "pv",
+        "myelofibrosis", "mf", "primary myelofibrosis",
+        "essential thrombocythemia", "et", "essential thrombocythaemia",
+    ],
+    "mf": ["myelofibrosis", "mf", "primary myelofibrosis", "myeloproliferative neoplasm", "mpn"],
+    "pv": ["polycythemia vera", "pv", "myeloproliferative neoplasm", "mpn"],
     # Pediatric / Neural Crest
     "neuroblastoma": ["neuroblastoma", "autonomic", "peripheral nervous system", "nbl"],
     # Other / Rare
