@@ -12,8 +12,9 @@ data/
 │   └── cgi_biomarkers.tsv
 ├── depmap/                 # DepMap cell line data
 │   ├── OmicsSomaticMutations.csv
-│   ├── primary-screen-replicate-collapsed-logfold-change.csv
-│   ├── primary-screen-replicate-collapsed-treatment-info.csv
+│   ├── CRISPRGeneEffect.csv
+│   ├── prism-repurposing-20q2-primary-screen-logfold-change.csv
+│   ├── prism-repurposing-20q2-primary-screen-replicate-treatment-info.csv
 │   └── sample_info.csv
 ├── fda/                    # Raw FDA downloads
 │   └── Table of Pharmacogenomic Biomarkers...xlsx
@@ -77,10 +78,13 @@ Cell line dependency and drug sensitivity data.
 **URL:** https://depmap.org/portal/  
 **Files:**  
 - `OmicsSomaticMutations.csv` - Cell line mutation profiles  
-- `primary-screen-replicate-collapsed-logfold-change.csv` - PRISM drug sensitivity data  
-- `primary-screen-replicate-collapsed-treatment-info.csv` - PRISM treatment info  
+- `CRISPRGeneEffect.csv` - CRISPR knockout gene dependency (Chronos) scores, read locally by `fetch_gene_dependency`  
+- `prism-repurposing-20q2-primary-screen-logfold-change.csv` - PRISM drug sensitivity data (replicate/well-level, PRISM Repurposing 20Q2)  
+- `prism-repurposing-20q2-primary-screen-replicate-treatment-info.csv` - PRISM treatment info, well-keyed (joins to the logfold-change file via `column_name`)  
 - `sample_info.csv` - Cell line metadata  
 **Refresh:** Manual: should download quarterly  
+
+**Note:** DepMap's live task-based dependency API (`/portal/api/download/custom`) is now gated by Cloudflare Turnstile bot verification and cannot be queried programmatically. Gene dependency data is read from the local `CRISPRGeneEffect.csv` bulk download instead.
 
 
 ## FDA Labels Setup
@@ -108,8 +112,9 @@ The cache is also populated on-demand when querying drugs not yet cached.
 | `Table of Pharmacogenomic Biomarkers...xlsx`            | `data/fda/`              | [FDA](https://www.fda.gov/drugs/science-and-research-drugs/table-pharmacogenomic-biomarkers-drug-labeling) | Quarterly | 2025-04-01 | Raw FDA biomarker table                |
 | `fda_oncology_biomarkers.xlsx`                          | `data/processing/`       | Filtered from above                                                                                        | Quarterly | 2025-04-01 | Oncology-only subset of FDA biomarkers |
 | `OmicsSomaticMutations.csv`                             | `data/depmap/`           | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | Cell line mutation profiles            |
-| `primary-screen-replicate-collapsed-logfold-change.csv` | `data/depmap/`           | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | PRISM drug sensitivity data            |
-| `primary-screen-replicate-collapsed-treatment-info.csv` | `data/depmap/`           | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | PRISM treatment info                   |
+| `CRISPRGeneEffect.csv`                                  | `data/depmap/`           | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | CRISPR gene dependency (Chronos) scores |
+| `prism-repurposing-20q2-primary-screen-logfold-change.csv` | `data/depmap/`        | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | PRISM drug sensitivity data            |
+| `prism-repurposing-20q2-primary-screen-replicate-treatment-info.csv` | `data/depmap/` | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | PRISM treatment info                   |
 | `sample_info.csv`                                       | `data/depmap/`           | [DepMap](https://depmap.org/portal/)                                                                       | Quarterly | 2025-04-01 | Cell line metadata                     |
 | `hotspots.txt`                                          | `data/hotspots_msk/`     | [Cancer Hotspots](https://cancerhotspots.org)                                                              | TBD | TBD | MSK mutation hotspots                  |
 

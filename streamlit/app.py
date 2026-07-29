@@ -65,8 +65,8 @@ st.markdown(
 
 
 MODELS = {
-    "Google Gemini 2.0 Flash": "gemini/gemini-2.0-flash",
-    "Google Gemini 1.5 Pro": "gemini/gemini-1.5-pro",
+    "Google Gemini 2.5 Flash": "gemini/gemini-2.5-flash",
+    "Google Gemini 2.5 Pro": "gemini/gemini-2.5-pro",
     "Anthropic Claude Sonnet 4": "claude-sonnet-4-20250514",
     "Anthropic Claude 3.5 Haiku": "claude-3-5-haiku-20241022",
     "OpenAI GPT-4o-mini": "gpt-4o-mini",

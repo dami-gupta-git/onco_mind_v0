@@ -1314,7 +1314,7 @@ BROAD_VARIANTS: set[tuple[str, str]] = {
 # Configuration for LLM-based evidence synthesis and paper scoring
 
 # Default model for LLM calls
-LLM_DEFAULT_MODEL = "gemini/gemini-2.0-flash"
+LLM_DEFAULT_MODEL = "claude-sonnet-4-5-20250929"
 
 # Fast/cheap model for high-volume operations (paper scoring, knowledge extraction)
 LLM_FAST_MODEL = "gpt-4o-mini"
@@ -1324,7 +1324,7 @@ LLM_TIMEOUT_DEFAULT = 60
 LLM_TIMEOUT_CLAUDE = 120
 
 # Token limits for different LLM tasks
-LLM_MAX_TOKENS_SYNTHESIS = 3000
+LLM_MAX_TOKENS_SYNTHESIS = 6000
 LLM_MAX_TOKENS_PAPER_SCORING = 500
 LLM_MAX_TOKENS_KNOWLEDGE_EXTRACTION = 1500
 
@@ -1378,8 +1378,6 @@ GNOMAD_LOW_FREQ_THRESHOLD = 0.05     # gnomAD AF 1–5% → Low-frequency
 
 # API endpoints
 DEPMAP_DOWNLOAD_API = "https://depmap.org/portal/download/api/download"
-DEPMAP_CUSTOM_DOWNLOAD_API = "https://depmap.org/portal/api/download/custom"
-DEPMAP_TASK_STATUS_API = "https://depmap.org/portal/api/task"
 
 # PRISM drug sensitivity data URLs (24Q2 release)
 DEPMAP_PRISM_SENSITIVITY_URL = (
@@ -1401,12 +1399,6 @@ DEPMAP_DATA_VERSION = "DepMap Public 24Q4"
 
 # Timeout for DepMap requests (seconds)
 DEPMAP_DEFAULT_TIMEOUT = 60.0
-DEPMAP_TASK_POLL_TIMEOUT = 10.0
-DEPMAP_DOWNLOAD_TIMEOUT = 30.0
-
-# Task polling configuration
-DEPMAP_MAX_TASK_POLL_ATTEMPTS = 10
-DEPMAP_TASK_POLL_INTERVAL = 1  # seconds
 
 # Drug sensitivity thresholds
 DEPMAP_SENSITIVITY_THRESHOLD = -1.7  # Log2FC threshold for sensitivity

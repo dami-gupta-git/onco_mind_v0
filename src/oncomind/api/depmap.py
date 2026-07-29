@@ -15,7 +15,6 @@ Key Design:
 - No API key required for public endpoints
 """
 
-import asyncio
 import csv
 import io
 from dataclasses import dataclass
@@ -33,8 +32,6 @@ from oncomind.models.evidence.depmap import (
 from oncomind.config.debug import get_logger
 from oncomind.config.constants import (
     DEPMAP_DOWNLOAD_API,
-    DEPMAP_CUSTOM_DOWNLOAD_API,
-    DEPMAP_TASK_STATUS_API,
     DEPMAP_PRISM_SENSITIVITY_URL,
     DEPMAP_PRISM_DRUG_INFO_URL,
     DEPMAP_MUTATIONS_FILE,
@@ -42,10 +39,6 @@ from oncomind.config.constants import (
     DEPMAP_RELEASE,
     DEPMAP_DATA_VERSION,
     DEPMAP_DEFAULT_TIMEOUT,
-    DEPMAP_TASK_POLL_TIMEOUT,
-    DEPMAP_DOWNLOAD_TIMEOUT,
-    DEPMAP_MAX_TASK_POLL_ATTEMPTS,
-    DEPMAP_TASK_POLL_INTERVAL,
     DEPMAP_SENSITIVITY_THRESHOLD,
     DEPMAP_MIN_CELL_LINES,
     DEPMAP_TOP_DRUGS_LIMIT,
@@ -230,10 +223,10 @@ class DepMapClient:
 
         data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
         sensitivity_file = (
-            data_dir / "primary-screen-replicate-collapsed-logfold-change.csv"
+            data_dir / "prism-repurposing-20q2-primary-screen-logfold-change.csv"
         )
         treatment_file = (
-            data_dir / "primary-screen-replicate-collapsed-treatment-info.csv"
+            data_dir / "prism-repurposing-20q2-primary-screen-replicate-treatment-info.csv"
         )
 
         if not sensitivity_file.exists() or not treatment_file.exists():
@@ -244,16 +237,21 @@ class DepMapClient:
             # Load treatment info to get drug names
             treatment_df = pd.read_csv(treatment_file)
             # Create mapping from column_name to drug name
-            # The column names in sensitivity file are like "BRD-A00077618-236-07-6::2.5::HTS"
+            # Column names in the sensitivity file are per-well IDs like "PREP001_X1:A03::HTS";
+            # only rows with a real compound name (excludes vehicle/positive controls) are kept
             drug_name_map = {}
             for _, row in treatment_df.iterrows():
                 col_name = row.get("column_name")
                 drug_name = row.get("name")
-                if col_name and drug_name:
+                if col_name and pd.notna(drug_name) and drug_name != "NA":
                     drug_name_map[col_name] = drug_name
 
-            # Load sensitivity data (cell lines as rows, drugs as columns)
+            # Load sensitivity data (cell lines as rows, wells as columns)
             sensitivity_df = pd.read_csv(sensitivity_file, index_col=0)
+            # Restrict to columns with a known compound (drops control/unmapped wells)
+            sensitivity_df = sensitivity_df[
+                [c for c in sensitivity_df.columns if c in drug_name_map]
+            ]
 
             # Get cell lines that are in our variant set AND in the sensitivity data
             variant_lines_set = set(variant_cell_lines)
@@ -280,19 +278,7 @@ class DepMapClient:
 
                 # Only include if mean response is below threshold (sensitive)
                 if mean_log2fc <= sensitivity_threshold:
-                    # Get drug name from mapping, or extract from column name
-                    drug_name = drug_name_map.get(drug_col)
-                    if not drug_name:
-                        # Try to match by broad_id prefix
-                        broad_id = (
-                            drug_col.split("::")[0] if "::" in drug_col else drug_col
-                        )
-                        matches = treatment_df[treatment_df["broad_id"] == broad_id]
-                        if not matches.empty:
-                            drug_name = matches.iloc[0].get("name")
-
-                    if not drug_name:
-                        drug_name = drug_col.split("::")[0]  # Use broad_id as fallback
+                    drug_name = drug_name_map[drug_col]
 
                     # Get list of sensitive cell lines
                     sensitive_lines = [
@@ -432,9 +418,7 @@ class DepMapClient:
         self,
         gene: str,
     ) -> GeneDependency | None:
-        """Fetch CRISPR gene dependency data.
-
-        Uses the task-based API to get gene-specific dependency scores.
+        """Fetch CRISPR gene dependency (Chronos) data from local file.
 
         Args:
             gene: Gene symbol (e.g., "BRAF")
@@ -442,86 +426,53 @@ class DepMapClient:
         Returns:
             GeneDependency with essentiality scores, or None if unavailable
         """
-        client = self._get_client()
+        data_dir = Path(__file__).parent.parent.parent.parent / "data" / "depmap"
+        crispr_file = data_dir / DEPMAP_CRISPR_FILE
 
-        try:
-            # Use the custom download endpoint with gene filter
-            response = await client.post(
-                DEPMAP_CUSTOM_DOWNLOAD_API,
-                json={
-                    "datasetId": "Chronos_Combined",
-                    "featureLabels": [gene.upper()],
-                    "dropEmpty": True,
-                },
-                timeout=DEPMAP_DOWNLOAD_TIMEOUT,
-            )
-            response.raise_for_status()
-            task_info = response.json()
-
-            task_id = task_info.get("id")
-            if not task_id:
-                logger.warning("No task ID returned from DepMap")
-                return None
-
-            # Poll for task completion
-            for _ in range(DEPMAP_MAX_TASK_POLL_ATTEMPTS):
-                await asyncio.sleep(DEPMAP_TASK_POLL_INTERVAL)
-
-                status_response = await client.get(
-                    f"{DEPMAP_TASK_STATUS_API}/{task_id}",
-                    timeout=DEPMAP_TASK_POLL_TIMEOUT,
-                )
-                status = status_response.json()
-
-                if status.get("state") == "SUCCESS":
-                    download_url = status.get("result", {}).get("downloadUrl")
-                    if download_url:
-                        # Fetch the CSV data
-                        data_response = await client.get(
-                            download_url, timeout=DEPMAP_DOWNLOAD_TIMEOUT
-                        )
-                        data_response.raise_for_status()
-
-                        # Parse CSV - first column is cell line ID, second is gene score
-                        content = data_response.text
-                        reader = csv.reader(io.StringIO(content))
-
-                        scores = []
-                        header = next(reader, None)
-                        for row in reader:
-                            if len(row) >= 2:
-                                try:
-                                    scores.append(float(row[1]))
-                                except (ValueError, IndexError):
-                                    pass
-
-                        if scores:
-                            mean_score = sum(scores) / len(scores)
-                            # Count dependent lines (score below threshold)
-                            n_dependent = sum(
-                                1 for s in scores if s < DEPMAP_DEPENDENCY_THRESHOLD
-                            )
-
-                            return GeneDependency(
-                                gene=gene.upper(),
-                                mean_dependency_score=mean_score,
-                                n_dependent_lines=n_dependent,
-                                n_total_lines=len(scores),
-                                dependency_pct=(
-                                    (n_dependent / len(scores) * 100) if scores else 0.0
-                                ),
-                                top_dependent_lines=[],  # Would need cell line names
-                            )
-                    break
-
-                elif status.get("state") == "FAILURE":
-                    logger.warning(f"DepMap task failed: {status.get('message')}")
-                    break
-
+        if not crispr_file.exists():
+            logger.warning(f"CRISPR gene effect file not found: {crispr_file}")
             return None
 
+        gene_upper = gene.upper()
+
+        try:
+            # Header columns are "SYMBOL (EntrezID)"; find the one matching this gene
+            header = pd.read_csv(crispr_file, nrows=0)
+            gene_col = next(
+                (
+                    col
+                    for col in header.columns
+                    if col.upper() == gene_upper
+                    or col.upper().startswith(f"{gene_upper} (")
+                ),
+                None,
+            )
+            if gene_col is None:
+                logger.debug(f"No CRISPR dependency column found for {gene}")
+                return None
+
+            gene_series = pd.read_csv(
+                crispr_file, usecols=[header.columns[0], gene_col]
+            )[gene_col].dropna()
+
+            if gene_series.empty:
+                return None
+
+            scores = gene_series.tolist()
+            mean_score = sum(scores) / len(scores)
+            n_dependent = sum(1 for s in scores if s < DEPMAP_DEPENDENCY_THRESHOLD)
+
+            return GeneDependency(
+                gene=gene_upper,
+                mean_dependency_score=mean_score,
+                n_dependent_lines=n_dependent,
+                n_total_lines=len(scores),
+                dependency_pct=(n_dependent / len(scores) * 100),
+                top_dependent_lines=[],  # Would need cell line name join
+            )
+
         except Exception as e:
-            logger.warning(f"Error fetching gene dependency: {e}")
+            logger.warning(f"Error reading CRISPR gene effect file: {e}")
             return None
 
     async def fetch_depmap_evidence(

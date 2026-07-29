@@ -86,7 +86,7 @@ def main():
     not_found = []
 
     for i, drug in enumerate(unique_drugs):
-        if drug in labels:
+        if labels.get(drug) is not None:
             logger.debug(f"Skipping {drug} (already fetched)")
             continue
 

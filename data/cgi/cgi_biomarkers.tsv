@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png+xml" href="/favicon2.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <title>Cancer Genome Interpreter</title>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-Z41BQLVW3D"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {
+        analytics_storage: localStorage.getItem('cgi-cookie-consent') === 'accepted' ? 'granted' : 'denied'
+      });
+      gtag('js', new Date());
+      gtag('config', 'G-Z41BQLVW3D');
+    </script>
+    <script type="module" crossorigin src="/assets/index-o9LjqW1P.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-COjM-vkP.js">
+    <link rel="modulepreload" crossorigin href="/assets/mui-Cxr33bwg.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-reEeLSKd.css">
+    <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+
